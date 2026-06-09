@@ -33,6 +33,7 @@ builder.Services.AddScoped<AuthService>();
 builder.Services.AddScoped<ProfileService>();
 builder.Services.AddScoped<AgentService>();
 builder.Services.AddScoped<TaskService>();
+builder.Services.AddScoped<AgentCommsService>();
 
 // Auth
 using var rsa = RSA.Create();
