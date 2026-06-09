@@ -5,7 +5,7 @@ export const siteConfig = {
   description: 'Premium React component library for enterprise applications.',
 };
 
-export type PageKey = 'Home' | 'About';
+export type PageKey = 'Home' | 'About' | 'Dashboard' | 'Agents';
 
 export const pages: {
   icon: typeof House;
