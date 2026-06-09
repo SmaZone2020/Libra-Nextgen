@@ -1,8 +1,10 @@
 using System.Security.Cryptography;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
+using LibraNextgen.Common.Models;
 using LibraNextgen.Service.Configuration;
 using LibraNextgen.Service.Data;
+using LibraNextgen.Service.Profiles;
 using LibraNextgen.Service.Services;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -10,7 +12,18 @@ var builder = WebApplication.CreateBuilder(args);
 // MongoDB
 builder.Services.Configure<MongoSettings>(builder.Configuration.GetSection(MongoSettings.SectionName));
 builder.Services.AddSingleton<MongoDbContext>();
-builder.Services.AddScoped(typeof(Repository<>));
+
+// Typed repositories per collection
+builder.Services.AddScoped<Repository<Agent>>(sp =>
+    new Repository<Agent>(sp.GetRequiredService<MongoDbContext>(), "agents"));
+builder.Services.AddScoped<Repository<AgentTask>>(sp =>
+    new Repository<AgentTask>(sp.GetRequiredService<MongoDbContext>(), "tasks"));
+builder.Services.AddScoped<Repository<User>>(sp =>
+    new Repository<User>(sp.GetRequiredService<MongoDbContext>(), "users"));
+builder.Services.AddScoped<Repository<AuditLog>>(sp =>
+    new Repository<AuditLog>(sp.GetRequiredService<MongoDbContext>(), "audit_logs"));
+builder.Services.AddScoped<Repository<MalleableProfileConfig>>(sp =>
+    new Repository<MalleableProfileConfig>(sp.GetRequiredService<MongoDbContext>(), "profiles"));
 
 // JWT Settings (singleton so EnsureKeys is shared)
 var jwtSettings = builder.Configuration.GetSection(JwtSettings.SectionName).Get<JwtSettings>() ?? new JwtSettings();
@@ -19,6 +32,7 @@ builder.Services.AddSingleton(jwtSettings);
 builder.Services.AddScoped<AuthService>();
 builder.Services.AddScoped<ProfileService>();
 builder.Services.AddScoped<AgentService>();
+builder.Services.AddScoped<TaskService>();
 
 // Auth
 using var rsa = RSA.Create();
