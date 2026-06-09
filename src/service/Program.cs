@@ -5,6 +5,8 @@ using LibraNextgen.Common.Models;
 using LibraNextgen.Service.Configuration;
 using LibraNextgen.Service.Data;
 using LibraNextgen.Service.Profiles;
+using LibraNextgen.Common.Protocol;
+using LibraNextgen.Service.Hubs;
 using LibraNextgen.Service.Services;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -35,6 +37,10 @@ builder.Services.AddScoped<AgentService>();
 builder.Services.AddScoped<TaskService>();
 builder.Services.AddScoped<AgentCommsService>();
 
+// WebSocket
+builder.Services.AddSingleton<ISessionLock, ShellSessionLock>();
+builder.Services.AddSingleton<ConnectionManager>();
+
 // Auth
 using var rsa = RSA.Create();
 rsa.ImportFromPem(jwtSettings.PublicKey);
@@ -60,8 +66,7 @@ builder.Services.AddAuthorization();
 builder.Services.AddControllers();
 builder.Services.AddOpenApi();
 
-// SignalR for real-time
-builder.Services.AddSignalR();
+// WebSocket middleware is enabled via app.UseWebSockets()
 
 // CORS
 builder.Services.AddCors(options =>
@@ -91,7 +96,9 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseCors("CorsSignalR");
+app.UseWebSockets();
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
+WebSocketHandler.Map(app);
 app.Run();
