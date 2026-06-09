@@ -7,6 +7,7 @@ using LibraNextgen.Service.Data;
 using LibraNextgen.Service.Profiles;
 using LibraNextgen.Common.Protocol;
 using LibraNextgen.Service.Hubs;
+using LibraNextgen.Service.Middleware;
 using LibraNextgen.Service.Services;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -40,6 +41,7 @@ builder.Services.AddScoped<AgentCommsService>();
 // WebSocket
 builder.Services.AddSingleton<ISessionLock, ShellSessionLock>();
 builder.Services.AddSingleton<ConnectionManager>();
+builder.Services.AddScoped<AuditService>();
 
 // Auth
 using var rsa = RSA.Create();
@@ -99,6 +101,7 @@ app.UseCors("CorsSignalR");
 app.UseWebSockets();
 app.UseAuthentication();
 app.UseAuthorization();
+app.UseMiddleware<AuditMiddleware>();
 app.MapControllers();
 WebSocketHandler.Map(app);
 app.Run();
