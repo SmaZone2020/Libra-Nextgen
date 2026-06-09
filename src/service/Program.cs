@@ -17,6 +17,7 @@ var jwtSettings = builder.Configuration.GetSection(JwtSettings.SectionName).Get<
 jwtSettings.EnsureKeys();
 builder.Services.AddSingleton(jwtSettings);
 builder.Services.AddScoped<AuthService>();
+builder.Services.AddScoped<ProfileService>();
 
 // Auth
 using var rsa = RSA.Create();
