@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
+using Scalar.AspNetCore;
 using LibraNextgen.Common.Models;
 using LibraNextgen.Service.Configuration;
 using LibraNextgen.Service.Data;
@@ -64,9 +65,18 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     });
 builder.Services.AddAuthorization();
 
-// Controllers + OpenAPI
+// Controllers + OpenAPI with Scalar UI
 builder.Services.AddControllers();
-builder.Services.AddOpenApi();
+builder.Services.AddOpenApi("v1", options =>
+{
+    options.AddDocumentTransformer((document, _, _) =>
+    {
+        document.Info.Title = "Libra-Nextgen API";
+        document.Info.Version = "v1";
+        document.Info.Description = "Libra-Nextgen C2 Framework REST API";
+        return Task.CompletedTask;
+    });
+});
 
 // WebSocket middleware is enabled via app.UseWebSockets()
 
@@ -92,9 +102,14 @@ using (var scope = app.Services.CreateScope())
     await authService.SeedDefaultAdminAsync();
 }
 
+app.MapOpenApi();
 if (app.Environment.IsDevelopment())
 {
-    app.MapOpenApi();
+    app.MapScalarApiReference(options =>
+    {
+        options.Title = "Libra-Nextgen API";
+        options.Theme = Scalar.AspNetCore.ScalarTheme.DeepSpace;
+    });
 }
 
 app.UseCors("CorsSignalR");
