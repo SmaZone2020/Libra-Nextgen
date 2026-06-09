@@ -1,6 +1,9 @@
+using System.Security.Cryptography;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.IdentityModel.Tokens;
 using LibraNextgen.Service.Configuration;
 using LibraNextgen.Service.Data;
-using Microsoft.AspNetCore.Authentication.JwtBearer;
+using LibraNextgen.Service.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -9,9 +12,31 @@ builder.Services.Configure<MongoSettings>(builder.Configuration.GetSection(Mongo
 builder.Services.AddSingleton<MongoDbContext>();
 builder.Services.AddScoped(typeof(Repository<>));
 
+// JWT Settings (singleton so EnsureKeys is shared)
+var jwtSettings = builder.Configuration.GetSection(JwtSettings.SectionName).Get<JwtSettings>() ?? new JwtSettings();
+jwtSettings.EnsureKeys();
+builder.Services.AddSingleton(jwtSettings);
+builder.Services.AddScoped<AuthService>();
+
 // Auth
+using var rsa = RSA.Create();
+rsa.ImportFromPem(jwtSettings.PublicKey);
+
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
-    .AddJwtBearer();
+    .AddJwtBearer(options =>
+    {
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer = true,
+            ValidateAudience = true,
+            ValidateLifetime = true,
+            ValidateIssuerSigningKey = true,
+            ValidIssuer = jwtSettings.Issuer,
+            ValidAudience = jwtSettings.Audience,
+            IssuerSigningKey = new RsaSecurityKey(rsa),
+            ClockSkew = TimeSpan.Zero
+        };
+    });
 builder.Services.AddAuthorization();
 
 // Controllers + OpenAPI
@@ -35,6 +60,13 @@ builder.Services.AddCors(options =>
 });
 
 var app = builder.Build();
+
+// Seed default admin user
+using (var scope = app.Services.CreateScope())
+{
+    var authService = scope.ServiceProvider.GetRequiredService<AuthService>();
+    await authService.SeedDefaultAdminAsync();
+}
 
 if (app.Environment.IsDevelopment())
 {
