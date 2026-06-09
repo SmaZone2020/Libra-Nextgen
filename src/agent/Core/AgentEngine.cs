@@ -75,42 +75,39 @@ public class AgentEngine
 
     private async Task ExecuteTaskAsync(LibraNextgen.Common.Models.AgentTask task, CancellationToken ct)
     {
-        var result = new Dictionary<string, object>
-        {
-            ["taskId"] = task.Id,
-            ["success"] = false,
-            ["output"] = "",
-            ["error"] = ""
-        };
+        var output = "";
+        var error = "";
+        var success = false;
 
         try
         {
             switch (task.CommandType)
             {
                 case Common.Models.CommandType.Shell:
-                    result["output"] = ExecuteShell(task.Command);
-                    result["success"] = true;
+                    output = ExecuteShell(task.Command);
+                    success = true;
                     break;
                 case Common.Models.CommandType.Sleep:
                     if (int.TryParse(task.Command, out var seconds))
                     {
-                        result["output"] = $"Sleeping for {seconds}s";
-                        result["success"] = true;
+                        output = $"Sleeping for {seconds}s";
+                        success = true;
                         await Task.Delay(seconds * 1000, ct);
                     }
                     break;
                 default:
-                    result["output"] = $"Unknown command type: {task.CommandType}";
-                    result["success"] = false;
+                    output = $"Unknown command type: {task.CommandType}";
                     break;
             }
         }
         catch (Exception ex)
         {
-            result["error"] = ex.Message;
+            error = ex.Message;
         }
 
-        var resultJson = JsonSerializer.Serialize(result);
+        var escapedOutput = output.Replace("\\", "\\\\").Replace("\"", "\\\"");
+        var escapedError = error.Replace("\\", "\\\\").Replace("\"", "\\\"");
+        var resultJson = $"{{\"taskId\":\"{task.Id}\",\"success\":{success.ToString().ToLowerInvariant()},\"output\":\"{escapedOutput}\",\"error\":\"{escapedError}\"}}";
         await _communicator.SubmitResultAsync(_agentId, resultJson, ct);
     }
 

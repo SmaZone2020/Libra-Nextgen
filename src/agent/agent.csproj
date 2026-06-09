@@ -5,7 +5,7 @@
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <PublishAot>true</PublishAot>
+    <PublishAot Condition="'$(Configuration)' == 'Release'">true</PublishAot>
     <InvariantGlobalization>true</InvariantGlobalization>
     <RootNamespace>LibraNextgen.Agent</RootNamespace>
   </PropertyGroup>
