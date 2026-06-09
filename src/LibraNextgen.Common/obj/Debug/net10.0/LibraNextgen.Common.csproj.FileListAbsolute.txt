@@ -1,0 +1,12 @@
+D:\Projects\Mix\Libra-Nextgen\src\LibraNextgen.Common\bin\Debug\net10.0\LibraNextgen.Common.deps.json
+D:\Projects\Mix\Libra-Nextgen\src\LibraNextgen.Common\bin\Debug\net10.0\LibraNextgen.Common.dll
+D:\Projects\Mix\Libra-Nextgen\src\LibraNextgen.Common\bin\Debug\net10.0\LibraNextgen.Common.pdb
+D:\Projects\Mix\Libra-Nextgen\src\LibraNextgen.Common\obj\Debug\net10.0\LibraNextgen.Common.csproj.AssemblyReference.cache
+D:\Projects\Mix\Libra-Nextgen\src\LibraNextgen.Common\obj\Debug\net10.0\LibraNextgen.Common.GeneratedMSBuildEditorConfig.editorconfig
+D:\Projects\Mix\Libra-Nextgen\src\LibraNextgen.Common\obj\Debug\net10.0\LibraNextgen.Common.AssemblyInfoInputs.cache
+D:\Projects\Mix\Libra-Nextgen\src\LibraNextgen.Common\obj\Debug\net10.0\LibraNextgen.Common.AssemblyInfo.cs
+D:\Projects\Mix\Libra-Nextgen\src\LibraNextgen.Common\obj\Debug\net10.0\LibraNextgen.Common.csproj.CoreCompileInputs.cache
+D:\Projects\Mix\Libra-Nextgen\src\LibraNextgen.Common\obj\Debug\net10.0\LibraNextgen.Common.dll
+D:\Projects\Mix\Libra-Nextgen\src\LibraNextgen.Common\obj\Debug\net10.0\refint\LibraNextgen.Common.dll
+D:\Projects\Mix\Libra-Nextgen\src\LibraNextgen.Common\obj\Debug\net10.0\LibraNextgen.Common.pdb
+D:\Projects\Mix\Libra-Nextgen\src\LibraNextgen.Common\obj\Debug\net10.0\ref\LibraNextgen.Common.dll
