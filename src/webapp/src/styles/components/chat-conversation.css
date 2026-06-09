@@ -1,0 +1,68 @@
+.chat-conversation {
+  min-height: calc(var(--spacing,.25rem) * 0);
+  font-size: var(--text-sm,.875rem);
+  line-height: var(--tw-leading,var(--text-sm--line-height,calc(1.25 / .875)));
+  --chat-conversation-shadow-size: 32px;
+  -webkit-mask-image: linear-gradient(to bottom, transparent, black var(--chat-conversation-shadow-size), black calc(100% - var(--chat-conversation-shadow-size)), transparent);
+  -webkit-mask-image: linear-gradient(to bottom, transparent, black var(--chat-conversation-shadow-size), black calc(100% - var(--chat-conversation-shadow-size)), transparent);
+  mask-image: linear-gradient(to bottom, transparent, black var(--chat-conversation-shadow-size), black calc(100% - var(--chat-conversation-shadow-size)), transparent);
+  flex-direction: column;
+  flex: 1;
+  display: flex;
+  position: relative;
+  overflow-y: auto;
+}
+
+.chat-conversation__content {
+  flex-direction: column;
+  width: 100%;
+  margin-inline: auto;
+  display: flex;
+}
+
+.chat-conversation__scroll-anchor {
+  width: 100%;
+  height: 1px;
+  scroll-margin-top: calc(var(--spacing,.25rem) * 4);
+  flex-shrink: 0;
+}
+
+.chat-conversation__scroll-button-container {
+  bottom: calc(var(--spacing,.25rem) * 4);
+  z-index: 10;
+  width: max-content;
+  margin-inline: auto;
+  position: sticky;
+}
+
+.chat-conversation__scroll-button-container[data-state=hidden] {
+  pointer-events: none;
+  visibility: hidden;
+}
+
+.chat-conversation__scroll-button {
+  border-style: var(--tw-border-style);
+  background-color: var(--surface);
+  color: var(--foreground);
+  --tw-shadow: var(--surface-shadow);
+  box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+  border-width: 1px;
+  border-color: #0000;
+}
+
+.chat-conversation__scroll-button:is(.dark,.dark *,[data-theme=dark],[data-theme=dark] *),.chat-conversation__scroll-button:is(.dark,.dark *,[data-theme=dark],[data-theme=dark] *):before,.chat-conversation__scroll-button:is(.dark,.dark *,[data-theme=dark],[data-theme=dark] *):after {
+  border-color: var(--border);
+}
+
+@media (prefers-color-scheme:dark) {
+  .chat-conversation__scroll-button:  not(:is(.dark,.dark *,[data-theme=dark],[data-theme=dark] *)) .chat-conversation__scroll-button,.chat-conversation__scroll-button:  not(:is(.dark,.dark *,[data-theme=dark],[data-theme=dark] *)) .chat-conversation__scroll-button:  before,.chat-conversation__scroll-button:  not(:is(.dark,.dark *,[data-theme=dark],[data-theme=dark] *)) .chat-conversation__scroll-button:  after {
+    border-color: var(--border);
+  }
+}
+
+.chat-conversation__scroll-button {
+  --button-bg: var(--surface);
+  --button-bg-hover: var(--surface);
+  --button-bg-pressed: var(--surface);
+  --button-fg: var(--foreground);
+}

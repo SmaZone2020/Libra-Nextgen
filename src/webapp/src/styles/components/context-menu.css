@@ -1,0 +1,138 @@
+.context-menu__trigger {
+  -webkit-touch-callout: none;
+  display: inline-block;
+  position: relative
+}
+
+.context-menu__popover {
+  max-width: 48svw;
+  scroll-padding-block: calc(var(--spacing,.25rem) * 1);
+  overscroll-behavior: contain;
+  border-radius: calc(var(--radius) * 3);
+  background-color: var(--overlay);
+  padding: calc(var(--spacing,.25rem) * 0);
+  font-size: var(--text-sm,.875rem);
+  line-height: var(--tw-leading,var(--text-sm--line-height,calc(1.25 / .875)));
+  --tw-outline-style: none;
+  outline-style: none;
+  overflow-y: auto
+}
+
+@media (min-width:48rem) {
+  .context-menu__popover {
+    min-width: calc(var(--spacing,.25rem) * 55)
+  }
+}
+
+.context-menu__popover {
+  box-shadow: var(--shadow-overlay)
+}
+
+.context-menu__popover:focus-visible:not(:focus),.context-menu__popover[data-focus-visible=true] {
+  --tw-outline-style: none;
+  outline-style: none
+}
+
+.context-menu__popover[data-entering=true] {
+  animation: enter var(--tw-animation-duration,var(--tw-duration,.15s))var(--tw-ease,ease)var(--tw-animation-delay,0s)var(--tw-animation-iteration-count,1)var(--tw-animation-direction,normal)var(--tw-animation-fill-mode,none);
+  --tw-duration: .15s;
+  --tw-ease: ease;
+  --tw-enter-opacity: 0;
+  --tw-enter-scale: .9;
+  transition-duration: .15s;
+  transition-timing-function: ease
+}
+
+.context-menu__popover[data-entering=true][data-placement=top] {
+  --tw-enter-translate-y: calc(1*var(--spacing))
+}
+
+.context-menu__popover[data-entering=true][data-placement=bottom] {
+  --tw-enter-translate-y: calc(1*var(--spacing)*-1)
+}
+
+.context-menu__popover[data-entering=true][data-placement=left] {
+  --tw-enter-translate-x: calc(1*var(--spacing))
+}
+
+.context-menu__popover[data-entering=true][data-placement=right] {
+  --tw-enter-translate-x: calc(1*var(--spacing)*-1)
+}
+
+.context-menu__popover[data-exiting=true] {
+  animation: exit var(--tw-animation-duration,var(--tw-duration,.15s))var(--tw-ease,ease)var(--tw-animation-delay,0s)var(--tw-animation-iteration-count,1)var(--tw-animation-direction,normal)var(--tw-animation-fill-mode,none);
+  --tw-duration: .1s;
+  --tw-ease: ease;
+  --tw-exit-scale: .95;
+  --tw-exit-opacity: 0;
+  transition-duration: .1s;
+  transition-timing-function: ease
+}
+
+.context-menu__popover[data-exiting=true],.context-menu__popover[data-entering=true] {
+  will-change: opacity,transform
+}
+
+:is(.context-menu__popover[data-exiting=true],.context-menu__popover[data-entering=true]):is([data-reduce-motion=true],[data-reduce-motion=true] *),:is(.context-menu__popover[data-exiting=true],.context-menu__popover[data-entering=true]):is([data-reduce-motion=true],[data-reduce-motion=true] *):before,:is(.context-menu__popover[data-exiting=true],.context-menu__popover[data-entering=true]):is([data-reduce-motion=true],[data-reduce-motion=true] *):after {
+  animation: none
+}
+
+@media (prefers-reduced-motion:reduce) {
+  :is(.context-menu__popover[data-exiting=true],.context-menu__popover[data-entering=true]):not(:is([data-reduce-motion=true],[data-reduce-motion=true] *)),:is(.context-menu__popover[data-exiting=true],.context-menu__popover[data-entering=true]):not(:is([data-reduce-motion=true],[data-reduce-motion=true] *)):before,:is(.context-menu__popover[data-exiting=true],.context-menu__popover[data-entering=true]):not(:is([data-reduce-motion=true],[data-reduce-motion=true] *)):after {
+    animation: none
+  }
+}
+
+.context-menu__popover [data-slot=context-menu-menu] {
+  padding: calc(var(--spacing,.25rem) * 1.5);
+  --tw-outline-style: none;
+  outline-style: none
+}
+
+.context-menu__popover [data-slot=context-menu-separator] {
+  width: 94%;
+  margin-left: 3%
+}
+
+.context-menu__menu {
+  gap: calc(var(--spacing,.25rem) * .5);
+  width: 100%;
+  padding: calc(var(--spacing,.25rem) * 1);
+  flex-direction: column;
+  display: flex;
+  position: relative;
+  overflow: clip
+}
+
+.context-menu__separator {
+  margin-block: calc(var(--spacing,.25rem) * 1);
+  background-color: var(--separator);
+  width: 100%;
+  height: 1px
+}
+
+@property --tw-duration {
+  syntax: "*";
+  inherits: false
+}
+
+@property --tw-ease {
+  syntax: "*";
+  inherits: false
+}
+
+@keyframes enter {
+  0% {
+    opacity: var(--tw-enter-opacity,1);
+    transform: translate3d(var(--tw-enter-translate-x,0),var(--tw-enter-translate-y,0),0)scale3d(var(--tw-enter-scale,1),var(--tw-enter-scale,1),var(--tw-enter-scale,1))rotate(var(--tw-enter-rotate,0));
+    filter: blur(var(--tw-enter-blur,0))
+  }
+}
+
+@keyframes exit {
+  to {
+    opacity: var(--tw-exit-opacity,1);
+    transform: translate3d(var(--tw-exit-translate-x,0),var(--tw-exit-translate-y,0),0)scale3d(var(--tw-exit-scale,1),var(--tw-exit-scale,1),var(--tw-exit-scale,1))rotate(var(--tw-exit-rotate,0));
+    filter: blur(var(--tw-exit-blur,0))
+  }
+}

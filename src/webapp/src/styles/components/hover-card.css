@@ -1,0 +1,189 @@
+.hover-card__trigger {
+  display: inline-flex
+}
+
+.hover-card__content {
+  border-radius: calc(var(--radius) * 2);
+  background-color: var(--overlay);
+  --tw-shadow: var(--overlay-shadow);
+  box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+  --tw-outline-style: none;
+  max-width: var(--container-sm,24rem);
+  padding: calc(var(--spacing,.25rem) * 4);
+  outline-style: none
+}
+
+.hover-card__content[data-entering=true] {
+  animation: enter var(--tw-animation-duration,var(--tw-duration,.15s))var(--tw-ease,ease)var(--tw-animation-delay,0s)var(--tw-animation-iteration-count,1)var(--tw-animation-direction,normal)var(--tw-animation-fill-mode,none);
+  --tw-duration: .15s;
+  --tw-ease: var(--ease-out,cubic-bezier(0, 0, .2, 1));
+  transition-duration: .15s;
+  transition-timing-function: var(--ease-out,cubic-bezier(0, 0, .2, 1));
+  --tw-enter-opacity: 0;
+  --tw-enter-scale: .97
+}
+
+.hover-card__content[data-exiting=true] {
+  animation: exit var(--tw-animation-duration,var(--tw-duration,.15s))var(--tw-ease,ease)var(--tw-animation-delay,0s)var(--tw-animation-iteration-count,1)var(--tw-animation-direction,normal)var(--tw-animation-fill-mode,none);
+  --tw-duration: .1s;
+  --tw-ease: var(--ease-out,cubic-bezier(0, 0, .2, 1));
+  transition-duration: .1s;
+  transition-timing-function: var(--ease-out,cubic-bezier(0, 0, .2, 1));
+  --tw-exit-opacity: 0;
+  --tw-exit-scale: .97
+}
+
+.hover-card__content[data-placement=bottom][data-entering=true] {
+  --tw-enter-translate-y: calc(1*var(--spacing)*-1)
+}
+
+.hover-card__content[data-placement=top][data-entering=true] {
+  --tw-enter-translate-y: calc(1*var(--spacing))
+}
+
+.hover-card__content[data-placement=left][data-entering=true] {
+  --tw-enter-translate-x: calc(1*var(--spacing))
+}
+
+.hover-card__content[data-placement=right][data-entering=true] {
+  --tw-enter-translate-x: calc(1*var(--spacing)*-1)
+}
+
+.hover-card__content[data-exiting=true],.hover-card__content[data-entering=true] {
+  will-change: opacity,transform
+}
+
+:is(.hover-card__content[data-exiting=true],.hover-card__content[data-entering=true]):is([data-reduce-motion=true],[data-reduce-motion=true] *),:is(.hover-card__content[data-exiting=true],.hover-card__content[data-entering=true]):is([data-reduce-motion=true],[data-reduce-motion=true] *):before,:is(.hover-card__content[data-exiting=true],.hover-card__content[data-entering=true]):is([data-reduce-motion=true],[data-reduce-motion=true] *):after {
+  animation: none
+}
+
+@media (prefers-reduced-motion:reduce) {
+  :is(.hover-card__content[data-exiting=true],.hover-card__content[data-entering=true]):not(:is([data-reduce-motion=true],[data-reduce-motion=true] *)),:is(.hover-card__content[data-exiting=true],.hover-card__content[data-entering=true]):not(:is([data-reduce-motion=true],[data-reduce-motion=true] *)):before,:is(.hover-card__content[data-exiting=true],.hover-card__content[data-entering=true]):not(:is([data-reduce-motion=true],[data-reduce-motion=true] *)):after {
+    animation: none
+  }
+}
+
+.hover-card__arrow {
+  display: block
+}
+
+.hover-card__arrow svg {
+  fill: var(--overlay)
+}
+
+.hover-card__arrow[data-placement=bottom] svg {
+  rotate: 180deg
+}
+
+.hover-card__arrow[data-placement=left] svg {
+  rotate: -90deg
+}
+
+.hover-card__arrow[data-placement=right] svg {
+  rotate: 90deg
+}
+
+@property --tw-shadow {
+  syntax: "*";
+  inherits: false;
+  initial-value: 0 0 #0000
+}
+
+@property --tw-shadow-color {
+  syntax: "*";
+  inherits: false
+}
+
+@property --tw-shadow-alpha {
+  syntax: "<percentage>";
+  inherits: false;
+  initial-value: 100%
+}
+
+@property --tw-inset-shadow {
+  syntax: "*";
+  inherits: false;
+  initial-value: 0 0 #0000
+}
+
+@property --tw-inset-shadow-color {
+  syntax: "*";
+  inherits: false
+}
+
+@property --tw-inset-shadow-alpha {
+  syntax: "<percentage>";
+  inherits: false;
+  initial-value: 100%
+}
+
+@property --tw-ring-color {
+  syntax: "*";
+  inherits: false
+}
+
+@property --tw-ring-shadow {
+  syntax: "*";
+  inherits: false;
+  initial-value: 0 0 #0000
+}
+
+@property --tw-inset-ring-color {
+  syntax: "*";
+  inherits: false
+}
+
+@property --tw-inset-ring-shadow {
+  syntax: "*";
+  inherits: false;
+  initial-value: 0 0 #0000
+}
+
+@property --tw-ring-inset {
+  syntax: "*";
+  inherits: false
+}
+
+@property --tw-ring-offset-width {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0
+}
+
+@property --tw-ring-offset-color {
+  syntax: "*";
+  inherits: false;
+  initial-value: #fff
+}
+
+@property --tw-ring-offset-shadow {
+  syntax: "*";
+  inherits: false;
+  initial-value: 0 0 #0000
+}
+
+@property --tw-duration {
+  syntax: "*";
+  inherits: false
+}
+
+@property --tw-ease {
+  syntax: "*";
+  inherits: false
+}
+
+@keyframes enter {
+  0% {
+    opacity: var(--tw-enter-opacity,1);
+    transform: translate3d(var(--tw-enter-translate-x,0),var(--tw-enter-translate-y,0),0)scale3d(var(--tw-enter-scale,1),var(--tw-enter-scale,1),var(--tw-enter-scale,1))rotate(var(--tw-enter-rotate,0));
+    filter: blur(var(--tw-enter-blur,0))
+  }
+}
+
+@keyframes exit {
+  to {
+    opacity: var(--tw-exit-opacity,1);
+    transform: translate3d(var(--tw-exit-translate-x,0),var(--tw-exit-translate-y,0),0)scale3d(var(--tw-exit-scale,1),var(--tw-exit-scale,1),var(--tw-exit-scale,1))rotate(var(--tw-exit-rotate,0));
+    filter: blur(var(--tw-exit-blur,0))
+  }
+}

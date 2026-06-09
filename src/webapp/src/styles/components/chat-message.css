@@ -1,0 +1,82 @@
+.chat-message--user {
+  flex-direction: column;
+  align-items: flex-end;
+  width: 100%;
+  display: flex;
+}
+
+.chat-message--assistant {
+  align-items: flex-start;
+  gap: calc(var(--spacing,.25rem) * 3);
+  width: 100%;
+  padding-block: calc(var(--spacing,.25rem) * 2);
+  flex-direction: row;
+  display: flex;
+}
+
+.chat-message__body {
+  min-width: calc(var(--spacing,.25rem) * 0);
+  gap: calc(var(--spacing,.25rem) * 2);
+  padding-right: calc(var(--spacing,.25rem) * 12);
+  flex-direction: column;
+  flex: 1;
+  display: flex;
+}
+
+.chat-message__bubble {
+  border-radius: calc(var(--radius) * 2);
+  background-color: var(--default);
+  padding-inline: calc(var(--spacing,.25rem) * 4);
+  padding-block: calc(var(--spacing,.25rem) * 2);
+  color: var(--foreground);
+}
+
+.chat-message__content {
+  font-size: var(--text-sm,.875rem);
+  line-height: var(--tw-leading,var(--text-sm--line-height,calc(1.25 / .875)));
+  --tw-leading: var(--leading-relaxed,1.625);
+  line-height: var(--leading-relaxed,1.625);
+  color: var(--foreground);
+}
+
+.chat-message--assistant .chat-message__content {
+  width: 100%;
+  max-width: none;
+}
+
+.chat-message__media {
+  gap: calc(var(--spacing,.25rem) * 2);
+  flex-direction: column;
+  display: flex;
+}
+
+.chat-message__actions {
+  opacity: .5;
+  transition-property: opacity;
+  transition-timing-function: var(--tw-ease,var(--default-transition-timing-function,cubic-bezier(.4, 0, .2, 1)));
+  transition-duration: var(--tw-duration,var(--default-transition-duration,.15s));
+  align-items: flex-start;
+  display: flex;
+}
+
+@media (hover:hover) {
+  .chat-message--assistant:  hover .chat-message__actions,.chat-message--user:  hover .chat-message__actions {
+    opacity: 1;
+  }
+}
+
+.chat-message__action {
+  color: var(--muted);
+}
+
+.chat-message__avatar {
+  flex-shrink: 0;
+  align-self: flex-start;
+}
+
+.chat-message__avatar-spacer {
+  width: calc(var(--spacing,.25rem) * 8);
+  height: calc(var(--spacing,.25rem) * 8);
+  flex-shrink: 0;
+  align-self: flex-start;
+}

@@ -1,0 +1,162 @@
+.native-select {
+  gap: calc(var(--spacing,.25rem) * 1);
+  flex-direction: column;
+  display: inline-flex
+}
+
+:is(.native-select[data-invalid=true],.native-select[aria-invalid=true]) [data-slot=description] {
+  display: none
+}
+
+.native-select [data-slot=label] {
+  width: fit-content
+}
+
+.native-select [data-slot=description] {
+  padding-inline: calc(var(--spacing,.25rem) * 1)
+}
+
+.native-select__trigger {
+  align-items: center;
+  display: inline-flex;
+  position: relative
+}
+
+.native-select__select {
+  min-height: calc(var(--spacing,.25rem) * 9);
+  appearance: none;
+  border-radius: var(--field-radius,calc(var(--radius) * 1.5));
+  border-style: var(--tw-border-style);
+  background-color: var(--field-background,var(--default));
+  width: 100%;
+  padding-inline: calc(var(--spacing,.25rem) * 3);
+  padding-block: calc(var(--spacing,.25rem) * 2);
+  font-size: var(--text-sm,.875rem);
+  line-height: var(--tw-leading,var(--text-sm--line-height,calc(1.25 / .875)));
+  color: var(--field-foreground,var(--foreground));
+  --tw-shadow: var(--field-shadow);
+  box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+  --tw-outline-style: none;
+  -webkit-tap-highlight-color: transparent;
+  transition: background-color .15s var(--ease-smooth), border-color .15s var(--ease-smooth), box-shadow .15s var(--ease-out);
+  border-width: 1px;
+  outline-style: none;
+  display: inline-flex;
+  position: relative
+}
+
+.native-select__select:is([data-reduce-motion=true],[data-reduce-motion=true] *),.native-select__select:is([data-reduce-motion=true],[data-reduce-motion=true] *):before,.native-select__select:is([data-reduce-motion=true],[data-reduce-motion=true] *):after {
+  transition-property: none
+}
+
+@media (prefers-reduced-motion:reduce) {
+  .native-select__select: not(:is([data-reduce-motion=true],[data-reduce-motion=true] *)),.native-select__select: not(:is([data-reduce-motion=true],[data-reduce-motion=true] *)):before,.native-select__select: not(:is([data-reduce-motion=true],[data-reduce-motion=true] *)):after {
+    transition-property: none
+  }
+}
+
+.native-select__select {
+  cursor: var(--cursor-interactive);
+  border-width: var(--border-width-field);
+  border-color: var(--color-field-border);
+  padding-right: calc(var(--native-select-indicator-offset,.5rem) + var(--native-select-indicator-size,1rem) + .5rem)
+}
+
+@media (hover:hover) {
+  .native-select__select: hover,.native-select__select[data-hovered=true] {
+    background-color: var(--field-hover);
+    border-color: var(--color-field-border-hover)
+  }
+}
+
+.native-select__select:focus-visible:not(:focus),.native-select__select[data-focus-visible=true] {
+  --tw-ring-shadow: var(--tw-ring-inset,) 0 0 0 calc(2px + var(--tw-ring-offset-width)) var(--tw-ring-color,currentcolor);
+  box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+  --tw-ring-color: var(--focus);
+  --tw-ring-offset-width: var(--ring-offset-width);
+  --tw-ring-offset-shadow: var(--tw-ring-inset,) 0 0 0 var(--tw-ring-offset-width) var(--tw-ring-offset-color);
+  --tw-ring-offset-color: var(--background);
+  --tw-outline-style: none;
+  border-color: var(--color-field-border-focus);
+  background-color: var(--color-field-focus);
+  outline-style: none
+}
+
+.native-select__select:focus {
+  border-color: var(--color-field-border-focus);
+  background-color: var(--color-field-focus)
+}
+
+.native-select[data-invalid=true] .native-select__select,.native-select[aria-invalid=true] .native-select__select {
+  outline-style: var(--tw-outline-style);
+  outline-width: 1px;
+  outline-color: var(--danger);
+  --tw-outline-style: solid;
+  --tw-ring-offset-width: 3px;
+  outline-style: solid
+}
+
+:is(.native-select[data-invalid=true] .native-select__select,.native-select[aria-invalid=true] .native-select__select):focus,:is(.native-select[data-invalid=true] .native-select__select,.native-select[aria-invalid=true] .native-select__select):focus-visible,:is(.native-select[data-invalid=true] .native-select__select,.native-select[aria-invalid=true] .native-select__select)[data-focused=true],:is(.native-select[data-invalid=true] .native-select__select,.native-select[aria-invalid=true] .native-select__select)[data-focus-visible=true],:is(.native-select[data-invalid=true] .native-select__select,.native-select[aria-invalid=true] .native-select__select):focus-within,:is(.native-select[data-invalid=true] .native-select__select,.native-select[aria-invalid=true] .native-select__select)[data-focus-within=true] {
+  --tw-ring-shadow: var(--tw-ring-inset,) 0 0 0 calc(2px + var(--tw-ring-offset-width)) var(--tw-ring-color,currentcolor);
+  box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+  --tw-ring-color: var(--danger);
+  --tw-ring-offset-shadow: var(--tw-ring-inset,) 0 0 0 var(--tw-ring-offset-width) var(--tw-ring-offset-color);
+  --tw-ring-offset-width: 0px
+}
+
+.native-select[data-invalid=true] .native-select__select,.native-select[aria-invalid=true] .native-select__select {
+  background-color: var(--color-field-focus)
+}
+
+.native-select__select:disabled,.native-select__select[aria-disabled=true] {
+  opacity: var(--disabled-opacity);
+  cursor: var(--cursor-disabled);
+  pointer-events: none
+}
+
+.native-select__select:has(option[value=""]:checked) {
+  color: var(--field-placeholder,var(--muted))
+}
+
+.native-select__select::-ms-expand {
+  display: none
+}
+
+.native-select__indicator {
+  pointer-events: none;
+  inset-block: calc(var(--spacing,.25rem) * 0);
+  right: calc(var(--spacing,.25rem) * 2);
+  color: var(--field-placeholder,var(--muted));
+  flex-shrink: 0;
+  justify-content: center;
+  align-items: center;
+  margin-block: auto;
+  display: flex;
+  position: absolute
+}
+
+.native-select__indicator svg {
+  --native-select-indicator-size: 1rem;
+  width: calc(var(--spacing,.25rem) * 4);
+  height: calc(var(--spacing,.25rem) * 4)
+}
+
+.native-select--secondary .native-select__select {
+  --tw-shadow: 0 0 #0000;
+  box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+  background-color: var(--color-default)
+}
+
+@media (hover:hover) {
+  .native-select--secondary .native-select__select: hover,.native-select--secondary .native-select__select[data-hovered=true] {
+    background-color: var(--color-default-hover)
+  }
+}
+
+.native-select--secondary .native-select__select:focus-visible:not(:focus),.native-select--secondary .native-select__select[data-focus-visible=true],.native-select--secondary .native-select__select:focus {
+  background-color: var(--color-default)
+}
+
+.native-select--full-width,.native-select__trigger--full-width {
+  width: 100%
+}

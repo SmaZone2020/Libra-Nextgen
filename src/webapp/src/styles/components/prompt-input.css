@@ -1,0 +1,555 @@
+.prompt-input {
+  width: 100%;
+  position: relative
+}
+
+.prompt-input__shell {
+  border-radius: calc(var(--radius) * 2);
+  border-style: solid;
+  border-color: var(--field-border,var(--border));
+  border-width: var(--border-width-field,var(--field-border-width,1px));
+  width: 100%;
+  transition: background-color .15s var(--ease-smooth), border-color .15s var(--ease-smooth), box-shadow .15s var(--ease-out);
+  flex-direction: column;
+  display: flex;
+  position: relative;
+  overflow: hidden
+}
+
+.prompt-input__shell--primary {
+  background-color: var(--field-background,var(--default));
+  border-color: var(--field-border,var(--border))
+}
+
+@media (hover:hover) {
+  .prompt-input__shell--primary: hover {
+    border-color: var(--field-border-hover)
+  }
+}
+
+.prompt-input:focus-within .prompt-input__shell--primary {
+  background-color: var(--field-focus,var(--field-background,var(--default)));
+  border-color: var(--field-border-focus,var(--field-border,var(--border)))
+}
+
+.prompt-input__shell--secondary {
+  --tw-shadow: 0 0 #0000;
+  box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+  background-color: var(--default);
+  border-color: var(--field-border,var(--border))
+}
+
+@media (hover:hover) {
+  .prompt-input__shell--secondary: hover {
+    background-color: var(--default-hover)
+  }
+}
+
+.prompt-input:focus-within .prompt-input__shell--secondary {
+  background-color: var(--default);
+  border-color: var(--field-border-focus,var(--field-border,var(--border)))
+}
+
+.prompt-input__shell[data-dragging=true] {
+  background-color: var(--accent-soft);
+  border-style: dotted;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent)
+}
+
+.prompt-input__content {
+  min-height: calc(var(--spacing,.25rem) * 0);
+  gap: calc(var(--spacing,.25rem) * 1);
+  flex-direction: column;
+  flex: 1;
+  display: flex
+}
+
+.prompt-input__attachments {
+  gap: calc(var(--spacing,.25rem) * 2);
+  padding-inline: calc(var(--spacing,.25rem) * 3);
+  padding-top: calc(var(--spacing,.25rem) * 3);
+  padding-bottom: calc(var(--spacing,.25rem) * 1);
+  flex-wrap: wrap;
+  display: flex
+}
+
+.prompt-input__textarea {
+  resize: none;
+  min-height: 112px;
+  padding-inline: calc(var(--spacing,.25rem) * 3);
+  padding-top: calc(var(--spacing,.25rem) * 3);
+  padding-bottom: calc(var(--spacing,.25rem) * 12);
+  transition: height .1s var(--ease-out)
+}
+
+.prompt-input__attachments+.prompt-input__textarea {
+  padding-top: calc(var(--spacing,.25rem) * 1)
+}
+
+@media (prefers-reduced-motion:reduce) {
+  .prompt-input__textarea {
+    transition: none
+  }
+}
+
+.prompt-input__shell .prompt-input__textarea.textarea,.prompt-input__shell .prompt-input__textarea.textarea:hover:not(:focus):not(:focus-visible),.prompt-input__shell .prompt-input__textarea.textarea[data-hovered=true]:not([data-focused=true]):not([data-focus-visible=true]) {
+  box-shadow: none;
+  --tw-shadow: 0 0 #0000;
+  --tw-inset-shadow: 0 0 #0000;
+  --tw-ring-shadow: 0 0 #0000;
+  --tw-inset-ring-shadow: 0 0 #0000;
+  --tw-ring-offset-shadow: 0 0 #0000;
+  background-color: #0000;
+  border-color: #0000
+}
+
+.prompt-input__shell .prompt-input__textarea.textarea:focus,.prompt-input__shell .prompt-input__textarea.textarea:focus-visible,.prompt-input__shell .prompt-input__textarea.textarea[data-focused=true],.prompt-input__shell .prompt-input__textarea.textarea[data-focus-visible=true] {
+  box-shadow: none;
+  --tw-shadow: 0 0 #0000;
+  --tw-inset-shadow: 0 0 #0000;
+  --tw-ring-shadow: 0 0 #0000;
+  --tw-inset-ring-shadow: 0 0 #0000;
+  --tw-ring-offset-shadow: 0 0 #0000;
+  background-color: #0000;
+  border-color: #0000;
+  outline: none
+}
+
+.prompt-input--sm .prompt-input__textarea {
+  min-height: 88px;
+  padding-bottom: calc(var(--spacing,.25rem) * 10)
+}
+
+.prompt-input--lg .prompt-input__textarea {
+  min-height: 128px;
+  padding-bottom: calc(var(--spacing,.25rem) * 14)
+}
+
+.prompt-input__toolbar {
+  inset-inline: calc(var(--spacing,.25rem) * 3);
+  bottom: calc(var(--spacing,.25rem) * 3);
+  justify-content: space-between;
+  align-items: center;
+  gap: calc(var(--spacing,.25rem) * 2);
+  display: flex;
+  position: absolute
+}
+
+.prompt-input__toolbar-start,.prompt-input__toolbar-end {
+  align-items: center;
+  gap: calc(var(--spacing,.25rem) * 2);
+  display: flex
+}
+
+.prompt-input__toolbar-end {
+  margin-left: auto
+}
+
+.prompt-input__footer {
+  margin-top: calc(var(--spacing,.25rem) * 1);
+  text-align: center;
+  font-size: var(--text-xs,.75rem);
+  line-height: var(--tw-leading,var(--text-xs--line-height,calc(1 / .75)));
+  color: var(--muted)
+}
+
+.prompt-input__send {
+  flex-shrink: 0
+}
+
+.prompt-input[data-disabled=true] {
+  opacity: .6
+}
+
+.prompt-input[data-pending=true] .prompt-input__shell {
+  opacity: .95
+}
+
+.prompt-input[data-status=error] .prompt-input__send {
+  background-color: var(--danger);
+  color: var(--danger-foreground)
+}
+
+.prompt-input[data-disabled=true] .prompt-input__shell {
+  cursor: not-allowed
+}
+
+.prompt-input:not([data-disabled=true]) .prompt-input__shell {
+  cursor: text
+}
+
+.prompt-input:not([data-disabled=true]) .prompt-input__toolbar {
+  cursor: default
+}
+
+.prompt-input[data-variant=inline] .prompt-input__shell--inline {
+  background-color: var(--field-background,var(--default));
+  border-color: var(--field-border,var(--border));
+  border-radius: var(--radius-2xl,1rem);
+  transition: background-color .15s var(--ease-smooth), border-color .15s var(--ease-smooth), border-radius .2s var(--ease-out), box-shadow .15s var(--ease-out), min-height .2s var(--ease-out)
+}
+
+@media (prefers-reduced-motion:reduce) {
+  .prompt-input[data-variant=inline] .prompt-input__shell--inline {
+    transition: background-color .15s var(--ease-smooth), border-color .15s var(--ease-smooth), box-shadow .15s var(--ease-out)
+  }
+}
+
+@media (hover:hover) {
+  .prompt-input[data-variant=inline] .prompt-input__shell--inline: hover {
+    border-color: var(--field-border-hover)
+  }
+}
+
+.prompt-input[data-variant=inline]:focus-within .prompt-input__shell--inline {
+  background-color: var(--field-focus,var(--field-background,var(--default)));
+  border-color: var(--field-border-focus,var(--field-border,var(--border)))
+}
+
+.prompt-input[data-variant=inline] .prompt-input__send,.prompt-input[data-variant=inline] [data-slot=prompt-input-action] {
+  width: calc(var(--spacing,.25rem) * 8);
+  height: calc(var(--spacing,.25rem) * 8);
+  max-height: calc(var(--spacing,.25rem) * 8);
+  min-height: calc(var(--spacing,.25rem) * 8);
+  max-width: calc(var(--spacing,.25rem) * 8);
+  min-width: calc(var(--spacing,.25rem) * 8);
+  flex-shrink: 0
+}
+
+.prompt-input[data-variant=inline]:not([data-expanded]) .prompt-input__shell--inline:not(:has(.prompt-input__attachments>*)) {
+  min-height: 50px;
+  padding-block: calc(var(--spacing,.25rem) * 0);
+  border-radius: 25px;
+  grid-template: "attachments attachments attachments""toolbar-start textarea toolbar-end"minmax(0,auto)/auto minmax(0,1fr) auto;
+  align-items: center;
+  display: grid;
+  overflow: hidden
+}
+
+.prompt-input[data-variant=inline]:not([data-expanded]) .prompt-input__shell--inline:not(:has(.prompt-input__attachments>*)) .prompt-input__content,.prompt-input[data-variant=inline]:not([data-expanded]) .prompt-input__shell--inline:not(:has(.prompt-input__attachments>*)) .prompt-input__toolbar {
+  display: contents
+}
+
+.prompt-input[data-variant=inline]:not([data-expanded]) .prompt-input__shell--inline:not(:has(.prompt-input__attachments>*)) .prompt-input__textarea {
+  resize: none;
+  min-height: 50px;
+  max-height: 50px;
+  padding-inline: calc(var(--spacing,.25rem) * 2);
+  padding-block: calc(var(--spacing,.25rem) * 3.5);
+  transition: height .1s var(--ease-out), min-height .2s var(--ease-out);
+  grid-area: textarea;
+  align-self: center;
+  overflow-y: hidden
+}
+
+@media (prefers-reduced-motion:reduce) {
+  .prompt-input[data-variant=inline]:not([data-expanded]) .prompt-input__shell--inline: not(:has(.prompt-input__attachments>*)) .prompt-input__textarea {
+    transition: none
+  }
+}
+
+.prompt-input[data-variant=inline]:not([data-expanded]) .prompt-input__shell--inline:not(:has(.prompt-input__attachments>*)) .prompt-input__toolbar-start {
+  height: calc(var(--spacing,.25rem) * 8);
+  padding-left: calc(var(--spacing,.25rem) * 2);
+  grid-area: toolbar-start;
+  align-self: center
+}
+
+.prompt-input[data-variant=inline]:not([data-expanded]) .prompt-input__shell--inline:not(:has(.prompt-input__attachments>*)) .prompt-input__toolbar-end {
+  height: calc(var(--spacing,.25rem) * 8);
+  padding-right: calc(var(--spacing,.25rem) * 2);
+  grid-area: toolbar-end;
+  align-self: center
+}
+
+.prompt-input[data-variant=inline][data-expanded] .prompt-input__shell--inline,.prompt-input[data-variant=inline] .prompt-input__shell--inline:has(.prompt-input__attachments>*) {
+  border-radius: var(--radius-2xl,1rem);
+  flex-direction: column;
+  min-height: 112px;
+  display: flex
+}
+
+.prompt-input[data-variant=inline][data-expanded] .prompt-input__content,.prompt-input[data-variant=inline] .prompt-input__shell--inline:has(.prompt-input__attachments>*) .prompt-input__content {
+  min-height: calc(var(--spacing,.25rem) * 0);
+  gap: calc(var(--spacing,.25rem) * 1);
+  flex-direction: column;
+  flex: 1;
+  display: flex
+}
+
+.prompt-input[data-variant=inline][data-expanded] .prompt-input__toolbar,.prompt-input[data-variant=inline] .prompt-input__shell--inline:has(.prompt-input__attachments>*) .prompt-input__toolbar {
+  inset-inline: calc(var(--spacing,.25rem) * 3);
+  bottom: calc(var(--spacing,.25rem) * 3);
+  justify-content: space-between;
+  align-items: center;
+  gap: calc(var(--spacing,.25rem) * 2);
+  display: flex;
+  position: absolute
+}
+
+.prompt-input[data-variant=inline][data-expanded] .prompt-input__attachments,.prompt-input[data-variant=inline] .prompt-input__shell--inline:has(.prompt-input__attachments>*) .prompt-input__attachments {
+  gap: calc(var(--spacing,.25rem) * 2);
+  padding-inline: calc(var(--spacing,.25rem) * 3);
+  padding-top: calc(var(--spacing,.25rem) * 3);
+  padding-bottom: calc(var(--spacing,.25rem) * 1);
+  flex-wrap: wrap;
+  display: flex
+}
+
+.prompt-input[data-variant=inline][data-expanded] .prompt-input__textarea,.prompt-input[data-variant=inline] .prompt-input__shell--inline:has(.prompt-input__attachments>*) .prompt-input__textarea {
+  resize: none;
+  min-height: 72px;
+  max-height: 240px;
+  padding-inline: calc(var(--spacing,.25rem) * 3);
+  padding-top: calc(var(--spacing,.25rem) * 3);
+  padding-bottom: calc(var(--spacing,.25rem) * 12);
+  transition: height .1s var(--ease-out), min-height .2s var(--ease-out)
+}
+
+@media (prefers-reduced-motion:reduce) {
+  .prompt-input[data-variant=inline][data-expanded] .prompt-input__textarea,.prompt-input[data-variant=inline] .prompt-input__shell--inline: has(.prompt-input__attachments>*) .prompt-input__textarea {
+    transition: none
+  }
+}
+
+.prompt-input[data-variant=inline][data-expanded] .prompt-input__attachments+.prompt-input__textarea,.prompt-input[data-variant=inline] .prompt-input__shell--inline:has(.prompt-input__attachments>*) .prompt-input__attachments+.prompt-input__textarea {
+  padding-top: calc(var(--spacing,.25rem) * 1)
+}
+
+.prompt-input[data-variant=inline][data-expanded] .prompt-input__toolbar-start,.prompt-input[data-variant=inline] .prompt-input__shell--inline:has(.prompt-input__attachments>*) .prompt-input__toolbar-start {
+  padding-left: calc(var(--spacing,.25rem) * 0);
+  flex-shrink: 0
+}
+
+.prompt-input[data-variant=inline][data-expanded] .prompt-input__toolbar-end,.prompt-input[data-variant=inline] .prompt-input__shell--inline:has(.prompt-input__attachments>*) .prompt-input__toolbar-end {
+  padding-right: calc(var(--spacing,.25rem) * 0);
+  flex-shrink: 0
+}
+
+.prompt-input [data-slot=select-trigger].prompt-input__select-trigger--outline {
+  --field-border: var(--border);
+  --field-border-hover: var(--border);
+  --field-border-focus: var(--border);
+  box-shadow: none;
+  border-style: solid;
+  border-width: var(--border-width,1px);
+  border-color: var(--border);
+  --button-bg-hover: var(--default);
+  background-color: #0000
+}
+
+@supports (color:color-mix(in lab, red, red)) {
+  .prompt-input [data-slot=select-trigger].prompt-input__select-trigger--outline {
+    --button-bg-hover: color-mix(in srgb, var(--default) 60%, transparent)
+  }
+}
+
+@media (hover:hover) {
+  .prompt-input [data-slot=select-trigger].prompt-input__select-trigger--outline: hover,.prompt-input [data-slot=select-trigger].prompt-input__select-trigger--outline[data-hovered=true] {
+    border-color: var(--border);
+    background-color: var(--button-bg-hover)
+  }
+}
+
+.prompt-input [data-slot=select-trigger].prompt-input__select-trigger--outline:focus-visible,.prompt-input [data-slot=select-trigger].prompt-input__select-trigger--outline[data-focus-visible=true] {
+  border-color: var(--border);
+  background-color: #0000
+}
+
+.prompt-input:has(>.prompt-input__queue) {
+  gap: calc(var(--spacing,.25rem) * 2);
+  flex-direction: column;
+  width: 100%;
+  display: flex;
+  overflow-x: hidden
+}
+
+.prompt-input:has(>.prompt-input__queue)>.prompt-input__shell {
+  flex-shrink: 0;
+  width: 100%
+}
+
+.prompt-input__queue {
+  border-radius: calc(var(--radius) * 2);
+  border-style: solid;
+  border-color: var(--field-border,var(--border));
+  border-width: var(--border-width-field,var(--field-border-width,1px));
+  width: 100%;
+  transition: background-color .15s var(--ease-smooth), border-color .15s var(--ease-smooth);
+  flex-shrink: 0;
+  position: relative;
+  overflow: hidden
+}
+
+.prompt-input[data-variant=primary] .prompt-input__queue,.prompt-input:not([data-variant]) .prompt-input__queue {
+  background-color: var(--field-background,var(--default))
+}
+
+.prompt-input[data-variant=secondary] .prompt-input__queue {
+  background-color: var(--default)
+}
+
+@media (hover:hover) {
+  .prompt-input[data-variant=primary] .prompt-input__queue: hover,.prompt-input: not([data-variant]) .prompt-input__queue: hover {
+    border-color: var(--field-border-hover,var(--field-border,var(--border)))
+  }
+}
+
+.prompt-input:focus-within[data-variant=primary] .prompt-input__queue,.prompt-input:focus-within:not([data-variant]) .prompt-input__queue,.prompt-input[data-variant=inline]:focus-within .prompt-input__queue {
+  border-color: var(--field-border-focus,var(--field-border,var(--border)))
+}
+
+.prompt-input__queue-list {
+  max-height: calc(var(--spacing,.25rem) * 40);
+  width: 100%;
+  overflow-x: hidden
+}
+
+.prompt-input__queue-list-items {
+  margin: calc(var(--spacing,.25rem) * 0);
+  padding: calc(var(--spacing,.25rem) * 0);
+  list-style-type: none
+}
+
+.prompt-input__queue-item {
+  min-width: calc(var(--spacing,.25rem) * 0);
+  align-items: center;
+  gap: calc(var(--spacing,.25rem) * 2);
+  padding-inline: calc(var(--spacing,.25rem) * 2);
+  padding-block: calc(var(--spacing,.25rem) * 1);
+  display: flex
+}
+
+.prompt-input__queue-item+.prompt-input__queue-item {
+  border-top-style: var(--tw-border-style);
+  border-top-width: 1px;
+  border-color: var(--border)
+}
+
+@supports (color:color-mix(in lab, red, red)) {
+  .prompt-input__queue-item+.prompt-input__queue-item {
+    border-color: color-mix(in oklab, var(--border) 50%, transparent)
+  }
+}
+
+.prompt-input__queue-item-body {
+  min-width: calc(var(--spacing,.25rem) * 0);
+  align-items: center;
+  gap: calc(var(--spacing,.25rem) * 2);
+  flex: 1;
+  display: flex
+}
+
+.prompt-input__queue-item-body:has(.prompt-input__queue-item-attachments) {
+  align-items: stretch;
+  gap: calc(var(--spacing,.25rem) * 2);
+  flex-direction: column
+}
+
+.prompt-input__queue-item-body:has(.prompt-input__queue-item-attachments) .prompt-input__queue-item-icon {
+  align-self: flex-start
+}
+
+.prompt-input__queue-item>.prompt-input__queue-item-attachments {
+  padding-left: calc(var(--spacing,.25rem) * 9);
+  flex-basis: 100%
+}
+
+.prompt-input__queue-item:has(>.prompt-input__queue-item-attachments) {
+  flex-wrap: wrap
+}
+
+.prompt-input__queue-item:has(>.prompt-input__queue-item-attachments) .prompt-input__queue-item-actions {
+  align-self: center
+}
+
+.prompt-input__queue-item-handle {
+  width: calc(var(--spacing,.25rem) * 7);
+  height: calc(var(--spacing,.25rem) * 7);
+  min-height: calc(var(--spacing,.25rem) * 7);
+  min-width: calc(var(--spacing,.25rem) * 7);
+  color: var(--muted);
+  opacity: 1;
+  transition-property: opacity;
+  transition-timing-function: var(--tw-ease,var(--default-transition-timing-function,cubic-bezier(.4, 0, .2, 1)));
+  transition-duration: var(--tw-duration,var(--default-transition-duration,.15s));
+  flex-shrink: 0
+}
+
+.prompt-input__queue-item-handle[data-reorder-enabled] {
+  cursor: grab
+}
+
+.prompt-input__queue-item-handle[data-reorder-enabled]:active {
+  cursor: grabbing
+}
+
+.prompt-input__queue-item-icon {
+  color: var(--muted);
+  flex-shrink: 0;
+  justify-content: center;
+  align-self: center;
+  align-items: center;
+  display: flex
+}
+
+.prompt-input__queue-item-content {
+  min-width: calc(var(--spacing,.25rem) * 0);
+  font-size: var(--text-xs,.75rem);
+  line-height: var(--tw-leading,var(--text-xs--line-height,calc(1 / .75)));
+  overflow-wrap: anywhere;
+  color: var(--muted);
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  flex: 1;
+  align-self: center;
+  display: -webkit-box;
+  overflow: hidden
+}
+
+.prompt-input__queue-item-body .prompt-input__queue-item-content {
+  min-width: calc(var(--spacing,.25rem) * 0);
+  flex: 1
+}
+
+.prompt-input__queue-item-description {
+  font-size: var(--text-xs,.75rem);
+  line-height: var(--tw-leading,var(--text-xs--line-height,calc(1 / .75)));
+  --tw-leading: calc(var(--spacing,.25rem) * 4);
+  line-height: calc(var(--spacing,.25rem) * 4);
+  color: var(--muted)
+}
+
+.prompt-input__queue-item-actions {
+  align-items: center;
+  gap: calc(var(--spacing,.25rem) * .5);
+  transition-property: opacity;
+  transition-timing-function: var(--tw-ease,var(--default-transition-timing-function,cubic-bezier(.4, 0, .2, 1)));
+  transition-duration: var(--tw-duration,var(--default-transition-duration,.15s));
+  flex-shrink: 0;
+  align-self: center;
+  display: flex
+}
+
+.prompt-input__queue[data-actions-visibility=hover] .prompt-input__queue-item-actions {
+  opacity: 0
+}
+
+.prompt-input__queue[data-actions-visibility=hover] .prompt-input__queue-item:hover .prompt-input__queue-item-actions,.prompt-input__queue[data-actions-visibility=hover] .prompt-input__queue-item:focus-within .prompt-input__queue-item-actions,.prompt-input__queue[data-actions-visibility=hover] .prompt-input__queue-item:has([aria-expanded=true]) .prompt-input__queue-item-actions,.prompt-input__queue[data-actions-visibility=hover] .prompt-input__queue-item:has([data-open=true]) .prompt-input__queue-item-actions,.prompt-input__queue[data-actions-visibility=always] .prompt-input__queue-item-actions {
+  opacity: 1
+}
+
+.prompt-input__queue-item-attachments {
+  min-width: calc(var(--spacing,.25rem) * 0);
+  align-items: center;
+  gap: calc(var(--spacing,.25rem) * 2);
+  flex-wrap: wrap;
+  display: flex
+}
+
+.prompt-input__queue-item-attachments-overflow {
+  font-size: var(--text-xs,.75rem);
+  line-height: var(--tw-leading,var(--text-xs--line-height,calc(1 / .75)));
+  color: var(--muted)
+}

@@ -1,0 +1,22 @@
+.bar-chart {
+  width: 100%;
+}
+
+.bar-chart .recharts-cartesian-axis-tick-value {
+  font-size: 10px;
+  fill: var(--muted)!important;
+}
+
+.bar-chart .recharts-cartesian-axis-line,.bar-chart .recharts-cartesian-axis-tick-line {
+  stroke: none!important;
+}
+
+.bar-chart .recharts-cartesian-grid line {
+  stroke: var(--muted);
+  stroke-opacity: .15;
+}
+
+.bar-chart .recharts-tooltip-cursor {
+  fill: currentColor;
+  opacity: .05;
+}

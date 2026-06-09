@@ -1,0 +1,179 @@
+.segment {
+  background-color: var(--default);
+  padding: calc(var(--spacing,.25rem) * 1);
+  border-radius: calc(var(--radius-2xl) + .25rem);
+  align-items: center;
+  display: inline-flex;
+  position: relative
+}
+
+.segment__item {
+  z-index: 1;
+  cursor: var(--cursor-interactive);
+  height: calc(var(--spacing,.25rem) * 8);
+  justify-content: center;
+  align-items: center;
+  gap: calc(var(--spacing,.25rem) * 1.5);
+  border-radius: calc(var(--radius) * 3);
+  width: 100%;
+  padding-inline: calc(var(--spacing,.25rem) * 4);
+  text-align: center;
+  font-size: var(--text-sm,.875rem);
+  line-height: var(--tw-leading,var(--text-sm--line-height,calc(1.25 / .875)));
+  --tw-font-weight: var(--font-weight-medium,500);
+  font-weight: var(--font-weight-medium,500);
+  white-space: nowrap;
+  color: var(--muted);
+  --tw-outline-style: none;
+  -webkit-tap-highlight-color: transparent;
+  transition: color .15s var(--ease-smooth), background-color .15s var(--ease-smooth), box-shadow .15s var(--ease-out), opacity .15s var(--ease-smooth);
+  outline-style: none;
+  display: flex;
+  position: relative
+}
+
+.segment__item:is([data-reduce-motion=true],[data-reduce-motion=true] *),.segment__item:is([data-reduce-motion=true],[data-reduce-motion=true] *):before,.segment__item:is([data-reduce-motion=true],[data-reduce-motion=true] *):after {
+  transition-property: none
+}
+
+@media (prefers-reduced-motion:reduce) {
+  .segment__item: not(:is([data-reduce-motion=true],[data-reduce-motion=true] *)),.segment__item: not(:is([data-reduce-motion=true],[data-reduce-motion=true] *)):before,.segment__item: not(:is([data-reduce-motion=true],[data-reduce-motion=true] *)):after {
+    transition-property: none
+  }
+}
+
+.segment__item[data-selected=true] {
+  color: var(--segment-foreground)
+}
+
+.segment__item[data-selected=true] .segment__separator,.segment__item[data-selected=true]+.segment__item .segment__separator {
+  opacity: 0
+}
+
+.segment__item:disabled,.segment__item[data-disabled=true],.segment__item[aria-disabled=true] {
+  opacity: var(--disabled-opacity);
+  cursor: var(--cursor-disabled);
+  pointer-events: none
+}
+
+@media (hover:hover) {
+  .segment__item: not([data-selected=true]):not([data-disabled=true]):hover,.segment__item[data-hovered=true]:not([data-selected=true]):not([data-disabled=true]) {
+    opacity: .7
+  }
+}
+
+.segment__item:focus-visible:not(:focus),.segment__item[data-focus-visible=true] {
+  --tw-ring-shadow: var(--tw-ring-inset,) 0 0 0 calc(2px + var(--tw-ring-offset-width)) var(--tw-ring-color,currentcolor);
+  box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+  --tw-ring-color: var(--focus);
+  --tw-ring-offset-width: var(--ring-offset-width);
+  --tw-ring-offset-shadow: var(--tw-ring-inset,) 0 0 0 var(--tw-ring-offset-width) var(--tw-ring-offset-color);
+  --tw-ring-offset-color: var(--background);
+  --tw-outline-style: none;
+  outline-style: none
+}
+
+.segment__item svg {
+  width: calc(var(--spacing,.25rem) * 4);
+  height: calc(var(--spacing,.25rem) * 4);
+  flex-shrink: 0
+}
+
+.segment__separator {
+  background-color: var(--muted)
+}
+
+@supports (color:color-mix(in lab, red, red)) {
+  .segment__separator {
+    background-color: color-mix(in oklab, var(--muted) 25%, transparent)
+  }
+}
+
+.segment__separator {
+  pointer-events: none;
+  width: 1px;
+  height: 50%;
+  transition: opacity .15s var(--ease-smooth);
+  border-radius: 4px;
+  position: absolute;
+  top: 25%;
+  left: 0
+}
+
+.segment__separator:is([data-reduce-motion=true],[data-reduce-motion=true] *),.segment__separator:is([data-reduce-motion=true],[data-reduce-motion=true] *):before,.segment__separator:is([data-reduce-motion=true],[data-reduce-motion=true] *):after {
+  transition-property: none
+}
+
+@media (prefers-reduced-motion:reduce) {
+  .segment__separator: not(:is([data-reduce-motion=true],[data-reduce-motion=true] *)),.segment__separator: not(:is([data-reduce-motion=true],[data-reduce-motion=true] *)):before,.segment__separator: not(:is([data-reduce-motion=true],[data-reduce-motion=true] *)):after {
+    transition-property: none
+  }
+}
+
+.segment__item:first-child>.segment__separator {
+  display: none
+}
+
+.segment__indicator {
+  z-index: -1;
+  border-radius: var(--radius-3xl);
+  background-color: var(--segment);
+  width: 100%;
+  height: 100%;
+  box-shadow: var(--shadow-surface);
+  transition-property: translate,width,height;
+  transition-duration: .25s;
+  transition-timing-function: var(--ease-out-fluid);
+  position: absolute;
+  top: 0;
+  left: 0
+}
+
+.segment__indicator:is([data-reduce-motion=true],[data-reduce-motion=true] *),.segment__indicator:is([data-reduce-motion=true],[data-reduce-motion=true] *):before,.segment__indicator:is([data-reduce-motion=true],[data-reduce-motion=true] *):after {
+  transition-property: none
+}
+
+@media (prefers-reduced-motion:reduce) {
+  .segment__indicator: not(:is([data-reduce-motion=true],[data-reduce-motion=true] *)),.segment__indicator: not(:is([data-reduce-motion=true],[data-reduce-motion=true] *)):before,.segment__indicator: not(:is([data-reduce-motion=true],[data-reduce-motion=true] *)):after {
+    transition-property: none
+  }
+}
+
+.segment--sm {
+  padding: calc(var(--spacing,.25rem) * .5)
+}
+
+.segment__item--sm {
+  height: calc(var(--spacing,.25rem) * 7);
+  padding-inline: calc(var(--spacing,.25rem) * 2.5);
+  font-size: var(--text-xs,.75rem);
+  line-height: var(--tw-leading,var(--text-xs--line-height,calc(1 / .75)))
+}
+
+.segment__item--md {
+  height: calc(var(--spacing,.25rem) * 8);
+  padding-inline: calc(var(--spacing,.25rem) * 4);
+  font-size: var(--text-sm,.875rem);
+  line-height: var(--tw-leading,var(--text-sm--line-height,calc(1.25 / .875)))
+}
+
+.segment__item--lg {
+  height: calc(var(--spacing,.25rem) * 10);
+  padding-inline: calc(var(--spacing,.25rem) * 5);
+  font-size: var(--text-sm,.875rem);
+  line-height: var(--tw-leading,var(--text-sm--line-height,calc(1.25 / .875)))
+}
+
+.segment--ghost {
+  padding: calc(var(--spacing,.25rem) * 0);
+  background-color: #0000
+}
+
+.segment__item--ghost[data-selected=true] {
+  color: var(--accent-foreground)
+}
+
+.segment__indicator--ghost {
+  background-color: var(--accent);
+  box-shadow: none
+}

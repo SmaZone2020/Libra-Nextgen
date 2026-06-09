@@ -1,0 +1,125 @@
+.cell-switch {
+  --tw-outline-style: none;
+  -webkit-tap-highlight-color: transparent;
+  outline-style: none;
+  gap: 0;
+  display: flex;
+}
+
+.cell-switch .cell-switch__trigger {
+  height: calc(var(--spacing,.25rem) * 9);
+  align-items: center;
+  gap: calc(var(--spacing,.25rem) * 3);
+  border-radius: var(--field-radius,calc(var(--radius) * 1.5));
+  border-style: var(--tw-border-style);
+  background-color: var(--field-background,var(--default));
+  width: 100%;
+  padding-inline: calc(var(--spacing,.25rem) * 3);
+  color: var(--field-foreground,var(--foreground));
+  --tw-shadow: var(--field-shadow);
+  box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+  transition: background-color .15s var(--ease-smooth), border-color .15s var(--ease-smooth), box-shadow .15s var(--ease-out);
+  border-width: 1px;
+  display: flex;
+}
+
+.cell-switch .cell-switch__trigger:is([data-reduce-motion=true],[data-reduce-motion=true] *),.cell-switch .cell-switch__trigger:is([data-reduce-motion=true],[data-reduce-motion=true] *):before,.cell-switch .cell-switch__trigger:is([data-reduce-motion=true],[data-reduce-motion=true] *):after {
+  transition-property: none;
+}
+
+@media (prefers-reduced-motion:reduce) {
+  .cell-switch .cell-switch__trigger:  not(:is([data-reduce-motion=true],[data-reduce-motion=true] *)),.cell-switch .cell-switch__trigger:  not(:is([data-reduce-motion=true],[data-reduce-motion=true] *)):before,.cell-switch .cell-switch__trigger:  not(:is([data-reduce-motion=true],[data-reduce-motion=true] *)):after {
+    transition-property: none;
+  }
+}
+
+.cell-switch .cell-switch__trigger {
+  border-width: var(--border-width-field);
+  border-color: var(--color-field-border);
+  padding-right: .75rem;
+}
+
+.cell-switch .cell-switch__trigger--secondary {
+  --tw-shadow: 0 0 #0000;
+  box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+  background-color: var(--color-default);
+}
+
+.cell-switch .cell-switch__control--secondary {
+  background-color: var(--muted);
+}
+
+@supports (color:color-mix(in lab, red, red)) {
+  .cell-switch .cell-switch__control--secondary {
+    background-color: color-mix(in oklab, var(--muted) 20%, transparent);
+  }
+}
+
+.cell-switch .cell-switch__label {
+  min-width: calc(var(--spacing,.25rem) * 0);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: start;
+  font-size: var(--text-sm,.875rem);
+  line-height: var(--tw-leading,var(--text-sm--line-height,calc(1.25 / .875)));
+  --tw-font-weight: var(--font-weight-medium,500);
+  font-weight: var(--font-weight-medium,500);
+  color: var(--foreground);
+  flex: 1;
+  overflow: hidden;
+}
+
+.cell-switch .cell-switch__control {
+  flex-shrink: 0;
+}
+
+@media (hover:hover) {
+  .cell-switch[data-hovered=true] .cell-switch__trigger {
+    background-color: var(--field-hover);
+    border-color: var(--color-field-border-hover);
+  }
+  .cell-switch[data-hovered=true] .cell-switch__trigger--secondary {
+    background-color: var(--color-default-hover);
+  }
+  .cell-switch[data-hovered=true] .cell-switch__control--secondary {
+    background-color: var(--muted);
+  }
+  @supports (color:  color-mix(in lab, red, red)) {
+    .cell-switch[data-hovered=true] .cell-switch__control--secondary {
+      background-color: color-mix(in oklab, var(--muted) 20%, transparent);
+    }
+  }
+}
+
+.cell-switch[data-focus-visible=true] .cell-switch__trigger {
+  --tw-ring-shadow: var(--tw-ring-inset,) 0 0 0 calc(2px + var(--tw-ring-offset-width)) var(--tw-ring-color,currentcolor);
+  box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+  --tw-ring-color: var(--focus);
+  --tw-ring-offset-width: var(--ring-offset-width);
+  --tw-ring-offset-shadow: var(--tw-ring-inset,) 0 0 0 var(--tw-ring-offset-width) var(--tw-ring-offset-color);
+  --tw-ring-offset-color: var(--background);
+  --tw-outline-style: none;
+  border-color: var(--color-field-border-focus);
+  background-color: var(--color-field-focus);
+  outline-style: none;
+}
+
+.cell-switch[data-focus-visible=true] .cell-switch__trigger--secondary {
+  background-color: var(--color-default);
+}
+
+.cell-switch[data-disabled=true] .cell-switch__trigger {
+  opacity: var(--disabled-opacity);
+  cursor: var(--cursor-disabled);
+  pointer-events: none;
+}
+
+.cell-switch[data-pressed=true] .cell-switch__control--secondary {
+  background-color: var(--muted);
+}
+
+@supports (color:color-mix(in lab, red, red)) {
+  .cell-switch[data-pressed=true] .cell-switch__control--secondary {
+    background-color: color-mix(in oklab, var(--muted) 30%, transparent);
+  }
+}

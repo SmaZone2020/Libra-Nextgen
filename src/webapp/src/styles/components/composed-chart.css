@@ -1,0 +1,28 @@
+.composed-chart {
+  width: 100%
+}
+
+.composed-chart .recharts-cartesian-axis-tick-value {
+  font-size: 10px;
+  fill: var(--muted)!important
+}
+
+.composed-chart .recharts-cartesian-axis-line,.composed-chart .recharts-cartesian-axis-tick-line {
+  stroke: none!important
+}
+
+.composed-chart .recharts-cartesian-grid line {
+  stroke: var(--muted);
+  stroke-opacity: .15
+}
+
+.composed-chart .recharts-tooltip-cursor {
+  stroke: var(--muted);
+  stroke-dasharray: 4 4;
+  stroke-width: 1px
+}
+
+.composed-chart .recharts-active-dot circle {
+  stroke: var(--surface);
+  stroke-width: 2px
+}

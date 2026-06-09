@@ -1,0 +1,440 @@
+.emoji-picker__trigger {
+  --tw-outline-style: none;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform .25s var(--ease-out-quart), background-color .15s var(--ease-smooth), box-shadow .15s var(--ease-out);
+  transform: translateZ(0) var(--tw-rotate-x,) var(--tw-rotate-y,) var(--tw-rotate-z,) var(--tw-skew-x,) var(--tw-skew-y,);
+  outline-style: none
+}
+
+.emoji-picker__trigger:is([data-reduce-motion=true],[data-reduce-motion=true] *),.emoji-picker__trigger:is([data-reduce-motion=true],[data-reduce-motion=true] *):before,.emoji-picker__trigger:is([data-reduce-motion=true],[data-reduce-motion=true] *):after {
+  transition-property: none
+}
+
+@media (prefers-reduced-motion:reduce) {
+  .emoji-picker__trigger: not(:is([data-reduce-motion=true],[data-reduce-motion=true] *)),.emoji-picker__trigger: not(:is([data-reduce-motion=true],[data-reduce-motion=true] *)):before,.emoji-picker__trigger: not(:is([data-reduce-motion=true],[data-reduce-motion=true] *)):after {
+    transition-property: none
+  }
+}
+
+.emoji-picker__trigger {
+  cursor: var(--cursor-interactive)
+}
+
+.emoji-picker__trigger:focus-visible:not(:focus),.emoji-picker__trigger[data-focus-visible=true] {
+  --tw-ring-shadow: var(--tw-ring-inset,) 0 0 0 calc(2px + var(--tw-ring-offset-width)) var(--tw-ring-color,currentcolor);
+  box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+  --tw-ring-color: var(--focus);
+  --tw-ring-offset-width: var(--ring-offset-width);
+  --tw-ring-offset-shadow: var(--tw-ring-inset,) 0 0 0 var(--tw-ring-offset-width) var(--tw-ring-offset-color);
+  --tw-ring-offset-color: var(--background);
+  --tw-outline-style: none;
+  outline-style: none
+}
+
+.emoji-picker__trigger:disabled,.emoji-picker__trigger[aria-disabled=true] {
+  opacity: var(--disabled-opacity);
+  cursor: var(--cursor-disabled);
+  pointer-events: none
+}
+
+.emoji-picker__trigger:active,.emoji-picker__trigger[data-pressed=true] {
+  transform: scale(.97)
+}
+
+.emoji-picker__value {
+  --tw-leading: 1;
+  line-height: 1
+}
+
+.emoji-picker__popover {
+  border-radius: calc(var(--radius) * 2);
+  background-color: var(--overlay);
+  --tw-shadow: var(--overlay-shadow);
+  box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+  --tw-outline-style: none;
+  box-sizing: border-box;
+  outline-style: none;
+  flex-direction: column;
+  display: flex;
+  overflow: hidden
+}
+
+.emoji-picker__popover[data-entering=true] {
+  animation: enter var(--tw-animation-duration,var(--tw-duration,.15s))var(--tw-ease,ease)var(--tw-animation-delay,0s)var(--tw-animation-iteration-count,1)var(--tw-animation-direction,normal)var(--tw-animation-fill-mode,none);
+  --tw-duration: .15s;
+  --tw-ease: var(--ease-out,cubic-bezier(0, 0, .2, 1));
+  transition-duration: .15s;
+  transition-timing-function: var(--ease-out,cubic-bezier(0, 0, .2, 1));
+  --tw-enter-opacity: 0;
+  --tw-enter-scale: .95
+}
+
+.emoji-picker__popover[data-exiting=true] {
+  animation: exit var(--tw-animation-duration,var(--tw-duration,.15s))var(--tw-ease,ease)var(--tw-animation-delay,0s)var(--tw-animation-iteration-count,1)var(--tw-animation-direction,normal)var(--tw-animation-fill-mode,none);
+  --tw-duration: .1s;
+  --tw-ease: var(--ease-out,cubic-bezier(0, 0, .2, 1));
+  transition-duration: .1s;
+  transition-timing-function: var(--ease-out,cubic-bezier(0, 0, .2, 1));
+  --tw-exit-opacity: 0;
+  --tw-exit-scale: .95
+}
+
+.emoji-picker__popover[data-entering=true],.emoji-picker__popover[data-exiting=true] {
+  will-change: opacity,transform
+}
+
+:is(.emoji-picker__popover[data-entering=true],.emoji-picker__popover[data-exiting=true]):is([data-reduce-motion=true],[data-reduce-motion=true] *),:is(.emoji-picker__popover[data-entering=true],.emoji-picker__popover[data-exiting=true]):is([data-reduce-motion=true],[data-reduce-motion=true] *):before,:is(.emoji-picker__popover[data-entering=true],.emoji-picker__popover[data-exiting=true]):is([data-reduce-motion=true],[data-reduce-motion=true] *):after {
+  animation: none
+}
+
+@media (prefers-reduced-motion:reduce) {
+  :is(.emoji-picker__popover[data-entering=true],.emoji-picker__popover[data-exiting=true]):not(:is([data-reduce-motion=true],[data-reduce-motion=true] *)),:is(.emoji-picker__popover[data-entering=true],.emoji-picker__popover[data-exiting=true]):not(:is([data-reduce-motion=true],[data-reduce-motion=true] *)):before,:is(.emoji-picker__popover[data-entering=true],.emoji-picker__popover[data-exiting=true]):not(:is([data-reduce-motion=true],[data-reduce-motion=true] *)):after {
+    animation: none
+  }
+}
+
+.emoji-picker__popover--sm {
+  width: 240px;
+  height: 280px
+}
+
+.emoji-picker__popover--md {
+  width: 280px;
+  height: 350px
+}
+
+.emoji-picker__popover--lg {
+  width: 320px;
+  height: 420px
+}
+
+.emoji-picker__content {
+  gap: calc(var(--spacing,.25rem) * 1.5);
+  padding: calc(var(--spacing,.25rem) * 2);
+  flex-direction: column;
+  flex: 1;
+  display: flex;
+  overflow: hidden
+}
+
+.emoji-picker__grid {
+  padding-top: calc(var(--spacing,.25rem) * 1);
+  --tw-outline-style: none;
+  -webkit-overflow-scrolling: touch;
+  outline-style: none;
+  flex: 1;
+  scroll-padding: 4px;
+  overflow: auto
+}
+
+.emoji-picker__grid:has(~[data-slot=emoji-picker-footer]) {
+  padding-bottom: calc(var(--spacing,.25rem) * 10)
+}
+
+.emoji-picker__item {
+  border-radius: calc(var(--radius) * 1);
+  --tw-outline-style: none;
+  -webkit-tap-highlight-color: transparent;
+  width: 100%;
+  height: 100%;
+  cursor: var(--cursor-interactive);
+  outline-style: none;
+  justify-content: center;
+  align-items: center;
+  display: flex
+}
+
+@media (hover:hover) {
+  .emoji-picker__item: hover,.emoji-picker__item[data-hovered=true] {
+    background-color: var(--default)
+  }
+}
+
+.emoji-picker__item[data-focused=true] {
+  background-color: var(--default)
+}
+
+.emoji-picker__item[data-pressed=true] {
+  background-color: var(--default-hover)
+}
+
+.emoji-picker__item:focus-visible:not(:focus),.emoji-picker__item[data-focus-visible=true] {
+  --tw-ring-shadow: var(--tw-ring-inset,) 0 0 0 calc(2px + var(--tw-ring-offset-width)) var(--tw-ring-color,currentcolor);
+  box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+  --tw-ring-color: var(--focus);
+  --tw-ring-offset-width: var(--ring-offset-width);
+  --tw-ring-offset-shadow: var(--tw-ring-inset,) 0 0 0 var(--tw-ring-offset-width) var(--tw-ring-offset-color);
+  --tw-ring-offset-color: var(--background);
+  --tw-outline-style: none;
+  outline-style: none
+}
+
+.emoji-picker__item[data-selected=true] {
+  background-color: var(--default-hover)
+}
+
+.emoji-picker__item:disabled,.emoji-picker__item[aria-disabled=true] {
+  opacity: var(--disabled-opacity);
+  cursor: var(--cursor-disabled);
+  pointer-events: none
+}
+
+.emoji-picker__item--sm {
+  font-size: 20px
+}
+
+.emoji-picker__item--md {
+  font-size: 24px
+}
+
+.emoji-picker__item--lg {
+  font-size: 28px
+}
+
+.emoji-picker__footer {
+  inset-inline: calc(var(--spacing,.25rem) * 0);
+  bottom: calc(var(--spacing,.25rem) * 0);
+  align-items: center;
+  gap: calc(var(--spacing,.25rem) * 2);
+  border-top-style: var(--tw-border-style);
+  border-top-width: 1px;
+  border-color: var(--border);
+  width: 100%;
+  display: flex;
+  position: absolute
+}
+
+@supports (color:color-mix(in lab, red, red)) {
+  .emoji-picker__footer {
+    border-color: color-mix(in oklab, var(--border) 50%, transparent)
+  }
+}
+
+.emoji-picker__footer {
+  background-color: var(--surface);
+  padding-inline: calc(var(--spacing,.25rem) * 1);
+  padding-block: calc(var(--spacing,.25rem) * 1.5);
+  font-size: var(--text-xs,.75rem);
+  line-height: var(--tw-leading,var(--text-xs--line-height,calc(1 / .75)));
+  color: var(--muted)
+}
+
+.emoji-picker__empty {
+  height: 100%;
+  padding-block: calc(var(--spacing,.25rem) * 6);
+  text-align: center;
+  font-size: var(--text-sm,.875rem);
+  line-height: var(--tw-leading,var(--text-sm--line-height,calc(1.25 / .875)));
+  color: var(--muted);
+  flex: 1;
+  justify-content: center;
+  align-items: center;
+  display: flex
+}
+
+.emoji-picker__skin-tone-options {
+  align-items: center;
+  gap: calc(var(--spacing,.25rem) * .5);
+  padding: calc(var(--spacing,.25rem) * 1);
+  display: flex
+}
+
+.emoji-picker__skin-tone-picker {
+  width: calc(var(--spacing,.25rem) * 6);
+  height: calc(var(--spacing,.25rem) * 6);
+  border-radius: calc(var(--radius) * .75);
+  font-size: var(--text-base,1rem);
+  line-height: var(--tw-leading,var(--text-base--line-height,calc(1.5 / 1)));
+  --tw-leading: 1;
+  --tw-outline-style: none;
+  -webkit-tap-highlight-color: transparent;
+  cursor: var(--cursor-interactive);
+  outline-style: none;
+  flex-shrink: 0;
+  justify-content: center;
+  align-items: center;
+  line-height: 1;
+  display: flex
+}
+
+@media (hover:hover) {
+  .emoji-picker__skin-tone-picker: hover,.emoji-picker__skin-tone-picker[data-hovered=true] {
+    background-color: var(--default)
+  }
+}
+
+.emoji-picker__skin-tone-picker:focus-visible:not(:focus),.emoji-picker__skin-tone-picker[data-focus-visible=true] {
+  --tw-ring-shadow: var(--tw-ring-inset,) 0 0 0 calc(2px + var(--tw-ring-offset-width)) var(--tw-ring-color,currentcolor);
+  box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+  --tw-ring-color: var(--focus);
+  --tw-ring-offset-width: var(--ring-offset-width);
+  --tw-ring-offset-shadow: var(--tw-ring-inset,) 0 0 0 var(--tw-ring-offset-width) var(--tw-ring-offset-color);
+  --tw-ring-offset-color: var(--background);
+  --tw-outline-style: none;
+  outline-style: none
+}
+
+.emoji-picker__skin-tone-picker:disabled,.emoji-picker__skin-tone-picker[aria-disabled=true] {
+  opacity: var(--disabled-opacity);
+  cursor: var(--cursor-disabled);
+  pointer-events: none
+}
+
+.emoji-picker__skin-tone-option {
+  border-radius: calc(var(--radius) * 2);
+  padding: calc(var(--spacing,.25rem) * 1);
+  font-size: var(--text-xl,1.25rem);
+  line-height: var(--tw-leading,var(--text-xl--line-height,calc(1.75 / 1.25)));
+  --tw-leading: 1;
+  --tw-outline-style: none;
+  -webkit-tap-highlight-color: transparent;
+  cursor: var(--cursor-interactive);
+  outline-style: none;
+  justify-content: center;
+  align-items: center;
+  line-height: 1;
+  display: flex
+}
+
+@media (hover:hover) {
+  .emoji-picker__skin-tone-option: hover,.emoji-picker__skin-tone-option[data-hovered=true] {
+    background-color: var(--default)
+  }
+}
+
+.emoji-picker__skin-tone-option:focus-visible:not(:focus),.emoji-picker__skin-tone-option[data-focus-visible=true] {
+  --tw-ring-shadow: var(--tw-ring-inset,) 0 0 0 calc(2px + var(--tw-ring-offset-width)) var(--tw-ring-color,currentcolor);
+  box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+  --tw-ring-color: var(--focus);
+  --tw-ring-offset-width: var(--ring-offset-width);
+  --tw-ring-offset-shadow: var(--tw-ring-inset,) 0 0 0 var(--tw-ring-offset-width) var(--tw-ring-offset-color);
+  --tw-ring-offset-color: var(--background);
+  --tw-outline-style: none;
+  outline-style: none
+}
+
+.emoji-picker__skin-tone-option[data-selected=true] {
+  background-color: var(--default-hover)
+}
+
+.emoji-picker__skin-tone-option:disabled,.emoji-picker__skin-tone-option[aria-disabled=true] {
+  opacity: var(--disabled-opacity);
+  cursor: var(--cursor-disabled);
+  pointer-events: none
+}
+
+@property --tw-shadow {
+  syntax: "*";
+  inherits: false;
+  initial-value: 0 0 #0000
+}
+
+@property --tw-shadow-color {
+  syntax: "*";
+  inherits: false
+}
+
+@property --tw-shadow-alpha {
+  syntax: "<percentage>";
+  inherits: false;
+  initial-value: 100%
+}
+
+@property --tw-inset-shadow {
+  syntax: "*";
+  inherits: false;
+  initial-value: 0 0 #0000
+}
+
+@property --tw-inset-shadow-color {
+  syntax: "*";
+  inherits: false
+}
+
+@property --tw-inset-shadow-alpha {
+  syntax: "<percentage>";
+  inherits: false;
+  initial-value: 100%
+}
+
+@property --tw-ring-color {
+  syntax: "*";
+  inherits: false
+}
+
+@property --tw-ring-shadow {
+  syntax: "*";
+  inherits: false;
+  initial-value: 0 0 #0000
+}
+
+@property --tw-inset-ring-color {
+  syntax: "*";
+  inherits: false
+}
+
+@property --tw-inset-ring-shadow {
+  syntax: "*";
+  inherits: false;
+  initial-value: 0 0 #0000
+}
+
+@property --tw-ring-inset {
+  syntax: "*";
+  inherits: false
+}
+
+@property --tw-ring-offset-width {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0
+}
+
+@property --tw-ring-offset-color {
+  syntax: "*";
+  inherits: false;
+  initial-value: #fff
+}
+
+@property --tw-ring-offset-shadow {
+  syntax: "*";
+  inherits: false;
+  initial-value: 0 0 #0000
+}
+
+@property --tw-leading {
+  syntax: "*";
+  inherits: false
+}
+
+@property --tw-duration {
+  syntax: "*";
+  inherits: false
+}
+
+@property --tw-ease {
+  syntax: "*";
+  inherits: false
+}
+
+@property --tw-border-style {
+  syntax: "*";
+  inherits: false;
+  initial-value: solid
+}
+
+@keyframes enter {
+  0% {
+    opacity: var(--tw-enter-opacity,1);
+    transform: translate3d(var(--tw-enter-translate-x,0),var(--tw-enter-translate-y,0),0)scale3d(var(--tw-enter-scale,1),var(--tw-enter-scale,1),var(--tw-enter-scale,1))rotate(var(--tw-enter-rotate,0));
+    filter: blur(var(--tw-enter-blur,0))
+  }
+}
+
+@keyframes exit {
+  to {
+    opacity: var(--tw-exit-opacity,1);
+    transform: translate3d(var(--tw-exit-translate-x,0),var(--tw-exit-translate-y,0),0)scale3d(var(--tw-exit-scale,1),var(--tw-exit-scale,1),var(--tw-exit-scale,1))rotate(var(--tw-exit-rotate,0));
+    filter: blur(var(--tw-exit-blur,0))
+  }
+}

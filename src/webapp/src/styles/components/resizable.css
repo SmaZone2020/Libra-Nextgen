@@ -1,0 +1,214 @@
+.resizable {
+  --resizable-handle-size: 1px;
+  --resizable-handle-hit-area: 8px;
+  --resizable-handle-color: var(--color-separator);
+  --resizable-handle-color-hover: var(--color-separator-secondary);
+  --resizable-handle-color-active: var(--color-accent-soft);
+  --resizable-indicator-pill-width: 6px;
+  --resizable-indicator-pill-height: 32px;
+  --resizable-indicator-drag-radius: var(--radius-sm,6px);
+  --resizable-indicator-drag-bg: var(--color-default);
+  --resizable-indicator-drag-bg-hover: var(--color-default-hover);
+  --resizable-indicator-drag-fg: var(--color-muted);
+  --resizable-indicator-drag-fg-hover: var(--color-foreground);
+  --resizable-indicator-drag-long: 20px;
+  --resizable-indicator-drag-short: 13px;
+  --resizable-indicator-drag-icon-size: 10px;
+  --resizable-indicator-radius: var(--radius-full,9999px);
+  --resizable-transition-duration: .12s;
+  height: 100%;
+  min-height: calc(var(--spacing,.25rem) * 0);
+  width: 100%;
+  min-width: calc(var(--spacing,.25rem) * 0);
+  display: flex
+}
+
+.resizable--horizontal {
+  flex-direction: row
+}
+
+.resizable--vertical {
+  flex-direction: column
+}
+
+.resizable__panel {
+  min-height: calc(var(--spacing,.25rem) * 0);
+  min-width: calc(var(--spacing,.25rem) * 0);
+  position: relative;
+  overflow: hidden
+}
+
+.resizable__handle {
+  --tw-outline-style: none;
+  -webkit-tap-highlight-color: transparent;
+  background-color: var(--resizable-handle-color);
+  cursor: var(--cursor-interactive,col-resize);
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+  transition: background-color var(--resizable-transition-duration) ease;
+  outline-style: none;
+  flex: none;
+  justify-content: center;
+  align-items: center;
+  display: flex;
+  position: relative
+}
+
+.resizable__handle--horizontal {
+  width: var(--resizable-handle-size);
+  cursor: col-resize
+}
+
+.resizable__handle--vertical {
+  height: var(--resizable-handle-size);
+  cursor: row-resize
+}
+
+.resizable__handle:before {
+  content: "";
+  background: 0 0;
+  position: absolute
+}
+
+.resizable__handle--horizontal:before {
+  top: 0;
+  bottom: 0;
+  left: calc((var(--resizable-handle-size) - var(--resizable-handle-hit-area)) / 2);
+  right: calc((var(--resizable-handle-size) - var(--resizable-handle-hit-area)) / 2)
+}
+
+.resizable__handle--vertical:before {
+  left: 0;
+  right: 0;
+  top: calc((var(--resizable-handle-size) - var(--resizable-handle-hit-area)) / 2);
+  bottom: calc((var(--resizable-handle-size) - var(--resizable-handle-hit-area)) / 2)
+}
+
+.resizable__handle--primary {
+  --resizable-handle-color: var(--color-separator)
+}
+
+.resizable__handle--secondary {
+  --resizable-handle-color: var(--color-separator-secondary)
+}
+
+.resizable__handle--tertiary {
+  --resizable-handle-color: var(--color-separator-tertiary)
+}
+
+@media (hover:hover) {
+  .resizable__handle: hover,.resizable__handle[data-hovered=true] {
+    background-color: var(--resizable-handle-color-hover)
+  }
+}
+
+.resizable__handle[data-resize-handle-active],.resizable__handle[data-resize-handle-state=drag],.resizable__handle:active,.resizable__handle[data-pressed=true] {
+  background-color: var(--resizable-handle-color-active)
+}
+
+.resizable__handle:focus-visible:not(:focus),.resizable__handle[data-focus-visible=true] {
+  --tw-ring-shadow: var(--tw-ring-inset,) 0 0 0 calc(2px + var(--tw-ring-offset-width)) var(--tw-ring-color,currentcolor);
+  box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+  --tw-ring-color: var(--focus);
+  --tw-ring-offset-width: var(--ring-offset-width);
+  --tw-ring-offset-shadow: var(--tw-ring-inset,) 0 0 0 var(--tw-ring-offset-width) var(--tw-ring-offset-color);
+  --tw-ring-offset-color: var(--background);
+  --tw-outline-style: none;
+  outline-style: none
+}
+
+.resizable__handle:disabled,.resizable__handle[aria-disabled=true],.resizable__handle[data-disabled] {
+  opacity: var(--disabled-opacity);
+  cursor: var(--cursor-disabled);
+  pointer-events: none;
+  cursor: default
+}
+
+.resizable__handle-indicator {
+  pointer-events: none;
+  z-index: 1;
+  justify-content: center;
+  align-items: center;
+  display: flex;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%,-50%)
+}
+
+.resizable__handle--pill .resizable__handle-indicator--pill,.resizable__handle-indicator--pill {
+  width: var(--resizable-indicator-pill-width);
+  height: var(--resizable-indicator-pill-height);
+  border-radius: var(--resizable-indicator-radius);
+  background-color: var(--color-default);
+  transition: background-color var(--resizable-transition-duration) ease, transform var(--resizable-transition-duration) ease
+}
+
+.resizable__handle--vertical .resizable__handle-indicator--pill {
+  width: var(--resizable-indicator-pill-height);
+  height: var(--resizable-indicator-pill-width)
+}
+
+@media (hover:hover) {
+  .resizable__handle--pill: hover .resizable__handle-indicator--pill,.resizable__handle--pill[data-hovered=true] .resizable__handle-indicator--pill {
+    background-color: var(--color-default-hover)
+  }
+}
+
+.resizable__handle--pill[data-resize-handle-active] .resizable__handle-indicator--pill,.resizable__handle--pill:active .resizable__handle-indicator--pill {
+  background-color: var(--color-default-hover)
+}
+
+.resizable__handle-indicator--drag {
+  border-radius: var(--resizable-indicator-drag-radius);
+  background-color: var(--resizable-indicator-drag-bg);
+  color: var(--resizable-indicator-drag-fg);
+  transition: background-color var(--resizable-transition-duration) ease, color var(--resizable-transition-duration) ease;
+  justify-content: center;
+  align-items: center;
+  display: inline-flex
+}
+
+.resizable__handle-indicator-icon {
+  width: var(--resizable-indicator-drag-icon-size);
+  height: var(--resizable-indicator-drag-icon-size);
+  display: block
+}
+
+.resizable__handle--horizontal .resizable__handle-indicator--drag {
+  width: var(--resizable-indicator-drag-short);
+  height: var(--resizable-indicator-drag-long)
+}
+
+.resizable__handle--vertical .resizable__handle-indicator--drag {
+  width: var(--resizable-indicator-drag-long);
+  height: var(--resizable-indicator-drag-short)
+}
+
+@media (hover:hover) {
+  .resizable__handle--drag: hover .resizable__handle-indicator--drag,.resizable__handle--drag[data-hovered=true] .resizable__handle-indicator--drag {
+    background-color: var(--resizable-indicator-drag-bg-hover);
+    color: var(--resizable-indicator-drag-fg-hover)
+  }
+}
+
+.resizable__handle--handle {
+  background-color: #0000
+}
+
+@media (hover:hover) {
+  .resizable__handle--handle: hover,.resizable__handle--handle[data-hovered=true] {
+    background-color: #0000
+  }
+}
+
+.resizable__handle--handle[data-resize-handle-active],.resizable__handle--handle[data-resize-handle-state=drag],.resizable__handle--handle:active,.resizable__handle--handle[data-pressed=true] {
+  background-color: #0000
+}
+
+@media (prefers-reduced-motion:reduce) {
+  .resizable__handle,.resizable__handle-indicator,.resizable__handle-indicator--pill,.resizable__handle-indicator--drag {
+    transition: none
+  }
+}

@@ -1,0 +1,212 @@
+.chat-tool {
+  border-radius: calc(var(--radius) * 1.5);
+  border-style: var(--tw-border-style);
+  border-width: 1px;
+  border-color: var(--default);
+  width: 100%;
+  overflow: hidden;
+}
+
+.chat-tool [data-slot=disclosure-heading],.chat-tool-group [data-slot=disclosure-heading] {
+  width: 100%;
+}
+
+.chat-tool__trigger,.chat-tool-group__trigger {
+  height: auto;
+  min-height: calc(var(--spacing,.25rem) * 9);
+  cursor: pointer;
+  justify-content: space-between;
+  align-items: center;
+  gap: calc(var(--spacing,.25rem) * 2);
+  width: 100%;
+  padding-inline: calc(var(--spacing,.25rem) * 3);
+  padding-block: calc(var(--spacing,.25rem) * 2);
+  text-align: left;
+  font-size: var(--text-xs,.75rem);
+  line-height: var(--tw-leading,var(--text-xs--line-height,calc(1 / .75)));
+  --tw-font-weight: var(--font-weight-normal,400);
+  font-weight: var(--font-weight-normal,400);
+  color: var(--foreground);
+  -webkit-tap-highlight-color: transparent;
+  border-radius: 0;
+  display: inline-flex;
+}
+
+@media (hover:hover) {
+  .chat-tool__trigger:  hover,.chat-tool__trigger[data-hovered=true],.chat-tool-group__trigger:  hover,.chat-tool-group__trigger[data-hovered=true] {
+    background-color: var(--default);
+  }
+}
+
+.chat-tool__trigger:active,.chat-tool__trigger[data-pressed=true],.chat-tool-group__trigger:active,.chat-tool-group__trigger[data-pressed=true] {
+  background-color: var(--default);
+}
+
+.chat-tool__trigger[data-expandable=false],.chat-tool__trigger[data-expandable=false]:hover,.chat-tool__trigger[data-expandable=false][data-hovered=true],.chat-tool__trigger[data-expandable=false]:active,.chat-tool__trigger[data-expandable=false][data-pressed=true] {
+  cursor: default;
+  background-color: #0000;
+}
+
+.chat-tool--streaming .chat-tool__trigger,.chat-tool--running .chat-tool__trigger {
+  color: var(--foreground);
+}
+
+.chat-tool--error {
+  border-color: var(--danger);
+}
+
+@supports (color:color-mix(in lab, red, red)) {
+  .chat-tool--error {
+    border-color: color-mix(in oklab, var(--danger) 30%, transparent);
+  }
+}
+
+.chat-tool--requires-action {
+  border-color: var(--warning);
+}
+
+@supports (color:color-mix(in lab, red, red)) {
+  .chat-tool--requires-action {
+    border-color: color-mix(in oklab, var(--warning) 40%, transparent);
+  }
+}
+
+.chat-tool__trigger-label {
+  min-width: calc(var(--spacing,.25rem) * 0);
+  align-items: center;
+  gap: calc(var(--spacing,.25rem) * 2);
+  font-size: var(--text-xs,.75rem);
+  line-height: var(--tw-leading,var(--text-xs--line-height,calc(1 / .75)));
+  --tw-font-weight: var(--font-weight-normal,400);
+  font-weight: var(--font-weight-normal,400);
+  display: flex;
+}
+
+.chat-tool__trigger-label>.text-shimmer {
+  min-width: calc(var(--spacing,.25rem) * 0);
+  align-items: center;
+  gap: calc(var(--spacing,.25rem) * 2);
+  display: inline-flex;
+}
+
+.chat-tool__content {
+  border-top-style: var(--tw-border-style);
+  border-top-width: 0;
+  border-color: var(--default);
+}
+
+.chat-tool__content:not([data-expanded=true]),.chat-tool-group__content:not([data-expanded=true]) {
+  opacity: 0;
+  height: 0!important;
+}
+
+.chat-tool__content-body {
+  gap: calc(var(--spacing,.25rem) * 1);
+  padding: calc(var(--spacing,.25rem) * 1);
+  flex-direction: column;
+  display: flex;
+}
+
+.chat-tool__args-label,.chat-tool__result-label,.chat-tool__error-label {
+  margin-bottom: calc(var(--spacing,.25rem) * 1);
+  --tw-font-weight: var(--font-weight-medium,500);
+  font-size: 10px;
+  font-weight: var(--font-weight-medium,500);
+  --tw-tracking: var(--tracking-wide,.025em);
+  letter-spacing: var(--tracking-wide,.025em);
+  color: var(--muted);
+  text-transform: uppercase;
+}
+
+.chat-tool__args,.chat-tool__result,.chat-tool__error {
+  font-size: var(--text-xs,.75rem);
+  line-height: var(--tw-leading,var(--text-xs--line-height,calc(1 / .75)));
+}
+
+.chat-tool__args .code-block,.chat-tool__result .code-block {
+  margin-block: calc(var(--spacing,.25rem) * 1);
+  border-radius: calc(var(--radius) * 1.5);
+}
+
+.chat-tool__args .code-block__code,.chat-tool__result .code-block__code {
+  --tw-leading: calc(var(--spacing,.25rem) * 5);
+  font-size: 11px;
+  line-height: calc(var(--spacing,.25rem) * 5);
+}
+
+.chat-tool__args .code-block__code pre,.chat-tool__result .code-block__code pre {
+  padding-inline: calc(var(--spacing,.25rem) * 2.5);
+  padding-block: calc(var(--spacing,.25rem) * 1.5);
+}
+
+.chat-tool__error {
+  color: var(--danger);
+}
+
+.chat-tool__approval {
+  gap: calc(var(--spacing,.25rem) * 2);
+  padding-top: calc(var(--spacing,.25rem) * 3);
+  flex-direction: column;
+  display: flex;
+}
+
+.chat-tool__approval-actions {
+  justify-content: flex-end;
+  align-items: center;
+  gap: calc(var(--spacing,.25rem) * 2);
+  display: flex;
+}
+
+.chat-tool__meta {
+  border-top-style: var(--tw-border-style);
+  border-top-width: 1px;
+  border-color: var(--default);
+  padding-top: calc(var(--spacing,.25rem) * 2);
+  font-family: var(--font-mono,ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace);
+  font-size: var(--text-xs,.75rem);
+  line-height: var(--tw-leading,var(--text-xs--line-height,calc(1 / .75)));
+  color: var(--muted);
+}
+
+.chat-tool__status {
+  width: calc(var(--spacing,.25rem) * 3.5);
+  height: calc(var(--spacing,.25rem) * 3.5);
+  color: var(--muted);
+  flex-shrink: 0;
+  justify-content: center;
+  align-items: center;
+  display: inline-flex;
+}
+
+.chat-tool-group {
+  border-radius: calc(var(--radius) * 1.5);
+  border-style: var(--tw-border-style);
+  border-width: 1px;
+  border-color: var(--default);
+  width: 100%;
+  overflow: hidden;
+}
+
+.chat-tool-group__content {
+  border-top-style: var(--tw-border-style);
+  border-top-width: 0;
+  border-color: var(--default);
+}
+
+.chat-tool-group__content-body {
+  gap: calc(var(--spacing,.25rem) * 1.5);
+  padding: calc(var(--spacing,.25rem) * 1);
+  flex-direction: column;
+  display: flex;
+}
+
+.chat-tool-group__trigger-label {
+  min-width: calc(var(--spacing,.25rem) * 0);
+  align-items: center;
+  gap: calc(var(--spacing,.25rem) * 2);
+  font-size: var(--text-xs,.75rem);
+  line-height: var(--tw-leading,var(--text-xs--line-height,calc(1 / .75)));
+  --tw-font-weight: var(--font-weight-normal,400);
+  font-weight: var(--font-weight-normal,400);
+  display: flex;
+}

@@ -1,0 +1,22 @@
+.radar-chart {
+  width: 100%
+}
+
+.radar-chart .recharts-polar-angle-axis-tick-value {
+  font-size: 11px;
+  fill: var(--muted)!important
+}
+
+.radar-chart .recharts-polar-radius-axis-tick-value {
+  font-size: 10px;
+  fill: var(--muted)!important
+}
+
+.radar-chart .recharts-polar-grid-concentric-polygon,.radar-chart .recharts-polar-grid-concentric-circle,.radar-chart .recharts-polar-grid-angle line {
+  stroke: var(--muted);
+  stroke-opacity: .2
+}
+
+.radar-chart .recharts-tooltip-cursor {
+  display: none
+}

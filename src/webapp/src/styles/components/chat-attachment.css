@@ -1,0 +1,98 @@
+.chat-attachment {
+  width: calc(var(--spacing,.25rem) * 16);
+  height: calc(var(--spacing,.25rem) * 16);
+  border-radius: calc(var(--radius) * 1);
+  border-style: var(--tw-border-style);
+  border-width: 1px;
+  border-color: var(--border);
+  background-color: #0000;
+  flex-shrink: 0;
+  position: relative;
+  overflow: hidden;
+}
+
+.chat-attachment__preview {
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  overflow: hidden;
+}
+
+.chat-attachment__preview-image,.chat-attachment__preview-video {
+  object-fit: cover;
+  width: 100%;
+  height: 100%;
+}
+
+.chat-attachment__preview-fallback {
+  width: 100%;
+  height: 100%;
+  color: var(--muted);
+  justify-content: center;
+  align-items: center;
+  display: inline-flex;
+}
+
+.chat-attachment__name {
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border-width: 0;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  position: absolute;
+  overflow: hidden;
+}
+
+.chat-attachment__remove {
+  top: calc(var(--spacing,.25rem) * 1.5);
+  right: calc(var(--spacing,.25rem) * 1.5);
+  background-color: var(--default);
+  color: var(--muted);
+  opacity: .7;
+  --tw-shadow: var(--overlay-shadow);
+  box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+  --tw-backdrop-blur: blur(var(--blur-sm,8px));
+  -webkit-backdrop-filter: var(--tw-backdrop-blur,) var(--tw-backdrop-brightness,) var(--tw-backdrop-contrast,) var(--tw-backdrop-grayscale,) var(--tw-backdrop-hue-rotate,) var(--tw-backdrop-invert,) var(--tw-backdrop-opacity,) var(--tw-backdrop-saturate,) var(--tw-backdrop-sepia,);
+  backdrop-filter: var(--tw-backdrop-blur,) var(--tw-backdrop-brightness,) var(--tw-backdrop-contrast,) var(--tw-backdrop-grayscale,) var(--tw-backdrop-hue-rotate,) var(--tw-backdrop-invert,) var(--tw-backdrop-opacity,) var(--tw-backdrop-saturate,) var(--tw-backdrop-sepia,);
+  transition-property: opacity;
+  transition-timing-function: var(--tw-ease,var(--default-transition-timing-function,cubic-bezier(.4, 0, .2, 1)));
+  transition-duration: var(--tw-duration,var(--default-transition-duration,.15s));
+  position: absolute;
+}
+
+@media (hover:hover) {
+  .chat-attachment__remove:  hover {
+    background-color: var(--default-hover);
+    color: var(--foreground);
+  }
+}
+
+.chat-attachment [data-slot=chat-attachment-remove] {
+  width: calc(var(--spacing,.25rem) * 3);
+  height: calc(var(--spacing,.25rem) * 3);
+}
+
+.chat-attachment [data-slot=chat-attachment-remove] svg {
+  width: calc(var(--spacing,.25rem) * 2);
+  height: calc(var(--spacing,.25rem) * 2);
+}
+
+@media (hover:hover) {
+  .chat-attachment__remove {
+    opacity: 0;
+  }
+  .chat-attachment:  hover .chat-attachment__remove,.chat-attachment:  focus-within .chat-attachment__remove {
+    opacity: 1;
+  }
+}
+
+.chat-attachment-group {
+  align-items: flex-start;
+  gap: calc(var(--spacing,.25rem) * 2);
+  flex-wrap: wrap;
+  display: flex;
+}

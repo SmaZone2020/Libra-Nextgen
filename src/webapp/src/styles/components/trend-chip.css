@@ -1,0 +1,26 @@
+.trend-chip__indicator {
+  flex-shrink: 0
+}
+
+.trend-chip__value {
+  font-variant-numeric: tabular-nums
+}
+
+.trend-chip__suffix {
+  color: var(--muted)
+}
+
+.trend-chip--sm .trend-chip__indicator {
+  width: calc(var(--spacing,.25rem) * 3);
+  height: calc(var(--spacing,.25rem) * 3)
+}
+
+.trend-chip--md .trend-chip__indicator {
+  width: calc(var(--spacing,.25rem) * 3.5);
+  height: calc(var(--spacing,.25rem) * 3.5)
+}
+
+.trend-chip--lg .trend-chip__indicator {
+  width: calc(var(--spacing,.25rem) * 4);
+  height: calc(var(--spacing,.25rem) * 4)
+}

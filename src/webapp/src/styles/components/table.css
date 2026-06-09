@@ -1,0 +1,4 @@
+.table__row:last-child .table__cell {
+  border-bottom-style: var(--tw-border-style);
+  border-bottom-width: 0
+}

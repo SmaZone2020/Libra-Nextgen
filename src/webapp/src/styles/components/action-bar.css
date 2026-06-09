@@ -1,0 +1,64 @@
+.action-bar {
+  pointer-events: none;
+  inset-inline: calc(var(--spacing,.25rem) * 0);
+  bottom: calc(var(--spacing,.25rem) * 6);
+  z-index: 50;
+  justify-content: center;
+  display: flex;
+  position: fixed;
+}
+
+.action-bar [data-slot=toolbar] {
+  border-radius: calc(var(--radius) * 3);
+}
+
+.action-bar__wrapper {
+  pointer-events: auto;
+  --tw-shadow: var(--overlay-shadow);
+  box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+  padding: 6px 12px;
+}
+
+.action-bar__prefix {
+  align-items: center;
+  gap: calc(var(--spacing,.25rem) * 2.5);
+  display: flex;
+}
+
+.action-bar__content {
+  align-items: center;
+  gap: calc(var(--spacing,.25rem) * 1);
+  display: flex;
+}
+
+.action-bar__suffix {
+  align-items: center;
+  display: flex;
+}
+
+.action-bar__label {
+  font-size: var(--text-sm,.875rem);
+  line-height: var(--tw-leading,var(--text-sm--line-height,calc(1.25 / .875)));
+  --tw-font-weight: var(--font-weight-medium,500);
+  font-weight: var(--font-weight-medium,500);
+}
+
+@media (max-width:639px) {
+  .action-bar__wrapper {
+    padding: 4px 8px;
+  }
+  .action-bar__prefix {
+    gap: calc(var(--spacing,.25rem) * 1.5);
+  }
+  .action-bar__label {
+    clip-path: inset(50%);
+    white-space: nowrap;
+    border-width: 0;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    position: absolute;
+    overflow: hidden;
+  }
+}

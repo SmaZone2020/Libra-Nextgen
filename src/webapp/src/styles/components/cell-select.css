@@ -1,0 +1,124 @@
+.cell-select {
+  --cell-select-indicator-size: .75rem;
+}
+
+.cell-select .cell-select__trigger {
+  height: calc(var(--spacing,.25rem) * 9);
+  align-items: center;
+  gap: calc(var(--spacing,.25rem) * 3);
+  border-radius: var(--field-radius,calc(var(--radius) * 1.5));
+  border-style: var(--tw-border-style);
+  background-color: var(--field-background,var(--default));
+  padding-inline: calc(var(--spacing,.25rem) * 3);
+  color: var(--field-foreground,var(--foreground));
+  --tw-shadow: var(--field-shadow);
+  box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+  --tw-outline-style: none;
+  -webkit-tap-highlight-color: transparent;
+  cursor: var(--cursor-interactive);
+  transition: background-color .15s var(--ease-smooth), border-color .15s var(--ease-smooth), box-shadow .15s var(--ease-out);
+  border-width: 1px;
+  outline-style: none;
+  display: flex;
+}
+
+.cell-select .cell-select__trigger:is([data-reduce-motion=true],[data-reduce-motion=true] *),.cell-select .cell-select__trigger:is([data-reduce-motion=true],[data-reduce-motion=true] *):before,.cell-select .cell-select__trigger:is([data-reduce-motion=true],[data-reduce-motion=true] *):after {
+  transition-property: none;
+}
+
+@media (prefers-reduced-motion:reduce) {
+  .cell-select .cell-select__trigger:  not(:is([data-reduce-motion=true],[data-reduce-motion=true] *)),.cell-select .cell-select__trigger:  not(:is([data-reduce-motion=true],[data-reduce-motion=true] *)):before,.cell-select .cell-select__trigger:  not(:is([data-reduce-motion=true],[data-reduce-motion=true] *)):after {
+    transition-property: none;
+  }
+}
+
+.cell-select .cell-select__trigger {
+  border-width: var(--border-width-field);
+  border-color: var(--color-field-border);
+  padding-right: .75rem;
+}
+
+@media (hover:hover) {
+  .cell-select .cell-select__trigger:  hover,.cell-select .cell-select__trigger[data-hovered=true] {
+    background-color: var(--field-hover);
+    border-color: var(--color-field-border-hover);
+  }
+}
+
+.cell-select .cell-select__trigger:focus-visible:not(:focus),.cell-select .cell-select__trigger[data-focus-visible=true] {
+  --tw-ring-shadow: var(--tw-ring-inset,) 0 0 0 calc(2px + var(--tw-ring-offset-width)) var(--tw-ring-color,currentcolor);
+  box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+  --tw-ring-color: var(--focus);
+  --tw-ring-offset-width: var(--ring-offset-width);
+  --tw-ring-offset-shadow: var(--tw-ring-inset,) 0 0 0 var(--tw-ring-offset-width) var(--tw-ring-offset-color);
+  --tw-ring-offset-color: var(--background);
+  --tw-outline-style: none;
+  border-color: var(--color-field-border-focus);
+  background-color: var(--color-field-focus);
+  outline-style: none;
+}
+
+.cell-select .cell-select__trigger:disabled,.cell-select .cell-select__trigger[aria-disabled=true] {
+  opacity: var(--disabled-opacity);
+  cursor: var(--cursor-disabled);
+  pointer-events: none;
+}
+
+.cell-select .cell-select__trigger--secondary {
+  --tw-shadow: 0 0 #0000;
+  box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+  background-color: var(--color-default);
+}
+
+@media (hover:hover) {
+  .cell-select .cell-select__trigger--secondary:  hover,.cell-select .cell-select__trigger--secondary[data-hovered=true] {
+    background-color: var(--color-default-hover);
+  }
+}
+
+.cell-select .cell-select__trigger--secondary:focus-visible:not(:focus),.cell-select .cell-select__trigger--secondary[data-focus-visible=true] {
+  background-color: var(--color-default);
+}
+
+.cell-select .cell-select__label {
+  min-width: calc(var(--spacing,.25rem) * 0);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: start;
+  font-size: var(--text-sm,.875rem);
+  line-height: var(--tw-leading,var(--text-sm--line-height,calc(1.25 / .875)));
+  --tw-font-weight: var(--font-weight-medium,500);
+  font-weight: var(--font-weight-medium,500);
+  color: var(--foreground);
+  flex: 1;
+  overflow: hidden;
+}
+
+.cell-select .cell-select__value {
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: end;
+  font-size: var(--text-sm,.875rem);
+  line-height: var(--tw-leading,var(--text-sm--line-height,calc(1.25 / .875)));
+  color: var(--muted);
+  flex-shrink: 0;
+  margin-left: auto;
+  overflow: hidden;
+}
+
+.cell-select .cell-select__indicator {
+  margin-block: calc(var(--spacing,.25rem) * 0);
+  color: var(--muted);
+  width: var(--cell-select-indicator-size);
+  height: var(--cell-select-indicator-size);
+  flex-shrink: 0;
+  position: static;
+}
+
+.cell-select .cell-select__indicator[data-open=true] {
+  rotate: 0deg;
+}
+
+.cell-select .cell-select__popover {
+  min-width: var(--trigger-width);
+}

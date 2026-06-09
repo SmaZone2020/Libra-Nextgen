@@ -1,0 +1,368 @@
+.stepper {
+  --stepper-indicator-size: 28px;
+  --stepper-separator-size: 2px;
+  --stepper-vertical-gap: 16px;
+  --stepper-active-color: var(--color-accent);
+  --stepper-complete-color: var(--color-accent);
+  --stepper-complete-fg: var(--color-accent-foreground);
+  --stepper-inactive-border: var(--color-border);
+  --stepper-inactive-fg: var(--color-muted);
+  margin: calc(var(--spacing,.25rem) * 0);
+  padding: calc(var(--spacing,.25rem) * 0);
+  list-style-type: none
+}
+
+.stepper--horizontal {
+  align-items: flex-start;
+  display: flex
+}
+
+.stepper--vertical {
+  flex-direction: column;
+  display: flex
+}
+
+.stepper__step {
+  position: relative
+}
+
+.stepper__step--horizontal {
+  flex-direction: column;
+  flex: 1;
+  align-items: center;
+  display: flex;
+  position: relative;
+  overflow: visible
+}
+
+.stepper__step--vertical {
+  padding-bottom: var(--stepper-vertical-gap);
+  flex-direction: column;
+  display: flex;
+  position: relative
+}
+
+.stepper__step--vertical:last-child {
+  padding-bottom: 0
+}
+
+.stepper__step-button {
+  border-style: var(--tw-border-style);
+  transition-property: color,background-color,border-color,outline-color,text-decoration-color,fill,stroke,--tw-gradient-from,--tw-gradient-via,--tw-gradient-to;
+  transition-timing-function: var(--tw-ease,var(--default-transition-timing-function,cubic-bezier(.4, 0, .2, 1)));
+  transition-duration: var(--tw-duration,var(--default-transition-duration,.15s));
+  --tw-duration: .1s;
+  --tw-outline-style: none;
+  -webkit-tap-highlight-color: transparent;
+  border-radius: calc(var(--radius) * 1);
+  padding: calc(var(--spacing,.25rem) * 0);
+  transform: translateZ(0) var(--tw-rotate-x,) var(--tw-rotate-y,) var(--tw-rotate-z,) var(--tw-skew-x,) var(--tw-skew-y,);
+  background-color: #0000;
+  border-width: 0;
+  outline-style: none;
+  align-items: center;
+  transition-duration: .1s;
+  display: flex
+}
+
+.stepper__step-button:is([data-reduce-motion=true],[data-reduce-motion=true] *),.stepper__step-button:is([data-reduce-motion=true],[data-reduce-motion=true] *):before,.stepper__step-button:is([data-reduce-motion=true],[data-reduce-motion=true] *):after {
+  transition-property: none
+}
+
+@media (prefers-reduced-motion:reduce) {
+  .stepper__step-button: not(:is([data-reduce-motion=true],[data-reduce-motion=true] *)),.stepper__step-button: not(:is([data-reduce-motion=true],[data-reduce-motion=true] *)):before,.stepper__step-button: not(:is([data-reduce-motion=true],[data-reduce-motion=true] *)):after {
+    transition-property: none
+  }
+}
+
+.stepper__step-button[data-clickable=true] {
+  cursor: var(--cursor-interactive)
+}
+
+@media (hover:hover) {
+  :is(.stepper__step-button[data-clickable=true]:hover,.stepper__step-button[data-clickable=true][data-hovered=true]) .stepper__indicator {
+    opacity: .8
+  }
+}
+
+.stepper__step-button[data-clickable=true]:active,.stepper__step-button[data-clickable=true][data-pressed=true] {
+  opacity: .8
+}
+
+.stepper__step-button[data-clickable=true]:focus-visible {
+  --tw-ring-shadow: var(--tw-ring-inset,) 0 0 0 calc(2px + var(--tw-ring-offset-width)) var(--tw-ring-color,currentcolor);
+  box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+  --tw-ring-color: var(--focus);
+  --tw-ring-offset-width: var(--ring-offset-width);
+  --tw-ring-offset-shadow: var(--tw-ring-inset,) 0 0 0 var(--tw-ring-offset-width) var(--tw-ring-offset-color);
+  --tw-ring-offset-color: var(--background);
+  --tw-outline-style: none;
+  outline-style: none
+}
+
+.stepper__step-button--horizontal {
+  z-index: 10;
+  align-items: center;
+  gap: calc(var(--spacing,.25rem) * 1.5);
+  flex-direction: column;
+  position: relative
+}
+
+.stepper__step-button--vertical {
+  z-index: 10;
+  align-items: flex-start;
+  gap: calc(var(--spacing,.25rem) * 2.5);
+  flex-direction: row;
+  position: relative
+}
+
+.stepper__indicator {
+  width: var(--stepper-indicator-size);
+  height: var(--stepper-indicator-size);
+  border: 2px solid;
+  border-radius: 3.40282e38px;
+  flex-shrink: 0;
+  justify-content: center;
+  align-items: center;
+  display: flex
+}
+
+.stepper__indicator[data-status=inactive] {
+  border-color: var(--stepper-inactive-border);
+  color: var(--stepper-inactive-fg);
+  background-color: #0000
+}
+
+.stepper__indicator[data-status=active] {
+  border-color: var(--stepper-active-color);
+  color: var(--stepper-active-color);
+  background-color: #0000
+}
+
+.stepper__indicator[data-status=complete] {
+  background-color: var(--stepper-complete-color);
+  border-color: var(--stepper-complete-color);
+  color: var(--stepper-complete-fg);
+  --tw-shadow: 0 1px 3px 0 var(--tw-shadow-color,#0000001a), 0 1px 2px -1px var(--tw-shadow-color,#0000001a);
+  box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+  animation: .3s ease-out stepper-indicator-complete
+}
+
+.stepper__indicator[data-status=complete]:is([data-reduce-motion=true],[data-reduce-motion=true] *),.stepper__indicator[data-status=complete]:is([data-reduce-motion=true],[data-reduce-motion=true] *):before,.stepper__indicator[data-status=complete]:is([data-reduce-motion=true],[data-reduce-motion=true] *):after {
+  animation: none
+}
+
+@media (prefers-reduced-motion:reduce) {
+  .stepper__indicator[data-status=complete]:not(:is([data-reduce-motion=true],[data-reduce-motion=true] *)),.stepper__indicator[data-status=complete]:not(:is([data-reduce-motion=true],[data-reduce-motion=true] *)):before,.stepper__indicator[data-status=complete]:not(:is([data-reduce-motion=true],[data-reduce-motion=true] *)):after {
+    animation: none
+  }
+}
+
+@keyframes stepper-indicator-complete {
+  0% {
+    transform: scale(1)
+  }
+50% {
+    transform: scale(1.15)
+  }
+to {
+    transform: scale(1)
+  }
+}
+
+.stepper__indicator--sm {
+  --tw-font-weight: var(--font-weight-semibold,600);
+  font-size: 10px;
+  font-weight: var(--font-weight-semibold,600)
+}
+
+.stepper__indicator--md {
+  font-size: var(--text-xs,.75rem);
+  line-height: var(--tw-leading,var(--text-xs--line-height,calc(1 / .75)));
+  --tw-font-weight: var(--font-weight-semibold,600);
+  font-weight: var(--font-weight-semibold,600)
+}
+
+.stepper__indicator--lg {
+  font-size: var(--text-sm,.875rem);
+  line-height: var(--tw-leading,var(--text-sm--line-height,calc(1.25 / .875)));
+  --tw-font-weight: var(--font-weight-semibold,600);
+  font-weight: var(--font-weight-semibold,600)
+}
+
+.stepper__separator {
+  display: flex
+}
+
+.stepper__separator--horizontal {
+  top: calc(var(--stepper-indicator-size) / 2 - var(--stepper-separator-size) / 2);
+  left: calc(50% + var(--stepper-indicator-size) / 2);
+  right: calc(-50% + var(--stepper-indicator-size) / 2);
+  position: absolute
+}
+
+.stepper__separator--vertical {
+  top: var(--stepper-indicator-size);
+  bottom: 0;
+  left: calc(var(--stepper-indicator-size) / 2 - var(--stepper-separator-size) / 2);
+  position: absolute
+}
+
+.stepper__separator-track {
+  background-color: var(--separator);
+  position: relative;
+  overflow: hidden
+}
+
+.stepper__separator-track--horizontal {
+  width: 100%;
+  height: var(--stepper-separator-size)
+}
+
+.stepper__separator-track--vertical {
+  height: 100%;
+  width: var(--stepper-separator-size)
+}
+
+.stepper__separator-fill {
+  inset: calc(var(--spacing,.25rem) * 0);
+  background-color: var(--stepper-complete-color);
+  position: absolute
+}
+
+.stepper__separator-fill--horizontal {
+  transform: scaleX(var(--stepper-separator-progress,0));
+  transform-origin: 0;
+  transition: transform .3s
+}
+
+.stepper__separator-fill--vertical {
+  transform: scaleY(var(--stepper-separator-progress,0));
+  transform-origin: top;
+  transition: transform .3s
+}
+
+.stepper__content {
+  flex-direction: column;
+  display: flex
+}
+
+.stepper__content--horizontal {
+  text-align: center;
+  align-items: center
+}
+
+.stepper__content--vertical {
+  text-align: left;
+  min-height: var(--stepper-indicator-size);
+  align-items: flex-start
+}
+
+.stepper__title {
+  --tw-leading: var(--leading-tight,1.25);
+  line-height: var(--leading-tight,1.25);
+  --tw-font-weight: var(--font-weight-medium,500);
+  font-weight: var(--font-weight-medium,500);
+  color: var(--foreground);
+  transition: color .3s
+}
+
+.stepper__step[data-status=inactive] .stepper__title {
+  color: var(--muted)
+}
+
+.stepper__title--sm {
+  font-size: 11px
+}
+
+.stepper__title--md {
+  font-size: var(--text-xs,.75rem);
+  line-height: var(--tw-leading,var(--text-xs--line-height,calc(1 / .75)))
+}
+
+.stepper__title--lg {
+  font-size: var(--text-sm,.875rem);
+  line-height: var(--tw-leading,var(--text-sm--line-height,calc(1.25 / .875)))
+}
+
+.stepper__description {
+  --tw-leading: var(--leading-snug,1.375);
+  line-height: var(--leading-snug,1.375);
+  color: var(--muted);
+  transition: color .3s
+}
+
+.stepper__step[data-status=inactive] .stepper__description {
+  opacity: .6
+}
+
+.stepper__description--sm {
+  margin-top: calc(var(--spacing,.25rem) * .5);
+  font-size: 10px
+}
+
+.stepper__description--md,.stepper__description--lg {
+  margin-top: calc(var(--spacing,.25rem) * .5);
+  font-size: var(--text-xs,.75rem);
+  line-height: var(--tw-leading,var(--text-xs--line-height,calc(1 / .75)))
+}
+
+.stepper__icon {
+  justify-content: center;
+  align-items: center;
+  display: flex
+}
+
+.stepper__icon svg {
+  width: 55%;
+  height: 55%
+}
+
+.stepper__icon [data-slot=stepper-default-checkmark] {
+  width: 44%;
+  height: 44%
+}
+
+[data-slot=stepper-default-checkmark] {
+  transform: translateZ(0) var(--tw-rotate-x,) var(--tw-rotate-y,) var(--tw-rotate-z,) var(--tw-skew-x,) var(--tw-skew-y,)
+}
+
+[data-slot=stepper-default-checkmark] polyline {
+  stroke-dasharray: 22;
+  stroke-dashoffset: 0;
+  animation: .2s ease-out 50ms both stepper-checkmark-draw
+}
+
+[data-slot=stepper-default-checkmark] polyline:is([data-reduce-motion=true],[data-reduce-motion=true] *),[data-slot=stepper-default-checkmark] polyline:is([data-reduce-motion=true],[data-reduce-motion=true] *):before,[data-slot=stepper-default-checkmark] polyline:is([data-reduce-motion=true],[data-reduce-motion=true] *):after {
+  animation: none
+}
+
+@media (prefers-reduced-motion:reduce) {
+  [data-slot=stepper-default-checkmark] polyline: not(:is([data-reduce-motion=true],[data-reduce-motion=true] *)),[data-slot=stepper-default-checkmark] polyline: not(:is([data-reduce-motion=true],[data-reduce-motion=true] *)):before,[data-slot=stepper-default-checkmark] polyline: not(:is([data-reduce-motion=true],[data-reduce-motion=true] *)):after {
+    animation: none
+  }
+}
+
+@keyframes stepper-checkmark-draw {
+  0% {
+    stroke-dashoffset: 22px
+  }
+to {
+    stroke-dashoffset: 0
+  }
+}
+
+.stepper--sm {
+  --stepper-indicator-size: 22px;
+  --stepper-vertical-gap: 12px
+}
+
+.stepper--md {
+  --stepper-indicator-size: 28px;
+  --stepper-vertical-gap: 16px
+}
+
+.stepper--lg {
+  --stepper-indicator-size: 36px;
+  --stepper-vertical-gap: 24px
+}

@@ -1,0 +1,83 @@
+.widget {
+  border-radius: calc(var(--radius) * 2);
+  background-color: var(--surface-secondary);
+  flex-direction: column;
+  display: flex;
+  overflow: hidden
+}
+
+.widget__header {
+  margin-top: calc(var(--spacing,.25rem) * .5);
+  min-height: calc(var(--spacing,.25rem) * 8);
+  justify-content: space-between;
+  align-items: center;
+  gap: calc(var(--spacing,.25rem) * 3);
+  padding-inline: calc(var(--spacing,.25rem) * 4);
+  display: flex
+}
+
+.widget__title {
+  font-size: var(--text-sm,.875rem);
+  line-height: var(--tw-leading,var(--text-sm--line-height,calc(1.25 / .875)));
+  --tw-font-weight: var(--font-weight-semibold,600);
+  font-weight: var(--font-weight-semibold,600);
+  color: var(--foreground)
+}
+
+.widget__description {
+  font-size: var(--text-xs,.75rem);
+  line-height: var(--tw-leading,var(--text-xs--line-height,calc(1 / .75)));
+  color: var(--muted)
+}
+
+.widget__content {
+  margin-inline: calc(var(--spacing,.25rem) * 1.5);
+  margin-bottom: calc(var(--spacing,.25rem) * 1.5);
+  border-radius: calc(var(--radius) * 1.5);
+  background-color: var(--surface);
+  padding: calc(var(--spacing,.25rem) * 4);
+  flex: 1;
+  overflow: hidden
+}
+
+.widget__content:first-child {
+  margin-top: calc(var(--spacing,.25rem) * 1.5)
+}
+
+.widget__content {
+  box-shadow: 0 0 0 1px oklch(0% 0 0/.03),0 1px 2px oklch(0% 0 0/.04)
+}
+
+.widget__footer {
+  align-items: center;
+  gap: calc(var(--spacing,.25rem) * 3);
+  padding-inline: calc(var(--spacing,.25rem) * 4);
+  padding-top: calc(var(--spacing,.25rem) * 3);
+  padding-bottom: calc(var(--spacing,.25rem) * 4);
+  display: flex
+}
+
+.widget__legend {
+  align-items: center;
+  gap: calc(var(--spacing,.25rem) * 3);
+  display: flex
+}
+
+.widget__legend-item {
+  align-items: center;
+  gap: calc(var(--spacing,.25rem) * 1.5);
+  display: flex
+}
+
+.widget__legend-item-dot {
+  width: calc(var(--spacing,.25rem) * 2.5);
+  height: calc(var(--spacing,.25rem) * 2.5);
+  border-radius: 3.40282e38px;
+  flex-shrink: 0
+}
+
+.widget__legend-item-label {
+  font-size: var(--text-xs,.75rem);
+  line-height: var(--tw-leading,var(--text-xs--line-height,calc(1 / .75)));
+  color: var(--muted)
+}

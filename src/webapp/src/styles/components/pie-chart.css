@@ -1,0 +1,29 @@
+.pie-chart {
+  width: 100%
+}
+
+.pie-chart .recharts-pie-sector path {
+  stroke: none
+}
+
+.pie-chart .recharts-pie-label-text {
+  font-size: 11px;
+  fill: var(--muted)!important
+}
+
+.pie-chart .recharts-pie-label-line {
+  stroke: var(--muted);
+  stroke-opacity: .3
+}
+
+.pie-chart .recharts-label {
+  fill: var(--foreground)
+}
+
+.pie-chart .recharts-tooltip-cursor {
+  display: none
+}
+
+.pie-chart .recharts-tooltip-wrapper {
+  z-index: 10
+}

@@ -1,0 +1,201 @@
+@layer theme {
+  html.glass-light,html[data-theme=glass-light] {
+    --glass-blur: 20px;
+    --border-width-field: 1px;
+    --accent: oklch(30% .006 240);
+    --field-border: oklch(0% 0 0/.04);
+    --separator: oklch(0% 0 0/.1);
+    --surface: oklch(100% 0 0/.8);
+    --surface-secondary: oklch(from var(--surface) l c h / .5)
+  }
+@supports (color: color-mix(in lab, red, red)) {
+    html.glass-light,html[data-theme=glass-light] {
+      --surface-secondary: oklch(from color-mix(in oklab, var(--surface) 100%, var(--foreground) 6%) l c h / .5)
+    }
+  }
+html.glass-light,html[data-theme=glass-light] {
+    --surface-tertiary: oklch(from var(--surface) l c h / .7)
+  }
+@supports (color: color-mix(in lab, red, red)) {
+    html.glass-light,html[data-theme=glass-light] {
+      --surface-tertiary: oklch(from color-mix(in oklab, var(--surface) 100%, var(--foreground) 6%) l c h / .7)
+    }
+  }
+html.glass-light,html[data-theme=glass-light] {
+    --overlay: oklch(100% 0 0/.75);
+    --default: oklch(0% 0 0/.07);
+    --field-background: oklch(14% .05 255/.06);
+    --backdrop: oklch(77.21% .0036 247.87/.6);
+    --background: oklch(97% .0029 264.54);
+    --background-gradient: linear-gradient(#3040c833 0%, #408cf01a 50%, #7cd2e400 100%);
+    --surface-shadow: 0 0px 0px 0 #0000;
+    --overlay-shadow: 0 2px 8px 0 #0000000f, 0 -6px 12px 0 #00000008, 0 14px 28px 0 #00000014;
+    --field-shadow: 0 0px 0px 0 #0000;
+    --glass-pinned-surface: oklch(99.11% 0 0);
+    --glass-pinned-surface-secondary: oklch(95.77% .0017 247.84);
+    --chart-1: oklch(65% .06 240);
+    --chart-2: oklch(55% .05 240);
+    --chart-3: oklch(45% .04 240);
+    --chart-4: oklch(35% .03 240);
+    --chart-5: oklch(75% .06 240)
+  }
+html.glass-dark,html[data-theme=glass-dark] {
+    --glass-blur: 36px;
+    --border-width-field: 1px;
+    --accent: oklch(98% .001 240);
+    --accent-foreground: var(--eclipse);
+    --field-border: oklch(100% 0 0/.04);
+    --separator: oklch(100% 0 0/.12);
+    --surface: oklch(100% 0 0/.04);
+    --surface-secondary: oklch(from var(--surface) l c h / .1)
+  }
+@supports (color: color-mix(in lab, red, red)) {
+    html.glass-dark,html[data-theme=glass-dark] {
+      --surface-secondary: oklch(from color-mix(in oklab, var(--surface) 100%, var(--foreground) 6%) l c h / .1)
+    }
+  }
+html.glass-dark,html[data-theme=glass-dark] {
+    --surface-tertiary: oklch(from var(--surface) l c h / .2)
+  }
+@supports (color: color-mix(in lab, red, red)) {
+    html.glass-dark,html[data-theme=glass-dark] {
+      --surface-tertiary: oklch(from color-mix(in oklab, var(--surface) 100%, var(--foreground) 6%) l c h / .2)
+    }
+  }
+html.glass-dark,html[data-theme=glass-dark] {
+    --overlay: oklch(100% 0 0/.05);
+    --default: oklch(100% 0 0/.08);
+    --field-background: oklch(100% 0 0/.08);
+    --backdrop: oklch(0% 0 0/.3);
+    --background: oklch(15% .003 240);
+    --background-gradient: linear-gradient(#195eb429 0%, #005e500a 50%, #00786e00 100%);
+    --glass-pinned-surface: oklch(29.25% .0023 247.9);
+    --glass-pinned-surface-secondary: oklch(25.55% .0024 247.92);
+    --chart-1: oklch(from var(--accent) calc(l - .4) c h);
+    --chart-2: oklch(from var(--accent) calc(l - .2) c h);
+    --chart-3: var(--accent);
+    --chart-4: oklch(from var(--accent) calc(l + .06) c h);
+    --chart-5: oklch(from var(--accent) calc(l + .12) c h)
+  }
+}
+
+@layer components {
+  .card,.alert,.tabs__list,.tabs__indicator,.tooltip,.popover,.dropdown__popover,.modal__dialog,.drawer__dialog,.alert-dialog__dialog,.select__trigger,.select__popover,.autocomplete__trigger,.autocomplete__popover,.combo-box__popover,.date-picker__popover,.date-range-picker__popover,.color-picker__popover,.toast,.toolbar--attached,.input,.textarea,.input-group,.number-field__group {
+    -webkit-backdrop-filter: blur(var(--glass-blur));
+    backdrop-filter: blur(var(--glass-blur))
+  }
+.number-field__increment-button,.number-field__decrement-button {
+    border: none
+  }
+.date-input-group,.color-input-group,.search-field__group,.input-otp__slot,.checkbox__control,.radio__control,.button--secondary,.button--tertiary,.toggle-button {
+    -webkit-backdrop-filter: blur(var(--glass-blur));
+    backdrop-filter: blur(var(--glass-blur))
+  }
+.toggle-button[data-selected=true] {
+    background-color: var(--accent);
+    color: var(--accent-foreground)
+  }
+.toggle-button[data-selected=true]:hover,.toggle-button[data-selected=true][data-hovered=true] {
+    background-color: var(--accent-hover);
+    color: var(--accent-foreground)
+  }
+.close-button--default,.pagination__link--active,.switch__control,.tag--default,.chip {
+    -webkit-backdrop-filter: blur(var(--glass-blur));
+    backdrop-filter: blur(var(--glass-blur))
+  }
+.badge {
+    -webkit-backdrop-filter: blur(var(--glass-blur));
+    backdrop-filter: blur(var(--glass-blur));
+    border: none
+  }
+.kbd,.avatar,.table__row {
+    -webkit-backdrop-filter: blur(var(--glass-blur));
+    backdrop-filter: blur(var(--glass-blur))
+  }
+.table__header {
+    background-color: var(--surface-secondary)
+  }
+@supports (color: color-mix(in lab, red, red)) {
+    .table__header {
+      background-color: color-mix(in oklab, var(--surface-secondary) 1%, transparent)
+    }
+  }
+.table__header,.accordion__trigger,.slider__track,.progress-bar__track,.meter__track,.hover-card__content,.context-menu__popover,.command__dialog,.emoji-picker__popover {
+    -webkit-backdrop-filter: blur(var(--glass-blur));
+    backdrop-filter: blur(var(--glass-blur))
+  }
+.emoji-picker__footer {
+    z-index: 10;
+    border-radius: calc(var(--radius) * 4);
+    -webkit-backdrop-filter: blur(var(--glass-blur));
+    backdrop-filter: blur(var(--glass-blur));
+    background-color: #0000;
+    position: relative
+  }
+.floating-toc__content,.sheet__dialog {
+    -webkit-backdrop-filter: blur(var(--glass-blur));
+    backdrop-filter: blur(var(--glass-blur))
+  }
+.chart-tooltip {
+    background-color: var(--background-secondary);
+    box-shadow: var(--overlay-shadow);
+    border: none
+  }
+.item-card--default {
+    -webkit-backdrop-filter: blur(var(--glass-blur));
+    backdrop-filter: blur(var(--glass-blur))
+  }
+.item-card-group--default,.item-card-group--secondary,.item-card-group--tertiary {
+    -webkit-backdrop-filter: blur(var(--glass-blur));
+    backdrop-filter: blur(var(--glass-blur));
+    overflow: hidden
+  }
+.kpi-group,.widget {
+    -webkit-backdrop-filter: blur(var(--glass-blur));
+    backdrop-filter: blur(var(--glass-blur))
+  }
+.widget__content {
+    -webkit-backdrop-filter: blur(var(--glass-blur));
+    backdrop-filter: blur(var(--glass-blur));
+    box-shadow: none
+  }
+.sidebar--floating,.sidebar__provider: has(.sidebar--inset) .sidebar__main,.native-select__select,.cell-select,.cell-switch,.cell-slider,.cell-color-picker {
+    -webkit-backdrop-filter: blur(var(--glass-blur));
+    backdrop-filter: blur(var(--glass-blur))
+  }
+[data-slot=data-grid] .table__column[data-pinned],[data-slot=data-grid] .data-grid__selection-column[data-pinned],[data-slot=data-grid] .data-grid__drag-handle-column[data-pinned] {
+    background-color: var(--glass-pinned-surface-secondary)
+  }
+[data-slot=data-grid] .table__cell[data-pinned],[data-slot=data-grid] .data-grid__selection-cell[data-pinned],[data-slot=data-grid] .data-grid__drag-handle-cell[data-pinned] {
+    background-color: var(--glass-pinned-surface)
+  }
+@media (hover: hover) {
+    [data-slot=data-grid] .table__row: hover [data-pinned].table__cell,[data-slot=data-grid] .table__row[data-hovered=true] [data-pinned].table__cell {
+      background-color: var(--glass-pinned-surface)
+    }
+@supports (color: color-mix(in lab, red, red)) {
+      [data-slot=data-grid] .table__row: hover [data-pinned].table__cell,[data-slot=data-grid] .table__row[data-hovered=true] [data-pinned].table__cell {
+        background-color: color-mix(in oklch, var(--glass-pinned-surface) 40%, var(--glass-pinned-surface-secondary))
+      }
+    }
+  }
+[data-slot=data-grid] .table__row[data-selected=true] [data-pinned].table__cell {
+    background-color: var(--glass-pinned-surface)
+  }
+@supports (color: color-mix(in lab, red, red)) {
+    [data-slot=data-grid] .table__row[data-selected=true] [data-pinned].table__cell {
+      background-color: color-mix(in oklch, var(--glass-pinned-surface) 10%, var(--glass-pinned-surface-secondary))
+    }
+  }
+.table-root--secondary [data-pinned].table__cell {
+    background-color: var(--glass-pinned-surface)
+  }
+.segment,.number-stepper__group,.number-stepper__decrement-button,.number-stepper__increment-button,.emoji-reaction-button,.kanban__column-body {
+    -webkit-backdrop-filter: blur(var(--glass-blur));
+    backdrop-filter: blur(var(--glass-blur))
+  }
+.carousel__previous,.carousel__next {
+    color: #fff;
+    mix-blend-mode: difference
+  }
+}

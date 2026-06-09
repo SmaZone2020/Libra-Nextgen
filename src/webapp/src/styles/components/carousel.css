@@ -1,0 +1,209 @@
+.carousel {
+  --tw-outline-style: none;
+  --carousel-gap: calc(var(--spacing) * 4);
+  outline-style: none;
+}
+
+.carousel:focus-visible:not(:focus),.carousel[data-focus-visible=true] {
+  --tw-ring-shadow: var(--tw-ring-inset,) 0 0 0 calc(2px + var(--tw-ring-offset-width)) var(--tw-ring-color,currentcolor);
+  box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+  --tw-ring-color: var(--focus);
+  --tw-ring-offset-width: var(--ring-offset-width);
+  --tw-ring-offset-shadow: var(--tw-ring-inset,) 0 0 0 var(--tw-ring-offset-width) var(--tw-ring-offset-color);
+  --tw-ring-offset-color: var(--background);
+  --tw-outline-style: none;
+  outline-style: none;
+}
+
+.carousel__viewport-wrapper {
+  position: relative;
+}
+
+.carousel__viewport {
+  overflow: hidden;
+}
+
+.carousel__content {
+  display: flex;
+}
+
+.carousel__content--horizontal {
+  margin-left: calc(var(--carousel-gap) * -1);
+  flex-direction: row;
+}
+
+.carousel__item {
+  min-width: calc(var(--spacing,.25rem) * 0);
+  flex: 0 0 100%;
+  position: relative;
+}
+
+.carousel__item--horizontal {
+  padding-left: var(--carousel-gap);
+}
+
+.carousel__previous,.carousel__next {
+  z-index: 10;
+  position: absolute;
+}
+
+.carousel__previous--in-place,.carousel__next--in-place {
+  top: 50%;
+  translate: 0 -50%;
+}
+
+.carousel__previous--in-place {
+  left: calc(var(--spacing) * 5);
+}
+
+.carousel__next--in-place {
+  right: calc(var(--spacing) * 5);
+}
+
+.carousel__previous--modal,.carousel__next--modal {
+  top: 50%;
+  translate: 0 -50%;
+}
+
+.carousel__previous--modal {
+  left: calc(var(--spacing) * -15);
+}
+
+.carousel__next--modal {
+  right: calc(var(--spacing) * -15);
+}
+
+.carousel__previous--miniatures,.carousel__next--miniatures {
+  flex-shrink: 0;
+  position: relative;
+  top: auto;
+  left: auto;
+  right: auto;
+  transform: none;
+}
+
+.carousel__dots {
+  justify-content: center;
+  align-items: center;
+  gap: calc(var(--spacing,.25rem) * 2);
+  margin-top: calc(var(--spacing,.25rem) * 4);
+  display: flex;
+}
+
+.carousel__dot {
+  width: calc(var(--spacing,.25rem) * 2);
+  height: calc(var(--spacing,.25rem) * 2);
+  --tw-outline-style: none;
+  -webkit-tap-highlight-color: transparent;
+  background-color: var(--default);
+  border-radius: calc(var(--radius) * 9999);
+  cursor: var(--cursor-interactive);
+  outline-style: none;
+  transition: background-color .2s;
+}
+
+@media (hover:hover) {
+  .carousel__dot:  hover,.carousel__dot[data-hovered=true] {
+    background-color: var(--default-hover);
+  }
+}
+
+.carousel__dot:focus-visible:not(:focus),.carousel__dot[data-focus-visible=true] {
+  --tw-ring-shadow: var(--tw-ring-inset,) 0 0 0 calc(2px + var(--tw-ring-offset-width)) var(--tw-ring-color,currentcolor);
+  box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+  --tw-ring-color: var(--focus);
+  --tw-ring-offset-width: var(--ring-offset-width);
+  --tw-ring-offset-shadow: var(--tw-ring-inset,) 0 0 0 var(--tw-ring-offset-width) var(--tw-ring-offset-color);
+  --tw-ring-offset-color: var(--background);
+  --tw-outline-style: none;
+  outline-style: none;
+}
+
+.carousel__dot[data-selected=true] {
+  background-color: var(--accent);
+}
+
+.carousel__thumbnails {
+  align-items: center;
+  gap: calc(var(--spacing,.25rem) * 3);
+  margin-inline: calc(var(--spacing,.25rem) * -1);
+  margin-top: calc(var(--spacing,.25rem) * 4);
+  padding-inline: calc(var(--spacing,.25rem) * 1);
+  padding-block: calc(var(--spacing,.25rem) * 1);
+  cursor: var(--cursor-interactive);
+  display: flex;
+}
+
+.carousel__thumbnails--miniatures {
+  margin-top: calc(var(--spacing,.25rem) * 0);
+  justify-content: center;
+}
+
+.carousel__thumbnail {
+  width: calc(var(--spacing,.25rem) * 16);
+  height: calc(var(--spacing,.25rem) * 16);
+  border-radius: calc(var(--radius) * 2);
+  --tw-outline-style: none;
+  -webkit-tap-highlight-color: transparent;
+  cursor: var(--cursor-interactive);
+  outline-style: none;
+  flex-shrink: 0;
+  transition: box-shadow .15s,opacity .15s,transform .15s;
+  position: relative;
+}
+
+.carousel__thumbnail img {
+  pointer-events: none;
+  inset: calc(var(--spacing,.25rem) * 0);
+  border-radius: calc(var(--radius) * 2);
+  object-fit: cover;
+  -webkit-user-select: none;
+  user-select: none;
+  width: 100%;
+  height: 100%;
+  position: absolute;
+}
+
+@media (hover:hover) {
+  .carousel__thumbnail:  hover,.carousel__thumbnail[data-hovered=true] {
+    opacity: .85;
+  }
+}
+
+.carousel__thumbnail:active,.carousel__thumbnail[data-pressed=true] {
+  transform: scale(.95);
+}
+
+.carousel__thumbnail:focus-visible:not(:focus),.carousel__thumbnail[data-focus-visible=true] {
+  --tw-ring-shadow: var(--tw-ring-inset,) 0 0 0 calc(2px + var(--tw-ring-offset-width)) var(--tw-ring-color,currentcolor);
+  box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+  --tw-ring-color: var(--focus);
+  --tw-ring-offset-width: var(--ring-offset-width);
+  --tw-ring-offset-shadow: var(--tw-ring-inset,) 0 0 0 var(--tw-ring-offset-width) var(--tw-ring-offset-color);
+  --tw-ring-offset-color: var(--background);
+  --tw-outline-style: none;
+  outline-style: none;
+}
+
+.carousel__thumbnail[data-selected=true] {
+  box-shadow: 0 0 0 2px var(--color-accent);
+}
+
+@media (prefers-reduced-motion:reduce) {
+  .carousel__thumbnail {
+    transition: none;
+  }
+}
+
+.carousel--modal {
+  align-items: center;
+  gap: calc(var(--spacing,.25rem) * 4);
+  flex-direction: column;
+  display: flex;
+}
+
+.carousel--miniatures {
+  flex-direction: column;
+  align-items: center;
+  display: flex;
+}

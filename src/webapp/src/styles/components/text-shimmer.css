@@ -1,0 +1,132 @@
+@property --shimmer-track-height {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 200px
+}
+
+@property --shimmer-angle {
+  syntax: "<angle>";
+  inherits: true;
+  initial-value: 15deg
+}
+
+@keyframes text-shimmer {
+  0% {
+    background-position: 100% 0
+  }
+}
+
+.text-shimmer {
+  --shimmer-track-height: 1em;
+  --_speed: 200;
+  --_spread: calc(4ch + 80px);
+  --_bg: oklch(from currentColor l c h / calc(alpha * .45));
+  --_fg: currentColor;
+  --_gradient-width: calc(var(--_spread) + var(--shimmer-track-height) * tan(var(--shimmer-angle)));
+  --_active-distance: calc(var(--shimmer-track-width,200px) + var(--_gradient-width));
+  --_duration: calc(var(--_active-distance) / var(--_speed) / 1px * 1000);
+  --_repeat-delay: calc(20000 / var(--_speed));
+  --_repeat-delay-px: calc(var(--_repeat-delay) * var(--_active-distance) / var(--_duration));
+  --_xy-offset-px: calc((var(--shimmer-x,0) + var(--shimmer-y,0) * tan(var(--shimmer-angle))) * 1px);
+  --_bg-width: calc(100% + var(--shimmer-track-width,100%) + var(--_gradient-width) + var(--_repeat-delay-px));
+  --_position: calc(var(--shimmer-track-width,(100% - var(--_gradient-width) - var(--_repeat-delay-px)) / 2) + var(--_gradient-width) / 2 + var(--_repeat-delay-px) - var(--_xy-offset-px));
+  --_mix-96: var(--_fg);
+  width: fit-content;
+  display: inline-block;
+  position: relative
+}
+
+@supports (color:color-mix(in lab, red, red)) {
+  .text-shimmer {
+    --_mix-96: color-mix(in oklch, var(--_fg), var(--_bg) 96%)
+  }
+}
+
+.text-shimmer {
+  --_mix-83: var(--_fg)
+}
+
+@supports (color:color-mix(in lab, red, red)) {
+  .text-shimmer {
+    --_mix-83: color-mix(in oklch, var(--_fg), var(--_bg) 83%)
+  }
+}
+
+.text-shimmer {
+  --_mix-67: var(--_fg)
+}
+
+@supports (color:color-mix(in lab, red, red)) {
+  .text-shimmer {
+    --_mix-67: color-mix(in oklch, var(--_fg), var(--_bg) 67%)
+  }
+}
+
+.text-shimmer {
+  --_mix-50: var(--_fg)
+}
+
+@supports (color:color-mix(in lab, red, red)) {
+  .text-shimmer {
+    --_mix-50: color-mix(in oklch, var(--_fg), var(--_bg) 50%)
+  }
+}
+
+.text-shimmer {
+  --_mix-33: var(--_fg)
+}
+
+@supports (color:color-mix(in lab, red, red)) {
+  .text-shimmer {
+    --_mix-33: color-mix(in oklch, var(--_fg), var(--_bg) 33%)
+  }
+}
+
+.text-shimmer {
+  --_mix-17: var(--_fg)
+}
+
+@supports (color:color-mix(in lab, red, red)) {
+  .text-shimmer {
+    --_mix-17: color-mix(in oklch, var(--_fg), var(--_bg) 17%)
+  }
+}
+
+.text-shimmer {
+  --_mix-4: var(--_fg)
+}
+
+@supports (color:color-mix(in lab, red, red)) {
+  .text-shimmer {
+    --_mix-4: color-mix(in oklch, var(--_fg), var(--_bg) 4%)
+  }
+}
+
+.text-shimmer {
+  background: linear-gradient(calc(90deg + var(--shimmer-angle)), var(--_bg) calc(var(--_position) - var(--_spread) * .5), var(--_mix-96) calc(var(--_position) - var(--_spread) * .44), var(--_mix-83) calc(var(--_position) - var(--_spread) * .37), var(--_mix-67) calc(var(--_position) - var(--_spread) * .31), var(--_mix-50) calc(var(--_position) - var(--_spread) * .25), var(--_mix-33) calc(var(--_position) - var(--_spread) * .19), var(--_mix-17) calc(var(--_position) - var(--_spread) * .12), var(--_mix-4) calc(var(--_position) - var(--_spread) * .06), var(--_fg) var(--_position), var(--_mix-4) calc(var(--_position) + var(--_spread) * .06), var(--_mix-17) calc(var(--_position) + var(--_spread) * .12), var(--_mix-33) calc(var(--_position) + var(--_spread) * .19), var(--_mix-50) calc(var(--_position) + var(--_spread) * .25), var(--_mix-67) calc(var(--_position) + var(--_spread) * .31), var(--_mix-83) calc(var(--_position) + var(--_spread) * .37), var(--_mix-96) calc(var(--_position) + var(--_spread) * .44), var(--_bg) calc(var(--_position) + var(--_spread) * .5)) 0 0 / var(--_bg-width) 100% no-repeat;
+  -webkit-text-fill-color: transparent;
+  animation: 1s linear infinite backwards text-shimmer;
+  animation-duration: calc((var(--_duration) + var(--_repeat-delay)) * 1ms);
+  -webkit-background-clip: text;
+  background-clip: text
+}
+
+.dark .text-shimmer,[data-theme=dark] .text-shimmer {
+  --_fg: oklch(from currentColor max(.8, calc(l + .4)) c h / calc(alpha + .4))
+}
+
+@-moz-document url-prefix() {
+  .text-shimmer {
+    --_duration: calc(375000 / var(--_speed))
+  }
+}
+
+@media (prefers-reduced-motion:reduce) {
+  .text-shimmer {
+    -webkit-text-fill-color: unset;
+    color: currentColor;
+    opacity: .6;
+    background: 0 0;
+    animation: none
+  }
+}

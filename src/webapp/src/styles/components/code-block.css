@@ -1,0 +1,93 @@
+.code-block {
+  margin-block: calc(var(--spacing,.25rem) * 2);
+  border-radius: calc(var(--radius) * 2);
+  background-color: var(--surface-secondary);
+  width: 100%;
+  color: var(--surface-secondary-foreground);
+  flex-direction: column;
+  display: flex;
+  overflow: clip;
+}
+
+.code-block__header {
+  justify-content: space-between;
+  align-items: center;
+  gap: calc(var(--spacing,.25rem) * 2);
+  padding-inline: calc(var(--spacing,.25rem) * 3);
+  padding-top: calc(var(--spacing,.25rem) * 2);
+  display: flex;
+}
+
+.code-block__code {
+  --tw-leading: var(--leading-relaxed,1.625);
+  width: 100%;
+  font-size: 13px;
+  line-height: var(--leading-relaxed,1.625);
+  overflow-x: auto;
+}
+
+.code-block__code pre {
+  margin: calc(var(--spacing,.25rem) * 0);
+  padding-inline: calc(var(--spacing,.25rem) * 3);
+  padding-block: calc(var(--spacing,.25rem) * 2);
+  background: 0 0!important;
+}
+
+.code-block__code code {
+  font-family: var(--font-mono,ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace);
+}
+
+.code-block__code .line {
+  padding-inline: 0!important;
+}
+
+.code-block__code .shiki,.code-block__code .shiki span {
+  color: var(--shiki-light,var(--color-surface-secondary-foreground));
+}
+
+:is(.dark,.glass-dark,.mouve-dark,.brutalism-dark,[data-theme=dark],[data-theme$=-dark]) .code-block__code .shiki,:is(.dark,.glass-dark,.mouve-dark,.brutalism-dark,[data-theme=dark],[data-theme$=-dark]) .code-block__code .shiki span {
+  color: var(--shiki-dark,var(--color-surface-secondary-foreground));
+}
+
+.code-block__copy-button {
+  cursor: var(--cursor-interactive);
+  color: var(--muted);
+  --tw-outline-style: none;
+  -webkit-tap-highlight-color: transparent;
+  outline-style: none;
+  flex-shrink: 0;
+}
+
+.code-block__copy-button.button--icon-only.button--sm {
+  width: 24px;
+  height: 24px;
+}
+
+.code-block__copy-button.button--icon-only.button--sm svg {
+  width: 12px;
+  height: 12px;
+  margin: 0;
+}
+
+.code-block__copy-button:focus-visible:not(:focus),.code-block__copy-button[data-focus-visible=true] {
+  --tw-ring-shadow: var(--tw-ring-inset,) 0 0 0 calc(2px + var(--tw-ring-offset-width)) var(--tw-ring-color,currentcolor);
+  box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+  --tw-ring-color: var(--focus);
+  --tw-ring-offset-width: var(--ring-offset-width);
+  --tw-ring-offset-shadow: var(--tw-ring-inset,) 0 0 0 var(--tw-ring-offset-width) var(--tw-ring-offset-color);
+  --tw-ring-offset-color: var(--background);
+  --tw-outline-style: none;
+  outline-style: none;
+}
+
+.code-block__copy-button:disabled,.code-block__copy-button[aria-disabled=true] {
+  opacity: var(--disabled-opacity);
+  cursor: var(--cursor-disabled);
+  pointer-events: none;
+}
+
+@media (hover:hover) {
+  .code-block__copy-button:  hover,.code-block__copy-button[data-hovered=true] {
+    color: var(--foreground);
+  }
+}

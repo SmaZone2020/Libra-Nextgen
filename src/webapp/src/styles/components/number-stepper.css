@@ -1,0 +1,299 @@
+.number-stepper {
+  flex-shrink: 0;
+  display: inline-flex
+}
+
+.number-stepper__group {
+  align-items: center;
+  gap: calc(var(--spacing,.25rem) * 0);
+  border-style: var(--tw-border-style);
+  background-color: var(--default);
+  padding: calc(var(--spacing,.25rem) * 0);
+  --tw-shadow: 0 0 #0000;
+  box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+  border-width: 0;
+  border-radius: 3.40282e38px;
+  display: inline-flex
+}
+
+.number-stepper__input {
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border-width: 0;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  position: absolute;
+  overflow: hidden
+}
+
+.number-stepper__decrement-button,.number-stepper__increment-button {
+  height: calc(var(--spacing,.25rem) * 9);
+  width: calc(var(--spacing,.25rem) * 9);
+  border-style: var(--tw-border-style);
+  background-color: var(--surface);
+  --tw-shadow: var(--surface-shadow);
+  box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+  --tw-outline-style: none;
+  -webkit-tap-highlight-color: transparent;
+  border-width: 0;
+  border-radius: 3.40282e38px;
+  outline-style: none;
+  flex-shrink: 0;
+  justify-content: center;
+  align-items: center;
+  display: flex;
+  position: relative
+}
+
+@media (min-width:48rem) {
+  .number-stepper__decrement-button,.number-stepper__increment-button {
+    height: calc(var(--spacing,.25rem) * 8);
+    width: calc(var(--spacing,.25rem) * 8)
+  }
+}
+
+.number-stepper__decrement-button,.number-stepper__increment-button {
+  cursor: var(--cursor-interactive);
+  transition: background-color .1s var(--ease-out), box-shadow .1s var(--ease-out), transform .25s var(--ease-smooth);
+  transform: translateZ(0) var(--tw-rotate-x,) var(--tw-rotate-y,) var(--tw-rotate-z,) var(--tw-skew-x,) var(--tw-skew-y,)
+}
+
+:is(.number-stepper__decrement-button,.number-stepper__increment-button):is([data-reduce-motion=true],[data-reduce-motion=true] *),:is(.number-stepper__decrement-button,.number-stepper__increment-button):is([data-reduce-motion=true],[data-reduce-motion=true] *):before,:is(.number-stepper__decrement-button,.number-stepper__increment-button):is([data-reduce-motion=true],[data-reduce-motion=true] *):after {
+  transition-property: none
+}
+
+@media (prefers-reduced-motion:reduce) {
+  :is(.number-stepper__decrement-button,.number-stepper__increment-button):not(:is([data-reduce-motion=true],[data-reduce-motion=true] *)),:is(.number-stepper__decrement-button,.number-stepper__increment-button):not(:is([data-reduce-motion=true],[data-reduce-motion=true] *)):before,:is(.number-stepper__decrement-button,.number-stepper__increment-button):not(:is([data-reduce-motion=true],[data-reduce-motion=true] *)):after {
+    transition-property: none
+  }
+}
+
+:is(.number-stepper__decrement-button,.number-stepper__increment-button) svg {
+  width: calc(var(--spacing,.25rem) * 4);
+  height: calc(var(--spacing,.25rem) * 4);
+  color: var(--muted);
+  flex-shrink: 0;
+  transition: color .15s
+}
+
+:is(.number-stepper__decrement-button,.number-stepper__increment-button) svg:is([data-reduce-motion=true],[data-reduce-motion=true] *),:is(.number-stepper__decrement-button,.number-stepper__increment-button) svg:is([data-reduce-motion=true],[data-reduce-motion=true] *):before,:is(.number-stepper__decrement-button,.number-stepper__increment-button) svg:is([data-reduce-motion=true],[data-reduce-motion=true] *):after {
+  transition-property: none
+}
+
+@media (prefers-reduced-motion:reduce) {
+  :is(.number-stepper__decrement-button,.number-stepper__increment-button) svg: not(:is([data-reduce-motion=true],[data-reduce-motion=true] *)),:is(.number-stepper__decrement-button,.number-stepper__increment-button) svg: not(:is([data-reduce-motion=true],[data-reduce-motion=true] *)):before,:is(.number-stepper__decrement-button,.number-stepper__increment-button) svg: not(:is([data-reduce-motion=true],[data-reduce-motion=true] *)):after {
+    transition-property: none
+  }
+}
+
+@media (hover:hover) {
+  :is(:is(.number-stepper__decrement-button,.number-stepper__increment-button):hover,:is(.number-stepper__decrement-button,.number-stepper__increment-button)[data-hovered=true]) svg {
+    color: var(--foreground)
+  }
+}
+
+:is(.number-stepper__decrement-button,.number-stepper__increment-button):active,:is(.number-stepper__decrement-button,.number-stepper__increment-button)[data-pressed=true] {
+  transform: scale(.97)
+}
+
+:is(.number-stepper__decrement-button,.number-stepper__increment-button):focus-visible:not(:focus),:is(.number-stepper__decrement-button,.number-stepper__increment-button)[data-focus-visible=true] {
+  --tw-ring-shadow: var(--tw-ring-inset,) 0 0 0 calc(2px + var(--tw-ring-offset-width)) var(--tw-ring-color,currentcolor);
+  box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+  --tw-ring-color: var(--focus);
+  --tw-ring-offset-width: var(--ring-offset-width);
+  --tw-ring-offset-shadow: var(--tw-ring-inset,) 0 0 0 var(--tw-ring-offset-width) var(--tw-ring-offset-color);
+  --tw-ring-offset-color: var(--background);
+  --tw-outline-style: none;
+  outline-style: none
+}
+
+:is(.number-stepper__decrement-button,.number-stepper__increment-button):disabled,:is(.number-stepper__decrement-button,.number-stepper__increment-button)[aria-disabled=true] {
+  opacity: var(--disabled-opacity);
+  cursor: var(--cursor-disabled);
+  pointer-events: none
+}
+
+.number-stepper__value {
+  --tw-font-weight: var(--font-weight-semibold,600);
+  font-weight: var(--font-weight-semibold,600);
+  color: var(--foreground);
+  font-variant-numeric: tabular-nums;
+  justify-content: center;
+  align-items: center;
+  line-height: .85;
+  display: flex
+}
+
+.number-stepper__group--sm {
+  gap: calc(var(--spacing,.25rem) * 0);
+  padding: calc(var(--spacing,.25rem) * .5);
+  border-radius: 3.40282e38px
+}
+
+@media (min-width:48rem) {
+  .number-stepper__group--sm {
+    padding: calc(var(--spacing,.25rem) * .5)
+  }
+}
+
+.number-stepper__decrement-button--sm,.number-stepper__increment-button--sm {
+  height: calc(var(--spacing,.25rem) * 8);
+  width: calc(var(--spacing,.25rem) * 8)
+}
+
+@media (min-width:48rem) {
+  .number-stepper__decrement-button--sm,.number-stepper__increment-button--sm {
+    height: calc(var(--spacing,.25rem) * 7);
+    width: calc(var(--spacing,.25rem) * 7)
+  }
+}
+
+:is(.number-stepper__decrement-button--sm,.number-stepper__increment-button--sm) svg {
+  width: calc(var(--spacing,.25rem) * 3.5);
+  height: calc(var(--spacing,.25rem) * 3.5)
+}
+
+:is(.number-stepper__decrement-button--sm,.number-stepper__increment-button--sm):active,:is(.number-stepper__decrement-button--sm,.number-stepper__increment-button--sm)[data-pressed=true] {
+  transform: scale(.98)
+}
+
+.number-stepper__value--sm {
+  min-width: calc(var(--spacing,.25rem) * 6);
+  font-size: var(--text-xs,.75rem);
+  line-height: var(--tw-leading,var(--text-xs--line-height,calc(1 / .75)))
+}
+
+@media (min-width:48rem) {
+  .number-stepper__value--sm {
+    min-width: calc(var(--spacing,.25rem) * 5)
+  }
+}
+
+.number-stepper__value--sm {
+  height: calc(var(--spacing,.25rem) * 8)
+}
+
+@media (min-width:48rem) {
+  .number-stepper__value--sm {
+    height: calc(var(--spacing,.25rem) * 7)
+  }
+}
+
+.number-stepper__group--md {
+  gap: calc(var(--spacing,.25rem) * 0);
+  padding: calc(var(--spacing,.25rem) * .5);
+  border-radius: 3.40282e38px
+}
+
+@media (min-width:48rem) {
+  .number-stepper__group--md {
+    padding: calc(var(--spacing,.25rem) * .5)
+  }
+}
+
+.number-stepper__decrement-button--md,.number-stepper__increment-button--md {
+  height: calc(var(--spacing,.25rem) * 9);
+  width: calc(var(--spacing,.25rem) * 9)
+}
+
+@media (min-width:48rem) {
+  .number-stepper__decrement-button--md,.number-stepper__increment-button--md {
+    height: calc(var(--spacing,.25rem) * 8);
+    width: calc(var(--spacing,.25rem) * 8)
+  }
+}
+
+:is(.number-stepper__decrement-button--md,.number-stepper__increment-button--md) svg {
+  width: calc(var(--spacing,.25rem) * 4);
+  height: calc(var(--spacing,.25rem) * 4)
+}
+
+:is(.number-stepper__decrement-button--md,.number-stepper__increment-button--md):active,:is(.number-stepper__decrement-button--md,.number-stepper__increment-button--md)[data-pressed=true] {
+  transform: scale(.98)
+}
+
+.number-stepper__value--md {
+  min-width: calc(var(--spacing,.25rem) * 7);
+  font-size: var(--text-sm,.875rem);
+  line-height: var(--tw-leading,var(--text-sm--line-height,calc(1.25 / .875)))
+}
+
+@media (min-width:48rem) {
+  .number-stepper__value--md {
+    min-width: calc(var(--spacing,.25rem) * 6)
+  }
+}
+
+.number-stepper__value--md {
+  height: calc(var(--spacing,.25rem) * 9)
+}
+
+@media (min-width:48rem) {
+  .number-stepper__value--md {
+    height: calc(var(--spacing,.25rem) * 8)
+  }
+}
+
+.number-stepper__group--lg {
+  gap: calc(var(--spacing,.25rem) * .5);
+  padding: calc(var(--spacing,.25rem) * .5);
+  border-radius: 3.40282e38px
+}
+
+@media (min-width:48rem) {
+  .number-stepper__group--lg {
+    padding: calc(var(--spacing,.25rem) * .5)
+  }
+}
+
+.number-stepper__decrement-button--lg,.number-stepper__increment-button--lg {
+  height: calc(var(--spacing,.25rem) * 10);
+  width: calc(var(--spacing,.25rem) * 10)
+}
+
+@media (min-width:48rem) {
+  .number-stepper__decrement-button--lg,.number-stepper__increment-button--lg {
+    height: calc(var(--spacing,.25rem) * 9);
+    width: calc(var(--spacing,.25rem) * 9)
+  }
+}
+
+:is(.number-stepper__decrement-button--lg,.number-stepper__increment-button--lg) svg {
+  width: calc(var(--spacing,.25rem) * 5);
+  height: calc(var(--spacing,.25rem) * 5)
+}
+
+@media (min-width:48rem) {
+  :is(.number-stepper__decrement-button--lg,.number-stepper__increment-button--lg) svg {
+    width: calc(var(--spacing,.25rem) * 4);
+    height: calc(var(--spacing,.25rem) * 4)
+  }
+}
+
+:is(.number-stepper__decrement-button--lg,.number-stepper__increment-button--lg):active,:is(.number-stepper__decrement-button--lg,.number-stepper__increment-button--lg)[data-pressed=true] {
+  transform: scale(.96)
+}
+
+.number-stepper__value--lg {
+  min-width: calc(var(--spacing,.25rem) * 8);
+  font-size: var(--text-base,1rem);
+  line-height: var(--tw-leading,var(--text-base--line-height,calc(1.5 / 1)))
+}
+
+@media (min-width:48rem) {
+  .number-stepper__value--lg {
+    min-width: calc(var(--spacing,.25rem) * 7)
+  }
+}
+
+.number-stepper__value--lg {
+  height: calc(var(--spacing,.25rem) * 10)
+}
+
+@media (min-width:48rem) {
+  .number-stepper__value--lg {
+    height: calc(var(--spacing,.25rem) * 9)
+  }
+}

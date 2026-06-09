@@ -1,0 +1,28 @@
+.area-chart {
+  width: 100%;
+}
+
+.area-chart .recharts-cartesian-axis-tick-value {
+  font-size: 10px;
+  fill: var(--muted)!important;
+}
+
+.area-chart .recharts-cartesian-axis-line,.area-chart .recharts-cartesian-axis-tick-line {
+  stroke: none!important;
+}
+
+.area-chart .recharts-cartesian-grid line {
+  stroke: var(--muted);
+  stroke-opacity: .15;
+}
+
+.area-chart .recharts-tooltip-cursor {
+  stroke: var(--muted);
+  stroke-dasharray: 4 4;
+  stroke-width: 1px;
+}
+
+.area-chart .recharts-active-dot circle {
+  stroke: var(--surface);
+  stroke-width: 2px;
+}

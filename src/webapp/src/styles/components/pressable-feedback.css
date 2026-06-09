@@ -1,0 +1,202 @@
+.pressable-feedback {
+  --tw-outline-style: none;
+  -webkit-tap-highlight-color: transparent;
+  border-radius: inherit;
+  cursor: var(--cursor-interactive);
+  outline-style: none;
+  display: inline-flex;
+  position: relative;
+  overflow: hidden
+}
+
+.pressable-feedback:focus-visible:not(:focus),.pressable-feedback[data-focus-visible=true] {
+  --tw-ring-shadow: var(--tw-ring-inset,) 0 0 0 calc(2px + var(--tw-ring-offset-width)) var(--tw-ring-color,currentcolor);
+  box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+  --tw-ring-color: var(--focus);
+  --tw-ring-offset-width: var(--ring-offset-width);
+  --tw-ring-offset-shadow: var(--tw-ring-inset,) 0 0 0 var(--tw-ring-offset-width) var(--tw-ring-offset-color);
+  --tw-ring-offset-color: var(--background);
+  --tw-outline-style: none;
+  outline-style: none
+}
+
+.pressable-feedback:disabled,.pressable-feedback[aria-disabled=true] {
+  opacity: var(--disabled-opacity);
+  cursor: var(--cursor-disabled);
+  pointer-events: none
+}
+
+.pressable-feedback__highlight {
+  --pressable-feedback-highlight-color: currentColor;
+  --pressable-feedback-highlight-opacity: .08;
+  --pressable-feedback-highlight-pressed-opacity: .12;
+  --pressable-feedback-transition-duration: .15s;
+  pointer-events: none;
+  border-radius: inherit;
+  background-color: var(--pressable-feedback-highlight-color);
+  opacity: 0;
+  transition: opacity var(--pressable-feedback-transition-duration) ease;
+  position: absolute;
+  inset: 0
+}
+
+@media (hover:hover) {
+  :hover>.pressable-feedback__highlight,[data-hovered=true]>.pressable-feedback__highlight {
+    opacity: var(--pressable-feedback-highlight-opacity)
+  }
+}
+
+:active>.pressable-feedback__highlight,[data-pressed=true]>.pressable-feedback__highlight {
+  opacity: var(--pressable-feedback-highlight-pressed-opacity)
+}
+
+:disabled>.pressable-feedback__highlight,[aria-disabled=true]>.pressable-feedback__highlight {
+  display: none
+}
+
+.pressable-feedback__ripple {
+  pointer-events: none;
+  border-radius: inherit;
+  width: 100%;
+  height: 100%;
+  margin: auto;
+  display: block;
+  position: absolute;
+  inset: 0;
+  overflow: hidden
+}
+
+.pressable-feedback__ripple[aria-disabled=true] {
+  display: none
+}
+
+@media (forced-colors:active) {
+  .pressable-feedback__ripple {
+    display: none
+  }
+}
+
+.pressable-feedback__ripple-surface {
+  pointer-events: none;
+  border-radius: inherit;
+  inset: 0
+}
+
+.pressable-feedback__ripple-surface:before,.pressable-feedback__ripple-surface:after {
+  content: "";
+  opacity: 0;
+  position: absolute
+}
+
+.pressable-feedback__ripple-surface:before {
+  background-color: var(--pressable-feedback-ripple-color,currentColor);
+  width: 100%;
+  height: 100%;
+  transition: opacity var(--pressable-feedback-ripple-duration,.15s), background-color var(--pressable-feedback-ripple-duration,.15s);
+  inset: 0
+}
+
+.pressable-feedback__ripple-surface:after {
+  background: radial-gradient(closest-side, var(--pressable-feedback-ripple-color,currentColor) max(100% - 70px, 65%), transparent 100%);
+  transform-origin: 50%;
+  transition: opacity .375s;
+  inset: 0
+}
+
+.pressable-feedback__ripple-surface.--hover:before {
+  background-color: var(--pressable-feedback-ripple-color,currentColor);
+  opacity: var(--pressable-feedback-ripple-hover-opacity,.08)
+}
+
+.pressable-feedback__ripple-surface.--press:after {
+  opacity: var(--pressable-feedback-ripple-pressed-opacity,.12);
+  transition-duration: 75ms
+}
+
+.pressable-feedback__hold-confirm {
+  --pressable-feedback-hold-confirm-duration: 2s;
+  --pressable-feedback-hold-confirm-release-duration: .2s;
+  justify-content: center;
+  align-items: center;
+  gap: inherit;
+  pointer-events: none;
+  border-radius: inherit;
+  transition: clip-path var(--pressable-feedback-hold-confirm-release-duration) ease-out;
+  display: flex;
+  position: absolute;
+  inset: 0
+}
+
+.pressable-feedback__hold-confirm[data-sweep=right] {
+  clip-path: inset(0 100% 0 0)
+}
+
+.pressable-feedback__hold-confirm[data-sweep=left] {
+  clip-path: inset(0 0 0 100%)
+}
+
+.pressable-feedback__hold-confirm[data-sweep=down] {
+  clip-path: inset(0 0 100%)
+}
+
+.pressable-feedback__hold-confirm[data-sweep=up] {
+  clip-path: inset(100% 0 0)
+}
+
+.pressable-feedback__hold-confirm[data-holding=true] {
+  clip-path: inset(0);
+  transition: clip-path var(--pressable-feedback-hold-confirm-duration) linear
+}
+
+.pressable-feedback__hold-confirm[data-complete=true] {
+  clip-path: inset(0);
+  transition: none
+}
+
+:disabled>.pressable-feedback__hold-confirm,[aria-disabled=true]>.pressable-feedback__hold-confirm {
+  display: none
+}
+
+.pressable-feedback__progress-feedback {
+  --pressable-feedback-progress-feedback-duration: 2s;
+  --pressable-feedback-progress-feedback-release-duration: .3s;
+  justify-content: center;
+  align-items: center;
+  gap: inherit;
+  pointer-events: none;
+  border-radius: inherit;
+  transition: clip-path var(--pressable-feedback-progress-feedback-release-duration) ease-out;
+  display: flex;
+  position: absolute;
+  inset: 0
+}
+
+.pressable-feedback__progress-feedback[data-sweep=right] {
+  clip-path: inset(0 100% 0 0)
+}
+
+.pressable-feedback__progress-feedback[data-sweep=left] {
+  clip-path: inset(0 0 0 100%)
+}
+
+.pressable-feedback__progress-feedback[data-sweep=down] {
+  clip-path: inset(0 0 100%)
+}
+
+.pressable-feedback__progress-feedback[data-sweep=up] {
+  clip-path: inset(100% 0 0)
+}
+
+.pressable-feedback__progress-feedback[data-progressing=true] {
+  clip-path: inset(0);
+  transition: clip-path var(--pressable-feedback-progress-feedback-duration) linear
+}
+
+.pressable-feedback__progress-feedback[data-complete=true] {
+  clip-path: inset(0);
+  transition: none
+}
+
+:disabled>.pressable-feedback__progress-feedback,[aria-disabled=true]>.pressable-feedback__progress-feedback {
+  display: none
+}

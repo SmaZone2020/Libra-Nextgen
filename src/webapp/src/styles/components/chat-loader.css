@@ -1,0 +1,138 @@
+@keyframes chat-loader-bounce {
+  0%,80%,to {
+    opacity: .35;
+    transform: scale(.85);
+  }
+  40% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes chat-loader-pulse {
+  0%,to {
+    opacity: .45;
+    transform: scale(.92);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.chat-loader__dots {
+  align-items: center;
+  gap: calc(var(--spacing,.25rem) * 1);
+  display: inline-flex;
+}
+
+.chat-loader__dot {
+  background-color: var(--muted);
+  border-radius: 3.40282e38px;
+  width: .375rem;
+  height: .375rem;
+  animation: 1.2s ease-in-out infinite both chat-loader-bounce;
+}
+
+.chat-loader__dot:first-child {
+  animation-delay: -.24s;
+}
+
+.chat-loader__dot:nth-child(2) {
+  animation-delay: -.12s;
+}
+
+.chat-loader__dots--sm .chat-loader__dot {
+  width: .3125rem;
+  height: .3125rem;
+}
+
+.chat-loader__dots--lg .chat-loader__dot {
+  width: .5rem;
+  height: .5rem;
+}
+
+.chat-loader__pulse {
+  background-color: var(--accent);
+  border-radius: 3.40282e38px;
+  width: .5rem;
+  height: .5rem;
+  animation: 1.4s ease-in-out infinite chat-loader-pulse;
+}
+
+.chat-loader__pulse--sm {
+  width: .375rem;
+  height: .375rem;
+}
+
+.chat-loader__pulse--lg {
+  width: .625rem;
+  height: .625rem;
+}
+
+.chat-loader__skeleton {
+  align-items: flex-start;
+  gap: calc(var(--spacing,.25rem) * 3);
+  width: 100%;
+  display: flex;
+}
+
+.chat-loader__skeleton-avatar {
+  background-color: var(--default);
+  border-radius: 3.40282e38px;
+  flex-shrink: 0;
+  width: 2rem;
+  height: 2rem;
+}
+
+.chat-loader__skeleton-avatar--sm {
+  width: 1.5rem;
+  height: 1.5rem;
+}
+
+.chat-loader__skeleton-avatar--lg {
+  width: 2.25rem;
+  height: 2.25rem;
+}
+
+.chat-loader__skeleton-block {
+  min-width: calc(var(--spacing,.25rem) * 0);
+  gap: calc(var(--spacing,.25rem) * 2);
+  flex-direction: column;
+  flex: 1;
+  display: flex;
+}
+
+.chat-loader__skeleton-line {
+  height: calc(var(--spacing,.25rem) * 3);
+  border-radius: calc(var(--radius) * .75);
+  background-color: var(--default);
+  width: 100%;
+}
+
+.chat-loader__skeleton-line--sm {
+  height: calc(var(--spacing,.25rem) * 2.5);
+}
+
+.chat-loader__skeleton-line--lg {
+  height: calc(var(--spacing,.25rem) * 3.5);
+}
+
+.chat-loader__skeleton-line:nth-child(2) {
+  width: 85%;
+}
+
+.chat-loader__skeleton-line:nth-child(3) {
+  width: 65%;
+}
+
+.chat-loader__spinner {
+  display: inline-flex;
+}
+
+@media (prefers-reduced-motion:reduce) {
+  .chat-loader__dot,.chat-loader__pulse {
+    opacity: .7;
+    animation: none;
+  }
+}

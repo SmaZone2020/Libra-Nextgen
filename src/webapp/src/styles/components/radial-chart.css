@@ -1,0 +1,15 @@
+.radial-chart {
+  width: 100%
+}
+
+.radial-chart .recharts-tooltip-cursor {
+  display: none
+}
+
+.radial-chart .recharts-tooltip-wrapper {
+  z-index: 10
+}
+
+.radial-chart .recharts-radial-bar-background-sector {
+  fill: var(--separator)
+}
