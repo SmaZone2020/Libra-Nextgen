@@ -200,7 +200,14 @@ public static class WebSocketHandler
                         continue;
                     }
 
-                    await wsManager.BroadcastShellOutputAsync(agentId, message);
+                    if (message.Type is "screen.frame" or "screen.diff" or "screen.error")
+                    {
+                        ScreenStreamManager.TryPushFrame(agentId, json);
+                    }
+                    else
+                    {
+                        await wsManager.BroadcastShellOutputAsync(agentId, message);
+                    }
                 }
             }
         }
