@@ -95,6 +95,13 @@ export default function ShellPage() {
   const handleInput = useCallback((text: string) => {
     const id = agentIdRef.current;
     if (!connectedRef.current || !id) return;
+
+    const cmd = text.replace(/\r?\n$/, '').trim().toLowerCase();
+    if (cmd === 'cls' || cmd === 'clear') {
+      termRef.current?.clear();
+      return;
+    }
+
     consoleWs.send({
       type: 'shell.input',
       channel: id,
