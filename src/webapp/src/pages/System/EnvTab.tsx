@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Button, Input, Label, Modal, Tabs, TextField } from '@heroui/react';
+import { Button, Input, Label, Modal, Tabs, TextArea, TextField } from '@heroui/react';
 import { Pencil, TrashBin } from '@gravity-ui/icons';
 import { getEnvVars, setEnvVar, deleteEnvVar } from '../../api/system';
 import { DataGrid } from '../../components/data-grid';
@@ -39,6 +39,7 @@ export function EnvTab({ agentId }: EnvTabProps) {
   const [editValue, setEditValue] = useState('');
   const [editScope, setEditScope] = useState('user');
   const [isEditing, setIsEditing] = useState(false);
+  const [useTextarea, setUseTextarea] = useState(false);
 
   const contextRef = useRef<EnvVar | null>(null);
 
@@ -63,12 +64,20 @@ export function EnvTab({ agentId }: EnvTabProps) {
     contextRef.current = vars.find(v => v.name === key) ?? null;
   };
 
+  const isMultiValue = (val: string) => val.includes(';');
+
+  const toLines = (val: string) => val.split(';').join('\n');
+  const fromLines = (val: string) => val.split('\n').join(';');
+
   const handleEdit = () => {
     if (!contextRef.current) return;
+    const val = contextRef.current.value;
+    const multi = isMultiValue(val);
     setEditName(contextRef.current.name);
-    setEditValue(contextRef.current.value);
+    setEditValue(multi ? toLines(val) : val);
     setEditScope(scope);
     setIsEditing(true);
+    setUseTextarea(multi);
     setModalOpen(true);
   };
 
@@ -83,12 +92,14 @@ export function EnvTab({ agentId }: EnvTabProps) {
     setEditValue('');
     setEditScope(scope);
     setIsEditing(false);
+    setUseTextarea(false);
     setModalOpen(true);
   };
 
   const handleSave = async () => {
     if (!editName.trim()) return;
-    await setEnvVar(agentId, editName, editValue, editScope);
+    const saveValue = useTextarea ? fromLines(editValue) : editValue;
+    await setEnvVar(agentId, editName, saveValue, editScope);
     setModalOpen(false);
     fetchEnv();
   };
@@ -107,7 +118,7 @@ export function EnvTab({ agentId }: EnvTabProps) {
             <Tabs.Tab id="user">User<Tabs.Indicator /></Tabs.Tab>
           </Tabs.List>
         </Tabs>
-        <Button size="sm" variant="ghost" onPress={handleAdd}>
+        <Button size="sm" variant="tertiary" onPress={handleAdd}>
           Add Variable
         </Button>
         <span className="text-sm text-default-500">{currentVars.length} variables</span>
@@ -156,10 +167,17 @@ export function EnvTab({ agentId }: EnvTabProps) {
                   <Label>Name</Label>
                   <Input placeholder="VARIABLE_NAME" />
                 </TextField>
-                <TextField value={editValue} onChange={setEditValue}>
-                  <Label>Value</Label>
-                  <Input placeholder="value" />
-                </TextField>
+                {useTextarea ? (
+                  <TextField value={editValue} onChange={setEditValue}>
+                    <Label>Value (one entry per line)</Label>
+                    <TextArea className="font-mono text-sm" rows={10} placeholder="entry1&#10;entry2&#10;entry3" />
+                  </TextField>
+                ) : (
+                  <TextField value={editValue} onChange={setEditValue}>
+                    <Label>Value</Label>
+                    <Input placeholder="value" />
+                  </TextField>
+                )}
                 {!isEditing && (
                   <div className="flex gap-2">
                     <Button
@@ -181,7 +199,7 @@ export function EnvTab({ agentId }: EnvTabProps) {
               </div>
             </Modal.Body>
             <Modal.Footer>
-              <Button slot="close" variant="ghost">Cancel</Button>
+              <Button slot="close" variant="tertiary">Cancel</Button>
               <Button variant="primary" onPress={handleSave}>Save</Button>
             </Modal.Footer>
           </Modal.Dialog>
