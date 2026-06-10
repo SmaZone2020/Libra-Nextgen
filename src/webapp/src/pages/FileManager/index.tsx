@@ -134,7 +134,7 @@ export default function FileManagerPage() {
   const selectedAgent = agents.find(a => a.id === agentId);
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-2">
       <div className="flex items-center gap-3 flex-wrap">
         <ComboBox
           defaultItems={agents}

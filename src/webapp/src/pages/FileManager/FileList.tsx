@@ -55,13 +55,14 @@ export function FileList({ entries, loading, error, onRowAction, onContextMenu }
   return (
     <ContextMenu>
       <ContextMenu.Trigger className="w-full">
-        <div onContextMenu={onContextMenu} className="overflow-auto" style={{ maxHeight: 'calc(100vh - 260px)' }}>
+        <div onContextMenu={onContextMenu}>
           <DataGrid
             aria-label="File list"
             columns={columns}
             data={entries}
             getRowId={(e) => e.name}
             onRowAction={onRowAction}
+            scrollContainerClassName="max-h-[calc(100vh-220px)]"
             renderEmptyState={() => (
               <div className="flex justify-center py-8 text-default-500 text-sm">
                 {loading ? 'Loading...' : error ? <span className="text-danger-500">{error}</span> : 'Empty directory.'}

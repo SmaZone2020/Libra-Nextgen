@@ -35,7 +35,7 @@ export function PathBar({ path, drives, historyLength, onGoBack, onGoUp, onDrive
       </Button>
 
       <ComboBox
-        className="w-[180px]"
+        className="w-[80px]"
         defaultItems={driveItems}
         selectedKey={path.split('\\')[0] + '\\'}
         onSelectionChange={(key) => {
