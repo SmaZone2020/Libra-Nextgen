@@ -1,6 +1,11 @@
-const API_BASE = 'http://localhost:5270/api';
+const API_BASE = 'http://127.0.0.1:5270/api';
 
 let authToken: string | null = localStorage.getItem('token');
+let onAuthFailed: (() => void) | null = null;
+
+export function setOnAuthFailed(cb: (() => void) | null) {
+  onAuthFailed = cb;
+}
 
 export function setToken(token: string | null) {
   authToken = token;
@@ -30,6 +35,11 @@ async function request<T>(
     headers,
   });
 
+  if (response.status === 401) {
+    onAuthFailed?.();
+    throw new Error('Authentication failed. Please log in again.');
+  }
+
   if (response.status === 204) return undefined as T;
 
   if (!response.ok) {
@@ -46,5 +56,6 @@ export const api = {
     request<T>(path, { method: 'POST', body: body ? JSON.stringify(body) : undefined }),
   put: <T>(path: string, body?: unknown) =>
     request<T>(path, { method: 'PUT', body: body ? JSON.stringify(body) : undefined }),
-  delete: <T>(path: string) => request<T>(path, { method: 'DELETE' }),
+  delete: <T>(path: string, body?: unknown) =>
+    request<T>(path, { method: 'DELETE', body: body ? JSON.stringify(body) : undefined }),
 };
