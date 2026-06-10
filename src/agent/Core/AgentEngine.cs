@@ -167,6 +167,10 @@ public class AgentEngine
                 HandleScreenConfig(msg);
                 break;
 
+            case "camera.list":
+                await HandleCameraList(msg);
+                break;
+
             case "camera.bind":
                 HandleCameraBind(msg);
                 break;
@@ -177,6 +181,10 @@ public class AgentEngine
 
             case "camera.config":
                 HandleCameraConfig(msg);
+                break;
+
+            case "mic.list":
+                await HandleMicList(msg);
                 break;
 
             case "mic.bind":
@@ -691,6 +699,13 @@ public class AgentEngine
 
     // ── Camera Capture ────────────────────────────────────────────────────
 
+    private async Task HandleCameraList(WebSocketMessage msg)
+    {
+        var json = CameraCapture.GetDevicesJson();
+        var data = System.Text.Json.JsonSerializer.Deserialize<object>(json);
+        await _ws!.SendResultAsync("camera.list", _agentId, data!, msg.RequestId);
+    }
+
     private void HandleCameraBind(WebSocketMessage msg)
     {
         HandleCameraUnbind();
@@ -728,6 +743,13 @@ public class AgentEngine
     }
 
     // ── Microphone Capture ────────────────────────────────────────────────
+
+    private async Task HandleMicList(WebSocketMessage msg)
+    {
+        var json = MicCapture.GetDevicesJson();
+        var data = System.Text.Json.JsonSerializer.Deserialize<object>(json);
+        await _ws!.SendResultAsync("mic.list", _agentId, data!, msg.RequestId);
+    }
 
     private void HandleMicBind(WebSocketMessage msg)
     {

@@ -6,7 +6,11 @@ const API_BASE = 'http://127.0.0.1:5270';
 
 export interface CameraConfig {
   fps: number;
-  cameraIndex: number;
+}
+
+export interface CameraDevice {
+  index: number;
+  name: string;
 }
 
 interface UseCameraSessionOptions {
@@ -17,7 +21,7 @@ interface UseCameraSessionOptions {
 export function useCameraSession({ onFrame, onError }: UseCameraSessionOptions) {
   const agentIdRef = useRef<string>('');
   const [streaming, setStreaming] = useState(false);
-  const [config, setConfig] = useState<CameraConfig>({ fps: 10, cameraIndex: 0 });
+  const [config, setConfig] = useState<CameraConfig>({ fps: 10 });
   const onFrameRef = useRef(onFrame);
   const onErrorRef = useRef(onError);
   const abortRef = useRef<AbortController | null>(null);
@@ -99,7 +103,7 @@ export function useCameraSession({ onFrame, onError }: UseCameraSessionOptions) 
     });
   }, [stopSSE]);
 
-  const bind = useCallback((agentId: string, cfg?: Partial<CameraConfig>) => {
+  const bind = useCallback((agentId: string, cameraIndex: number, cfg?: Partial<CameraConfig>) => {
     unbind();
     agentIdRef.current = agentId;
     const finalCfg = { ...config, ...cfg };
@@ -109,7 +113,7 @@ export function useCameraSession({ onFrame, onError }: UseCameraSessionOptions) 
     consoleWs.send({
       type: 'camera.bind',
       channel: agentId,
-      data: { agentId, fps: finalCfg.fps, cameraIndex: finalCfg.cameraIndex },
+      data: { agentId, fps: finalCfg.fps, cameraIndex },
       ts: Date.now(),
     });
 

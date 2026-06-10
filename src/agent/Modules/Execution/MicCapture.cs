@@ -8,6 +8,26 @@ public sealed class MicCapture : IDisposable
     private readonly WsCommunicator _ws;
     private readonly string _agentId;
 
+    public static string GetDevicesJson()
+    {
+        try
+        {
+            var items = new List<string>();
+            for (int i = 0; i < WaveInEvent.DeviceCount; i++)
+            {
+                var caps = WaveInEvent.GetCapabilities(i);
+                items.Add($"{{\"index\":{i},\"name\":\"{EscapeJson(caps.ProductName)}\",\"channels\":{caps.Channels}}}");
+            }
+            return $"[{string.Join(",", items)}]";
+        }
+        catch
+        {
+            return "[]";
+        }
+    }
+
+    private static string EscapeJson(string s) => s.Replace("\\", "\\\\").Replace("\"", "\\\"");
+
     private int _deviceIndex;
     private WaveInEvent? _waveIn;
     private CancellationTokenSource? _cts;

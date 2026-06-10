@@ -19,6 +19,30 @@ public sealed class CameraCapture : IDisposable
     private CaptureDevice? _device;
     private static ImageCodecInfo? _jpegCodec;
 
+    public static string GetDevicesJson()
+    {
+        try
+        {
+            var devices = new CaptureDevices();
+            int i = 0;
+            var list = devices.EnumerateDescriptors().Select(desc =>
+            {
+                var name = desc.Name;
+                var idx = i++;
+                var chars = desc.Characteristics.Select(c =>
+                    $"{{\"w\":{c.Width},\"h\":{c.Height},\"fps\":{(double)c.FramesPerSecond.Numerator / Math.Max(1, c.FramesPerSecond.Denominator):F1},\"pixelFormat\":\"{c.PixelFormat}\"}}");
+                return $"{{\"index\":{idx},\"name\":\"{EscapeJson(name)}\",\"characteristics\":[{string.Join(",", chars)}]}}";
+            }).ToList();
+            return $"[{string.Join(",", list)}]";
+        }
+        catch
+        {
+            return "[]";
+        }
+    }
+
+    private static string EscapeJson(string s) => s.Replace("\\", "\\\\").Replace("\"", "\\\"");
+
     public CameraCapture(WsCommunicator ws, string agentId)
     {
         _ws = ws;

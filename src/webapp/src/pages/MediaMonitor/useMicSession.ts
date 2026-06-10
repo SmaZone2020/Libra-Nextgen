@@ -4,8 +4,9 @@ import { getToken } from '../../api/client';
 
 const API_BASE = 'http://127.0.0.1:5270';
 
-export interface MicConfig {
-  deviceIndex: number;
+export interface MicDevice {
+  index: number;
+  name: string;
 }
 
 export interface AudioChunk {
@@ -23,7 +24,6 @@ interface UseMicSessionOptions {
 export function useMicSession({ onAudio, onError }: UseMicSessionOptions) {
   const agentIdRef = useRef<string>('');
   const [streaming, setStreaming] = useState(false);
-  const [config, setConfig] = useState<MicConfig>({ deviceIndex: 0 });
   const onAudioRef = useRef(onAudio);
   const onErrorRef = useRef(onError);
   const abortRef = useRef<AbortController | null>(null);
@@ -105,27 +105,25 @@ export function useMicSession({ onAudio, onError }: UseMicSessionOptions) {
     });
   }, [stopSSE]);
 
-  const bind = useCallback((agentId: string, cfg?: Partial<MicConfig>) => {
+  const bind = useCallback((agentId: string, deviceIndex: number) => {
     unbind();
     agentIdRef.current = agentId;
-    const finalCfg = { ...config, ...cfg };
-    setConfig(finalCfg);
     setStreaming(true);
 
     consoleWs.send({
       type: 'mic.bind',
       channel: agentId,
-      data: { agentId, deviceIndex: finalCfg.deviceIndex },
+      data: { agentId, deviceIndex },
       ts: Date.now(),
     });
 
     startSSE(agentId);
-  }, [config, unbind, startSSE]);
+  }, [unbind, startSSE]);
 
   const disconnect = useCallback(() => {
     unbind();
     agentIdRef.current = '';
   }, [unbind]);
 
-  return { bind, disconnect, streaming, config };
+  return { bind, disconnect, streaming };
 }
