@@ -71,5 +71,18 @@ public static class FileOps
         }
     }
 
+    public static string CreateDirectory(string path)
+    {
+        try
+        {
+            Directory.CreateDirectory(path);
+            return $$"""{"path":"{{Esc(path)}}","status":"created"}""";
+        }
+        catch (Exception ex)
+        {
+            return $$"""{"error":"{{Esc(ex.Message)}}"}""";
+        }
+    }
+
     private static string Esc(string s) => s.Replace("\\", "\\\\").Replace("\"", "\\\"");
 }

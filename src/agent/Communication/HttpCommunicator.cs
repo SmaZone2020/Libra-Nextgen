@@ -20,13 +20,15 @@ public class HttpCommunicator : ICommunicator
 
     public async Task<string> RegisterAsync(
         string hostname, string userName, string os, string arch,
-        string publicKey, CancellationToken ct)
+        string publicKey, string hardwareJson, CancellationToken ct)
     {
+        var hw = hardwareJson.Length > 0 ? hardwareJson : "null";
         var json = $$"""
             {"hostname":"{{Escape(hostname)}}","userName":"{{Escape(userName)}}",
             "osVersion":"{{Escape(os)}}","arch":"{{Escape(arch)}}",
             "processName":"agent","pid":{{Environment.ProcessId}},
-            "isElevated":false,"publicKey":"{{Escape(publicKey)}}"}
+            "isElevated":false,"publicKey":"{{Escape(publicKey)}}",
+            "hardware":{{hw}}}
             """.Replace("\n", "").Replace("\r", "");
 
         var content = new StringContent(json, Encoding.UTF8, "application/json");
@@ -61,7 +63,6 @@ public class HttpCommunicator : ICommunicator
         await _http.SendAsync(request, ct);
     }
 
-    // Minimal JSON helpers that avoid reflection
     private static string Escape(string s) => s.Replace("\\", "\\\\").Replace("\"", "\\\"");
 
     private static string ExtractString(string json, string key)
@@ -82,7 +83,7 @@ public class HttpCommunicator : ICommunicator
         start += search.Length;
         if (start >= json.Length) return string.Empty;
 
-        if (json[start] == 'n') return string.Empty; // null
+        if (json[start] == 'n') return string.Empty;
         if (json[start] != '{') return string.Empty;
 
         var depth = 0;

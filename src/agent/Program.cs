@@ -1,5 +1,8 @@
+using System.Text;
 using LibraNextgen.Agent.Core;
 using LibraNextgen.Agent.Crypto;
+
+Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
 
 var config = ConfigManager.Load(args);
 var crypto = new AgentCrypto();

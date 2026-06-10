@@ -37,4 +37,36 @@ public class LinuxExecutor : IPlatformExecutor
 
         return string.IsNullOrEmpty(output) ? error : output;
     }
+
+    public InteractiveShellHandle StartInteractiveShell()
+    {
+        var psi = new ProcessStartInfo
+        {
+            FileName = _shell,
+            RedirectStandardInput = true,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true,
+            WorkingDirectory = "/"
+        };
+
+        var cts = new CancellationTokenSource();
+        var process = Process.Start(psi)!;
+        return new InteractiveShellHandle { Process = process, Cts = cts };
+    }
+
+    public string[] GetDrives()
+    {
+        var drives = new List<string> { "/" };
+        try
+        {
+            if (Directory.Exists("/mnt"))
+                drives.AddRange(Directory.GetDirectories("/mnt"));
+            if (Directory.Exists("/media"))
+                drives.AddRange(Directory.GetDirectories("/media"));
+        }
+        catch { /* ignore */ }
+        return drives.ToArray();
+    }
 }
