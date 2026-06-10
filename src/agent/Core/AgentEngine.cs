@@ -294,6 +294,10 @@ public class AgentEngine
             case "system.env.delete":
                 await HandleSystemEnvDelete(msg, ct);
                 break;
+
+            case "system.network":
+                await HandleSystemNetwork(msg, ct);
+                break;
         }
     }
 
@@ -587,6 +591,13 @@ public class AgentEngine
         var success = EnvInfo.Delete(name, scope);
         if (_ws != null)
             await _ws.SendResultAsync("system.env.delete.result", _agentId, new { success }, msg.RequestId);
+    }
+
+    private async Task HandleSystemNetwork(WebSocketMessage msg, CancellationToken ct)
+    {
+        var result = await NetworkInfo.CollectAsync();
+        if (_ws != null)
+            await _ws.SendResultAsync("system.network.result", _agentId, JsonSerializer.Deserialize<object>(result) ?? result, msg.RequestId);
     }
 
     // ── HTTP Task execution (heartbeat) ──────────────────────────────────
