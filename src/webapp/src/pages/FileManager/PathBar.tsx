@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { Button, Card, ComboBox, Input, ListBox } from '@heroui/react';
+import { Button, Card, ComboBox, Input, ListBox, Tooltip } from '@heroui/react';
 import { Breadcrumbs } from '@heroui/react/breadcrumbs';
 import { FolderArrowLeft, FolderTree } from '@gravity-ui/icons';
 
@@ -27,12 +27,22 @@ export function PathBar({ path, drives, historyLength, onGoBack, onGoUp, onDrive
 
   return (
     <div className="flex items-center gap-2 flex-wrap h-10">
-      <Button isIconOnly size="sm" variant="ghost" isDisabled={historyLength === 0} onPress={onGoBack}>
-        <FolderArrowLeft className="w-4 h-4" />
-      </Button>
-      <Button isIconOnly size="sm" variant="ghost" onPress={onGoUp}>
-        <FolderTree className="w-4 h-4" />
-      </Button>
+      <Tooltip delay={0}>
+        <Button isIconOnly className="rounded-[12px]" variant='tertiary' isDisabled={historyLength === 0} onPress={onGoBack}>
+          <FolderArrowLeft className="w-4 h-4" />
+        </Button>
+        <Tooltip.Content>
+          <p>Go Back</p>
+        </Tooltip.Content>
+      </Tooltip>
+      <Tooltip delay={0}>
+        <Button isIconOnly className="rounded-[12px]" variant='tertiary' onPress={onGoUp}>
+          <FolderTree className="w-4 h-4" />
+        </Button>
+        <Tooltip.Content>
+          <p>Go Up</p>
+        </Tooltip.Content>
+      </Tooltip>
 
       <ComboBox
         className="w-[80px]"

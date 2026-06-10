@@ -54,15 +54,20 @@ export function Sidebar({
                 </motion.div>
               )}
             </AnimatePresence>
-            <Button
-              isIconOnly
-              aria-label="Toggle sidebar"
-              size="sm"
-              variant="ghost"
-              onPress={() => onToggle(!collapsed)}
-            >
-              {collapsed ? <Bars className="w-5 h-5" /> : <Xmark className="w-5 h-5" />}
-            </Button>
+            <Tooltip delay={0}>
+              <Button
+                isIconOnly
+                aria-label="Toggle sidebar"
+                size="sm"
+                variant="ghost"
+                onPress={() => onToggle(!collapsed)}
+              >
+                {collapsed ? <Bars className="w-5 h-5" /> : <Xmark className="w-5 h-5" />}
+              </Button>
+              <Tooltip.Content>
+                <p>{collapsed ? 'Expand sidebar' : 'Collapse sidebar'}</p>
+              </Tooltip.Content>
+            </Tooltip>
           </div>
 
           <motion.nav
