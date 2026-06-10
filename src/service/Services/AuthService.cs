@@ -27,10 +27,9 @@ public class AuthService
         if (!VerifyPassword(request.Password, user.PasswordHash))
             return null;
 
-        var privateKey = _jwtSettings.PrivateKey ?? string.Empty;
         var (token, expires) = JwtHelper.GenerateToken(
             user.Id, user.Username, user.Role.ToString(),
-            privateKey, _jwtSettings.Issuer, _jwtSettings.Audience,
+            _jwtSettings.Rsa, _jwtSettings.Issuer, _jwtSettings.Audience,
             _jwtSettings.TokenExpirationMinutes);
 
         var refreshToken = GenerateRefreshToken();

@@ -1,5 +1,4 @@
 using LibraNextgen.Common.Models;
-using LibraNextgen.Common.Protocol;
 using LibraNextgen.Service.Data;
 using LibraNextgen.Service.Profiles;
 using MongoDB.Driver;
@@ -10,15 +9,18 @@ namespace LibraNextgen.Service.Services;
 public class AgentCommsService
 {
     private readonly Repository<Agent> _agents;
+    private readonly Repository<TrafficRecord> _traffic;
     private readonly TaskService _taskService;
     private readonly ProfileService _profileService;
 
     public AgentCommsService(
         Repository<Agent> agents,
+        Repository<TrafficRecord> traffic,
         TaskService taskService,
         ProfileService profileService)
     {
         _agents = agents;
+        _traffic = traffic;
         _taskService = taskService;
         _profileService = profileService;
     }
@@ -26,13 +28,25 @@ public class AgentCommsService
     public DefaultProfile GetActiveProfile() =>
         (DefaultProfile)_profileService.GetActiveProfile();
 
+    public async Task<Agent?> GetAgentAsync(string agentId) =>
+        await _agents.GetByIdAsync(agentId);
+
     public async Task<Agent?> HandleRegisterAsync(RegisterRequest request, string clientIp)
     {
-        var existing = await _agents.FirstOrDefaultAsync(a => a.Hostname == request.Hostname && a.UserName == request.UserName);
+        var hwid = request.Hardware?.Hwid;
+
+        // Match by HWID first, fall back to Hostname + UserName
+        Agent? existing = null;
+        if (!string.IsNullOrEmpty(hwid))
+            existing = await _agents.FirstOrDefaultAsync(a => a.Hwid == hwid);
+        if (existing == null)
+            existing = await _agents.FirstOrDefaultAsync(a => a.Hostname == request.Hostname && a.UserName == request.UserName);
+
         if (existing != null)
         {
             var ub = Builders<Agent>.Update;
-            var update = Builders<Agent>.Update.Combine(
+            var updates = new List<UpdateDefinition<Agent>>
+            {
                 ub.Set(a => a.Status, AgentStatus.Online),
                 ub.Set(a => a.LastSeen, DateTime.UtcNow),
                 ub.Set(a => a.IpAddress, clientIp),
@@ -41,10 +55,13 @@ public class AgentCommsService
                 ub.Set(a => a.OsVersion, request.OsVersion),
                 ub.Set(a => a.Arch, request.Arch),
                 ub.Set(a => a.ProcessName, request.ProcessName),
-                ub.Set(a => a.PublicKey, request.PublicKey)
-            );
-            await _agents.UpdateAsync(existing.Id, update);
+                ub.Set(a => a.PublicKey, request.PublicKey),
+                ub.Set(a => a.Hwid, hwid)
+            };
+            if (request.Hardware != null) updates.Add(ub.Set(a => a.Hardware, request.Hardware));
+            await _agents.UpdateAsync(existing.Id, Builders<Agent>.Update.Combine(updates));
             existing.PublicKey = request.PublicKey;
+            existing.Hardware = request.Hardware;
             return existing;
         }
 
@@ -59,18 +76,19 @@ public class AgentCommsService
             Pid = request.Pid,
             IsElevated = request.IsElevated,
             PublicKey = request.PublicKey,
+            Hardware = request.Hardware,
+            Hwid = hwid,
             Status = AgentStatus.Online
         };
         await _agents.InsertAsync(agent);
         return agent;
     }
 
-    public async Task<(bool valid, AgentTask? task)> HandleHeartbeatAsync(
-        string agentId, byte[] sessionKey)
+    public async Task<(bool valid, AgentTask? task, string hostname)> HandleHeartbeatAsync(string agentId)
     {
         var agent = await _agents.GetByIdAsync(agentId);
         if (agent == null)
-            return (false, null);
+            return (false, null, "");
 
         var ub = Builders<Agent>.Update;
         var update = Builders<Agent>.Update.Combine(
@@ -84,11 +102,22 @@ public class AgentCommsService
             await _taskService.UpdateStatusAsync(task.Id, TaskStatus.Sent);
         }
 
-        return (true, task);
+        return (true, task, agent.Hostname);
+    }
+
+    public async Task RecordTrafficAsync(string agentId, string hostname, long bytesReceived, long bytesSent)
+    {
+        await _traffic.InsertAsync(new TrafficRecord
+        {
+            AgentId = agentId,
+            Hostname = hostname,
+            BytesReceived = bytesReceived,
+            BytesSent = bytesSent
+        });
     }
 
     public async Task<bool> HandleResultAsync(
-        string agentId, TaskResult result, byte[] sessionKey)
+        string agentId, TaskResult result, long bytesReceived, long bytesSent)
     {
         var task = await _taskService.GetByIdAsync(result.TaskId);
         if (task == null || task.AgentId != agentId)
@@ -99,7 +128,23 @@ public class AgentCommsService
             result.Success ? TaskStatus.Completed : TaskStatus.Failed,
             result.Output,
             result.Error);
+
+        var agent = await _agents.GetByIdAsync(agentId);
+        await _traffic.InsertAsync(new TrafficRecord
+        {
+            AgentId = agentId,
+            Hostname = agent?.Hostname ?? "",
+            BytesReceived = bytesReceived,
+            BytesSent = bytesSent
+        });
+
         return true;
+    }
+
+    public async Task<List<TrafficRecord>> GetTrafficAsync(int minutes = 30)
+    {
+        var since = DateTime.UtcNow.AddMinutes(-minutes);
+        return await _traffic.FindAsync(t => t.Timestamp >= since);
     }
 }
 
@@ -113,6 +158,7 @@ public class RegisterRequest
     public int Pid { get; set; }
     public bool IsElevated { get; set; }
     public string? PublicKey { get; set; }
+    public HardwareInfo? Hardware { get; set; }
 }
 
 public class HeartbeatResponse

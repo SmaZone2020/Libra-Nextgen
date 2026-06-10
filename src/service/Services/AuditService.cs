@@ -1,5 +1,6 @@
 using LibraNextgen.Common.Models;
 using LibraNextgen.Service.Data;
+using MongoDB.Driver;
 
 namespace LibraNextgen.Service.Services;
 
@@ -29,14 +30,40 @@ public class AuditService
         await _auditLogs.InsertAsync(entry);
     }
 
-    public async Task<List<AuditLog>> GetRecentAsync(int page = 1, int pageSize = 50, CancellationToken ct = default)
+    public async Task<(List<AuditLog> logs, long total)> GetPagedAsync(
+        int page, int pageSize, string? query = null,
+        DateTime? from = null, DateTime? to = null, bool excludeHeartbeats = true, CancellationToken ct = default)
     {
-        var sort = MongoDB.Driver.Builders<AuditLog>.Sort.Descending(l => l.Timestamp);
-        return await _auditLogs.FindPagedAsync(_ => true, page, pageSize, sort, ct);
-    }
+        pageSize = Math.Clamp(pageSize, 1, 80);
 
-    public async Task<long> CountAsync(CancellationToken ct = default)
-    {
-        return await _auditLogs.CountAsync(ct: ct);
+        var builder = Builders<AuditLog>.Filter;
+        var filters = new List<FilterDefinition<AuditLog>>();
+
+        if (!string.IsNullOrWhiteSpace(query))
+        {
+            var q = query.Trim();
+            var searchFilter = builder.Or(
+                builder.Regex(l => l.UserName, new MongoDB.Bson.BsonRegularExpression(q, "i")),
+                builder.Regex(l => l.Action, new MongoDB.Bson.BsonRegularExpression(q, "i")),
+                builder.Regex(l => l.IpAddress, new MongoDB.Bson.BsonRegularExpression(q, "i")),
+                builder.Regex(l => l.TargetAgentId, new MongoDB.Bson.BsonRegularExpression(q, "i"))
+            );
+            filters.Add(searchFilter);
+        }
+
+        if (excludeHeartbeats)
+            filters.Add(builder.Ne(l => l.Action, "POST /api/beacon/heartbeat"));
+        if (from.HasValue)
+            filters.Add(builder.Gte(l => l.Timestamp, from.Value));
+        if (to.HasValue)
+            filters.Add(builder.Lte(l => l.Timestamp, to.Value));
+
+        var filter = filters.Count > 0 ? builder.And(filters) : FilterDefinition<AuditLog>.Empty;
+        var sort = Builders<AuditLog>.Sort.Descending(l => l.Timestamp);
+
+        var logs = await _auditLogs.FindPagedAsync(filter, page, pageSize, sort, ct);
+        var total = await _auditLogs.CountAsync(filter, ct);
+
+        return (logs, total);
     }
 }

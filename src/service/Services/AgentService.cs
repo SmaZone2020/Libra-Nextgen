@@ -13,10 +13,13 @@ public class AgentService
         _agents = agents;
     }
 
-    public async Task<List<AgentListItem>> GetAllAsync(int page = 1, int pageSize = 50, CancellationToken ct = default)
+    public async Task<List<AgentListItem>> GetAllAsync(int page = 1, int pageSize = 50, AgentStatus? status = null, CancellationToken ct = default)
     {
-        var sort = Builders<Agent>.Sort.Descending(a => a.LastSeen);
-        var agents = await _agents.FindPagedAsync(a => true, page, pageSize, sort, ct);
+        var filter = status.HasValue
+            ? Builders<Agent>.Filter.Eq(a => a.Status, status.Value)
+            : Builders<Agent>.Filter.Where(a => true);
+        var sort = Builders<Agent>.Sort.Descending(a => a.FirstSeen);
+        var agents = await _agents.FindPagedAsync(filter, page, pageSize, sort, ct);
         return agents.Select(MapToList).ToList();
     }
 
@@ -82,9 +85,11 @@ public class AgentService
         Pid = a.Pid,
         IsElevated = a.IsElevated,
         Status = a.Status,
+        Hwid = a.Hwid,
         FirstSeen = a.FirstSeen,
         LastSeen = a.LastSeen,
         HeartbeatInterval = a.HeartbeatInterval,
+        Hardware = a.Hardware,
         Metadata = a.Metadata
     };
 }

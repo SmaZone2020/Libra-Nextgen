@@ -1,4 +1,4 @@
-using System.Security.Cryptography;
+using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using Scalar.AspNetCore;
@@ -28,10 +28,11 @@ builder.Services.AddScoped<Repository<AuditLog>>(sp =>
     new Repository<AuditLog>(sp.GetRequiredService<MongoDbContext>(), "audit_logs"));
 builder.Services.AddScoped<Repository<MalleableProfileConfig>>(sp =>
     new Repository<MalleableProfileConfig>(sp.GetRequiredService<MongoDbContext>(), "profiles"));
+builder.Services.AddScoped<Repository<TrafficRecord>>(sp =>
+    new Repository<TrafficRecord>(sp.GetRequiredService<MongoDbContext>(), "traffic"));
 
-// JWT Settings (singleton so EnsureKeys is shared)
-var jwtSettings = builder.Configuration.GetSection(JwtSettings.SectionName).Get<JwtSettings>() ?? new JwtSettings();
-jwtSettings.EnsureKeys();
+// JWT Settings (singleton, holds RSA key pair)
+var jwtSettings = new JwtSettings();
 builder.Services.AddSingleton(jwtSettings);
 builder.Services.AddScoped<AuthService>();
 builder.Services.AddScoped<ProfileService>();
@@ -45,9 +46,6 @@ builder.Services.AddSingleton<ConnectionManager>();
 builder.Services.AddScoped<AuditService>();
 
 // Auth
-using var rsa = RSA.Create();
-rsa.ImportFromPem(jwtSettings.PublicKey);
-
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
     {
@@ -59,14 +57,29 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             ValidateIssuerSigningKey = true,
             ValidIssuer = jwtSettings.Issuer,
             ValidAudience = jwtSettings.Audience,
-            IssuerSigningKey = new RsaSecurityKey(rsa),
+            IssuerSigningKey = new RsaSecurityKey(jwtSettings.Rsa),
             ClockSkew = TimeSpan.Zero
+        };
+        options.Events = new JwtBearerEvents
+        {
+            OnMessageReceived = context =>
+            {
+                var token = context.Request.Query["token"].FirstOrDefault();
+                if (!string.IsNullOrEmpty(token))
+                {
+                    context.Token = token;
+                }
+                return Task.CompletedTask;
+            }
         };
     });
 builder.Services.AddAuthorization();
 
 // Controllers + OpenAPI with Scalar UI
-builder.Services.AddControllers();
+builder.Services.AddControllers().AddJsonOptions(options =>
+{
+    options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());
+});
 builder.Services.AddOpenApi("v1", options =>
 {
     options.AddDocumentTransformer((document, _, _) =>
@@ -112,8 +125,8 @@ if (app.Environment.IsDevelopment())
     });
 }
 
-app.UseCors("CorsSignalR");
 app.UseWebSockets();
+app.UseCors("CorsSignalR");
 app.UseAuthentication();
 app.UseAuthorization();
 app.UseMiddleware<AuditMiddleware>();

@@ -3,10 +3,6 @@ using LibraNextgen.Service.Services;
 
 namespace LibraNextgen.Service.Controllers;
 
-/// <summary>
-/// Public endpoints for agent beacon communication.
-/// These endpoints are NOT protected by JWT — agents use AES/RSA encryption instead.
-/// </summary>
 [ApiController]
 [Route("api/beacon")]
 public class AgentCommsController : ControllerBase
@@ -18,10 +14,6 @@ public class AgentCommsController : ControllerBase
         _commsService = commsService;
     }
 
-    /// <summary>
-    /// Agent registration. Agent sends system info and RSA public key.
-    /// Server responds with a session AES key encrypted with the agent's RSA public key.
-    /// </summary>
     [HttpPost("register")]
     public async Task<IActionResult> Register([FromBody] RegisterRequest request)
     {
@@ -48,30 +40,27 @@ public class AgentCommsController : ControllerBase
         return Ok(response);
     }
 
-    /// <summary>
-    /// Heartbeat endpoint. Agent polls this to check for pending tasks.
-    /// Body is encrypted with the session AES key.
-    /// </summary>
     [HttpPost("heartbeat")]
     public async Task<IActionResult> Heartbeat([FromBody] object encryptedPayload)
     {
-        // In production: decrypt payload using agent's session key
-        // For now, extract agent_id from the envelope
         var agentId = Request.Headers["X-Agent-Id"].FirstOrDefault();
         if (string.IsNullOrEmpty(agentId))
             return BadRequest(new { error = "missing agent id" });
 
-        var (valid, task) = await _commsService.HandleHeartbeatAsync(agentId, Array.Empty<byte>());
+        var bytesReceived = Request.ContentLength ?? 0;
+        var (valid, task, hostname) = await _commsService.HandleHeartbeatAsync(agentId);
         if (!valid)
             return NotFound(new { error = "agent not found" });
 
         var response = new HeartbeatResponse { PendingTask = task };
+        var responseJson = System.Text.Json.JsonSerializer.Serialize(response);
+        var bytesSent = System.Text.Encoding.UTF8.GetByteCount(responseJson);
+
+        await _commsService.RecordTrafficAsync(agentId, hostname, bytesReceived, bytesSent);
+
         return Ok(response);
     }
 
-    /// <summary>
-    /// Task result submission. Agent posts encrypted execution results.
-    /// </summary>
     [HttpPost("result")]
     public async Task<IActionResult> SubmitResult([FromBody] TaskResult result)
     {
@@ -79,7 +68,10 @@ public class AgentCommsController : ControllerBase
         if (string.IsNullOrEmpty(agentId))
             return BadRequest(new { error = "missing agent id" });
 
-        var success = await _commsService.HandleResultAsync(agentId, result, Array.Empty<byte>());
+        var bytesReceived = Request.ContentLength ?? 0;
+        var responseJson = System.Text.Json.JsonSerializer.Serialize(new { status = "received" });
+        var bytesSent = System.Text.Encoding.UTF8.GetByteCount(responseJson);
+        var success = await _commsService.HandleResultAsync(agentId, result, bytesReceived, bytesSent);
         if (!success)
             return NotFound(new { error = "invalid task" });
 

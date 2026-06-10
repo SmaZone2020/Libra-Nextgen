@@ -23,6 +23,21 @@ public class Repository<T> where T : class
     }
 
     public async Task<List<T>> FindPagedAsync(
+        FilterDefinition<T> filter,
+        int page,
+        int pageSize,
+        SortDefinition<T>? sort = null,
+        CancellationToken ct = default)
+    {
+        sort ??= Builders<T>.Sort.Descending("_id");
+        return await _collection.Find(filter)
+            .Sort(sort)
+            .Skip((page - 1) * pageSize)
+            .Limit(pageSize)
+            .ToListAsync(ct);
+    }
+
+    public async Task<List<T>> FindPagedAsync(
         Expression<Func<T, bool>> filter,
         int page,
         int pageSize,
@@ -82,6 +97,11 @@ public class Repository<T> where T : class
     {
         var f = filter != null ? Builders<T>.Filter.Where(filter) : FilterDefinition<T>.Empty;
         return await _collection.CountDocumentsAsync(f, cancellationToken: ct);
+    }
+
+    public async Task<long> CountAsync(FilterDefinition<T> filter, CancellationToken ct = default)
+    {
+        return await _collection.CountDocumentsAsync(filter, cancellationToken: ct);
     }
 
     public async Task<bool> ExistsAsync(Expression<Func<T, bool>> filter, CancellationToken ct = default)

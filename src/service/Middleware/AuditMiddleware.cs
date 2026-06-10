@@ -37,10 +37,11 @@ public class AuditMiddleware
             }
             finally
             {
-                context.Response.Body = originalStream;
                 responseBody.Seek(0, SeekOrigin.Begin);
                 var responseText = await new StreamReader(responseBody).ReadToEndAsync();
+                responseBody.Seek(0, SeekOrigin.Begin);
                 await responseBody.CopyToAsync(originalStream);
+                context.Response.Body = originalStream;
 
                 var userId = context.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value ?? "anonymous";
                 var userName = context.User.Identity?.Name ?? "anonymous";
