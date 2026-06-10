@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Accordion, Card, Input } from '@heroui/react';
 import { ChevronDown, CircleXmark } from '@gravity-ui/icons';
 import { getProcesses, killProcess } from '../../api/system';
@@ -30,53 +31,54 @@ interface ProcessGroup {
   isSystem: boolean;
 }
 
-const columns: DataGridColumn<ProcessItem>[] = [
-  {
-    id: 'pid', header: 'PID',
-    cell: (item) => <span className="font-mono text-sm tabular-nums">{item.pid}</span>,
-    allowsSorting: true,
-    sortFn: (a, b) => a.pid - b.pid,
-    isRowHeader: true,
-  },
-  {
-    id: 'cpuMs', header: 'CPU (ms)',
-    cell: (item) => <span className="text-default-500 text-sm tabular-nums">{item.cpuMs.toLocaleString()}</span>,
-    allowsSorting: true,
-    sortFn: (a, b) => a.cpuMs - b.cpuMs,
-  },
-  {
-    id: 'memoryBytes', header: 'Memory',
-    cell: (item) => <span className="text-default-500 text-sm tabular-nums">{formatMemory(item.memoryBytes)}</span>,
-    allowsSorting: true,
-    sortFn: (a, b) => a.memoryBytes - b.memoryBytes,
-  },
-  {
-    id: 'threadCount', header: 'Threads',
-    cell: (item) => <span className="text-default-500 text-sm tabular-nums">{item.threadCount}</span>,
-    allowsSorting: true,
-    sortFn: (a, b) => a.threadCount - b.threadCount,
-  },
-  {
-    id: 'startTime', header: 'Start Time',
-    cell: (item) => (
-      <span className="text-default-500 text-sm">
-        {item.startTime ? new Date(item.startTime).toLocaleString() : '—'}
-      </span>
-    ),
-  },
-];
-
 interface ProcessTabProps {
   agentId: string;
 }
 
 export function ProcessTab({ agentId }: ProcessTabProps) {
+  const { t } = useTranslation();
   const [processes, setProcesses] = useState<ProcessItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('');
   const [expandedKeys, setExpandedKeys] = useState<Set<string>>(new Set());
   const hashRef = useRef<string | undefined>(undefined);
   const contextPidRef = useRef<number | null>(null);
+
+  const columns: DataGridColumn<ProcessItem>[] = [
+    {
+      id: 'pid', header: 'PID',
+      cell: (item) => <span className="font-mono text-sm tabular-nums">{item.pid}</span>,
+      allowsSorting: true,
+      sortFn: (a, b) => a.pid - b.pid,
+      isRowHeader: true,
+    },
+    {
+      id: 'cpuMs', header: 'CPU (ms)',
+      cell: (item) => <span className="text-default-500 text-sm tabular-nums">{item.cpuMs.toLocaleString()}</span>,
+      allowsSorting: true,
+      sortFn: (a, b) => a.cpuMs - b.cpuMs,
+    },
+    {
+      id: 'memoryBytes', header: t('agents.ram'),
+      cell: (item) => <span className="text-default-500 text-sm tabular-nums">{formatMemory(item.memoryBytes)}</span>,
+      allowsSorting: true,
+      sortFn: (a, b) => a.memoryBytes - b.memoryBytes,
+    },
+    {
+      id: 'threadCount', header: 'Threads',
+      cell: (item) => <span className="text-default-500 text-sm tabular-nums">{item.threadCount}</span>,
+      allowsSorting: true,
+      sortFn: (a, b) => a.threadCount - b.threadCount,
+    },
+    {
+      id: 'startTime', header: 'Start Time',
+      cell: (item) => (
+        <span className="text-default-500 text-sm">
+          {item.startTime ? new Date(item.startTime).toLocaleString() : '—'}
+        </span>
+      ),
+    },
+  ];
 
   const fetchProcesses = useCallback(async () => {
     try {
@@ -126,7 +128,7 @@ export function ProcessTab({ agentId }: ProcessTabProps) {
 
     if (systemProcesses.length > 0) {
       userGroups.push({
-        name: 'System Processes',
+        name: t('system.systemProcesses'),
         processes: systemProcesses,
         totalCpu: systemProcesses.reduce((s, p) => s + p.cpuMs, 0),
         totalMemory: systemProcesses.reduce((s, p) => s + p.memoryBytes, 0),
@@ -135,7 +137,7 @@ export function ProcessTab({ agentId }: ProcessTabProps) {
     }
 
     return userGroups;
-  }, [processes]);
+  }, [processes, t]);
 
   const filteredGroups = useMemo(() => {
     if (!filter) return groups;
@@ -171,16 +173,16 @@ export function ProcessTab({ agentId }: ProcessTabProps) {
       <div className="flex items-center gap-3">
         <Input
           className="max-w-xs"
-          placeholder="Filter by name or PID..."
+          placeholder={t('system.filterProcesses')}
           value={filter}
           onChange={(e) => setFilter((e.target as HTMLInputElement).value)}
         />
-        <span className="text-sm text-default-500">{processes.length} processes</span>
+        <span className="text-sm text-default-500">{t('system.processesCount', { count: processes.length })}</span>
       </div>
       <Card className="max-h-[calc(100vh-330px)] overflow-y-auto">
         {loading ? (
           <div className="flex justify-center py-8 text-default-500 text-sm">
-            Loading processes...
+            {t('system.loadingProcesses')}
           </div>
         ) : (
           <Accordion
@@ -217,7 +219,7 @@ export function ProcessTab({ agentId }: ProcessTabProps) {
                               scrollContainerClassName="max-h-80"
                               renderEmptyState={() => (
                                 <div className="flex justify-center py-4 text-default-500 text-sm">
-                                  No processes.
+                                  {t('system.noProcesses')}
                                 </div>
                               )}
                             />
@@ -225,8 +227,8 @@ export function ProcessTab({ agentId }: ProcessTabProps) {
                         </ContextMenu.Trigger>
                         <ContextMenu.Popover>
                           <ContextMenu.Menu>
-                            <ContextMenu.Item id="kill" textValue="Kill Process" onAction={handleKill}>
-                              <CircleXmark className="w-4 h-4" /> Kill Process
+                            <ContextMenu.Item id="kill" textValue={t('system.killProcess')} onAction={handleKill}>
+                              <CircleXmark className="w-4 h-4" /> {t('system.killProcess')}
                             </ContextMenu.Item>
                           </ContextMenu.Menu>
                         </ContextMenu.Popover>

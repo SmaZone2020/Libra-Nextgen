@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Button, Card, Input, Label, TextField } from '@heroui/react';
 import { login } from '../../api/auth';
 import type { LoginRequest } from '../../types/models';
@@ -8,6 +9,7 @@ interface LoginPageProps {
 }
 
 export default function LoginPage({ onLogin }: LoginPageProps) {
+  const { t } = useTranslation();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -23,7 +25,7 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
       const res = await login(req);
       onLogin(res.username, res.role);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Login failed');
+      setError(err instanceof Error ? err.message : t('login.loginFailed'));
     } finally {
       setLoading(false);
     }
@@ -43,11 +45,11 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
               </div>
             )}
             <TextField autoFocus value={username} onChange={setUsername}>
-              <Label>Username</Label>
+              <Label>{t('login.username')}</Label>
               <Input placeholder="admin" />
             </TextField>
             <TextField type="password" value={password} onChange={setPassword}>
-              <Label>Password</Label>
+              <Label>{t('login.password')}</Label>
               <Input placeholder="admin123" />
             </TextField>
           </Card.Content>
@@ -58,7 +60,7 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
               variant="primary"
               className="px-10 mx-auto"
             >
-              {loading ? 'Signing in...' : 'Sign In'}
+              {loading ? t('login.signingIn') : t('login.signIn')}
             </Button>
           </Card.Footer>
         </form>

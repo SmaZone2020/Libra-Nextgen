@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Button, ListBox, Select } from '@heroui/react';
 import { useAgent } from '../../contexts/AgentContext';
 import { getToken } from '../../api/client';
@@ -12,15 +13,8 @@ import type { AudioChunk } from './useMicSession';
 
 const API_BASE = 'http://127.0.0.1:5270';
 
-const FPS_OPTIONS = [
-  { id: '5', label: '5 FPS' },
-  { id: '10', label: '10 FPS' },
-  { id: '15', label: '15 FPS' },
-  { id: '20', label: '20 FPS' },
-  { id: '30', label: '30 FPS' },
-];
-
 export default function MediaMonitorPage() {
+  const { t } = useTranslation();
   const { agentId } = useAgent();
   const cameraCanvasRef = useRef<HTMLCanvasElement>(null);
   const audioRef = useRef<AudioPlayerHandle>(null);
@@ -33,6 +27,14 @@ export default function MediaMonitorPage() {
   const [cameraIndex, setCameraIndex] = useState(0);
   const [micIndex, setMicIndex] = useState(0);
   const [fps, setFps] = useState(10);
+
+  const FPS_OPTIONS = [
+    { id: '5', label: t('mediaMonitor.fps.5') },
+    { id: '10', label: t('mediaMonitor.fps.10') },
+    { id: '15', label: t('mediaMonitor.fps.15') },
+    { id: '20', label: t('mediaMonitor.fps.20') },
+    { id: '30', label: t('mediaMonitor.fps.30') },
+  ];
 
   // ── Fetch devices ───────────────────────────────────────────────────────
   const fetchDevices = useCallback(async (agentId: string) => {
@@ -106,7 +108,6 @@ export default function MediaMonitorPage() {
     if (agentId) {
       setCameraError(null);
       setMicError(null);
-      audioActiveRef.current = true;
       fetchDevices(agentId);
     } else {
       audioActiveRef.current = false;
@@ -127,7 +128,7 @@ export default function MediaMonitorPage() {
   if (!agentId) {
     return (
       <div className="flex items-center justify-center py-20 text-neutral-500 text-sm select-none">
-        Select an online agent to monitor its camera and microphone.
+        {t('mediaMonitor.selectAgent')}
       </div>
     );
   }
@@ -137,10 +138,70 @@ export default function MediaMonitorPage() {
 
   return (
     <div className="flex flex-col gap-4 h-[calc(100vh-180px)]">
+
+      {/* Mic Section */}
+      <div className="h-[80px] shrink-0 flex flex-col gap-2">
+        <div className="flex items-center gap-3 flex-wrap">
+          <h2 className="text-sm font-semibold text-neutral-700">{t('mediaMonitor.microphone')}</h2>
+
+          <Select
+            selectedKey={String(micIndex)}
+            onSelectionChange={
+              micStreaming ? undefined : (key) => key && setMicIndex(Number(key))
+            }
+            isDisabled={micStreaming || noMic}
+            aria-label={t('mediaMonitor.microphone')}
+          >
+            <Select.Trigger>
+              <Select.Value />
+            </Select.Trigger>
+            <Select.Popover>
+              <ListBox>
+                {mics.map((m) => (
+                  <ListBox.Item key={String(m.index)} id={String(m.index)} textValue={m.name}>
+                    {m.name}
+                    <ListBox.ItemIndicator />
+                  </ListBox.Item>
+                ))}
+              </ListBox>
+            </Select.Popover>
+          </Select>
+
+          <span className={`w-2 h-2 rounded-full ${micStreaming ? 'bg-green-500' : 'bg-neutral-300'}`} />
+          <span className="text-xs text-default-400">
+            {micStreaming ? t('mediaMonitor.streaming') : t('mediaMonitor.stopped')}
+          </span>
+          {micStreaming ? (
+            <Button size="sm" variant="tertiary" onPress={() => { audioRef.current?.stop(); micDisconnect(); }}>{t('common.stop')}</Button>
+          ) : (
+            <Button
+              size="sm"
+              variant="tertiary"
+              isDisabled={noMic}
+              onPress={() => { audioActiveRef.current = true; micBind(agentId, micIndex); }}
+            >
+              {t('common.start')}
+            </Button>
+          )}
+          {micError && <span className="text-xs text-red-500">{micError}</span>}
+        </div>
+        <div className="flex items-center gap-2 text-xs text-neutral-500">
+          <span className="block h-1 flex-1 rounded bg-neutral-200 overflow-hidden">
+            <span
+              className="block h-full bg-green-500 transition-all duration-75"
+              style={{ width: micStreaming ? '100%' : '0%' }}
+            />
+          </span>
+          {micStreaming ? <span>{t('mediaMonitor.receivingAudio')}</span> : <span>{t('mediaMonitor.micStopped')}</span>}
+        </div>
+      </div>
+
+      <AudioPlayer ref={audioRef} active={audioActiveRef.current} />
+
       {/* Camera Section */}
       <div className="flex-1 min-h-0 flex flex-col gap-2">
         <div className="flex items-center gap-3 shrink-0 flex-wrap">
-          <h2 className="text-sm font-semibold text-neutral-700">Camera</h2>
+          <h2 className="text-sm font-semibold text-neutral-700">{t('mediaMonitor.camera')}</h2>
 
           <Select
             selectedKey={String(cameraIndex)}
@@ -149,7 +210,7 @@ export default function MediaMonitorPage() {
             }
             isDisabled={cameraStreaming || noCamera}
             className="w-[180px]"
-            aria-label="Camera device"
+            aria-label={t('mediaMonitor.camera')}
           >
             <Select.Trigger>
               <Select.Value />
@@ -172,7 +233,7 @@ export default function MediaMonitorPage() {
               cameraStreaming ? undefined : (key) => key && setFps(Number(key))
             }
             className="w-[110px]"
-            aria-label="Camera FPS"
+            aria-label={t('screenMonitor.frameRate')}
           >
             <Select.Trigger>
               <Select.Value />
@@ -191,10 +252,10 @@ export default function MediaMonitorPage() {
 
           <span className={`w-2 h-2 rounded-full ${cameraStreaming ? 'bg-green-500' : 'bg-neutral-300'}`} />
           <span className="text-xs text-default-400">
-            {cameraStreaming ? 'Streaming' : 'Stopped'}
+            {cameraStreaming ? t('mediaMonitor.streaming') : t('mediaMonitor.stopped')}
           </span>
           {cameraStreaming ? (
-            <Button size="sm" variant="tertiary" onPress={() => cameraDisconnect()}>Stop</Button>
+            <Button size="sm" variant="tertiary" onPress={() => cameraDisconnect()}>{t('common.stop')}</Button>
           ) : (
             <Button
               size="sm"
@@ -202,79 +263,22 @@ export default function MediaMonitorPage() {
               isDisabled={noCamera}
               onPress={() => cameraBind(agentId, cameraIndex, { fps })}
             >
-              Start
+              {t('common.start')}
             </Button>
           )}
           {cameraError && <span className="text-xs text-red-500">{cameraError}</span>}
         </div>
-        <div className="flex-1 min-h-0 rounded-lg overflow-hidden border border-neutral-200 bg-black flex items-center justify-center">
-          {noCamera && !cameraStreaming ? (
-            <span className="text-neutral-500 text-sm">No camera found</span>
-          ) : (
+        <div className="flex-1 min-h-0 rounded-lg overflow-hidden border border-neutral-200 bg-neutral-900 flex items-center justify-center">
+          {cameraStreaming ? (
             <canvas ref={cameraCanvasRef} className="max-w-full max-h-full object-contain" />
-          )}
-        </div>
-      </div>
-
-      {/* Mic Section */}
-      <div className="h-[80px] shrink-0 flex flex-col gap-2">
-        <div className="flex items-center gap-3 flex-wrap">
-          <h2 className="text-sm font-semibold text-neutral-700">Microphone</h2>
-
-          <Select
-            selectedKey={String(micIndex)}
-            onSelectionChange={
-              micStreaming ? undefined : (key) => key && setMicIndex(Number(key))
-            }
-            isDisabled={micStreaming || noMic}
-            className="w-[200px]"
-            aria-label="Mic device"
-          >
-            <Select.Trigger>
-              <Select.Value />
-            </Select.Trigger>
-            <Select.Popover>
-              <ListBox>
-                {mics.map((m) => (
-                  <ListBox.Item key={String(m.index)} id={String(m.index)} textValue={m.name}>
-                    {m.name}
-                    <ListBox.ItemIndicator />
-                  </ListBox.Item>
-                ))}
-              </ListBox>
-            </Select.Popover>
-          </Select>
-
-          <span className={`w-2 h-2 rounded-full ${micStreaming ? 'bg-green-500' : 'bg-neutral-300'}`} />
-          <span className="text-xs text-default-400">
-            {micStreaming ? 'Streaming' : 'Stopped'}
-          </span>
-          {micStreaming ? (
-            <Button size="sm" variant="tertiary" onPress={() => { audioRef.current?.stop(); micDisconnect(); }}>Stop</Button>
+          ) : noCamera ? (
+            <span className="text-neutral-500 text-sm select-none">{t('mediaMonitor.noCamera')}</span>
           ) : (
-            <Button
-              size="sm"
-              variant="tertiary"
-              isDisabled={noMic}
-              onPress={() => { audioActiveRef.current = true; micBind(agentId, micIndex); }}
-            >
-              Start
-            </Button>
+            <span className="text-neutral-500 text-sm select-none">{t('mediaMonitor.cameraStopped')}</span>
           )}
-          {micError && <span className="text-xs text-red-500">{micError}</span>}
-        </div>
-        <div className="flex items-center gap-2 text-xs text-neutral-500">
-          <span className="block h-1 flex-1 rounded bg-neutral-200 overflow-hidden">
-            <span
-              className="block h-full bg-green-500 transition-all duration-75"
-              style={{ width: micStreaming ? '100%' : '0%' }}
-            />
-          </span>
-          {micStreaming && <span>Receiving audio...</span>}
         </div>
       </div>
 
-      <AudioPlayer ref={audioRef} active={audioActiveRef.current} />
     </div>
   );
 }

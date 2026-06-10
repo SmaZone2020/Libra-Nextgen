@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { listFiles, getDrives, deleteFile, renameFile, moveFile, copyFile, compressFile, decompressFile, createShortcut, downloadFile } from '../../api/files';
 import type { FileEntry } from '../../api/files';
 import { PathBar } from './PathBar';
@@ -7,6 +8,7 @@ import { useAgent } from '../../contexts/AgentContext';
 import { useDialog } from '../../hooks/useDialog';
 
 export default function FileManagerPage() {
+  const { t } = useTranslation();
   const { agentId } = useAgent();
   const { alert, confirm, prompt, DialogComponent } = useDialog();
   const [path, setPath] = useState('C:\\');
@@ -30,7 +32,7 @@ export default function FileManagerPage() {
       setPath(result.path);
       setEntries(result.entries);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to list directory');
+      setError(e instanceof Error ? e.message : t('fileManager.listFailed'));
     } finally { setLoading(false); }
   }, [agentId]);
 
@@ -58,7 +60,7 @@ export default function FileManagerPage() {
       setEntries(fileResult.entries);
       setDrives(drivesResult.drives);
     }).catch((e) => {
-      setError(e instanceof Error ? e.message : 'Failed to connect to agent');
+      setError(e instanceof Error ? e.message : t('fileManager.connectFailed'));
     }).finally(() => { setLoading(false); });
   }, [agentId]);
 
@@ -117,49 +119,49 @@ export default function FileManagerPage() {
 
   const handleRename = async () => {
     if (!agentId || !contextRef.current) return;
-    const { confirmed, value } = await prompt('New name:', contextRef.current.name);
+    const { confirmed, value } = await prompt(t('fileManager.renamePrompt'), contextRef.current.name);
     if (!confirmed || !value || value === contextRef.current.name) return;
     try {
       await renameFile(agentId, getContextPath(), value);
       sendFileList(path);
     } catch (e) {
-      await alert(e instanceof Error ? e.message : 'Rename failed');
+      await alert(e instanceof Error ? e.message : t('fileManager.renameFailed'));
     }
   };
 
   const handleMove = async () => {
     if (!agentId || !contextRef.current) return;
-    const { confirmed, value } = await prompt('Move to (destination path):');
+    const { confirmed, value } = await prompt(t('fileManager.movePrompt'));
     if (!confirmed || !value) return;
     try {
       await moveFile(agentId, getContextPath(), value);
       sendFileList(path);
     } catch (e) {
-      await alert(e instanceof Error ? e.message : 'Move failed');
+      await alert(e instanceof Error ? e.message : t('fileManager.moveFailed'));
     }
   };
 
   const handleCopy = async () => {
     if (!agentId || !contextRef.current) return;
-    const { confirmed, value } = await prompt('Copy to (destination path):');
+    const { confirmed, value } = await prompt(t('fileManager.copyPrompt'));
     if (!confirmed || !value) return;
     try {
       await copyFile(agentId, getContextPath(), value);
       sendFileList(path);
     } catch (e) {
-      await alert(e instanceof Error ? e.message : 'Copy failed');
+      await alert(e instanceof Error ? e.message : t('fileManager.copyFailed'));
     }
   };
 
   const handleDelete = async () => {
     if (!agentId || !contextRef.current) return;
-    const { confirmed } = await confirm(`Delete "${contextRef.current.name}"?`);
+    const { confirmed } = await confirm(t('fileManager.deleteConfirm', { name: contextRef.current.name }));
     if (!confirmed) return;
     try {
       await deleteFile(agentId, getContextPath());
       sendFileList(path);
     } catch (e) {
-      await alert(e instanceof Error ? e.message : 'Delete failed');
+      await alert(e instanceof Error ? e.message : t('fileManager.deleteFailed'));
     }
   };
 
@@ -169,7 +171,7 @@ export default function FileManagerPage() {
       await compressFile(agentId, getContextPath());
       sendFileList(path);
     } catch (e) {
-      await alert(e instanceof Error ? e.message : 'Compress failed');
+      await alert(e instanceof Error ? e.message : t('fileManager.compressFailed'));
     }
   };
 
@@ -179,7 +181,7 @@ export default function FileManagerPage() {
       await decompressFile(agentId, getContextPath());
       sendFileList(path);
     } catch (e) {
-      await alert(e instanceof Error ? e.message : 'Decompress failed');
+      await alert(e instanceof Error ? e.message : t('fileManager.decompressFailed'));
     }
   };
 
@@ -189,7 +191,7 @@ export default function FileManagerPage() {
       await createShortcut(agentId, getContextPath());
       sendFileList(path);
     } catch (e) {
-      await alert(e instanceof Error ? e.message : 'Create shortcut failed');
+      await alert(e instanceof Error ? e.message : t('fileManager.shortcutFailed'));
     }
   };
 
@@ -198,7 +200,7 @@ export default function FileManagerPage() {
     try {
       await downloadFile(agentId, getContextPath());
     } catch (e) {
-      await alert(e instanceof Error ? e.message : 'Download failed');
+      await alert(e instanceof Error ? e.message : t('fileManager.downloadFailed'));
     }
   };
 
@@ -209,7 +211,7 @@ export default function FileManagerPage() {
   if (!agentId) {
     return (
       <div className="flex items-center justify-center py-20 text-neutral-500 text-sm select-none">
-        Select an online agent to browse its file system.
+        {t('fileManager.selectAgent')}
       </div>
     );
   }

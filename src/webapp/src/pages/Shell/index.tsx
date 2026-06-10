@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import Terminal from '../../components/terminal';
 import type { TerminalHandle } from '../../components/terminal';
 import { useShellSession } from './useShellSession';
@@ -7,6 +8,7 @@ import { useAgent } from '../../contexts/AgentContext';
 type LockMode = 'write' | 'readonly' | null;
 
 export default function ShellPage() {
+  const { t } = useTranslation();
   const { agentId } = useAgent();
   const [lockMode, setLockMode] = useState<LockMode>(null);
   const [connected, setConnected] = useState(false);
@@ -35,7 +37,7 @@ export default function ShellPage() {
           className="flex items-center justify-center border border-neutral-700 rounded-lg text-neutral-500 text-sm select-none"
           style={{ height: 'calc(100vh - 240px)', minHeight: 400, background: '#1a1b1e' }}
         >
-          Select an online agent to open a remote shell session.
+          {t('shell.selectAgent')}
         </div>
       )}
 

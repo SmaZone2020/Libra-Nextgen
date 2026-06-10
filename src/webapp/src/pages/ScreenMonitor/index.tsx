@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Button, ListBox, Select } from '@heroui/react';
 import { useAgent } from '../../contexts/AgentContext';
 import { useScreenSession } from './useScreenSession';
@@ -6,27 +7,28 @@ import { ScreenCanvas } from './ScreenCanvas';
 import type { ScreenCanvasHandle } from './ScreenCanvas';
 import type { ScreenFrame } from './useScreenSession';
 
-const FPS_OPTIONS = [
-  { id: '1', label: '1 FPS' },
-  { id: '3', label: '3 FPS' },
-  { id: '5', label: '5 FPS' },
-  { id: '10', label: '10 FPS' },
-  { id: '15', label: '15 FPS' },
-];
-
-const QUALITY_OPTIONS = [
-  { id: 'original', label: 'Original' },
-  { id: '1080p', label: '1080p' },
-  { id: '720p', label: '720p' },
-  { id: '540p', label: '540p' },
-  { id: '360p', label: '360p' },
-  { id: '240p', label: '240p' },
-];
-
 export default function ScreenMonitorPage() {
+  const { t } = useTranslation();
   const { agentId } = useAgent();
   const canvasRef = useRef<ScreenCanvasHandle>(null);
   const [error, setError] = useState<string | null>(null);
+
+  const FPS_OPTIONS = [
+    { id: '1', label: t('screenMonitor.fps.1') },
+    { id: '3', label: t('screenMonitor.fps.3') },
+    { id: '5', label: t('screenMonitor.fps.5') },
+    { id: '10', label: t('screenMonitor.fps.10') },
+    { id: '15', label: t('screenMonitor.fps.15') },
+  ];
+
+  const QUALITY_OPTIONS = [
+    { id: 'original', label: t('screenMonitor.qualityOpts.original') },
+    { id: '1080p', label: t('screenMonitor.qualityOpts.1080p') },
+    { id: '720p', label: t('screenMonitor.qualityOpts.720p') },
+    { id: '540p', label: t('screenMonitor.qualityOpts.540p') },
+    { id: '360p', label: t('screenMonitor.qualityOpts.360p') },
+    { id: '240p', label: t('screenMonitor.qualityOpts.240p') },
+  ];
 
   const onFrame = useCallback((frame: ScreenFrame) => {
     if (!canvasRef.current) return;
@@ -44,13 +46,10 @@ export default function ScreenMonitorPage() {
   const { bind, disconnect, updateConfig, streaming, config } = useScreenSession({ onFrame, onError });
 
   useEffect(() => {
-    if (agentId) {
-      setError(null);
-      canvasRef.current?.clear();
-      bind(agentId);
-    } else {
+    if (!agentId) {
       disconnect();
       canvasRef.current?.clear();
+      setError(null);
     }
     return () => { disconnect(); };
   }, [agentId]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -58,7 +57,7 @@ export default function ScreenMonitorPage() {
   if (!agentId) {
     return (
       <div className="flex items-center justify-center py-20 text-neutral-500 text-sm select-none">
-        Select an online agent to view its screen.
+        {t('screenMonitor.selectAgent')}
       </div>
     );
   }
@@ -72,7 +71,7 @@ export default function ScreenMonitorPage() {
             if (key) updateConfig({ fps: Number(key) });
           }}
           className="w-[120px]"
-          aria-label="Frame rate"
+          aria-label={t('screenMonitor.frameRate')}
         >
           <Select.Trigger>
             <Select.Value />
@@ -95,7 +94,7 @@ export default function ScreenMonitorPage() {
             if (key) updateConfig({ quality: String(key) });
           }}
           className="w-[140px]"
-          aria-label="Quality"
+          aria-label={t('screenMonitor.quality')}
         >
           <Select.Trigger>
             <Select.Value />
@@ -115,18 +114,18 @@ export default function ScreenMonitorPage() {
         <div className="flex items-center gap-2">
           <span className={`w-2 h-2 rounded-full ${streaming ? 'bg-green-500' : 'bg-neutral-300'}`} />
           <span className="text-sm text-default-500">
-            {streaming ? 'Streaming' : 'Stopped'}
+            {streaming ? t('screenMonitor.streaming') : t('screenMonitor.stopped_status')}
           </span>
         </div>
 
         {streaming && (
           <Button size="sm" variant="tertiary" onPress={() => disconnect()}>
-            Stop
+            {t('common.stop')}
           </Button>
         )}
         {!streaming && agentId && (
           <Button size="sm" variant="tertiary" onPress={() => bind(agentId)}>
-            Start
+            {t('common.start')}
           </Button>
         )}
 
@@ -135,8 +134,12 @@ export default function ScreenMonitorPage() {
         )}
       </div>
 
-      <div className="flex-1 min-h-0 rounded-lg overflow-hidden border border-neutral-200">
-        <ScreenCanvas ref={canvasRef} className="w-full h-full" />
+      <div className="flex-1 min-h-0 rounded-lg overflow-hidden border border-neutral-200 bg-neutral-900 flex items-center justify-center">
+        {streaming ? (
+          <ScreenCanvas ref={canvasRef} className="w-full h-full" />
+        ) : (
+          <span className="text-neutral-500 text-sm select-none">{t('screenMonitor.stopped')}</span>
+        )}
       </div>
     </div>
   );

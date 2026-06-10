@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Button, Input, Label, Modal, Tabs, TextArea, TextField } from '@heroui/react';
 import { Pencil, TrashBin } from '@gravity-ui/icons';
 import { getEnvVars, setEnvVar, deleteEnvVar } from '../../api/system';
@@ -7,28 +8,12 @@ import { ContextMenu } from '@components/context-menu';
 import type { DataGridColumn } from '../../components/data-grid';
 import type { EnvVar } from '../../types/models';
 
-const columns: DataGridColumn<EnvVar>[] = [
-  {
-    id: 'name', header: 'Name',
-    cell: (item) => <span className="font-mono text-sm">{item.name}</span>,
-    allowsSorting: true,
-    sortFn: (a, b) => a.name.localeCompare(b.name),
-  },
-  {
-    id: 'value', header: 'Value',
-    cell: (item) => (
-      <span className="text-default-500 text-sm truncate max-w-[400px] block">
-        {item.value}
-      </span>
-    ),
-  },
-];
-
 interface EnvTabProps {
   agentId: string;
 }
 
 export function EnvTab({ agentId }: EnvTabProps) {
+  const { t } = useTranslation();
   const [systemVars, setSystemVars] = useState<EnvVar[]>([]);
   const [userVars, setUserVars] = useState<EnvVar[]>([]);
   const [loading, setLoading] = useState(true);
@@ -42,6 +27,23 @@ export function EnvTab({ agentId }: EnvTabProps) {
   const [useTextarea, setUseTextarea] = useState(false);
 
   const contextRef = useRef<EnvVar | null>(null);
+
+  const columns: DataGridColumn<EnvVar>[] = [
+    {
+      id: 'name', header: t('common.name'),
+      cell: (item) => <span className="font-mono text-sm">{item.name}</span>,
+      allowsSorting: true,
+      sortFn: (a, b) => a.name.localeCompare(b.name),
+    },
+    {
+      id: 'value', header: t('common.value'),
+      cell: (item) => (
+        <span className="text-default-500 text-sm truncate max-w-[400px] block">
+          {item.value}
+        </span>
+      ),
+    },
+  ];
 
   const fetchEnv = useCallback(async () => {
     setLoading(true);
@@ -113,15 +115,15 @@ export function EnvTab({ agentId }: EnvTabProps) {
           selectedKey={scope}
           onSelectionChange={(key) => setScope(String(key))}
         >
-          <Tabs.List aria-label="Env scope">
-            <Tabs.Tab id="system">System<Tabs.Indicator /></Tabs.Tab>
-            <Tabs.Tab id="user">User<Tabs.Indicator /></Tabs.Tab>
+          <Tabs.List aria-label={t('system.infoTabs')}>
+            <Tabs.Tab id="system">{t('system.scopes.system')}<Tabs.Indicator /></Tabs.Tab>
+            <Tabs.Tab id="user">{t('system.scopes.user')}<Tabs.Indicator /></Tabs.Tab>
           </Tabs.List>
         </Tabs>
         <Button size="sm" variant="tertiary" onPress={handleAdd}>
-          Add Variable
+          {t('system.addVariable')}
         </Button>
-        <span className="text-sm text-default-500">{currentVars.length} variables</span>
+        <span className="text-sm text-default-500">{t('system.varsCount', { count: currentVars.length })}</span>
       </div>
 
       <ContextMenu>
@@ -135,7 +137,7 @@ export function EnvTab({ agentId }: EnvTabProps) {
               scrollContainerClassName="max-h-[calc(100vh-300px)]"
               renderEmptyState={() => (
                 <div className="flex justify-center py-8 text-default-500 text-sm">
-                  {loading ? 'Loading...' : 'No environment variables found.'}
+                  {loading ? t('common.loading') : t('system.noEnvVars')}
                 </div>
               )}
             />
@@ -143,12 +145,12 @@ export function EnvTab({ agentId }: EnvTabProps) {
         </ContextMenu.Trigger>
         <ContextMenu.Popover>
           <ContextMenu.Menu>
-            <ContextMenu.Item id="edit" textValue="Edit" onAction={handleEdit}>
-              <Pencil className="w-4 h-4" /> Edit
+            <ContextMenu.Item id="edit" textValue={t('common.edit')} onAction={handleEdit}>
+              <Pencil className="w-4 h-4" /> {t('common.edit')}
             </ContextMenu.Item>
             <ContextMenu.Separator />
-            <ContextMenu.Item id="delete" textValue="Delete" onAction={handleDelete}>
-              <TrashBin className="w-4 h-4" /> Delete
+            <ContextMenu.Item id="delete" textValue={t('common.delete')} onAction={handleDelete}>
+              <TrashBin className="w-4 h-4" /> {t('common.delete')}
             </ContextMenu.Item>
           </ContextMenu.Menu>
         </ContextMenu.Popover>
@@ -159,23 +161,23 @@ export function EnvTab({ agentId }: EnvTabProps) {
           <Modal.Dialog>
             <Modal.CloseTrigger />
             <Modal.Header>
-              <Modal.Heading>{isEditing ? 'Edit Variable' : 'Add Variable'}</Modal.Heading>
+              <Modal.Heading>{isEditing ? t('system.editVariable') : t('system.addVariableTitle')}</Modal.Heading>
             </Modal.Header>
             <Modal.Body>
               <div className="flex flex-col gap-4">
                 <TextField value={editName} onChange={setEditName} isDisabled={isEditing}>
-                  <Label>Name</Label>
-                  <Input placeholder="VARIABLE_NAME" />
+                  <Label>{t('common.name')}</Label>
+                  <Input placeholder={t('system.varName')} />
                 </TextField>
                 {useTextarea ? (
                   <TextField value={editValue} onChange={setEditValue}>
-                    <Label>Value (one entry per line)</Label>
+                    <Label>{t('system.valueMultiline')}</Label>
                     <TextArea className="font-mono text-sm" rows={10} placeholder="entry1&#10;entry2&#10;entry3" />
                   </TextField>
                 ) : (
                   <TextField value={editValue} onChange={setEditValue}>
-                    <Label>Value</Label>
-                    <Input placeholder="value" />
+                    <Label>{t('common.value')}</Label>
+                    <Input placeholder={t('system.valuePlaceholder')} />
                   </TextField>
                 )}
                 {!isEditing && (
@@ -185,22 +187,22 @@ export function EnvTab({ agentId }: EnvTabProps) {
                       variant={editScope === 'user' ? 'primary' : 'ghost'}
                       onPress={() => setEditScope('user')}
                     >
-                      User
+                      {t('system.scopes.user')}
                     </Button>
                     <Button
                       size="sm"
                       variant={editScope === 'system' ? 'primary' : 'ghost'}
                       onPress={() => setEditScope('system')}
                     >
-                      System
+                      {t('system.scopes.system')}
                     </Button>
                   </div>
                 )}
               </div>
             </Modal.Body>
             <Modal.Footer>
-              <Button slot="close" variant="tertiary">Cancel</Button>
-              <Button variant="primary" onPress={handleSave}>Save</Button>
+              <Button slot="close" variant="tertiary">{t('common.cancel')}</Button>
+              <Button variant="primary" onPress={handleSave}>{t('common.save')}</Button>
             </Modal.Footer>
           </Modal.Dialog>
         </Modal.Container>

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom';
 import { AnimatePresence, motion } from 'motion/react';
 import { Button, Chip, ComboBox, Input, Label, ListBox } from '@heroui/react';
+import { useTranslation } from 'react-i18next';
 import { Sidebar } from '../shared/layout/Sidebar';
 import LoginPage from '../pages/Login';
 import Dashboard from '../pages/Dashboard';
@@ -17,7 +18,8 @@ import { setOnAuthFailed } from '../api/client';
 import { consoleWs } from '../ws/consoleWs';
 import { AgentProvider, useAgent } from '../contexts/AgentContext';
 import type { AgentListItem } from '../types/models';
-import { pageMeta, sidebarItems } from '../config/site';
+import { sidebarItems } from '../config/site';
+import '../i18n';
 
 const pageTransition = {
   duration: 0.3,
@@ -29,10 +31,22 @@ const SIDEBAR_W = { collapsed: 72, expanded: 256 };
 
 const AGENT_ROUTES = new Set(['/agents', '/shell', '/files', '/system', '/screen', '/media']);
 
+const PAGE_META_KEYS: Record<string, [string, string]> = {
+  '/': ['pageMeta.dashboard.label', 'pageMeta.dashboard.subtitle'],
+  '/agents': ['pageMeta.agents.label', 'pageMeta.agents.subtitle'],
+  '/screen': ['pageMeta.screen.label', 'pageMeta.screen.subtitle'],
+  '/media': ['pageMeta.media.label', 'pageMeta.media.subtitle'],
+  '/shell': ['pageMeta.shell.label', 'pageMeta.shell.subtitle'],
+  '/files': ['pageMeta.explorer.label', 'pageMeta.explorer.subtitle'],
+  '/system': ['pageMeta.system.label', 'pageMeta.system.subtitle'],
+  '/audit': ['pageMeta.audit.label', 'pageMeta.audit.subtitle'],
+};
+
 function PageHeader() {
+  const { t } = useTranslation();
   const { pathname } = useLocation();
-  const meta = pageMeta[pathname];
-  if (!meta) return null;
+  const keys = PAGE_META_KEYS[pathname];
+  if (!keys) return null;
   return (
     <motion.div
       key={pathname}
@@ -42,14 +56,15 @@ function PageHeader() {
       transition={{ duration: 0.25, ease: 'easeOut' }}
     >
       <h1 className="mt-0.5 text-xl font-semibold tracking-normal text-neutral-950">
-        {meta.label}
+        {t(keys[0])}
       </h1>
-      <p className="mt-0.5 text-sm text-neutral-600">{meta.subtitle}</p>
+      <p className="mt-0.5 text-sm text-neutral-600">{t(keys[1])}</p>
     </motion.div>
   );
 }
 
 function AgentSelector() {
+  const { t } = useTranslation();
   const { pathname } = useLocation();
   const { agents, agentId, selectedAgent, selectAgent, disconnect } = useAgent();
 
@@ -65,7 +80,7 @@ function AgentSelector() {
       >
         <Label className="sr-only">Agent</Label>
         <ComboBox.InputGroup>
-          <Input placeholder="Select agent..." />
+          <Input placeholder={t('common.selectAgent')} />
           <ComboBox.Trigger />
         </ComboBox.InputGroup>
         <ComboBox.Popover>
@@ -85,7 +100,7 @@ function AgentSelector() {
           <Chip size="sm" variant="soft" color="success">{selectedAgent.hostname}</Chip>
           <Chip size="sm" variant="soft">{selectedAgent.ipAddress}</Chip>
           <Button size="sm" variant="tertiary" onPress={disconnect}>
-            Disconnect
+            {t('common.disconnect')}
           </Button>
         </>
       )}
@@ -162,6 +177,7 @@ function AuthenticatedLayout({
   onToggle: (v: boolean) => void;
   onLogout: () => void;
 }) {
+  const { t } = useTranslation();
   const location = useLocation();
   const sidebarWidth = collapsed ? SIDEBAR_W.collapsed : SIDEBAR_W.expanded;
 
@@ -186,7 +202,7 @@ function AuthenticatedLayout({
               {user.username} ({user.role})
             </Chip>
             <Button size="sm" variant="ghost" onPress={onLogout}>
-              Logout
+              {t('common.logout')}
             </Button>
           </div>
         </header>
@@ -208,7 +224,6 @@ function AuthenticatedLayout({
                 <Route path="/audit" element={<AuditLogsPage />} />
                 <Route path="/system" element={<SystemPage />} />
                 <Route path="/screen" element={<ScreenMonitorPage />} />
-                <Route path="/media" element={<MediaMonitorPage />} />
                 <Route path="/media" element={<MediaMonitorPage />} />
               </Routes>
             </motion.div>

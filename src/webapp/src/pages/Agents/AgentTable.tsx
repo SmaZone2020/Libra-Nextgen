@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import { Spinner } from '@heroui/react';
 import { DataGrid } from '../../components/data-grid';
 import { ContextMenu } from '@components/context-menu';
@@ -18,29 +19,31 @@ interface AgentTableProps {
   onRemove: () => void;
 }
 
-const columns: DataGridColumn<AgentListItem>[] = [
-  {
-    id: 'hostname', header: 'Hostname',
-    cell: (item) => <span className="font-mono">{item.hostname}</span>,
-  },
-  {
-    id: 'ipAddress', header: 'IP',
-    cell: (item) => <span className="font-mono text-default-500">{item.ipAddress}</span>,
-  },
-  { id: 'osVersion', header: 'OS',
-    cell: (item) => <span className="text-default-500">{item.osVersion}</span>,
-  },
-  {
-    id: 'status', header: 'Status',
-    cell: (item) => <StatusChip status={item.status} />,
-  },
-  {
-    id: 'lastSeen', header: 'Last Seen',
-    cell: (item) => <span className="text-default-500 text-sm">{new Date(item.lastSeen).toLocaleString()}</span>,
-  },
-];
-
 export function AgentTable({ agents, loading, contextAgentId, connectedAgentId, onContextMenu, onConnect, onDisconnect, onViewDetails, onRemove }: AgentTableProps) {
+  const { t } = useTranslation();
+
+  const columns: DataGridColumn<AgentListItem>[] = [
+    {
+      id: 'hostname', header: t('agents.hostname'),
+      cell: (item) => <span className="font-mono">{item.hostname}</span>,
+    },
+    {
+      id: 'ipAddress', header: t('agents.ip'),
+      cell: (item) => <span className="font-mono text-default-500">{item.ipAddress}</span>,
+    },
+    { id: 'osVersion', header: t('agents.os'),
+      cell: (item) => <span className="text-default-500">{item.osVersion}</span>,
+    },
+    {
+      id: 'status', header: t('agents.status'),
+      cell: (item) => <StatusChip status={item.status} />,
+    },
+    {
+      id: 'lastSeen', header: t('agents.lastSeen'),
+      cell: (item) => <span className="text-default-500 text-sm">{new Date(item.lastSeen).toLocaleString()}</span>,
+    },
+  ];
+
   const isContextAgentConnected = contextAgentId === connectedAgentId && !!connectedAgentId;
   const contextAgent = agents.find(a => a.id === contextAgentId);
   const canConnect = contextAgent?.status === 'Online' && !isContextAgentConnected;
@@ -61,7 +64,7 @@ export function AgentTable({ agents, loading, contextAgentId, connectedAgentId, 
               getRowId={(a) => a.id}
               renderEmptyState={() => (
                 <div className="flex justify-center py-8 text-default-500 text-sm">
-                  No agents connected.
+                  {t('agents.noAgents')}
                 </div>
               )}
             />
@@ -72,21 +75,21 @@ export function AgentTable({ agents, loading, contextAgentId, connectedAgentId, 
       <ContextMenu.Popover>
         <ContextMenu.Menu>
           {canConnect && (
-            <ContextMenu.Item id="connect" textValue="Connect" onAction={onConnect}>
-              <PlugConnection className="w-4 h-4" /> Connect
+            <ContextMenu.Item id="connect" textValue={t('common.connect')} onAction={onConnect}>
+              <PlugConnection className="w-4 h-4" /> {t('common.connect')}
             </ContextMenu.Item>
           )}
           {isContextAgentConnected && (
-            <ContextMenu.Item id="disconnect" textValue="Disconnect" onAction={onDisconnect}>
-              <CircleXmark className="w-4 h-4" /> Disconnect
+            <ContextMenu.Item id="disconnect" textValue={t('common.disconnect')} onAction={onDisconnect}>
+              <CircleXmark className="w-4 h-4" /> {t('common.disconnect')}
             </ContextMenu.Item>
           )}
-          <ContextMenu.Item id="view-details" textValue="View Details" onAction={onViewDetails}>
-            <Eye className="w-4 h-4" /> View Details
+          <ContextMenu.Item id="view-details" textValue={t('agents.viewDetails')} onAction={onViewDetails}>
+            <Eye className="w-4 h-4" /> {t('agents.viewDetails')}
           </ContextMenu.Item>
           <ContextMenu.Separator />
-          <ContextMenu.Item id="remove" textValue="Remove" onAction={onRemove}>
-            <TrashBin className="w-4 h-4" /> Remove
+          <ContextMenu.Item id="remove" textValue={t('agents.remove')} onAction={onRemove}>
+            <TrashBin className="w-4 h-4" /> {t('agents.remove')}
           </ContextMenu.Item>
         </ContextMenu.Menu>
       </ContextMenu.Popover>

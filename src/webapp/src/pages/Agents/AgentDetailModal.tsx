@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import { Accordion, Button, Chip, Modal, Spinner } from '@heroui/react';
 import { ChevronDown } from '@gravity-ui/icons';
 import type { AgentDetail } from '../../types/models';
@@ -20,13 +21,13 @@ const gpuVendor = (name: string): { label: GpuVendor; color: 'success' | 'accent
   return { label: 'Other', color: 'default' };
 };
 
-function formatBytes(bytes: number): string {
+function formatBytes(bytes: number, t: (key: string) => string): string {
   if (!bytes || bytes <= 0) return '—';
-  if (bytes >= 1e12) return `${(bytes / 1e12).toFixed(1)} TB`;
-  if (bytes >= 1e9) return `${(bytes / 1e9).toFixed(1)} GB`;
-  if (bytes >= 1e6) return `${(bytes / 1e6).toFixed(1)} MB`;
-  if (bytes >= 1e3) return `${(bytes / 1e3).toFixed(1)} KB`;
-  return `${bytes} B`;
+  if (bytes >= 1e12) return `${(bytes / 1e12).toFixed(1)} ${t('common.byteUnits.TB')}`;
+  if (bytes >= 1e9) return `${(bytes / 1e9).toFixed(1)} ${t('common.byteUnits.GB')}`;
+  if (bytes >= 1e6) return `${(bytes / 1e6).toFixed(1)} ${t('common.byteUnits.MB')}`;
+  if (bytes >= 1e3) return `${(bytes / 1e3).toFixed(1)} ${t('common.byteUnits.KB')}`;
+  return `${bytes} ${t('common.byteUnits.B')}`;
 }
 
 interface AgentDetailModalProps {
@@ -37,15 +38,17 @@ interface AgentDetailModalProps {
 }
 
 export function AgentDetailModal({ isOpen, onOpenChange, agent, loading }: AgentDetailModalProps) {
+  const { t } = useTranslation();
+
   const infoFields: [string, string][] = agent ? [
-    ['IP', agent.ipAddress],
-    ['OS', agent.osVersion],
-    ['Arch', agent.arch],
-    ['User', agent.userName],
-    ['Process', `${agent.processName} (PID ${agent.pid})`],
-    ['Elevated', agent.isElevated ? 'Yes' : 'No'],
-    ['First Seen', new Date(agent.firstSeen).toLocaleString()],
-    ['Heartbeat', `${agent.heartbeatInterval}s`],
+    [t('agents.ip'), agent.ipAddress],
+    [t('agents.os'), agent.osVersion],
+    [t('agents.arch'), agent.arch],
+    [t('agents.user'), agent.userName],
+    [t('agents.process'), `${agent.processName} (PID ${agent.pid})`],
+    [t('agents.elevated'), agent.isElevated ? t('common.yes') : t('common.no')],
+    [t('agents.firstSeen'), new Date(agent.firstSeen).toLocaleString()],
+    [t('agents.heartbeat'), `${agent.heartbeatInterval}s`],
   ] : [];
 
   return (
@@ -55,7 +58,7 @@ export function AgentDetailModal({ isOpen, onOpenChange, agent, loading }: Agent
           <Modal.CloseTrigger />
           <Modal.Header>
             <Modal.Heading>
-              {agent ? agent.hostname : 'Agent Details'}
+              {agent ? agent.hostname : t('agents.details')}
             </Modal.Heading>
           </Modal.Header>
           <Modal.Body>
@@ -74,17 +77,17 @@ export function AgentDetailModal({ isOpen, onOpenChange, agent, loading }: Agent
                   ))}
                 </div>
                 {agent.hardware && (
-                  <HardwareAccordion hardware={agent.hardware} />
+                  <HardwareAccordion hardware={agent.hardware} t={t} />
                 )}
               </div>
             ) : (
               <p className="text-default-500 text-sm text-center py-4">
-                Failed to load agent details.
+                {t('agents.detailsFailed')}
               </p>
             )}
           </Modal.Body>
           <Modal.Footer>
-            <Button slot="close" variant="ghost">Close</Button>
+            <Button slot="close" variant="tertiary">{t('common.close')}</Button>
           </Modal.Footer>
         </Modal.Dialog>
       </Modal.Container>
@@ -92,14 +95,14 @@ export function AgentDetailModal({ isOpen, onOpenChange, agent, loading }: Agent
   );
 }
 
-function HardwareAccordion({ hardware }: { hardware: NonNullable<AgentDetail['hardware']> }) {
+function HardwareAccordion({ hardware, t }: { hardware: NonNullable<AgentDetail['hardware']>; t: (key: string, opts?: Record<string, unknown>) => string }) {
   return (
     <Accordion className="border-t border-default-200 pt-3">
       {(hardware.cpu || hardware.gpus.length > 0) && (
         <Accordion.Item key="cpu-gpu">
           <Accordion.Heading>
             <Accordion.Trigger>
-              CPU &amp; GPU
+              {t('agents.cpuGpu')}
               <Accordion.Indicator>
                 <ChevronDown />
               </Accordion.Indicator>
@@ -109,25 +112,25 @@ function HardwareAccordion({ hardware }: { hardware: NonNullable<AgentDetail['ha
             <Accordion.Body className="space-y-3">
               {hardware.cpu && (
                 <div>
-                  <p className="text-md font-bold mb-1">CPU</p>
+                  <p className="text-md font-bold mb-1">{t('agents.cpu')}</p>
                   <div className="flex items-center gap-2 mb-1">
                     {(() => { const v = cpuVendor(hardware.cpu.name); return <Chip color={v.color} size="sm" variant="soft">{v.label}</Chip>; })()}
                     <span className="text-sm">{hardware.cpu.name}</span>
                   </div>
                   <p className="text-xs text-default-500">
-                    {hardware.cpu.physicalCores}C/{hardware.cpu.logicalCores}T &middot; {hardware.cpu.maxClockMHz} MHz
+                    {t('agents.cores', { physical: hardware.cpu.physicalCores, logical: hardware.cpu.logicalCores })} &middot; {hardware.cpu.maxClockMHz} MHz
                   </p>
                 </div>
               )}
               {hardware.gpus.length > 0 && (
                 <div>
-                  <p className="text-md font-bold mb-1">GPU</p>
+                  <p className="text-md font-bold mb-1">{t('agents.gpu')}</p>
                   {hardware.gpus.map((g, i) => {
                     const v = gpuVendor(g.name);
                     return (
                       <div key={i} className="flex items-center gap-2 text-sm">
                         <Chip color={v.color} size="sm" variant="soft">{v.label}</Chip>
-                        <span>{g.name}{g.vramBytes ? ` (${formatBytes(g.vramBytes)})` : ''}</span>
+                        <span>{g.name}{g.vramBytes ? ` (${formatBytes(g.vramBytes, t)})` : ''}</span>
                       </div>
                     );
                   })}
@@ -141,7 +144,7 @@ function HardwareAccordion({ hardware }: { hardware: NonNullable<AgentDetail['ha
         <Accordion.Item key="ram-disks">
           <Accordion.Heading>
             <Accordion.Trigger>
-              RAM &amp; Disks
+              {t('agents.ramDisks')}
               <Accordion.Indicator>
                 <ChevronDown />
               </Accordion.Indicator>
@@ -151,16 +154,16 @@ function HardwareAccordion({ hardware }: { hardware: NonNullable<AgentDetail['ha
             <Accordion.Body className="space-y-3">
               {hardware.ram && (
                 <div>
-                  <p className="text-md font-bold mb-1">RAM</p>
-                  <p className="text-sm">{formatBytes(hardware.ram.totalBytes)}</p>
+                  <p className="text-md font-bold mb-1">{t('agents.ram')}</p>
+                  <p className="text-sm">{formatBytes(hardware.ram.totalBytes, t)}</p>
                 </div>
               )}
               {hardware.disks.length > 0 && (
                 <div>
-                  <p className="text-md font-bold mb-1">Disks</p>
+                  <p className="text-md font-bold mb-1">{t('agents.disks')}</p>
                   {hardware.disks.map((d, i) => (
                     <p key={i} className="text-sm">
-                      {d.model} &mdash; {formatBytes(d.sizeBytes)}{d.mediaType ? ` (${d.mediaType})` : ''}
+                      {d.model} &mdash; {formatBytes(d.sizeBytes, t)}{d.mediaType ? ` (${d.mediaType})` : ''}
                     </p>
                   ))}
                 </div>
@@ -173,7 +176,7 @@ function HardwareAccordion({ hardware }: { hardware: NonNullable<AgentDetail['ha
         <Accordion.Item key="displays">
           <Accordion.Heading>
             <Accordion.Trigger>
-              Displays
+              {t('agents.displays')}
               <Accordion.Indicator>
                 <ChevronDown />
               </Accordion.Indicator>
@@ -194,7 +197,7 @@ function HardwareAccordion({ hardware }: { hardware: NonNullable<AgentDetail['ha
         <Accordion.Item key="motherboard">
           <Accordion.Heading>
             <Accordion.Trigger>
-              Motherboard / BIOS
+              {t('agents.motherboardBios')}
               <Accordion.Indicator>
                 <ChevronDown />
               </Accordion.Indicator>

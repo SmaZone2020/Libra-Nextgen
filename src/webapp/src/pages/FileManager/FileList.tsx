@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import { DataGrid } from '../../components/data-grid';
 import { ContextMenu } from '@components/context-menu';
 import { fileIcon, formatSize } from './fileIcons';
@@ -35,50 +36,52 @@ interface FileListProps {
   contextEntry: FileEntry | null;
 }
 
-const columns: DataGridColumn<FileEntry>[] = [
-  {
-    id: 'name', header: 'Name',
-    cell: (item) => {
-      const Icon = fileIcon(item);
-      return (
-        <div className="flex items-center gap-2">
-          <Icon className="w-4 h-4 shrink-0 text-default-500" />
-          <span className={item.type === 'dir' ? 'font-medium' : ''}>{item.name}</span>
-        </div>
-      );
-    },
-  },
-  {
-    id: 'size', header: 'Size',
-    cell: (item) => (
-      <span className="text-default-500 text-sm tabular-nums">
-        {item.type === 'dir' ? '—' : formatSize(item.size)}
-      </span>
-    ),
-  },
-  {
-    id: 'modified', header: 'Modified',
-    cell: (item) => (
-      <span className="text-default-500 text-sm">
-        {new Date(item.modified).toLocaleString()}
-      </span>
-    ),
-  },
-  {
-    id: 'type', header: 'Type',
-    cell: (item) => (
-      <span className="text-default-500 text-sm">
-        {item.type === 'dir' ? 'Folder' : item.name.split('.').pop()?.toUpperCase() ?? 'File'}
-      </span>
-    ),
-  },
-];
-
 export function FileList({
   entries, loading, error, onRowAction, onContextMenu,
   onRename, onMove, onCopy, onDelete, onCompress, onDecompress, onShortcut, onDownload,
   contextEntry,
 }: FileListProps) {
+  const { t } = useTranslation();
+
+  const columns: DataGridColumn<FileEntry>[] = [
+    {
+      id: 'name', header: t('fileManager.name'),
+      cell: (item) => {
+        const Icon = fileIcon(item);
+        return (
+          <div className="flex items-center gap-2">
+            <Icon className="w-4 h-4 shrink-0 text-default-500" />
+            <span className={item.type === 'dir' ? 'font-medium' : ''}>{item.name}</span>
+          </div>
+        );
+      },
+    },
+    {
+      id: 'size', header: t('fileManager.size'),
+      cell: (item) => (
+        <span className="text-default-500 text-sm tabular-nums">
+          {item.type === 'dir' ? '—' : formatSize(item.size)}
+        </span>
+      ),
+    },
+    {
+      id: 'modified', header: t('fileManager.modified'),
+      cell: (item) => (
+        <span className="text-default-500 text-sm">
+          {new Date(item.modified).toLocaleString()}
+        </span>
+      ),
+    },
+    {
+      id: 'type', header: t('fileManager.type'),
+      cell: (item) => (
+        <span className="text-default-500 text-sm">
+          {item.type === 'dir' ? t('fileManager.folder') : item.name.split('.').pop()?.toUpperCase() ?? t('fileManager.file')}
+        </span>
+      ),
+    },
+  ];
+
   const isFile = contextEntry?.type === 'file';
   const showDecompress = isFile && isArchive(contextEntry.name);
 
@@ -95,7 +98,7 @@ export function FileList({
             scrollContainerClassName="max-h-[calc(100vh-260px)]"
             renderEmptyState={() => (
               <div className="flex justify-center py-8 text-default-500 text-sm">
-                {loading ? 'Loading...' : error ? <span className="text-danger-500">{error}</span> : 'Empty directory.'}
+                {loading ? t('common.loading') : error ? <span className="text-danger-500">{error}</span> : t('fileManager.emptyDir')}
               </div>
             )}
           />
@@ -103,38 +106,38 @@ export function FileList({
       </ContextMenu.Trigger>
       <ContextMenu.Popover>
         <ContextMenu.Menu>
-          <ContextMenu.Item id="rename" textValue="Rename" onAction={onRename}>
-            <Pencil className="w-4 h-4" /> Rename
+          <ContextMenu.Item id="rename" textValue={t('fileManager.rename')} onAction={onRename}>
+            <Pencil className="w-4 h-4" /> {t('fileManager.rename')}
           </ContextMenu.Item>
-          <ContextMenu.Item id="move" textValue="Move" onAction={onMove}>
-            <ArrowRightFromSquare className="w-4 h-4" /> Move
+          <ContextMenu.Item id="move" textValue={t('fileManager.move')} onAction={onMove}>
+            <ArrowRightFromSquare className="w-4 h-4" /> {t('fileManager.move')}
           </ContextMenu.Item>
-          <ContextMenu.Item id="copy" textValue="Copy" onAction={onCopy}>
-            <Copy className="w-4 h-4" /> Copy
+          <ContextMenu.Item id="copy" textValue={t('fileManager.copy')} onAction={onCopy}>
+            <Copy className="w-4 h-4" /> {t('fileManager.copy')}
           </ContextMenu.Item>
           <ContextMenu.Separator />
-          <ContextMenu.Item id="compress" textValue="Compress" onAction={onCompress}>
-            <Archive className="w-4 h-4" /> Compress
+          <ContextMenu.Item id="compress" textValue={t('fileManager.compress')} onAction={onCompress}>
+            <Archive className="w-4 h-4" /> {t('fileManager.compress')}
           </ContextMenu.Item>
           {showDecompress && (
-            <ContextMenu.Item id="decompress" textValue="Decompress" onAction={onDecompress}>
-              <FileZipper className="w-4 h-4" /> Decompress
+            <ContextMenu.Item id="decompress" textValue={t('fileManager.decompress')} onAction={onDecompress}>
+              <FileZipper className="w-4 h-4" /> {t('fileManager.decompress')}
             </ContextMenu.Item>
           )}
-          <ContextMenu.Item id="shortcut" textValue="Create Shortcut" onAction={onShortcut}>
-            <Link className="w-4 h-4" /> Create Shortcut
+          <ContextMenu.Item id="shortcut" textValue={t('fileManager.createShortcut')} onAction={onShortcut}>
+            <Link className="w-4 h-4" /> {t('fileManager.createShortcut')}
           </ContextMenu.Item>
           {isFile && (
             <>
               <ContextMenu.Separator />
-              <ContextMenu.Item id="download" textValue="Download" onAction={onDownload}>
-                <ArrowDownToLine className="w-4 h-4" /> Download
+              <ContextMenu.Item id="download" textValue={t('fileManager.download')} onAction={onDownload}>
+                <ArrowDownToLine className="w-4 h-4" /> {t('fileManager.download')}
               </ContextMenu.Item>
             </>
           )}
           <ContextMenu.Separator />
-          <ContextMenu.Item id="delete" textValue="Delete" onAction={onDelete}>
-            <TrashBin className="w-4 h-4" /> Delete
+          <ContextMenu.Item id="delete" textValue={t('fileManager.delete')} onAction={onDelete}>
+            <TrashBin className="w-4 h-4" /> {t('fileManager.delete')}
           </ContextMenu.Item>
         </ContextMenu.Menu>
       </ContextMenu.Popover>

@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Tabs } from '@heroui/react';
 import { getAgents, getAgent, deleteAgent } from '../../api/agents';
 import { AgentTable } from './AgentTable';
@@ -8,6 +9,7 @@ import { useDialog } from '../../hooks/useDialog';
 import type { AgentListItem, AgentDetail } from '../../types/models';
 
 export default function AgentsPage() {
+  const { t } = useTranslation();
   const { agentId, selectAgent, disconnect: disconnectAgent } = useAgent();
   const { confirm, DialogComponent } = useDialog();
   const [agents, setAgents] = useState<AgentListItem[]>([]);
@@ -68,7 +70,7 @@ export default function AgentsPage() {
   const handleRemove = async () => {
     const id = contextAgentRef.current;
     if (!id) return;
-    const { confirmed } = await confirm('Remove this agent?');
+    const { confirmed } = await confirm(t('agents.removeConfirm'));
     if (!confirmed) return;
     await deleteAgent(id);
     loadAgents();
@@ -81,10 +83,10 @@ export default function AgentsPage() {
         onSelectionChange={(key) => handleTabChange(String(key))}
       >
         <Tabs.ListContainer className="flex justify-center">
-          <Tabs.List aria-label="Agent filters" className="mx-auto w-md">
-            <Tabs.Tab id="all">All<Tabs.Indicator /></Tabs.Tab>
-            <Tabs.Tab id="online">Online<Tabs.Indicator /></Tabs.Tab>
-            <Tabs.Tab id="offline">Offline<Tabs.Indicator /></Tabs.Tab>
+          <Tabs.List aria-label={t('agents.agentFilters')} className="mx-auto w-md">
+            <Tabs.Tab id="all">{t('agents.all')}<Tabs.Indicator /></Tabs.Tab>
+            <Tabs.Tab id="online">{t('agents.online')}<Tabs.Indicator /></Tabs.Tab>
+            <Tabs.Tab id="offline">{t('agents.offline')}<Tabs.Indicator /></Tabs.Tab>
           </Tabs.List>
         </Tabs.ListContainer>
         <Tabs.Panel id="all">

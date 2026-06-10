@@ -1,7 +1,9 @@
 import type { ComponentType, ReactNode, SVGProps } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { Bars, Xmark } from '@gravity-ui/icons';
-import { Button, Tooltip } from '@heroui/react';
+import { Bars, Globe, Xmark } from '@gravity-ui/icons';
+import { Button, Dropdown, Label, Tooltip } from '@heroui/react';
+import { useTranslation } from 'react-i18next';
+import { switchLang } from '../../i18n';
 import { useLocation, useNavigate } from 'react-router-dom';
 
 interface NavItem {
@@ -23,6 +25,7 @@ export function Sidebar({
   items,
   onToggle,
 }: SidebarProps) {
+  const { t, i18n } = useTranslation();
   const location = useLocation();
   const navigate = useNavigate();
   return (
@@ -65,7 +68,7 @@ export function Sidebar({
                 {collapsed ? <Bars className="w-5 h-5" /> : <Xmark className="w-5 h-5" />}
               </Button>
               <Tooltip.Content>
-                <p>{collapsed ? 'Expand sidebar' : 'Collapse sidebar'}</p>
+                <p>{collapsed ? t('nav.expandSidebar') : t('nav.collapseSidebar')}</p>
               </Tooltip.Content>
             </Tooltip>
           </div>
@@ -77,6 +80,7 @@ export function Sidebar({
           >
             {items.map((item) => {
               const isActive = location.pathname === item.to;
+              const label = t(item.label);
               return (
                 <motion.div key={item.to} layout className="flex items-center">
                   <Tooltip delay={0} isDisabled={!collapsed}>
@@ -95,11 +99,11 @@ export function Sidebar({
                           opacity: collapsed ? 0 : 1,
                         }}
                       >
-                        {item.label}
+                        {label}
                       </span>
                     </Button>
                     <Tooltip.Content showArrow placement="right">
-                      {item.label}
+                      {label}
                     </Tooltip.Content>
                   </Tooltip>
                   <AnimatePresence>
@@ -120,7 +124,7 @@ export function Sidebar({
 
           <motion.div
             layout
-            className="pt-4 border-t border-neutral-200 w-full"
+            className="pt-4 border-t border-neutral-200 w-full space-y-2"
           >
             <AnimatePresence initial={false}>
               {!collapsed && (
@@ -131,10 +135,43 @@ export function Sidebar({
                   transition={{ duration: 0.2 }}
                   className="text-xs text-neutral-500 px-3 truncate"
                 >
-                  {items.length} pages
+                  {t('nav.pages', { count: items.length })}
                 </motion.p>
               )}
             </AnimatePresence>
+
+            <motion.div layout className="flex justify-center px-1">
+              <Dropdown>
+                <Button
+                  isIconOnly={collapsed}
+                  size="sm"
+                  variant="ghost"
+                  aria-label={t('nav.toggleSidebar')}
+                  className={collapsed ? 'h-9 w-9' : 'flex-1 justify-start px-3'}
+                >
+                  <Globe className="w-4 h-4 shrink-0" />
+                  {!collapsed && (
+                    <span className="text-sm font-medium ml-2">
+                      {i18n.language === 'zh' ? '中文' : 'English'}
+                    </span>
+                  )}
+                </Button>
+                <Dropdown.Popover>
+                  <Dropdown.Menu
+                    selectedKeys={[i18n.language]}
+                    selectionMode="single"
+                    onAction={(key) => switchLang(key as 'en' | 'zh')}
+                  >
+                    <Dropdown.Item id="en" textValue="English">
+                      <Label>English</Label>
+                    </Dropdown.Item>
+                    <Dropdown.Item id="zh" textValue="中文">
+                      <Label>中文</Label>
+                    </Dropdown.Item>
+                  </Dropdown.Menu>
+                </Dropdown.Popover>
+              </Dropdown>
+            </motion.div>
           </motion.div>
         </div>
       </aside>
@@ -153,7 +190,7 @@ export function Sidebar({
                 onClick={() => navigate(item.to)}
               >
                 <item.icon className="w-5 h-5" />
-                <span className="text-[10px] leading-none truncate">{item.label}</span>
+                <span className="text-[10px] leading-none truncate">{t(item.label)}</span>
               </button>
             );
           })}

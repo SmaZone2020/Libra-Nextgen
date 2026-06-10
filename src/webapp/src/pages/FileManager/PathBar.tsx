@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Button, Card, ComboBox, Input, ListBox, Tooltip } from '@heroui/react';
 import { Breadcrumbs } from '@heroui/react/breadcrumbs';
 import { FolderArrowLeft, FolderTree } from '@gravity-ui/icons';
@@ -14,6 +15,8 @@ interface PathBarProps {
 }
 
 export function PathBar({ path, drives, historyLength, onGoBack, onGoUp, onDriveChange, onNavigate }: PathBarProps) {
+  const { t } = useTranslation();
+
   const driveItems = useMemo(() => drives.map(d => ({ id: d, label: d })), [drives]);
 
   const breadcrumbs = useMemo(() => {
@@ -32,7 +35,7 @@ export function PathBar({ path, drives, historyLength, onGoBack, onGoUp, onDrive
           <FolderArrowLeft className="w-4 h-4" />
         </Button>
         <Tooltip.Content>
-          <p>Go Back</p>
+          <p>{t('fileManager.goBack')}</p>
         </Tooltip.Content>
       </Tooltip>
       <Tooltip delay={0}>
@@ -40,7 +43,7 @@ export function PathBar({ path, drives, historyLength, onGoBack, onGoUp, onDrive
           <FolderTree className="w-4 h-4" />
         </Button>
         <Tooltip.Content>
-          <p>Go Up</p>
+          <p>{t('fileManager.goUp')}</p>
         </Tooltip.Content>
       </Tooltip>
 
@@ -51,10 +54,10 @@ export function PathBar({ path, drives, historyLength, onGoBack, onGoUp, onDrive
         onSelectionChange={(key) => {
           if (key) onDriveChange(String(key));
         }}
-        aria-label="Select drive"
+        aria-label={t('fileManager.selectDrive')}
       >
         <ComboBox.InputGroup>
-          <Input placeholder="Drive..." />
+          <Input placeholder={t('fileManager.drive')} />
           <ComboBox.Trigger />
         </ComboBox.InputGroup>
         <ComboBox.Popover>

@@ -58,7 +58,7 @@ export function AgentSelector({ agents, selectedId, connected, lockMode, onSelec
       )}
 
       {connected && (
-        <Button size="sm" variant="ghost" onPress={onDisconnect}>
+        <Button size="sm" variant="tertiary" onPress={onDisconnect}>
           Disconnect
         </Button>
       )}

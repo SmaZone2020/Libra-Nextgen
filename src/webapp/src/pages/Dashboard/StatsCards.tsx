@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import { KPI } from '../../components/kpi';
 
 interface StatsCardsProps {
@@ -5,11 +6,12 @@ interface StatsCardsProps {
 }
 
 export function StatsCards({ stats }: StatsCardsProps) {
+  const { t } = useTranslation();
   const cards = [
-    { title: 'Total Agents', value: stats.agents, trend: 'up' as const },
-    { title: 'Online', value: stats.online, trend: 'up' as const },
-    { title: 'Total Tasks', value: stats.tasks, trend: 'neutral' as const },
-    { title: 'Pending', value: stats.pending, trend: 'neutral' as const },
+    { title: t('dashboard.totalAgents'), value: stats.agents, trend: 'up' as const },
+    { title: t('dashboard.online'), value: stats.online, trend: 'up' as const },
+    { title: t('dashboard.totalTasks'), value: stats.tasks, trend: 'neutral' as const },
+    { title: t('dashboard.pending'), value: stats.pending, trend: 'neutral' as const },
   ];
 
   return (
@@ -21,7 +23,7 @@ export function StatsCards({ stats }: StatsCardsProps) {
           </KPI.Header>
           <KPI.Content>
             <KPI.Value value={c.value} />
-            <KPI.Trend trend={c.trend}>{c.trend === 'up' ? 'Active' : 'Steady'}</KPI.Trend>
+            <KPI.Trend trend={c.trend}>{c.trend === 'up' ? t('dashboard.active') : t('dashboard.steady')}</KPI.Trend>
           </KPI.Content>
         </KPI>
       ))}

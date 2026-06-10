@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import { Button } from '@heroui/react';
 
 interface PaginationProps {
@@ -10,12 +11,13 @@ interface PaginationProps {
 }
 
 export function Pagination({ page, totalPages, total, pageSize, loading, onPageChange }: PaginationProps) {
+  const { t } = useTranslation();
   return (
     <div className="flex items-center justify-between mt-4 pt-4 border-t border-neutral-200">
       <span className="text-sm text-default-500">
         {total > 0
-          ? `Showing ${(page - 1) * pageSize + 1}-${Math.min(page * pageSize, total)} of ${total}`
-          : 'No results'}
+          ? t('audit.showing', { start: (page - 1) * pageSize + 1, end: Math.min(page * pageSize, total), total })
+          : t('common.noResults')}
       </span>
       <div className="flex items-center gap-2">
         <Button
@@ -24,10 +26,10 @@ export function Pagination({ page, totalPages, total, pageSize, loading, onPageC
           isDisabled={page <= 1 || loading}
           onPress={() => onPageChange(page - 1)}
         >
-          Previous
+          {t('audit.previous')}
         </Button>
         <span className="text-sm text-default-600">
-          Page {page} / {totalPages}
+          {t('audit.page', { page, totalPages })}
         </span>
         <Button
           size="sm"
@@ -35,7 +37,7 @@ export function Pagination({ page, totalPages, total, pageSize, loading, onPageC
           isDisabled={page >= totalPages || loading}
           onPress={() => onPageChange(page + 1)}
         >
-          Next
+          {t('audit.next')}
         </Button>
       </div>
     </div>

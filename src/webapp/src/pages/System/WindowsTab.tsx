@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Button } from '@heroui/react';
 import {
   CircleXmark, ArrowUp, ArrowDown, Xmark,
@@ -11,40 +12,41 @@ import { useDialog } from '../../hooks/useDialog';
 import type { DataGridColumn } from '../../components/data-grid';
 import type { WindowItem } from '../../types/models';
 
-const columns: DataGridColumn<WindowItem>[] = [
-  {
-    id: 'hwnd', header: 'HWND',
-    cell: (item) => <span className="font-mono text-sm tabular-nums">{item.hwnd}</span>,
-    isRowHeader: true,
-  },
-  {
-    id: 'title', header: 'Title',
-    cell: (item) => <span className="truncate max-w-[300px]">{item.title}</span>,
-  },
-  {
-    id: 'processName', header: 'Process',
-    cell: (item) => <span className="font-mono text-sm">{item.processName}</span>,
-  },
-  {
-    id: 'processId', header: 'PID',
-    cell: (item) => <span className="font-mono text-sm tabular-nums">{item.processId}</span>,
-  },
-  {
-    id: 'className', header: 'Class',
-    cell: (item) => <span className="text-default-500 text-sm">{item.className}</span>,
-  },
-];
-
 interface WindowsTabProps {
   agentId: string;
 }
 
 export function WindowsTab({ agentId }: WindowsTabProps) {
+  const { t } = useTranslation();
   const [windows, setWindows] = useState<WindowItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [supported, setSupported] = useState(true);
   const contextRef = useRef<WindowItem | null>(null);
   const { prompt, DialogComponent } = useDialog();
+
+  const columns: DataGridColumn<WindowItem>[] = [
+    {
+      id: 'hwnd', header: 'HWND',
+      cell: (item) => <span className="font-mono text-sm tabular-nums">{item.hwnd}</span>,
+      isRowHeader: true,
+    },
+    {
+      id: 'title', header: 'Title',
+      cell: (item) => <span className="truncate max-w-[300px]">{item.title}</span>,
+    },
+    {
+      id: 'processName', header: t('agents.process'),
+      cell: (item) => <span className="font-mono text-sm">{item.processName}</span>,
+    },
+    {
+      id: 'processId', header: 'PID',
+      cell: (item) => <span className="font-mono text-sm tabular-nums">{item.processId}</span>,
+    },
+    {
+      id: 'className', header: 'Class',
+      cell: (item) => <span className="text-default-500 text-sm">{item.className}</span>,
+    },
+  ];
 
   const fetchWindows = useCallback(async () => {
     setLoading(true);
@@ -107,7 +109,7 @@ export function WindowsTab({ agentId }: WindowsTabProps) {
   const handleSetTitle = async () => {
     const w = contextRef.current;
     if (!w) return;
-    const { confirmed, value } = await prompt('New window title:', w.title);
+    const { confirmed, value } = await prompt(t('system.newTitlePrompt'), w.title);
     if (!confirmed || !value || value === w.title) return;
     await setWindowTitle(agentId, w.hwnd, value);
     fetchWindows();
@@ -116,7 +118,7 @@ export function WindowsTab({ agentId }: WindowsTabProps) {
   if (!supported) {
     return (
       <div className="flex items-center justify-center py-20 text-neutral-500 text-sm select-none">
-        Window enumeration is only supported on Windows agents.
+        {t('system.windowsAgentOnly')}
       </div>
     );
   }
@@ -125,9 +127,9 @@ export function WindowsTab({ agentId }: WindowsTabProps) {
     <div className="space-y-3">
       <div className="flex items-center gap-3">
         <Button size="sm" variant="tertiary" onPress={fetchWindows} isDisabled={loading}>
-          Refresh
+          {t('common.refresh')}
         </Button>
-        <span className="text-sm text-default-500">{windows.length} windows</span>
+        <span className="text-sm text-default-500">{t('system.windowsCount', { count: windows.length })}</span>
       </div>
 
       <ContextMenu>
@@ -141,7 +143,7 @@ export function WindowsTab({ agentId }: WindowsTabProps) {
               scrollContainerClassName="max-h-[calc(100vh-300px)]"
               renderEmptyState={() => (
                 <div className="flex justify-center py-8 text-default-500 text-sm">
-                  {loading ? 'Loading windows...' : 'No visible windows found.'}
+                  {loading ? t('system.loadingWindows') : t('system.noWindows')}
                 </div>
               )}
             />
@@ -149,29 +151,29 @@ export function WindowsTab({ agentId }: WindowsTabProps) {
         </ContextMenu.Trigger>
         <ContextMenu.Popover>
           <ContextMenu.Menu>
-            <ContextMenu.Item id="kill" textValue="Kill Process" onAction={handleKillProcess}>
-              <CircleXmark className="w-4 h-4" /> Kill Process
+            <ContextMenu.Item id="kill" textValue={t('system.killProcess')} onAction={handleKillProcess}>
+              <CircleXmark className="w-4 h-4" /> {t('system.killProcess')}
             </ContextMenu.Item>
             <ContextMenu.Separator />
-            <ContextMenu.Item id="topmost" textValue="Set Topmost" onAction={handleTopmost}>
-              <ArrowUp className="w-4 h-4" /> Set Topmost
+            <ContextMenu.Item id="topmost" textValue={t('system.setTopmost')} onAction={handleTopmost}>
+              <ArrowUp className="w-4 h-4" /> {t('system.setTopmost')}
             </ContextMenu.Item>
-            <ContextMenu.Item id="bottom" textValue="Set Bottom" onAction={handleBottom}>
-              <ArrowDown className="w-4 h-4" /> Set Bottom
-            </ContextMenu.Item>
-            <ContextMenu.Separator />
-            <ContextMenu.Item id="close" textValue="Close" onAction={handleClose}>
-              <Xmark className="w-4 h-4" /> Close
-            </ContextMenu.Item>
-            <ContextMenu.Item id="minimize" textValue="Minimize" onAction={handleMinimize}>
-              <ArrowDownToLine className="w-4 h-4" /> Minimize
-            </ContextMenu.Item>
-            <ContextMenu.Item id="maximize" textValue="Maximize" onAction={handleMaximize}>
-              <ArrowUpFromLine className="w-4 h-4" /> Maximize
+            <ContextMenu.Item id="bottom" textValue={t('system.setBottom')} onAction={handleBottom}>
+              <ArrowDown className="w-4 h-4" /> {t('system.setBottom')}
             </ContextMenu.Item>
             <ContextMenu.Separator />
-            <ContextMenu.Item id="settitle" textValue="Change Title" onAction={handleSetTitle}>
-              <Pencil className="w-4 h-4" /> Change Title
+            <ContextMenu.Item id="close" textValue={t('common.close')} onAction={handleClose}>
+              <Xmark className="w-4 h-4" /> {t('common.close')}
+            </ContextMenu.Item>
+            <ContextMenu.Item id="minimize" textValue={t('system.minimize')} onAction={handleMinimize}>
+              <ArrowDownToLine className="w-4 h-4" /> {t('system.minimize')}
+            </ContextMenu.Item>
+            <ContextMenu.Item id="maximize" textValue={t('system.maximize')} onAction={handleMaximize}>
+              <ArrowUpFromLine className="w-4 h-4" /> {t('system.maximize')}
+            </ContextMenu.Item>
+            <ContextMenu.Separator />
+            <ContextMenu.Item id="settitle" textValue={t('system.changeTitle')} onAction={handleSetTitle}>
+              <Pencil className="w-4 h-4" /> {t('system.changeTitle')}
             </ContextMenu.Item>
           </ContextMenu.Menu>
         </ContextMenu.Popover>
