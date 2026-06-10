@@ -4,9 +4,11 @@ import type { FileEntry } from '../../api/files';
 import { PathBar } from './PathBar';
 import { FileList } from './FileList';
 import { useAgent } from '../../contexts/AgentContext';
+import { useDialog } from '../../hooks/useDialog';
 
 export default function FileManagerPage() {
   const { agentId } = useAgent();
+  const { alert, confirm, prompt, DialogComponent } = useDialog();
   const [path, setPath] = useState('C:\\');
   const [entries, setEntries] = useState<FileEntry[]>([]);
   const [loading, setLoading] = useState(false);
@@ -17,7 +19,6 @@ export default function FileManagerPage() {
   const contextRef = useRef<FileEntry | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const [contextEntry, setContextEntry] = useState<FileEntry | null>(null);
-  const clipboardRef = useRef<{ op: 'cut' | 'copy'; path: string } | null>(null);
 
   const sendFileList = useCallback(async (dirPath: string, id?: string) => {
     const targetId = id || agentId;
@@ -116,48 +117,49 @@ export default function FileManagerPage() {
 
   const handleRename = async () => {
     if (!agentId || !contextRef.current) return;
-    const newName = prompt('New name:', contextRef.current.name);
-    if (!newName || newName === contextRef.current.name) return;
+    const { confirmed, value } = await prompt('New name:', contextRef.current.name);
+    if (!confirmed || !value || value === contextRef.current.name) return;
     try {
-      await renameFile(agentId, getContextPath(), newName);
+      await renameFile(agentId, getContextPath(), value);
       sendFileList(path);
     } catch (e) {
-      alert(e instanceof Error ? e.message : 'Rename failed');
+      await alert(e instanceof Error ? e.message : 'Rename failed');
     }
   };
 
   const handleMove = async () => {
     if (!agentId || !contextRef.current) return;
-    const dest = prompt('Move to (destination path):');
-    if (!dest) return;
+    const { confirmed, value } = await prompt('Move to (destination path):');
+    if (!confirmed || !value) return;
     try {
-      await moveFile(agentId, getContextPath(), dest);
+      await moveFile(agentId, getContextPath(), value);
       sendFileList(path);
     } catch (e) {
-      alert(e instanceof Error ? e.message : 'Move failed');
+      await alert(e instanceof Error ? e.message : 'Move failed');
     }
   };
 
   const handleCopy = async () => {
     if (!agentId || !contextRef.current) return;
-    const dest = prompt('Copy to (destination path):');
-    if (!dest) return;
+    const { confirmed, value } = await prompt('Copy to (destination path):');
+    if (!confirmed || !value) return;
     try {
-      await copyFile(agentId, getContextPath(), dest);
+      await copyFile(agentId, getContextPath(), value);
       sendFileList(path);
     } catch (e) {
-      alert(e instanceof Error ? e.message : 'Copy failed');
+      await alert(e instanceof Error ? e.message : 'Copy failed');
     }
   };
 
   const handleDelete = async () => {
     if (!agentId || !contextRef.current) return;
-    if (!confirm(`Delete "${contextRef.current.name}"?`)) return;
+    const { confirmed } = await confirm(`Delete "${contextRef.current.name}"?`);
+    if (!confirmed) return;
     try {
       await deleteFile(agentId, getContextPath());
       sendFileList(path);
     } catch (e) {
-      alert(e instanceof Error ? e.message : 'Delete failed');
+      await alert(e instanceof Error ? e.message : 'Delete failed');
     }
   };
 
@@ -167,7 +169,7 @@ export default function FileManagerPage() {
       await compressFile(agentId, getContextPath());
       sendFileList(path);
     } catch (e) {
-      alert(e instanceof Error ? e.message : 'Compress failed');
+      await alert(e instanceof Error ? e.message : 'Compress failed');
     }
   };
 
@@ -177,7 +179,7 @@ export default function FileManagerPage() {
       await decompressFile(agentId, getContextPath());
       sendFileList(path);
     } catch (e) {
-      alert(e instanceof Error ? e.message : 'Decompress failed');
+      await alert(e instanceof Error ? e.message : 'Decompress failed');
     }
   };
 
@@ -187,7 +189,7 @@ export default function FileManagerPage() {
       await createShortcut(agentId, getContextPath());
       sendFileList(path);
     } catch (e) {
-      alert(e instanceof Error ? e.message : 'Create shortcut failed');
+      await alert(e instanceof Error ? e.message : 'Create shortcut failed');
     }
   };
 
@@ -196,7 +198,7 @@ export default function FileManagerPage() {
     try {
       await downloadFile(agentId, getContextPath());
     } catch (e) {
-      alert(e instanceof Error ? e.message : 'Download failed');
+      await alert(e instanceof Error ? e.message : 'Download failed');
     }
   };
 
@@ -240,6 +242,8 @@ export default function FileManagerPage() {
         onShortcut={handleShortcut}
         onDownload={handleDownload}
       />
+
+      {DialogComponent}
     </div>
   );
 }

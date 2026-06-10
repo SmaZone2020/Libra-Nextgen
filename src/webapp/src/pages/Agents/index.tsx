@@ -4,10 +4,12 @@ import { getAgents, getAgent, deleteAgent } from '../../api/agents';
 import { AgentTable } from './AgentTable';
 import { AgentDetailModal } from './AgentDetailModal';
 import { useAgent } from '../../contexts/AgentContext';
+import { useDialog } from '../../hooks/useDialog';
 import type { AgentListItem, AgentDetail } from '../../types/models';
 
 export default function AgentsPage() {
   const { agentId, selectAgent, disconnect: disconnectAgent } = useAgent();
+  const { confirm, DialogComponent } = useDialog();
   const [agents, setAgents] = useState<AgentListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<string>('online');
@@ -65,7 +67,9 @@ export default function AgentsPage() {
 
   const handleRemove = async () => {
     const id = contextAgentRef.current;
-    if (!id || !confirm('Remove this agent?')) return;
+    if (!id) return;
+    const { confirmed } = await confirm('Remove this agent?');
+    if (!confirmed) return;
     await deleteAgent(id);
     loadAgents();
   };
@@ -100,6 +104,8 @@ export default function AgentsPage() {
         agent={modalAgent}
         loading={modalLoading}
       />
+
+      {DialogComponent}
     </div>
   );
 }

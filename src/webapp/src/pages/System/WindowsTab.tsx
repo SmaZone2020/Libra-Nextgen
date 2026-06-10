@@ -7,6 +7,7 @@ import {
 import { getWindows, killProcess, closeWindow, minimizeWindow, maximizeWindow, setWindowTopmost, setWindowBottom, setWindowTitle } from '../../api/system';
 import { DataGrid } from '../../components/data-grid';
 import { ContextMenu } from '@components/context-menu';
+import { useDialog } from '../../hooks/useDialog';
 import type { DataGridColumn } from '../../components/data-grid';
 import type { WindowItem } from '../../types/models';
 
@@ -43,6 +44,7 @@ export function WindowsTab({ agentId }: WindowsTabProps) {
   const [loading, setLoading] = useState(true);
   const [supported, setSupported] = useState(true);
   const contextRef = useRef<WindowItem | null>(null);
+  const { prompt, DialogComponent } = useDialog();
 
   const fetchWindows = useCallback(async () => {
     setLoading(true);
@@ -105,9 +107,9 @@ export function WindowsTab({ agentId }: WindowsTabProps) {
   const handleSetTitle = async () => {
     const w = contextRef.current;
     if (!w) return;
-    const newTitle = prompt('New window title:', w.title);
-    if (newTitle == null || newTitle === w.title) return;
-    await setWindowTitle(agentId, w.hwnd, newTitle);
+    const { confirmed, value } = await prompt('New window title:', w.title);
+    if (!confirmed || !value || value === w.title) return;
+    await setWindowTitle(agentId, w.hwnd, value);
     fetchWindows();
   };
 
@@ -122,7 +124,7 @@ export function WindowsTab({ agentId }: WindowsTabProps) {
   return (
     <div className="space-y-3">
       <div className="flex items-center gap-3">
-        <Button size="sm" variant="ghost" onPress={fetchWindows} isDisabled={loading}>
+        <Button size="sm" variant="tertiary" onPress={fetchWindows} isDisabled={loading}>
           Refresh
         </Button>
         <span className="text-sm text-default-500">{windows.length} windows</span>
@@ -174,6 +176,8 @@ export function WindowsTab({ agentId }: WindowsTabProps) {
           </ContextMenu.Menu>
         </ContextMenu.Popover>
       </ContextMenu>
+
+      {DialogComponent}
     </div>
   );
 }
