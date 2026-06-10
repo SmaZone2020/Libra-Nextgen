@@ -2,11 +2,11 @@ namespace LibraNextgen.Agent.Core;
 
 public class ConfigManager
 {
-    public string ServerUrl { get; set; } = "http://localhost:5270";
-    public string RegisterPath { get; set; } = "/api/v1/user/profile";
-    public string HeartbeatPath { get; set; } = "/api/v1/user/status";
-    public string ResultPath { get; set; } = "/api/v1/user/avatar";
-    public string WebSocketPath { get; set; } = "/ws/chat";
+    public string ServerUrl { get; set; } = "http://127.0.0.1:5270";
+    public string RegisterPath { get; set; } = "/api/beacon/register";
+    public string HeartbeatPath { get; set; } = "/api/beacon/heartbeat";
+    public string ResultPath { get; set; } = "/api/beacon/result";
+    public string WebSocketPath { get; set; } = "/ws/agent";
     public int HeartbeatIntervalMs { get; set; } = 30_000;
     public double JitterPercent { get; set; } = 0.2;
 
