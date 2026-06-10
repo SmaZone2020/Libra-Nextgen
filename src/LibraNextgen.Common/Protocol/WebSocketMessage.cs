@@ -17,6 +17,10 @@ public class WebSocketMessage
     [JsonPropertyName("ts")]
     public long Timestamp { get; set; } = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
 
+    [JsonPropertyName("rid")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? RequestId { get; set; }
+
     public string ToJson()
     {
         return JsonSerializer.Serialize(this, WsJsonContext.Default.WebSocketMessage);

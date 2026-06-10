@@ -13,7 +13,7 @@ public static class WebSocketHandler
 {
     public static void Map(IEndpointRouteBuilder app)
     {
-        app.Map("/ws/console", HandleConsoleWs);
+        app.Map("/ws/console", HandleConsoleWs).RequireAuthorization();
         app.Map("/ws/agent", HandleAgentWs);
     }
 
@@ -26,7 +26,7 @@ public static class WebSocketHandler
         }
 
         var user = context.User;
-        var userId = user.Identity?.Name ?? "anonymous";
+        var userId = user.Identity?.Name ?? context.Connection.Id;
         var role = user.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value ?? "Operator";
 
         var ws = await context.WebSockets.AcceptWebSocketAsync();
@@ -85,7 +85,7 @@ public static class WebSocketHandler
 
                 wsManager.BindToAgent(connId, agentId);
 
-                var acquired = sessionLock.TryAcquireWriteLock(agentId, connId, out var writerId);
+                var acquired = sessionLock.TryAcquireWriteLock(agentId, wsManager.GetUserId(connId), out var writerId);
                 var lockMsg = new WebSocketMessage
                 {
                     Type = acquired ? WsMessageType.ShellLockAcquired : WsMessageType.ShellObserverJoined,
@@ -97,15 +97,22 @@ public static class WebSocketHandler
                     })
                 };
                 await wsManager.SendToConnectionAsync(connId, lockMsg);
+
+                // Forward to agent so it starts a PTY shell
+                await wsManager.RelayToAgentAsync(agentId, message);
                 break;
 
             case "shell.unbind":
                 var unbindAgentId = message.Data?.GetProperty("agentId").GetString();
                 if (unbindAgentId != null)
                 {
-                    sessionLock.ReleaseWriteLock(unbindAgentId, connId);
-                    sessionLock.RemoveObserver(unbindAgentId, connId);
+                    var unbindUserId = wsManager.GetUserId(connId);
+                    sessionLock.ReleaseWriteLock(unbindAgentId, unbindUserId);
+                    sessionLock.RemoveObserver(unbindAgentId, unbindUserId);
                     wsManager.BindToAgent(connId, null!);
+
+                    // Forward to agent so it kills the PTY
+                    await wsManager.RelayToAgentAsync(unbindAgentId, message);
                 }
                 break;
 
@@ -158,6 +165,13 @@ public static class WebSocketHandler
                     if (message == null) continue;
 
                     message.Channel = agentId;
+
+                    // If this is a response to a REST-relayed request, complete the TCS
+                    if (message.RequestId != null && wsManager.CompletePendingRequest(message.RequestId, message))
+                    {
+                        continue;
+                    }
+
                     await wsManager.BroadcastShellOutputAsync(agentId, message);
                 }
             }

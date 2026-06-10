@@ -12,6 +12,7 @@ namespace LibraNextgen.Service.Services;
 public class ConnectionManager
 {
     private readonly ConcurrentDictionary<string, ConnectionInfo> _connections = new();
+    private readonly ConcurrentDictionary<string, TaskCompletionSource<WebSocketMessage>> _pendingRequests = new();
     private readonly ISessionLock _sessionLock;
 
     public ConnectionManager(ISessionLock sessionLock)
@@ -45,11 +46,54 @@ public class ConnectionManager
         }
     }
 
+    /// <summary>
+    /// Register a pending request for REST→Agent→REST correlation.
+    /// </summary>
+    public TaskCompletionSource<WebSocketMessage> RegisterPendingRequest(string requestId)
+    {
+        var tcs = new TaskCompletionSource<WebSocketMessage>(TaskCreationOptions.RunContinuationsAsynchronously);
+        _pendingRequests[requestId] = tcs;
+        // Auto-cleanup after 30s to prevent memory leaks
+        _ = Task.Delay(TimeSpan.FromSeconds(30)).ContinueWith(_ =>
+        {
+            if (_pendingRequests.TryRemove(requestId, out var stale))
+                stale.TrySetCanceled();
+        });
+        return tcs;
+    }
+
+    /// <summary>
+    /// Complete a pending request with the agent's response.
+    /// Returns true if a matching request was found and completed.
+    /// </summary>
+    public bool CompletePendingRequest(string requestId, WebSocketMessage message)
+    {
+        if (_pendingRequests.TryRemove(requestId, out var tcs))
+        {
+            return tcs.TrySetResult(message);
+        }
+        return false;
+    }
+
     public void BindToAgent(string connectionId, string agentId)
     {
         if (_connections.TryGetValue(connectionId, out var info))
         {
             info.AgentId = agentId;
+        }
+    }
+
+    public async Task RelayToAgentAsync(string agentId, WebSocketMessage message, CancellationToken ct = default)
+    {
+        foreach (var (_, info) in _connections)
+        {
+            if (info.Type == "agent" && info.AgentId == agentId && info.Socket.State == WebSocketState.Open)
+            {
+                var json = message.ToJson();
+                var bytes = Encoding.UTF8.GetBytes(json);
+                await info.Socket.SendAsync(new ArraySegment<byte>(bytes), WebSocketMessageType.Text, true, ct);
+                return;
+            }
         }
     }
 
@@ -135,6 +179,11 @@ public class ConnectionManager
     public bool IsConsoleConnection(string connectionId)
     {
         return _connections.TryGetValue(connectionId, out var info) && info.Type == "console";
+    }
+
+    public string GetUserId(string connectionId)
+    {
+        return _connections.TryGetValue(connectionId, out var info) ? info.UserId : connectionId;
     }
 
     public class ConnectionInfo
