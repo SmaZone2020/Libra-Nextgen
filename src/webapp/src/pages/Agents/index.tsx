@@ -3,9 +3,11 @@ import { Tabs } from '@heroui/react';
 import { getAgents, getAgent, deleteAgent } from '../../api/agents';
 import { AgentTable } from './AgentTable';
 import { AgentDetailModal } from './AgentDetailModal';
+import { useAgent } from '../../contexts/AgentContext';
 import type { AgentListItem, AgentDetail } from '../../types/models';
 
 export default function AgentsPage() {
+  const { agentId, selectAgent, disconnect: disconnectAgent } = useAgent();
   const [agents, setAgents] = useState<AgentListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<string>('online');
@@ -37,6 +39,15 @@ export default function AgentsPage() {
   const handleContextMenu = (e: React.MouseEvent) => {
     const row = (e.target as HTMLElement).closest('[role="row"][data-key]');
     contextAgentRef.current = row ? row.getAttribute('data-key') : null;
+  };
+
+  const handleConnect = () => {
+    const id = contextAgentRef.current;
+    if (id) selectAgent(id);
+  };
+
+  const handleDisconnect = () => {
+    disconnectAgent();
   };
 
   const handleViewDetails = async () => {
@@ -73,13 +84,13 @@ export default function AgentsPage() {
           </Tabs.List>
         </Tabs.ListContainer>
         <Tabs.Panel id="all">
-          <AgentTable agents={agents} loading={loading} onContextMenu={handleContextMenu} onViewDetails={handleViewDetails} onRemove={handleRemove} />
+          <AgentTable agents={agents} loading={loading} contextAgentId={contextAgentRef.current} connectedAgentId={agentId} onContextMenu={handleContextMenu} onConnect={handleConnect} onDisconnect={handleDisconnect} onViewDetails={handleViewDetails} onRemove={handleRemove} />
         </Tabs.Panel>
         <Tabs.Panel id="online">
-          <AgentTable agents={agents} loading={loading} onContextMenu={handleContextMenu} onViewDetails={handleViewDetails} onRemove={handleRemove} />
+          <AgentTable agents={agents} loading={loading} contextAgentId={contextAgentRef.current} connectedAgentId={agentId} onContextMenu={handleContextMenu} onConnect={handleConnect} onDisconnect={handleDisconnect} onViewDetails={handleViewDetails} onRemove={handleRemove} />
         </Tabs.Panel>
         <Tabs.Panel id="offline">
-          <AgentTable agents={agents} loading={loading} onContextMenu={handleContextMenu} onViewDetails={handleViewDetails} onRemove={handleRemove} />
+          <AgentTable agents={agents} loading={loading} contextAgentId={contextAgentRef.current} connectedAgentId={agentId} onContextMenu={handleContextMenu} onConnect={handleConnect} onDisconnect={handleDisconnect} onViewDetails={handleViewDetails} onRemove={handleRemove} />
         </Tabs.Panel>
       </Tabs>
 

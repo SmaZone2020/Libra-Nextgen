@@ -1,16 +1,12 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { Button, Chip, ComboBox, Input, Label, ListBox } from '@heroui/react';
-import { getAgents } from '../../api/agents';
-import { listFiles, getDrives } from '../../api/files';
+import { listFiles, getDrives, deleteFile, renameFile, moveFile, copyFile, compressFile, decompressFile, createShortcut, downloadFile } from '../../api/files';
 import type { FileEntry } from '../../api/files';
 import { PathBar } from './PathBar';
 import { FileList } from './FileList';
-import type { AgentListItem } from '../../types/models';
+import { useAgent } from '../../contexts/AgentContext';
 
 export default function FileManagerPage() {
-  const [agents, setAgents] = useState<AgentListItem[]>([]);
-  const [agentId, setAgentId] = useState<string>('');
-  const [connected, setConnected] = useState(false);
+  const { agentId } = useAgent();
   const [path, setPath] = useState('C:\\');
   const [entries, setEntries] = useState<FileEntry[]>([]);
   const [loading, setLoading] = useState(false);
@@ -20,26 +16,16 @@ export default function FileManagerPage() {
 
   const contextRef = useRef<FileEntry | null>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const [contextEntry, setContextEntry] = useState<FileEntry | null>(null);
+  const clipboardRef = useRef<{ op: 'cut' | 'copy'; path: string } | null>(null);
 
-  useEffect(() => {
-    let cancelled = false;
-    async function load() {
-      try {
-        const res = await getAgents(1, 100, 'online');
-        if (!cancelled) setAgents(res.agents);
-      } catch { /* ignore */ }
-    }
-    load();
-    const timer = setInterval(load, 5000);
-    return () => { cancelled = true; clearInterval(timer); };
-  }, []);
-
-  const sendFileList = useCallback(async (dirPath: string) => {
-    if (!agentId) return;
+  const sendFileList = useCallback(async (dirPath: string, id?: string) => {
+    const targetId = id || agentId;
+    if (!targetId) return;
     setLoading(true);
     setError(null);
     try {
-      const result = await listFiles(agentId, dirPath);
+      const result = await listFiles(targetId, dirPath);
       setPath(result.path);
       setEntries(result.entries);
     } catch (e) {
@@ -47,32 +33,33 @@ export default function FileManagerPage() {
     } finally { setLoading(false); }
   }, [agentId]);
 
-  const bindAgent = useCallback(async (id: string) => {
-    if (!id) return;
+  useEffect(() => {
+    if (!agentId) {
+      setEntries([]);
+      setHistory([]);
+      setDrives([]);
+      setPath('C:\\');
+      return;
+    }
 
     abortRef.current?.abort();
     abortRef.current = new AbortController();
-
-    setAgentId(id);
-    setConnected(true);
     setEntries([]);
     setPath('C:\\');
     setHistory([]);
     setLoading(true);
 
-    try {
-      const [fileResult, drivesResult] = await Promise.all([
-        listFiles(id, 'C:\\'),
-        getDrives(id),
-      ]);
+    Promise.all([
+      listFiles(agentId, 'C:\\'),
+      getDrives(agentId),
+    ]).then(([fileResult, drivesResult]) => {
       setPath(fileResult.path);
       setEntries(fileResult.entries);
       setDrives(drivesResult.drives);
-    } catch (e) {
+    }).catch((e) => {
       setError(e instanceof Error ? e.message : 'Failed to connect to agent');
-      setConnected(false);
-    } finally { setLoading(false); }
-  }, []);
+    }).finally(() => { setLoading(false); });
+  }, [agentId]);
 
   const sortedEntries = useMemo(() => {
     const sorted = [...entries];
@@ -116,90 +103,143 @@ export default function FileManagerPage() {
   const handleContextMenu = (e: React.MouseEvent) => {
     const row = (e.target as HTMLElement).closest('[role="row"][data-key]');
     const key = row ? row.getAttribute('data-key') : null;
-    contextRef.current = entries.find(en => en.name === key) ?? null;
+    const entry = entries.find(en => en.name === key) ?? null;
+    contextRef.current = entry;
+    setContextEntry(entry);
   };
 
-  const handleDisconnect = useCallback(() => {
-    abortRef.current?.abort();
-    setConnected(false);
-    setAgentId('');
-    setEntries([]);
-    setHistory([]);
-  }, []);
+  const getContextPath = () => {
+    const entry = contextRef.current;
+    if (!entry) return '';
+    return path.replace(/\\+$/, '') + '\\' + entry.name;
+  };
+
+  const handleRename = async () => {
+    if (!agentId || !contextRef.current) return;
+    const newName = prompt('New name:', contextRef.current.name);
+    if (!newName || newName === contextRef.current.name) return;
+    try {
+      await renameFile(agentId, getContextPath(), newName);
+      sendFileList(path);
+    } catch (e) {
+      alert(e instanceof Error ? e.message : 'Rename failed');
+    }
+  };
+
+  const handleMove = async () => {
+    if (!agentId || !contextRef.current) return;
+    const dest = prompt('Move to (destination path):');
+    if (!dest) return;
+    try {
+      await moveFile(agentId, getContextPath(), dest);
+      sendFileList(path);
+    } catch (e) {
+      alert(e instanceof Error ? e.message : 'Move failed');
+    }
+  };
+
+  const handleCopy = async () => {
+    if (!agentId || !contextRef.current) return;
+    const dest = prompt('Copy to (destination path):');
+    if (!dest) return;
+    try {
+      await copyFile(agentId, getContextPath(), dest);
+      sendFileList(path);
+    } catch (e) {
+      alert(e instanceof Error ? e.message : 'Copy failed');
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!agentId || !contextRef.current) return;
+    if (!confirm(`Delete "${contextRef.current.name}"?`)) return;
+    try {
+      await deleteFile(agentId, getContextPath());
+      sendFileList(path);
+    } catch (e) {
+      alert(e instanceof Error ? e.message : 'Delete failed');
+    }
+  };
+
+  const handleCompress = async () => {
+    if (!agentId || !contextRef.current) return;
+    try {
+      await compressFile(agentId, getContextPath());
+      sendFileList(path);
+    } catch (e) {
+      alert(e instanceof Error ? e.message : 'Compress failed');
+    }
+  };
+
+  const handleDecompress = async () => {
+    if (!agentId || !contextRef.current) return;
+    try {
+      await decompressFile(agentId, getContextPath());
+      sendFileList(path);
+    } catch (e) {
+      alert(e instanceof Error ? e.message : 'Decompress failed');
+    }
+  };
+
+  const handleShortcut = async () => {
+    if (!agentId || !contextRef.current) return;
+    try {
+      await createShortcut(agentId, getContextPath());
+      sendFileList(path);
+    } catch (e) {
+      alert(e instanceof Error ? e.message : 'Create shortcut failed');
+    }
+  };
+
+  const handleDownload = async () => {
+    if (!agentId || !contextRef.current) return;
+    try {
+      await downloadFile(agentId, getContextPath());
+    } catch (e) {
+      alert(e instanceof Error ? e.message : 'Download failed');
+    }
+  };
 
   useEffect(() => {
     return () => { abortRef.current?.abort(); };
   }, []);
 
-  const selectedAgent = agents.find(a => a.id === agentId);
+  if (!agentId) {
+    return (
+      <div className="flex items-center justify-center py-20 text-neutral-500 text-sm select-none">
+        Select an online agent to browse its file system.
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-2">
-      <div className="flex items-center gap-3 flex-wrap">
-        <ComboBox
-          defaultItems={agents}
-          selectedKey={agentId || null}
-          onSelectionChange={(key) => bindAgent(String(key))}
-          isDisabled={connected}
-        >
-          <Label>Agent</Label>
-          <ComboBox.InputGroup>
-            <Input placeholder="Select agent..." />
-            <ComboBox.Trigger />
-          </ComboBox.InputGroup>
-          <ComboBox.Popover>
-            <ListBox>
-              {(item: AgentListItem) => (
-                <ListBox.Item id={item.id} textValue={item.hostname}>
-                  {item.hostname}
-                  <ListBox.ItemIndicator />
-                </ListBox.Item>
-              )}
-            </ListBox>
-          </ComboBox.Popover>
-        </ComboBox>
+      <PathBar
+        path={path}
+        drives={drives}
+        historyLength={history.length}
+        onGoBack={goBack}
+        onGoUp={goUp}
+        onDriveChange={handleDriveChange}
+        onNavigate={navigateTo}
+      />
 
-        {connected && selectedAgent && (
-          <div className="flex items-center gap-2">
-            <Chip size="sm" variant="soft" color="success">{selectedAgent.hostname}</Chip>
-            <Chip size="sm" variant="soft">{selectedAgent.ipAddress}</Chip>
-          </div>
-        )}
-
-        {connected && (
-          <Button size="sm" variant="ghost" onPress={handleDisconnect}>
-            Disconnect
-          </Button>
-        )}
-      </div>
-
-      {connected && (
-        <PathBar
-          path={path}
-          drives={drives}
-          historyLength={history.length}
-          onGoBack={goBack}
-          onGoUp={goUp}
-          onDriveChange={handleDriveChange}
-          onNavigate={navigateTo}
-        />
-      )}
-
-      {connected && (
-        <FileList
-          entries={sortedEntries}
-          loading={loading}
-          error={error}
-          onRowAction={handleRowAction}
-          onContextMenu={handleContextMenu}
-        />
-      )}
-
-      {!connected && (
-        <div className="flex items-center justify-center py-20 text-neutral-500 text-sm select-none">
-          Select an online agent to browse its file system.
-        </div>
-      )}
+      <FileList
+        entries={sortedEntries}
+        loading={loading}
+        error={error}
+        onRowAction={handleRowAction}
+        onContextMenu={handleContextMenu}
+        contextEntry={contextEntry}
+        onRename={handleRename}
+        onMove={handleMove}
+        onCopy={handleCopy}
+        onDelete={handleDelete}
+        onCompress={handleCompress}
+        onDecompress={handleDecompress}
+        onShortcut={handleShortcut}
+        onDownload={handleDownload}
+      />
     </div>
   );
 }

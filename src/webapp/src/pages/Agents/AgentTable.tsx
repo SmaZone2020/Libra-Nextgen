@@ -2,13 +2,18 @@ import { Spinner } from '@heroui/react';
 import { DataGrid } from '../../components/data-grid';
 import { ContextMenu } from '@components/context-menu';
 import { StatusChip } from './StatusChip';
+import { PlugConnection, CircleXmark, Eye, TrashBin } from '@gravity-ui/icons';
 import type { DataGridColumn } from '../../components/data-grid';
 import type { AgentListItem } from '../../types/models';
 
 interface AgentTableProps {
   agents: AgentListItem[];
   loading: boolean;
+  contextAgentId: string | null;
+  connectedAgentId: string;
   onContextMenu: (e: React.MouseEvent) => void;
+  onConnect: () => void;
+  onDisconnect: () => void;
   onViewDetails: () => void;
   onRemove: () => void;
 }
@@ -35,7 +40,11 @@ const columns: DataGridColumn<AgentListItem>[] = [
   },
 ];
 
-export function AgentTable({ agents, loading, onContextMenu, onViewDetails, onRemove }: AgentTableProps) {
+export function AgentTable({ agents, loading, contextAgentId, connectedAgentId, onContextMenu, onConnect, onDisconnect, onViewDetails, onRemove }: AgentTableProps) {
+  const isContextAgentConnected = contextAgentId === connectedAgentId && !!connectedAgentId;
+  const contextAgent = agents.find(a => a.id === contextAgentId);
+  const canConnect = contextAgent?.status === 'Online' && !isContextAgentConnected;
+
   return (
     <ContextMenu>
       <ContextMenu.Trigger className="w-full">
@@ -62,12 +71,22 @@ export function AgentTable({ agents, loading, onContextMenu, onViewDetails, onRe
 
       <ContextMenu.Popover>
         <ContextMenu.Menu>
+          {canConnect && (
+            <ContextMenu.Item id="connect" textValue="Connect" onAction={onConnect}>
+              <PlugConnection className="w-4 h-4" /> Connect
+            </ContextMenu.Item>
+          )}
+          {isContextAgentConnected && (
+            <ContextMenu.Item id="disconnect" textValue="Disconnect" onAction={onDisconnect}>
+              <CircleXmark className="w-4 h-4" /> Disconnect
+            </ContextMenu.Item>
+          )}
           <ContextMenu.Item id="view-details" textValue="View Details" onAction={onViewDetails}>
-            View Details
+            <Eye className="w-4 h-4" /> View Details
           </ContextMenu.Item>
           <ContextMenu.Separator />
           <ContextMenu.Item id="remove" textValue="Remove" onAction={onRemove}>
-            Remove
+            <TrashBin className="w-4 h-4" /> Remove
           </ContextMenu.Item>
         </ContextMenu.Menu>
       </ContextMenu.Popover>

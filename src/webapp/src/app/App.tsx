@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom';
 import { AnimatePresence, motion } from 'motion/react';
-import { Button, Chip } from '@heroui/react';
-import { ChartLine, Display, Folder, ListTimeline, Terminal } from '@gravity-ui/icons';
+import { Button, Chip, ComboBox, Input, Label, ListBox } from '@heroui/react';
 import { Sidebar } from '../shared/layout/Sidebar';
 import LoginPage from '../pages/Login';
 import Dashboard from '../pages/Dashboard';
@@ -10,9 +9,13 @@ import AgentsPage from '../pages/Agents';
 import AuditLogsPage from '../pages/AuditLogs';
 import ShellPage from '../pages/Shell';
 import FileManager from '../pages/FileManager';
+import SystemPage from '../pages/System';
 import { getStoredUser, logout } from '../api/auth';
 import { setOnAuthFailed } from '../api/client';
 import { consoleWs } from '../ws/consoleWs';
+import { AgentProvider, useAgent } from '../contexts/AgentContext';
+import type { AgentListItem } from '../types/models';
+import { pageMeta, sidebarItems } from '../config/site';
 
 const pageTransition = {
   duration: 0.3,
@@ -21,13 +24,8 @@ const pageTransition = {
 
 const SIDEBAR_W = { collapsed: 72, expanded: 256 };
 
-const pageMeta: Record<string, { label: string; subtitle: string }> = {
-  '/': { label: 'Dashboard', subtitle: 'Overview' },
-  '/agents': { label: 'Agents', subtitle: 'Agent list' },
-  '/shell': { label: 'Shell', subtitle: 'Remote terminal' },
-  '/files': { label: 'File Manager', subtitle: 'File browser' },
-  '/audit': { label: 'Audit Logs', subtitle: 'Security audit trail' },
-};
+
+const AGENT_ROUTES = new Set(['/agents', '/shell', '/files', '/system']);
 
 function PageHeader() {
   const { pathname } = useLocation();
@@ -49,13 +47,50 @@ function PageHeader() {
   );
 }
 
-const sidebarItems = [
-  { icon: ChartLine, to: '/', label: 'Dashboard' },
-  { icon: Display, to: '/agents', label: 'Agents' },
-  { icon: Terminal, to: '/shell', label: 'Shell' },
-  { icon: Folder, to: '/files', label: 'File Manager' },
-  { icon: ListTimeline, to: '/audit', label: 'Audit Logs' },
-];
+function AgentSelector() {
+  const { pathname } = useLocation();
+  const { agents, agentId, selectedAgent, selectAgent, disconnect } = useAgent();
+
+  if (!AGENT_ROUTES.has(pathname)) return null;
+
+  return (
+    <div className="flex items-center gap-3">
+      <ComboBox
+        defaultItems={agents}
+        selectedKey={agentId || null}
+        onSelectionChange={(key) => key && selectAgent(String(key))}
+        className="w-[220px]"
+      >
+        <Label className="sr-only">Agent</Label>
+        <ComboBox.InputGroup>
+          <Input placeholder="Select agent..." />
+          <ComboBox.Trigger />
+        </ComboBox.InputGroup>
+        <ComboBox.Popover>
+          <ListBox>
+            {(item: AgentListItem) => (
+              <ListBox.Item id={item.id} textValue={item.hostname}>
+                {item.hostname}
+                <ListBox.ItemIndicator />
+              </ListBox.Item>
+            )}
+          </ListBox>
+        </ComboBox.Popover>
+      </ComboBox>
+
+      {selectedAgent && (
+        <>
+          <Chip size="sm" variant="soft" color="success">{selectedAgent.hostname}</Chip>
+          <Chip size="sm" variant="soft">{selectedAgent.ipAddress}</Chip>
+          <Button size="sm" variant="ghost" onPress={disconnect}>
+            Disconnect
+          </Button>
+        </>
+      )}
+    </div>
+  );
+}
+
 
 export function App() {
   const [user, setUser] = useState(() => getStoredUser());
@@ -102,12 +137,14 @@ export function App() {
 
   return (
     <BrowserRouter>
-      <AuthenticatedLayout
-        user={user}
-        collapsed={collapsed}
-        onToggle={handleToggle}
-        onLogout={handleLogout}
-      />
+      <AgentProvider>
+        <AuthenticatedLayout
+          user={user}
+          collapsed={collapsed}
+          onToggle={handleToggle}
+          onLogout={handleLogout}
+        />
+      </AgentProvider>
     </BrowserRouter>
   );
 }
@@ -142,6 +179,7 @@ function AuthenticatedLayout({
         <header className="border-b border-neutral-200 bg-white px-4 py-4 sm:px-6 lg:px-8 flex justify-between items-center">
           <PageHeader />
           <div className="flex items-center gap-3">
+            <AgentSelector />
             <Chip size="sm" variant="soft">
               {user.username} ({user.role})
             </Chip>
@@ -166,6 +204,7 @@ function AuthenticatedLayout({
                 <Route path="/shell" element={<ShellPage />} />
                 <Route path="/files" element={<FileManager />} />
                 <Route path="/audit" element={<AuditLogsPage />} />
+                <Route path="/system" element={<SystemPage />} />
               </Routes>
             </motion.div>
           </AnimatePresence>

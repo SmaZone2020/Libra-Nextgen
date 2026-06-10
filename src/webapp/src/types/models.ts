@@ -149,3 +149,43 @@ export interface AuditLogEntry {
   ipAddress: string;
   success: boolean;
 }
+
+// ── System Info types ────────────────────────────────────────────────
+
+export interface ProcessItem {
+  pid: number;
+  name: string;
+  startTime: string;
+  cpuMs: number;
+  memoryBytes: number;
+  threadCount: number;
+}
+
+export interface ProcessListResult {
+  changed: boolean;
+  hash?: string;
+  processes?: ProcessItem[];
+}
+
+export interface WindowItem {
+  hwnd: number;
+  title: string;
+  processId: number;
+  processName: string;
+  className: string;
+}
+
+export interface WindowListResult {
+  windows: WindowItem[];
+  supported: boolean;
+}
+
+export interface EnvVar {
+  name: string;
+  value: string;
+}
+
+export interface EnvVarsResult {
+  system: EnvVar[];
+  user: EnvVar[];
+}
