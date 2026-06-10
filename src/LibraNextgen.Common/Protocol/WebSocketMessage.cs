@@ -46,6 +46,13 @@ public static class WsMessageType
     public const string ShellLockAcquired = "shell.lock.acquired";
     public const string ShellLockReleased = "shell.lock.released";
     public const string ShellObserverJoined = "shell.observer.joined";
+
+    public const string ScreenBind = "screen.bind";
+    public const string ScreenUnbind = "screen.unbind";
+    public const string ScreenConfig = "screen.config";
+    public const string ScreenFrame = "screen.frame";
+    public const string ScreenDiff = "screen.diff";
+    public const string ScreenError = "screen.error";
 }
 
 [JsonSerializable(typeof(WebSocketMessage))]

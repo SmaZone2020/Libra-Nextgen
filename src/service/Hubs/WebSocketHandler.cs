@@ -131,6 +131,20 @@ public static class WebSocketHandler
                 }
                 break;
 
+            case "screen.bind":
+            case "screen.unbind":
+            case "screen.config":
+                var screenAgentId = message.Channel;
+                if (string.IsNullOrEmpty(screenAgentId))
+                {
+                    try { screenAgentId = message.Data?.GetProperty("agentId").GetString(); } catch { }
+                }
+                if (!string.IsNullOrEmpty(screenAgentId))
+                {
+                    await wsManager.RelayToAgentAsync(screenAgentId, message);
+                }
+                break;
+
             default:
                 await wsManager.BroadcastToConsoleAsync(message);
                 break;

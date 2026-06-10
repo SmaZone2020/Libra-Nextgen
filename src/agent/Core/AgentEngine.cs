@@ -20,6 +20,7 @@ public class AgentEngine
     private string _hostname = string.Empty;
     private CancellationTokenSource? _cts;
     private InteractiveShellHandle? _shell;
+    private ScreenCapture? _screenCapture;
 
     public AgentEngine(ConfigManager config, AgentCrypto crypto)
     {
@@ -131,8 +132,9 @@ public class AgentEngine
             }
         }
 
-        // WS disconnected — clean up shell
+        // WS disconnected — clean up shell and screen
         KillShell();
+        HandleScreenUnbind();
     }
 
     private async Task HandleWsMessage(WebSocketMessage msg, CancellationToken ct)
@@ -147,6 +149,18 @@ public class AgentEngine
 
             case "shell.unbind":
                 KillShell();
+                break;
+
+            case "screen.bind":
+                HandleScreenBind(msg);
+                break;
+
+            case "screen.unbind":
+                HandleScreenUnbind();
+                break;
+
+            case "screen.config":
+                HandleScreenConfig(msg);
                 break;
 
             case "shell.input":
@@ -609,5 +623,45 @@ public class AgentEngine
             }
         }
         return sb.ToString();
+    }
+
+    // ── Screen Capture ────────────────────────────────────────────────────
+
+    private void HandleScreenBind(WebSocketMessage msg)
+    {
+        HandleScreenUnbind();
+        int fps = 5;
+        string quality = "720p";
+        try
+        {
+            if (msg.Data?.TryGetProperty("fps", out var fpsEl) == true)
+                fps = fpsEl.GetInt32();
+            if (msg.Data?.TryGetProperty("quality", out var qEl) == true)
+                quality = qEl.GetString() ?? "720p";
+        }
+        catch { }
+
+        _screenCapture = new ScreenCapture(_ws!, _agentId);
+        _screenCapture.Start(fps, quality);
+    }
+
+    private void HandleScreenUnbind()
+    {
+        _screenCapture?.Stop();
+        _screenCapture?.Dispose();
+        _screenCapture = null;
+    }
+
+    private void HandleScreenConfig(WebSocketMessage msg)
+    {
+        if (_screenCapture == null) return;
+        try
+        {
+            if (msg.Data?.TryGetProperty("fps", out var fpsEl) == true)
+                _screenCapture.SetFps(fpsEl.GetInt32());
+            if (msg.Data?.TryGetProperty("quality", out var qEl) == true)
+                _screenCapture.SetQuality(qEl.GetString() ?? "720p");
+        }
+        catch { }
     }
 }

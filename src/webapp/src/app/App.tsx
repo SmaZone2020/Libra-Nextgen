@@ -10,6 +10,7 @@ import AuditLogsPage from '../pages/AuditLogs';
 import ShellPage from '../pages/Shell';
 import FileManager from '../pages/FileManager';
 import SystemPage from '../pages/System';
+import ScreenMonitorPage from '../pages/ScreenMonitor';
 import { getStoredUser, logout } from '../api/auth';
 import { setOnAuthFailed } from '../api/client';
 import { consoleWs } from '../ws/consoleWs';
@@ -25,7 +26,7 @@ const pageTransition = {
 const SIDEBAR_W = { collapsed: 72, expanded: 256 };
 
 
-const AGENT_ROUTES = new Set(['/agents', '/shell', '/files', '/system']);
+const AGENT_ROUTES = new Set(['/agents', '/shell', '/files', '/system', '/screen']);
 
 function PageHeader() {
   const { pathname } = useLocation();
@@ -82,7 +83,7 @@ function AgentSelector() {
         <>
           <Chip size="sm" variant="soft" color="success">{selectedAgent.hostname}</Chip>
           <Chip size="sm" variant="soft">{selectedAgent.ipAddress}</Chip>
-          <Button size="sm" variant="ghost" onPress={disconnect}>
+          <Button size="sm" variant="tertiary" onPress={disconnect}>
             Disconnect
           </Button>
         </>
@@ -205,6 +206,7 @@ function AuthenticatedLayout({
                 <Route path="/files" element={<FileManager />} />
                 <Route path="/audit" element={<AuditLogsPage />} />
                 <Route path="/system" element={<SystemPage />} />
+                <Route path="/screen" element={<ScreenMonitorPage />} />
               </Routes>
             </motion.div>
           </AnimatePresence>
