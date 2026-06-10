@@ -59,6 +59,18 @@ export default {
       signingIn: 'Signing in...',
       loginFailed: 'Login failed',
     },
+    setup: {
+      description: 'No users exist yet. Create the initial admin account to get started.',
+      username: 'Username',
+      password: 'Password',
+      confirmPassword: 'Confirm Password',
+      createAccount: 'Create Account',
+      settingUp: 'Creating account...',
+      setupFailed: 'Setup failed',
+      usernameMinLength: 'Username must be at least 2 characters.',
+      passwordMinLength: 'Password must be at least 6 characters.',
+      passwordsMismatch: 'Passwords do not match.',
+    },
     dashboard: {
       traffic: 'Traffic',
       totalAgents: 'Total Agents',

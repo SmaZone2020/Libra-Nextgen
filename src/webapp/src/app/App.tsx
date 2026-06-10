@@ -5,6 +5,7 @@ import { Button, Chip, ComboBox, Input, Label, ListBox } from '@heroui/react';
 import { useTranslation } from 'react-i18next';
 import { Sidebar } from '../shared/layout/Sidebar';
 import LoginPage from '../pages/Login';
+import SetupPage from '../pages/Setup';
 import Dashboard from '../pages/Dashboard';
 import AgentsPage from '../pages/Agents';
 import AuditLogsPage from '../pages/AuditLogs';
@@ -13,7 +14,7 @@ import FileManager from '../pages/FileManager';
 import SystemPage from '../pages/System';
 import ScreenMonitorPage from '../pages/ScreenMonitor';
 import MediaMonitorPage from '../pages/MediaMonitor';
-import { getStoredUser, logout } from '../api/auth';
+import { getStoredUser, logout, checkSetupStatus } from '../api/auth';
 import { setOnAuthFailed } from '../api/client';
 import { consoleWs } from '../ws/consoleWs';
 import { AgentProvider, useAgent } from '../contexts/AgentContext';
@@ -115,6 +116,17 @@ export function App() {
     if (typeof window === 'undefined') return false;
     return localStorage.getItem('sidebar_collapsed') === 'true';
   });
+  const [needsSetup, setNeedsSetup] = useState(false);
+  const [checking, setChecking] = useState(true);
+
+  useEffect(() => {
+    checkSetupStatus().then(ns => {
+      setNeedsSetup(ns);
+      setChecking(false);
+    }).catch(() => {
+      setChecking(false);
+    });
+  }, []);
 
   const handleToggle = useCallback((v: boolean) => {
     setCollapsed(v);
@@ -149,6 +161,16 @@ export function App() {
   }, []);
 
   if (!user) {
+    if (checking) {
+      return (
+        <div className="min-h-screen flex items-center justify-center">
+          <div className="text-neutral-500">Loading...</div>
+        </div>
+      );
+    }
+    if (needsSetup) {
+      return <SetupPage onSetup={(username, role) => handleLogin(username, role)} />;
+    }
     return <LoginPage onLogin={handleLogin} />;
   }
 

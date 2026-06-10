@@ -47,20 +47,41 @@ public class AuthService
         };
     }
 
-    public async Task SeedDefaultAdminAsync()
+    public async Task<bool> NeedsSetupAsync()
     {
-        var exists = await _users.ExistsAsync(u => u.Username == "admin");
-        if (exists) return;
+        return !await _users.ExistsAsync(_ => true);
+    }
 
-        var admin = new User
+    public async Task<LoginResponse> SetupAsync(string username, string password, string ipAddress)
+    {
+        if (await _users.ExistsAsync(_ => true))
+            throw new InvalidOperationException("Setup has already been completed.");
+
+        var user = new User
         {
-            Username = "admin",
-            PasswordHash = HashPassword("admin123"),
+            Username = username,
+            PasswordHash = HashPassword(password),
             Role = UserRole.Admin,
             IsActive = true,
             CreatedAt = DateTime.UtcNow
         };
-        await _users.InsertAsync(admin);
+        await _users.InsertAsync(user);
+
+        var (token, expires) = JwtHelper.GenerateToken(
+            user.Id, user.Username, user.Role.ToString(),
+            _jwtSettings.Rsa, _jwtSettings.Issuer, _jwtSettings.Audience,
+            _jwtSettings.TokenExpirationMinutes);
+
+        var refreshToken = GenerateRefreshToken();
+
+        return new LoginResponse
+        {
+            Token = token,
+            RefreshToken = refreshToken,
+            ExpiresAt = expires,
+            Username = user.Username,
+            Role = user.Role
+        };
     }
 
     private static string HashPassword(string password)

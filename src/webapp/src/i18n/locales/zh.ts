@@ -59,6 +59,18 @@ export default {
       signingIn: '登录中...',
       loginFailed: '登录失败',
     },
+    setup: {
+      description: '尚未创建用户，请设置初始管理员账户。',
+      username: '用户名',
+      password: '密码',
+      confirmPassword: '确认密码',
+      createAccount: '创建账户',
+      settingUp: '创建中...',
+      setupFailed: '设置失败',
+      usernameMinLength: '用户名至少需要2个字符。',
+      passwordMinLength: '密码至少需要6个字符。',
+      passwordsMismatch: '两次输入的密码不一致。',
+    },
     dashboard: {
       traffic: '流量',
       totalAgents: 'Agent 总数',

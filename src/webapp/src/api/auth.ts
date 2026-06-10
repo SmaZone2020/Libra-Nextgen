@@ -1,8 +1,19 @@
 import { api, setToken } from './client';
-import type { LoginRequest, LoginResponse } from '../types/models';
+import type { LoginRequest, LoginResponse, SetupRequest } from '../types/models';
 
 export async function login(req: LoginRequest): Promise<LoginResponse> {
   const res = await api.post<LoginResponse>('/auth/login', req);
+  setToken(res.token);
+  return res;
+}
+
+export async function checkSetupStatus(): Promise<boolean> {
+  const res = await api.get<{ needsSetup: boolean }>('/auth/status');
+  return res.needsSetup;
+}
+
+export async function setup(req: SetupRequest): Promise<LoginResponse> {
+  const res = await api.post<LoginResponse>('/auth/setup', req);
   setToken(res.token);
   return res;
 }

@@ -95,6 +95,12 @@ export interface LoginRequest {
   password: string;
 }
 
+export interface SetupRequest {
+  username: string;
+  password: string;
+  confirmPassword: string;
+}
+
 export interface LoginResponse {
   token: string;
   refreshToken: string;

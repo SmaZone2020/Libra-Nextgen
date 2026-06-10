@@ -109,13 +109,6 @@ builder.Services.AddCors(options =>
 
 var app = builder.Build();
 
-// Seed default admin user
-using (var scope = app.Services.CreateScope())
-{
-    var authService = scope.ServiceProvider.GetRequiredService<AuthService>();
-    await authService.SeedDefaultAdminAsync();
-}
-
 app.MapOpenApi();
 if (app.Environment.IsDevelopment())
 {
