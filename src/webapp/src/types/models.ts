@@ -189,3 +189,37 @@ export interface EnvVarsResult {
   system: EnvVar[];
   user: EnvVar[];
 }
+
+export interface NetworkInterface {
+  name: string;
+  type: string;
+  mac: string;
+  speed: number;
+  ipv4: string[];
+  ipv6: string[];
+}
+
+export interface WanInfo {
+  publicIp: string;
+  gateway: string;
+}
+
+export interface WifiProfile {
+  ssid: string;
+  password: string;
+}
+
+export interface ProxyInfo {
+  enabled: boolean;
+  server: string;
+  port: number;
+  bypass: string;
+}
+
+export interface NetworkResult {
+  interfaces: NetworkInterface[];
+  wan: WanInfo;
+  wifi: WifiProfile[];
+  proxy: ProxyInfo;
+  dnsSuffix: string;
+}

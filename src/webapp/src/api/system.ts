@@ -1,5 +1,5 @@
 import { api } from './client';
-import type { ProcessListResult, WindowListResult, EnvVarsResult } from '../types/models';
+import type { ProcessListResult, WindowListResult, EnvVarsResult, NetworkResult } from '../types/models';
 
 export function getProcesses(agentId: string, lastHash?: string): Promise<ProcessListResult> {
   return api.post<ProcessListResult>(`/system/${agentId}/processes`, { lastHash: lastHash ?? null });
@@ -47,4 +47,8 @@ export function setEnvVar(agentId: string, name: string, value: string, scope: s
 
 export function deleteEnvVar(agentId: string, name: string, scope: string): Promise<{ success: boolean }> {
   return api.post<{ success: boolean }>(`/system/${agentId}/env/delete`, { name, scope });
+}
+
+export function getNetwork(agentId: string): Promise<NetworkResult> {
+  return api.post<NetworkResult>(`/system/${agentId}/network`);
 }
