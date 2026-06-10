@@ -1,14 +1,17 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
+import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom';
 import { AnimatePresence, motion } from 'motion/react';
-import type { PageKey } from '../config/site';
-import { pages } from '../config/site';
+import { Button, Chip } from '@heroui/react';
+import { ChartLine, Display, Folder, ListTimeline, Terminal } from '@gravity-ui/icons';
 import { Sidebar } from '../shared/layout/Sidebar';
-import { HomePage } from '../pages/Home';
-import { AboutPage } from '../pages/About';
 import LoginPage from '../pages/Login';
 import Dashboard from '../pages/Dashboard';
 import AgentsPage from '../pages/Agents';
+import AuditLogsPage from '../pages/AuditLogs';
+import ShellPage from '../pages/Shell';
+import FileManager from '../pages/FileManager';
 import { getStoredUser, logout } from '../api/auth';
+import { setOnAuthFailed } from '../api/client';
 import { consoleWs } from '../ws/consoleWs';
 
 const pageTransition = {
@@ -18,30 +21,44 @@ const pageTransition = {
 
 const SIDEBAR_W = { collapsed: 72, expanded: 256 };
 
-function PageHeader({ page }: { page: PageKey }) {
-  const item = [...pages, { id: 'Dashboard', label: 'Dashboard', subtitle: 'Overview' },
-    { id: 'Agents', label: 'Agents', subtitle: 'Agent list' }].find((p) => p.id === page);
-  if (!item) return null;
+const pageMeta: Record<string, { label: string; subtitle: string }> = {
+  '/': { label: 'Dashboard', subtitle: 'Overview' },
+  '/agents': { label: 'Agents', subtitle: 'Agent list' },
+  '/shell': { label: 'Shell', subtitle: 'Remote terminal' },
+  '/files': { label: 'File Manager', subtitle: 'File browser' },
+  '/audit': { label: 'Audit Logs', subtitle: 'Security audit trail' },
+};
+
+function PageHeader() {
+  const { pathname } = useLocation();
+  const meta = pageMeta[pathname];
+  if (!meta) return null;
   return (
     <motion.div
-      key={page}
+      key={pathname}
       animate={{ opacity: 1, x: 0 }}
       exit={{ opacity: 0, x: -16 }}
       initial={{ opacity: 0, x: 16 }}
       transition={{ duration: 0.25, ease: 'easeOut' }}
     >
-      <p className="text-sm font-medium text-emerald-600">Libra-Nextgen C2</p>
-      <h1 className="mt-0.5 text-xl font-semibold tracking-normal text-neutral-950 dark:text-white">
-        {item.label}
+      <h1 className="mt-0.5 text-xl font-semibold tracking-normal text-neutral-950">
+        {meta.label}
       </h1>
-      <p className="mt-0.5 text-sm text-neutral-600 dark:text-zinc-400">{item.subtitle}</p>
+      <p className="mt-0.5 text-sm text-neutral-600">{meta.subtitle}</p>
     </motion.div>
   );
 }
 
+const sidebarItems = [
+  { icon: ChartLine, to: '/', label: 'Dashboard' },
+  { icon: Display, to: '/agents', label: 'Agents' },
+  { icon: Terminal, to: '/shell', label: 'Shell' },
+  { icon: Folder, to: '/files', label: 'File Manager' },
+  { icon: ListTimeline, to: '/audit', label: 'Audit Logs' },
+];
+
 export function App() {
   const [user, setUser] = useState(() => getStoredUser());
-  const [page, setPage] = useState<PageKey>('Home');
   const [collapsed, setCollapsed] = useState(() => {
     if (typeof window === 'undefined') return false;
     return localStorage.getItem('sidebar_collapsed') === 'true';
@@ -51,6 +68,13 @@ export function App() {
     setCollapsed(v);
     localStorage.setItem('sidebar_collapsed', String(v));
   }, []);
+
+  useEffect(() => {
+    if (user) {
+      consoleWs.connect();
+    }
+    return () => { consoleWs.disconnect(); };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleLogin = (username: string, _role: string) => {
     setUser({ username, role: _role });
@@ -63,62 +87,86 @@ export function App() {
     setUser(null);
   };
 
+  useEffect(() => {
+    setOnAuthFailed(() => {
+      logout();
+      consoleWs.disconnect();
+      setUser(null);
+    });
+    return () => setOnAuthFailed(null);
+  }, []);
+
   if (!user) {
     return <LoginPage onLogin={handleLogin} />;
   }
 
+  return (
+    <BrowserRouter>
+      <AuthenticatedLayout
+        user={user}
+        collapsed={collapsed}
+        onToggle={handleToggle}
+        onLogout={handleLogout}
+      />
+    </BrowserRouter>
+  );
+}
+
+function AuthenticatedLayout({
+  user,
+  collapsed,
+  onToggle,
+  onLogout,
+}: {
+  user: { username: string; role: string };
+  collapsed: boolean;
+  onToggle: (v: boolean) => void;
+  onLogout: () => void;
+}) {
+  const location = useLocation();
   const sidebarWidth = collapsed ? SIDEBAR_W.collapsed : SIDEBAR_W.expanded;
 
-  // Sidebar items — dashboard and agents are C2-specific
-  const sidebarItems = [
-    ...pages,
-    { id: 'Dashboard' as PageKey, label: 'Dashboard', subtitle: 'Overview' },
-    { id: 'Agents' as PageKey, label: 'Agents', subtitle: 'Agent list' },
-  ];
-
   return (
-    <div className="min-h-screen bg-neutral-50 dark:bg-zinc-950 dark:text-white">
+    <div className="min-h-screen bg-neutral-50">
       <Sidebar
         brand="Libra Next"
         collapsed={collapsed}
-        currentPage={page}
-        items={sidebarItems as any}
-        onNavigate={(id) => setPage(id as PageKey)}
-        onToggle={handleToggle}
+        items={sidebarItems}
+        onToggle={onToggle}
       />
 
       <main
         className="sm:pl-[var(--sidebar-w)] pb-14 sm:pb-0 transition-all duration-300"
         style={{ '--sidebar-w': `${sidebarWidth}px` } as React.CSSProperties}
       >
-        <header className="border-b border-neutral-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 px-4 py-4 sm:px-6 lg:px-8 flex justify-between items-center">
-          <PageHeader page={page} />
+        <header className="border-b border-neutral-200 bg-white px-4 py-4 sm:px-6 lg:px-8 flex justify-between items-center">
+          <PageHeader />
           <div className="flex items-center gap-3">
-            <span className="text-xs text-zinc-500">
+            <Chip size="sm" variant="soft">
               {user.username} ({user.role})
-            </span>
-            <button
-              onClick={handleLogout}
-              className="text-xs text-zinc-500 hover:text-red-400 transition-colors"
-            >
+            </Chip>
+            <Button size="sm" variant="ghost" onPress={onLogout}>
               Logout
-            </button>
+            </Button>
           </div>
         </header>
 
         <div className="px-4 py-6 sm:px-6 lg:px-8">
           <AnimatePresence mode="wait">
             <motion.div
-              key={page}
+              key={location.pathname}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -12 }}
               initial={{ opacity: 0, y: 12 }}
               transition={pageTransition}
             >
-              {page === 'Home' && <HomePage />}
-              {page === 'About' && <AboutPage />}
-              {page === 'Dashboard' && <Dashboard />}
-              {page === 'Agents' && <AgentsPage />}
+              <Routes location={location}>
+                <Route path="/" element={<Dashboard />} />
+                <Route path="/agents" element={<AgentsPage />} />
+                <Route path="/shell" element={<ShellPage />} />
+                <Route path="/files" element={<FileManager />} />
+                <Route path="/audit" element={<AuditLogsPage />} />
+              </Routes>
             </motion.div>
           </AnimatePresence>
         </div>

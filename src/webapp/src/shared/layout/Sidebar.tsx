@@ -1,31 +1,30 @@
 import type { ComponentType, ReactNode, SVGProps } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { Bars, Xmark } from '@gravity-ui/icons';
-import { Button } from '@heroui/react';
+import { Button, Tooltip } from '@heroui/react';
+import { useLocation, useNavigate } from 'react-router-dom';
 
 interface NavItem {
   icon: ComponentType<SVGProps<SVGSVGElement>> | (() => ReactNode);
-  id: string;
+  to: string;
   label: string;
 }
 
 interface SidebarProps {
   brand?: string;
   collapsed: boolean;
-  currentPage: string;
   items: NavItem[];
-  onNavigate: (id: string) => void;
   onToggle: (v: boolean) => void;
 }
 
 export function Sidebar({
   brand = 'HeroUI',
   collapsed,
-  currentPage,
   items,
-  onNavigate,
   onToggle,
 }: SidebarProps) {
+  const location = useLocation();
+  const navigate = useNavigate();
   return (
     <>
       {/* Desktop sidebar */}
@@ -49,7 +48,7 @@ export function Sidebar({
                   transition={{ duration: 0.25, ease: 'easeInOut' }}
                   className="overflow-hidden"
                 >
-                  <span className="text-lg font-bold whitespace-nowrap block text-neutral-900">
+                  <span className="text-2xl font-bold whitespace-nowrap block text-neutral-900 mx-auto libre">
                     {brand}
                   </span>
                 </motion.div>
@@ -72,27 +71,32 @@ export function Sidebar({
             transition={{ layout: { staggerChildren: 0.08 } }}
           >
             {items.map((item) => {
-              const isActive = currentPage === item.id;
+              const isActive = location.pathname === item.to;
               return (
-                <motion.div key={item.id} layout className="flex items-center">
-                  <Button
-                    isIconOnly={collapsed}
-                    size="lg"
-                    variant={isActive ? 'primary' : 'ghost'}
-                    className={`flex-1 justify-start px-3 mr-1 transition-all duration-300 ${isActive ? 'rounded-[15px]' : ''}`}
-                    onPress={() => onNavigate(item.id)}
-                  >
-                    <item.icon className="w-5 h-5 shrink-0" />
-                    <span
-                      className="overflow-hidden whitespace-nowrap transition-all duration-300"
-                      style={{
-                        maxWidth: collapsed ? 0 : '14rem',
-                        opacity: collapsed ? 0 : 1,
-                      }}
+                <motion.div key={item.to} layout className="flex items-center">
+                  <Tooltip delay={0} isDisabled={!collapsed}>
+                    <Button
+                      isIconOnly={collapsed}
+                      size="lg"
+                      variant={isActive ? 'primary' : 'ghost'}
+                      className={`flex-1 justify-start px-3 mr-1 transition-all duration-300 ${isActive ? 'rounded-[15px]' : ''}`}
+                      onPress={() => navigate(item.to)}
                     >
+                      <item.icon className="w-5 h-5 shrink-0" />
+                      <span
+                        className="overflow-hidden whitespace-nowrap transition-all duration-300 font-medium "
+                        style={{
+                          maxWidth: collapsed ? 0 : '14rem',
+                          opacity: collapsed ? 0 : 1,
+                        }}
+                      >
+                        {item.label}
+                      </span>
+                    </Button>
+                    <Tooltip.Content showArrow placement="right">
                       {item.label}
-                    </span>
-                  </Button>
+                    </Tooltip.Content>
+                  </Tooltip>
                   <AnimatePresence>
                     {isActive && (
                       <motion.div
@@ -134,14 +138,14 @@ export function Sidebar({
       <nav className="sm:hidden fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-neutral-200">
         <div className="flex items-center justify-around h-14 px-2">
           {items.map((item) => {
-            const isActive = currentPage === item.id;
+            const isActive = location.pathname === item.to;
             return (
               <button
-                key={item.id}
+                key={item.to}
                 className={`flex flex-col items-center justify-center gap-0.5 min-w-0 flex-1 py-1 transition-colors ${
                   isActive ? 'text-blue-600' : 'text-neutral-500'
                 }`}
-                onClick={() => onNavigate(item.id)}
+                onClick={() => navigate(item.to)}
               >
                 <item.icon className="w-5 h-5" />
                 <span className="text-[10px] leading-none truncate">{item.label}</span>
