@@ -15,9 +15,12 @@ public class Agent
     public DateTime FirstSeen { get; set; } = DateTime.UtcNow;
     public DateTime LastSeen { get; set; } = DateTime.UtcNow;
     public int HeartbeatInterval { get; set; } = 30;
+    public string? Hwid { get; set; }
     public string? PublicKey { get; set; }
+    public HardwareInfo? Hardware { get; set; }
     public Dictionary<string, string> Metadata { get; set; } = new();
 }
+
 
 public class AgentListItem
 {
@@ -36,7 +39,10 @@ public class AgentDetail : AgentListItem
     public string ProcessName { get; set; } = string.Empty;
     public int Pid { get; set; }
     public bool IsElevated { get; set; }
+    public string? Hwid { get; set; }
     public DateTime FirstSeen { get; set; }
     public int HeartbeatInterval { get; set; }
+    public HardwareInfo? Hardware { get; set; }
     public Dictionary<string, string> Metadata { get; set; } = new();
 }
+

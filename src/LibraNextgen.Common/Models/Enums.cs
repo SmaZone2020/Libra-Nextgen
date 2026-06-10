@@ -34,5 +34,7 @@ public enum CommandType
     WifiScan,
     Kill,
     Sleep,
-    Proxy
+    Proxy,
+    FileList,
+    FileDrives
 }

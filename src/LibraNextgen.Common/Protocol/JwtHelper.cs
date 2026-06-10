@@ -11,16 +11,13 @@ public static class JwtHelper
         string userId,
         string username,
         string role,
-        string privateKeyPem,
+        RSA rsa,
         string issuer,
         string audience,
         int expirationMinutes = 120)
     {
-        using var rsa = RSA.Create();
-        rsa.ImportFromPem(privateKeyPem);
-        var credentials = new SigningCredentials(
-            new RsaSecurityKey(rsa),
-            SecurityAlgorithms.RsaSha256);
+        var rsaKey = new RsaSecurityKey(rsa);
+        var credentials = new SigningCredentials(rsaKey, SecurityAlgorithms.RsaSha256);
 
         var claims = new[]
         {
@@ -41,11 +38,8 @@ public static class JwtHelper
         return (new JwtSecurityTokenHandler().WriteToken(token), expires);
     }
 
-    public static ClaimsPrincipal? ValidateToken(string token, string publicKeyPem, string issuer, string audience)
+    public static ClaimsPrincipal? ValidateToken(string token, RSA rsa, string issuer, string audience)
     {
-        using var rsa = RSA.Create();
-        rsa.ImportFromPem(publicKeyPem);
-
         var handler = new JwtSecurityTokenHandler();
         var parameters = new TokenValidationParameters
         {
@@ -61,8 +55,7 @@ public static class JwtHelper
 
         try
         {
-            var principal = handler.ValidateToken(token, parameters, out _);
-            return principal;
+            return handler.ValidateToken(token, parameters, out _);
         }
         catch
         {
@@ -73,8 +66,6 @@ public static class JwtHelper
     public static (string publicKey, string privateKey) GenerateRsaKeysForJwt()
     {
         using var rsa = RSA.Create(2048);
-        var pub = rsa.ExportSubjectPublicKeyInfoPem();
-        var priv = rsa.ExportPkcs8PrivateKeyPem();
-        return (pub, priv);
+        return (rsa.ExportSubjectPublicKeyInfoPem(), rsa.ExportPkcs8PrivateKeyPem());
     }
 }
