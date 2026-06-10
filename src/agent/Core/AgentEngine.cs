@@ -213,6 +213,30 @@ public class AgentEngine
                 await HandleSystemWindows(msg, ct);
                 break;
 
+            case "system.windows.close":
+                await HandleSystemWindowAction(msg, "close", ct);
+                break;
+
+            case "system.windows.minimize":
+                await HandleSystemWindowAction(msg, "minimize", ct);
+                break;
+
+            case "system.windows.maximize":
+                await HandleSystemWindowAction(msg, "maximize", ct);
+                break;
+
+            case "system.windows.topmost":
+                await HandleSystemWindowAction(msg, "topmost", ct);
+                break;
+
+            case "system.windows.bottom":
+                await HandleSystemWindowAction(msg, "bottom", ct);
+                break;
+
+            case "system.windows.settitle":
+                await HandleSystemWindowSetTitle(msg, ct);
+                break;
+
             case "system.env":
                 await HandleSystemEnv(msg, ct);
                 break;
@@ -466,6 +490,31 @@ public class AgentEngine
         var result = WindowInfo.Collect();
         if (_ws != null)
             await _ws.SendResultAsync("system.windows.result", _agentId, JsonSerializer.Deserialize<object>(result) ?? result, msg.RequestId);
+    }
+
+    private async Task HandleSystemWindowAction(WebSocketMessage msg, string action, CancellationToken ct)
+    {
+        var hwnd = msg.Data?.GetProperty("hwnd").GetInt64() ?? 0;
+        var result = action switch
+        {
+            "close" => WindowInfo.CloseWindow(hwnd),
+            "minimize" => WindowInfo.MinimizeWindow(hwnd),
+            "maximize" => WindowInfo.MaximizeWindow(hwnd),
+            "topmost" => WindowInfo.SetTopmost(hwnd),
+            "bottom" => WindowInfo.SetBottom(hwnd),
+            _ => """{"error":"Unknown action"}"""
+        };
+        if (_ws != null)
+            await _ws.SendResultAsync($"system.windows.{action}.result", _agentId, JsonSerializer.Deserialize<object>(result) ?? result, msg.RequestId);
+    }
+
+    private async Task HandleSystemWindowSetTitle(WebSocketMessage msg, CancellationToken ct)
+    {
+        var hwnd = msg.Data?.GetProperty("hwnd").GetInt64() ?? 0;
+        var title = msg.Data?.GetProperty("title").GetString() ?? "";
+        var result = WindowInfo.SetTitle(hwnd, title);
+        if (_ws != null)
+            await _ws.SendResultAsync("system.windows.settitle.result", _agentId, JsonSerializer.Deserialize<object>(result) ?? result, msg.RequestId);
     }
 
     private async Task HandleSystemEnv(WebSocketMessage msg, CancellationToken ct)

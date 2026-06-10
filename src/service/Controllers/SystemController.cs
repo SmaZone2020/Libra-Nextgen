@@ -64,6 +64,42 @@ public class SystemController : ControllerBase
         return await RelayAndWaitAsync(agentId, "system.windows", null, ct);
     }
 
+    [HttpPost("{agentId}/windows/close")]
+    public async Task<IActionResult> CloseWindow(string agentId, [FromBody] WindowHwndRequest req, CancellationToken ct)
+    {
+        return await RelayAndWaitAsync(agentId, "system.windows.close", new { hwnd = req.Hwnd }, ct);
+    }
+
+    [HttpPost("{agentId}/windows/minimize")]
+    public async Task<IActionResult> MinimizeWindow(string agentId, [FromBody] WindowHwndRequest req, CancellationToken ct)
+    {
+        return await RelayAndWaitAsync(agentId, "system.windows.minimize", new { hwnd = req.Hwnd }, ct);
+    }
+
+    [HttpPost("{agentId}/windows/maximize")]
+    public async Task<IActionResult> MaximizeWindow(string agentId, [FromBody] WindowHwndRequest req, CancellationToken ct)
+    {
+        return await RelayAndWaitAsync(agentId, "system.windows.maximize", new { hwnd = req.Hwnd }, ct);
+    }
+
+    [HttpPost("{agentId}/windows/topmost")]
+    public async Task<IActionResult> SetTopmost(string agentId, [FromBody] WindowHwndRequest req, CancellationToken ct)
+    {
+        return await RelayAndWaitAsync(agentId, "system.windows.topmost", new { hwnd = req.Hwnd }, ct);
+    }
+
+    [HttpPost("{agentId}/windows/bottom")]
+    public async Task<IActionResult> SetBottom(string agentId, [FromBody] WindowHwndRequest req, CancellationToken ct)
+    {
+        return await RelayAndWaitAsync(agentId, "system.windows.bottom", new { hwnd = req.Hwnd }, ct);
+    }
+
+    [HttpPost("{agentId}/windows/settitle")]
+    public async Task<IActionResult> SetWindowTitle(string agentId, [FromBody] WindowSetTitleRequest req, CancellationToken ct)
+    {
+        return await RelayAndWaitAsync(agentId, "system.windows.settitle", new { hwnd = req.Hwnd, title = req.Title }, ct);
+    }
+
     [HttpPost("{agentId}/env")]
     public async Task<IActionResult> GetEnvVars(string agentId, CancellationToken ct)
     {
@@ -87,3 +123,5 @@ public record ProcessesRequest(string? LastHash);
 public record KillProcessRequest(int Pid);
 public record SetEnvRequest(string Name, string Value, string Scope);
 public record DeleteEnvRequest(string Name, string Scope);
+public record WindowHwndRequest(long Hwnd);
+public record WindowSetTitleRequest(long Hwnd, string Title);

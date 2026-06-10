@@ -1,7 +1,12 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Button } from '@heroui/react';
-import { getWindows } from '../../api/system';
+import {
+  CircleXmark, ArrowUp, ArrowDown, Xmark,
+  ArrowDownToLine, ArrowUpFromLine, Pencil,
+} from '@gravity-ui/icons';
+import { getWindows, killProcess, closeWindow, minimizeWindow, maximizeWindow, setWindowTopmost, setWindowBottom, setWindowTitle } from '../../api/system';
 import { DataGrid } from '../../components/data-grid';
+import { ContextMenu } from '@components/context-menu';
 import type { DataGridColumn } from '../../components/data-grid';
 import type { WindowItem } from '../../types/models';
 
@@ -9,6 +14,7 @@ const columns: DataGridColumn<WindowItem>[] = [
   {
     id: 'hwnd', header: 'HWND',
     cell: (item) => <span className="font-mono text-sm tabular-nums">{item.hwnd}</span>,
+    isRowHeader: true,
   },
   {
     id: 'title', header: 'Title',
@@ -36,6 +42,7 @@ export function WindowsTab({ agentId }: WindowsTabProps) {
   const [windows, setWindows] = useState<WindowItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [supported, setSupported] = useState(true);
+  const contextRef = useRef<WindowItem | null>(null);
 
   const fetchWindows = useCallback(async () => {
     setLoading(true);
@@ -50,6 +57,59 @@ export function WindowsTab({ agentId }: WindowsTabProps) {
   useEffect(() => {
     fetchWindows();
   }, [fetchWindows]);
+
+  const handleContextMenu = (e: React.MouseEvent) => {
+    const row = (e.target as HTMLElement).closest('[role="row"][data-key]');
+    const key = row ? row.getAttribute('data-key') : null;
+    contextRef.current = key ? windows.find(w => String(w.hwnd) === key) ?? null : null;
+  };
+
+  const handleKillProcess = async () => {
+    const w = contextRef.current;
+    if (!w) return;
+    await killProcess(agentId, w.processId);
+    fetchWindows();
+  };
+
+  const handleClose = async () => {
+    const w = contextRef.current;
+    if (!w) return;
+    await closeWindow(agentId, w.hwnd);
+    setTimeout(fetchWindows, 500);
+  };
+
+  const handleMinimize = async () => {
+    const w = contextRef.current;
+    if (!w) return;
+    await minimizeWindow(agentId, w.hwnd);
+  };
+
+  const handleMaximize = async () => {
+    const w = contextRef.current;
+    if (!w) return;
+    await maximizeWindow(agentId, w.hwnd);
+  };
+
+  const handleTopmost = async () => {
+    const w = contextRef.current;
+    if (!w) return;
+    await setWindowTopmost(agentId, w.hwnd);
+  };
+
+  const handleBottom = async () => {
+    const w = contextRef.current;
+    if (!w) return;
+    await setWindowBottom(agentId, w.hwnd);
+  };
+
+  const handleSetTitle = async () => {
+    const w = contextRef.current;
+    if (!w) return;
+    const newTitle = prompt('New window title:', w.title);
+    if (newTitle == null || newTitle === w.title) return;
+    await setWindowTitle(agentId, w.hwnd, newTitle);
+    fetchWindows();
+  };
 
   if (!supported) {
     return (
@@ -68,18 +128,52 @@ export function WindowsTab({ agentId }: WindowsTabProps) {
         <span className="text-sm text-default-500">{windows.length} windows</span>
       </div>
 
-      <DataGrid
-        aria-label="Window list"
-        columns={columns}
-        data={windows}
-        getRowId={(w) => w.hwnd}
-        scrollContainerClassName="max-h-[calc(100vh-300px)]"
-        renderEmptyState={() => (
-          <div className="flex justify-center py-8 text-default-500 text-sm">
-            {loading ? 'Loading windows...' : 'No visible windows found.'}
+      <ContextMenu>
+        <ContextMenu.Trigger className="w-full">
+          <div onContextMenu={handleContextMenu}>
+            <DataGrid
+              aria-label="Window list"
+              columns={columns}
+              data={windows}
+              getRowId={(w) => w.hwnd}
+              scrollContainerClassName="max-h-[calc(100vh-300px)]"
+              renderEmptyState={() => (
+                <div className="flex justify-center py-8 text-default-500 text-sm">
+                  {loading ? 'Loading windows...' : 'No visible windows found.'}
+                </div>
+              )}
+            />
           </div>
-        )}
-      />
+        </ContextMenu.Trigger>
+        <ContextMenu.Popover>
+          <ContextMenu.Menu>
+            <ContextMenu.Item id="kill" textValue="Kill Process" onAction={handleKillProcess}>
+              <CircleXmark className="w-4 h-4" /> Kill Process
+            </ContextMenu.Item>
+            <ContextMenu.Separator />
+            <ContextMenu.Item id="topmost" textValue="Set Topmost" onAction={handleTopmost}>
+              <ArrowUp className="w-4 h-4" /> Set Topmost
+            </ContextMenu.Item>
+            <ContextMenu.Item id="bottom" textValue="Set Bottom" onAction={handleBottom}>
+              <ArrowDown className="w-4 h-4" /> Set Bottom
+            </ContextMenu.Item>
+            <ContextMenu.Separator />
+            <ContextMenu.Item id="close" textValue="Close" onAction={handleClose}>
+              <Xmark className="w-4 h-4" /> Close
+            </ContextMenu.Item>
+            <ContextMenu.Item id="minimize" textValue="Minimize" onAction={handleMinimize}>
+              <ArrowDownToLine className="w-4 h-4" /> Minimize
+            </ContextMenu.Item>
+            <ContextMenu.Item id="maximize" textValue="Maximize" onAction={handleMaximize}>
+              <ArrowUpFromLine className="w-4 h-4" /> Maximize
+            </ContextMenu.Item>
+            <ContextMenu.Separator />
+            <ContextMenu.Item id="settitle" textValue="Change Title" onAction={handleSetTitle}>
+              <Pencil className="w-4 h-4" /> Change Title
+            </ContextMenu.Item>
+          </ContextMenu.Menu>
+        </ContextMenu.Popover>
+      </ContextMenu>
     </div>
   );
 }
