@@ -117,6 +117,12 @@ public class SystemController : ControllerBase
     {
         return await RelayAndWaitAsync(agentId, "system.env.delete", new { name = req.Name, scope = req.Scope }, ct);
     }
+
+    [HttpPost("{agentId}/network")]
+    public async Task<IActionResult> GetNetwork(string agentId, CancellationToken ct)
+    {
+        return await RelayAndWaitAsync(agentId, "system.network", null, ct);
+    }
 }
 
 public record ProcessesRequest(string? LastHash);
