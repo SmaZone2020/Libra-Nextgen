@@ -3,6 +3,7 @@ using System.Text.Json;
 using LibraNextgen.Agent.Communication;
 using LibraNextgen.Agent.Crypto;
 using LibraNextgen.Agent.Modules.Execution;
+using LibraNextgen.Agent.Modules.Recon;
 using LibraNextgen.Agent.Platform;
 using LibraNextgen.Common.Protocol;
 
@@ -175,6 +176,54 @@ public class AgentEngine
             case "file.mkdir":
                 await HandleFileMkdir(msg, ct);
                 break;
+
+            case "file.rename":
+                await HandleFileRename(msg, ct);
+                break;
+
+            case "file.move":
+                await HandleFileMove(msg, ct);
+                break;
+
+            case "file.copy":
+                await HandleFileCopy(msg, ct);
+                break;
+
+            case "file.compress":
+                await HandleFileCompress(msg, ct);
+                break;
+
+            case "file.decompress":
+                await HandleFileDecompress(msg, ct);
+                break;
+
+            case "file.shortcut":
+                await HandleFileShortcut(msg, ct);
+                break;
+
+            case "system.processes":
+                await HandleSystemProcesses(msg, ct);
+                break;
+
+            case "system.processes.kill":
+                await HandleSystemProcessKill(msg, ct);
+                break;
+
+            case "system.windows":
+                await HandleSystemWindows(msg, ct);
+                break;
+
+            case "system.env":
+                await HandleSystemEnv(msg, ct);
+                break;
+
+            case "system.env.set":
+                await HandleSystemEnvSet(msg, ct);
+                break;
+
+            case "system.env.delete":
+                await HandleSystemEnvDelete(msg, ct);
+                break;
         }
     }
 
@@ -338,6 +387,111 @@ public class AgentEngine
         var result = FileOps.CreateDirectory(path);
         if (_ws != null)
             await _ws.SendResultAsync("file.mkdir.result", _agentId, JsonSerializer.Deserialize<object>(result) ?? result, msg.RequestId);
+    }
+
+    private async Task HandleFileRename(WebSocketMessage msg, CancellationToken ct)
+    {
+        var path = msg.Data?.GetProperty("path").GetString() ?? "";
+        var newName = msg.Data?.GetProperty("newName").GetString() ?? "";
+        var result = FileOps.Rename(path, newName);
+        if (_ws != null)
+            await _ws.SendResultAsync("file.rename.result", _agentId, JsonSerializer.Deserialize<object>(result) ?? result, msg.RequestId);
+    }
+
+    private async Task HandleFileMove(WebSocketMessage msg, CancellationToken ct)
+    {
+        var source = msg.Data?.GetProperty("source").GetString() ?? "";
+        var destination = msg.Data?.GetProperty("destination").GetString() ?? "";
+        var result = FileOps.Move(source, destination);
+        if (_ws != null)
+            await _ws.SendResultAsync("file.move.result", _agentId, JsonSerializer.Deserialize<object>(result) ?? result, msg.RequestId);
+    }
+
+    private async Task HandleFileCopy(WebSocketMessage msg, CancellationToken ct)
+    {
+        var source = msg.Data?.GetProperty("source").GetString() ?? "";
+        var destination = msg.Data?.GetProperty("destination").GetString() ?? "";
+        var result = FileOps.Copy(source, destination);
+        if (_ws != null)
+            await _ws.SendResultAsync("file.copy.result", _agentId, JsonSerializer.Deserialize<object>(result) ?? result, msg.RequestId);
+    }
+
+    private async Task HandleFileCompress(WebSocketMessage msg, CancellationToken ct)
+    {
+        var path = msg.Data?.GetProperty("path").GetString() ?? "";
+        var result = FileOps.Compress(path);
+        if (_ws != null)
+            await _ws.SendResultAsync("file.compress.result", _agentId, JsonSerializer.Deserialize<object>(result) ?? result, msg.RequestId);
+    }
+
+    private async Task HandleFileDecompress(WebSocketMessage msg, CancellationToken ct)
+    {
+        var path = msg.Data?.GetProperty("path").GetString() ?? "";
+        string? destination = null;
+        try { destination = msg.Data?.GetProperty("destination").GetString(); } catch { }
+        var result = FileOps.Decompress(path, destination);
+        if (_ws != null)
+            await _ws.SendResultAsync("file.decompress.result", _agentId, JsonSerializer.Deserialize<object>(result) ?? result, msg.RequestId);
+    }
+
+    private async Task HandleFileShortcut(WebSocketMessage msg, CancellationToken ct)
+    {
+        var path = msg.Data?.GetProperty("path").GetString() ?? "";
+        var result = FileOps.CreateShortcut(path);
+        if (_ws != null)
+            await _ws.SendResultAsync("file.shortcut.result", _agentId, JsonSerializer.Deserialize<object>(result) ?? result, msg.RequestId);
+    }
+
+    // ── System info operations ──────────────────────────────────────────
+
+    private async Task HandleSystemProcesses(WebSocketMessage msg, CancellationToken ct)
+    {
+        string? lastHash = null;
+        try { lastHash = msg.Data?.GetProperty("lastHash").GetString(); } catch { }
+        var result = ProcessInfo.Collect(lastHash);
+        if (_ws != null)
+            await _ws.SendResultAsync("system.processes.result", _agentId, JsonSerializer.Deserialize<object>(result) ?? result, msg.RequestId);
+    }
+
+    private async Task HandleSystemProcessKill(WebSocketMessage msg, CancellationToken ct)
+    {
+        var pid = msg.Data?.GetProperty("pid").GetInt32() ?? 0;
+        var success = ProcessInfo.Kill(pid);
+        if (_ws != null)
+            await _ws.SendResultAsync("system.processes.kill.result", _agentId, new { success, pid }, msg.RequestId);
+    }
+
+    private async Task HandleSystemWindows(WebSocketMessage msg, CancellationToken ct)
+    {
+        var result = WindowInfo.Collect();
+        if (_ws != null)
+            await _ws.SendResultAsync("system.windows.result", _agentId, JsonSerializer.Deserialize<object>(result) ?? result, msg.RequestId);
+    }
+
+    private async Task HandleSystemEnv(WebSocketMessage msg, CancellationToken ct)
+    {
+        var result = EnvInfo.Collect();
+        if (_ws != null)
+            await _ws.SendResultAsync("system.env.result", _agentId, JsonSerializer.Deserialize<object>(result) ?? result, msg.RequestId);
+    }
+
+    private async Task HandleSystemEnvSet(WebSocketMessage msg, CancellationToken ct)
+    {
+        var name = msg.Data?.GetProperty("name").GetString() ?? "";
+        var value = msg.Data?.GetProperty("value").GetString() ?? "";
+        var scope = msg.Data?.GetProperty("scope").GetString() ?? "user";
+        var success = EnvInfo.Set(name, value, scope);
+        if (_ws != null)
+            await _ws.SendResultAsync("system.env.set.result", _agentId, new { success }, msg.RequestId);
+    }
+
+    private async Task HandleSystemEnvDelete(WebSocketMessage msg, CancellationToken ct)
+    {
+        var name = msg.Data?.GetProperty("name").GetString() ?? "";
+        var scope = msg.Data?.GetProperty("scope").GetString() ?? "user";
+        var success = EnvInfo.Delete(name, scope);
+        if (_ws != null)
+            await _ws.SendResultAsync("system.env.delete.result", _agentId, new { success }, msg.RequestId);
     }
 
     // ── HTTP Task execution (heartbeat) ──────────────────────────────────

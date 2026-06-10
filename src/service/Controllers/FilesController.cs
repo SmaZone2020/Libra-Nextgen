@@ -84,6 +84,62 @@ public class FilesController : ControllerBase
     {
         return await RelayAndWaitAsync(agentId, "file.mkdir", new { path = req.Path }, ct);
     }
+
+    [HttpPost("{agentId}/rename")]
+    public async Task<IActionResult> Rename(string agentId, [FromBody] RenameRequest req, CancellationToken ct)
+    {
+        return await RelayAndWaitAsync(agentId, "file.rename", new { path = req.Path, newName = req.NewName }, ct);
+    }
+
+    [HttpPost("{agentId}/move")]
+    public async Task<IActionResult> Move(string agentId, [FromBody] MoveRequest req, CancellationToken ct)
+    {
+        return await RelayAndWaitAsync(agentId, "file.move", new { source = req.Source, destination = req.Destination }, ct);
+    }
+
+    [HttpPost("{agentId}/copy")]
+    public async Task<IActionResult> Copy(string agentId, [FromBody] CopyRequest req, CancellationToken ct)
+    {
+        return await RelayAndWaitAsync(agentId, "file.copy", new { source = req.Source, destination = req.Destination }, ct);
+    }
+
+    [HttpPost("{agentId}/compress")]
+    public async Task<IActionResult> Compress(string agentId, [FromBody] CompressRequest req, CancellationToken ct)
+    {
+        return await RelayAndWaitAsync(agentId, "file.compress", new { path = req.Path }, ct);
+    }
+
+    [HttpPost("{agentId}/decompress")]
+    public async Task<IActionResult> Decompress(string agentId, [FromBody] DecompressRequest req, CancellationToken ct)
+    {
+        return await RelayAndWaitAsync(agentId, "file.decompress", new { path = req.Path, destination = req.Destination }, ct);
+    }
+
+    [HttpPost("{agentId}/shortcut")]
+    public async Task<IActionResult> CreateShortcut(string agentId, [FromBody] ShortcutRequest req, CancellationToken ct)
+    {
+        return await RelayAndWaitAsync(agentId, "file.shortcut", new { path = req.Path }, ct);
+    }
+
+    [HttpPost("{agentId}/download")]
+    public async Task<IActionResult> Download(string agentId, [FromBody] ReadRequest req, CancellationToken ct)
+    {
+        var result = await RelayAndWaitAsync(agentId, "file.read", new { path = req.Path }, ct);
+
+        if (result is ContentResult content)
+        {
+            var doc = System.Text.Json.JsonDocument.Parse(content.Content!);
+            if (doc.RootElement.TryGetProperty("error", out var errProp))
+                return BadRequest(new { error = errProp.GetString() });
+
+            var base64 = doc.RootElement.GetProperty("content").GetString()!;
+            var bytes = Convert.FromBase64String(base64);
+            var fileName = System.IO.Path.GetFileName(req.Path);
+            return File(bytes, "application/octet-stream", fileName);
+        }
+
+        return result;
+    }
 }
 
 // ── Request DTOs ─────────────────────────────────────────────────────────────
@@ -93,3 +149,9 @@ public record ReadRequest(string Path);
 public record WriteRequest(string Path, string Content);
 public record DeleteRequest(string Path);
 public record MkdirRequest(string Path);
+public record RenameRequest(string Path, string NewName);
+public record MoveRequest(string Source, string Destination);
+public record CopyRequest(string Source, string Destination);
+public record CompressRequest(string Path);
+public record DecompressRequest(string Path, string? Destination = null);
+public record ShortcutRequest(string Path);
