@@ -6,10 +6,51 @@ export type CommandType = 'Shell' | 'Upload' | 'Download' | 'Screenshot' | 'Webc
 export interface AgentListItem {
   id: string;
   hostname: string;
+  userName: string;
   ipAddress: string;
   osVersion: string;
   status: AgentStatus;
   lastSeen: string;
+}
+
+export interface CpuInfo {
+  name: string;
+  physicalCores: number;
+  logicalCores: number;
+  maxClockMHz: number;
+}
+
+export interface GpuInfo {
+  name: string;
+  driverVersion?: string;
+  vramBytes?: number;
+}
+
+export interface DiskInfo {
+  model: string;
+  sizeBytes: number;
+  mediaType?: string;
+  serialNumber?: string;
+}
+
+export interface RamInfo {
+  totalBytes: number;
+}
+
+export interface DisplayInfo {
+  name: string;
+  width: number;
+  height: number;
+}
+
+export interface HardwareInfo {
+  cpu?: CpuInfo;
+  gpus: GpuInfo[];
+  disks: DiskInfo[];
+  ram?: RamInfo;
+  displays: DisplayInfo[];
+  motherboardVendor?: string;
+  biosVersion?: string;
 }
 
 export interface AgentDetail extends AgentListItem {
@@ -18,8 +59,10 @@ export interface AgentDetail extends AgentListItem {
   processName: string;
   pid: number;
   isElevated: boolean;
+  hwid?: string;
   firstSeen: string;
   heartbeatInterval: number;
+  hardware?: HardwareInfo;
   metadata: Record<string, string>;
 }
 
@@ -84,4 +127,25 @@ export interface PagedResponse<T> {
   total: number;
   page: number;
   pageSize: number;
+}
+
+export interface TrafficRecord {
+  id: string;
+  agentId: string;
+  hostname: string;
+  bytesSent: number;
+  bytesReceived: number;
+  timestamp: string;
+}
+
+export interface AuditLogEntry {
+  id: string;
+  timestamp: string;
+  userId: string;
+  userName: string;
+  action: string;
+  targetAgentId?: string;
+  details?: string;
+  ipAddress: string;
+  success: boolean;
 }
