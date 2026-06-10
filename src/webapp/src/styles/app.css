@@ -5,6 +5,24 @@
 @source "../components/**/*.{ts,tsx}";
 @source "../**/*.{ts,tsx}";
 
+@font-face {
+  font-family: "libre";
+  src: url("/fonts/libre-bodoni.regular.ttf");
+}
+
+@font-face {
+  font-family: "vivo Sans";
+  src: url("/fonts/vivoSans-Medium.ttf");
+}
+
+* {
+  font-family: "vivo Sans", sans-serif;
+}
+
+.libre {
+  font-family: "libre", sans-serif;
+}
+
 :root {
   color: #17202a;
   background: #f7f4ee;

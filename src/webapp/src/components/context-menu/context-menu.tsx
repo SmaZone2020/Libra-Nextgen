@@ -9,7 +9,6 @@ import {
   useMemo,
   useRef,
 } from 'react';
-import { Menu, Popover, Separator } from 'react-aria-components/Menu';
 import { PopoverContext } from 'react-aria-components/Popover';
 import type { DOMRenderProps } from '@heroui/react';
 import {
@@ -19,6 +18,9 @@ import {
   DropdownSection,
   DropdownSubmenuIndicator,
   DropdownSubmenuTrigger,
+  MenuRoot,
+  PopoverContent,
+  SeparatorRoot,
 } from '@heroui/react';
 import { useControlledState } from '@react-stately/utils';
 import {
@@ -49,7 +51,7 @@ export interface ContextMenuTriggerProps<
 }
 
 export interface ContextMenuPopoverProps extends Omit<
-  ComponentPropsWithRef<typeof Popover>,
+  ComponentPropsWithRef<typeof PopoverContent>,
   'children' | 'isOpen' | 'triggerRef'
 > {
   children: ReactNode;
@@ -57,10 +59,10 @@ export interface ContextMenuPopoverProps extends Omit<
 
 export interface ContextMenuMenuProps<
   T extends object,
-> extends ComponentPropsWithRef<typeof Menu<T>> {}
+> extends ComponentPropsWithRef<typeof MenuRoot<T>> {}
 
 export interface ContextMenuSeparatorProps extends ComponentPropsWithRef<
-  typeof Separator
+  typeof SeparatorRoot
 > {}
 
 export type ContextMenuItemProps = ComponentPropsWithRef<typeof DropdownItem>;
@@ -311,20 +313,20 @@ export const ContextMenuPopover = ({
 
   if (parentPopoverContext != null) {
     return (
-      <Popover
+      <PopoverContent
         className={composeTwRenderProps(className, slots?.popover())}
         data-slot="context-menu-popover"
         offset={offset}
         placement={placement}
         {...props}
       >
-        {children}
-      </Popover>
+        {isOpen && children}
+      </PopoverContent>
     );
   }
 
   return (
-    <Popover
+    <PopoverContent
       ref={popoverRef}
       className={composeTwRenderProps(className, slots?.popover())}
       data-slot="context-menu-popover"
@@ -335,8 +337,8 @@ export const ContextMenuPopover = ({
       onOpenChange={onOpenChange}
       {...props}
     >
-      {children}
-    </Popover>
+      {isOpen && children}
+    </PopoverContent>
   );
 };
 
@@ -349,14 +351,14 @@ export function ContextMenuMenu<T extends object>({
   const { handleClose, slots } = useContext(ContextMenuContext);
 
   return (
-    <Menu
-      className={composeTwRenderProps(className, slots?.menu())}
+    <MenuRoot
+      className={composeSlotClassName(slots?.menu, className)}
       data-slot="context-menu-menu"
       onClose={onClose ?? handleClose}
       {...props}
     >
       {children}
-    </Menu>
+    </MenuRoot>
   );
 }
 
@@ -367,7 +369,7 @@ export const ContextMenuSeparator = ({
   const { slots } = useContext(ContextMenuContext);
 
   return (
-    <Separator
+    <SeparatorRoot
       className={composeSlotClassName(slots?.separator, className)}
       data-slot="context-menu-separator"
       {...props}

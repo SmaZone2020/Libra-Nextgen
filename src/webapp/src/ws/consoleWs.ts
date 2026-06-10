@@ -1,7 +1,7 @@
 import type { WsMessage } from '../types/models';
 import { getToken } from '../api/client';
 
-const WS_BASE = 'ws://localhost:5270/ws/console';
+const WS_BASE = 'ws://127.0.0.1:5270/ws/console';
 
 type MessageHandler = (msg: WsMessage) => void;
 

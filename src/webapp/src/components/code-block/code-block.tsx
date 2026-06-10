@@ -129,7 +129,7 @@ export const CodeBlockCode = ({
           ? await codeToHtml(code, {
               defaultColor: false,
               lang: language,
-              themes: { dark: resolvedDarkTheme, light: lightTheme },
+              themes: { light: lightTheme },
             })
           : await codeToHtml(code, { lang: language, theme: lightTheme });
 

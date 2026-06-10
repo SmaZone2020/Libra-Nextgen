@@ -1,5 +1,5 @@
 import { api } from './client';
-import type { AgentListItem, AgentDetail } from '../types/models';
+import type { AgentListItem, AgentDetail, TrafficRecord } from '../types/models';
 
 interface AgentListResponse {
   agents: AgentListItem[];
@@ -9,12 +9,22 @@ interface AgentListResponse {
   pageSize: number;
 }
 
-export async function getAgents(page = 1, pageSize = 50): Promise<AgentListResponse> {
-  return api.get<AgentListResponse>(`/agents?page=${page}&pageSize=${pageSize}`);
+interface TrafficResponse {
+  traffic: TrafficRecord[];
+}
+
+export async function getAgents(page = 1, pageSize = 50, status?: string): Promise<AgentListResponse> {
+  const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize) });
+  if (status) params.set('status', status);
+  return api.get<AgentListResponse>(`/agents?${params.toString()}`);
 }
 
 export async function getAgent(id: string): Promise<AgentDetail> {
   return api.get<AgentDetail>(`/agents/${id}`);
+}
+
+export async function getAgentTraffic(minutes = 30): Promise<TrafficResponse> {
+  return api.get<TrafficResponse>(`/agents/traffic?minutes=${minutes}`);
 }
 
 export async function deleteAgent(id: string): Promise<void> {
