@@ -14,10 +14,12 @@ public class ConnectionManager
     private readonly ConcurrentDictionary<string, ConnectionInfo> _connections = new();
     private readonly ConcurrentDictionary<string, TaskCompletionSource<WebSocketMessage>> _pendingRequests = new();
     private readonly ISessionLock _sessionLock;
+    private readonly AgentTrafficService _traffic;
 
-    public ConnectionManager(ISessionLock sessionLock)
+    public ConnectionManager(ISessionLock sessionLock, AgentTrafficService traffic)
     {
         _sessionLock = sessionLock;
+        _traffic = traffic;
     }
 
     public string AddConnection(string connectionId, WebSocket socket, string userId, string role, string type)
@@ -91,6 +93,7 @@ public class ConnectionManager
             {
                 var json = message.ToJson();
                 var bytes = Encoding.UTF8.GetBytes(json);
+                _traffic.Accumulate(agentId, "unknown", 0, bytes.Length);
                 await info.Socket.SendAsync(new ArraySegment<byte>(bytes), WebSocketMessageType.Text, true, ct);
                 return;
             }
@@ -148,6 +151,7 @@ public class ConnectionManager
             {
                 var json = message.ToJson();
                 var bytes = Encoding.UTF8.GetBytes(json);
+                _traffic.Accumulate(agentId, "unknown", 0, bytes.Length);
                 await info.Socket.SendAsync(new ArraySegment<byte>(bytes), WebSocketMessageType.Text, true, ct);
                 return;
             }

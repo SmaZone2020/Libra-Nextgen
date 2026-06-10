@@ -167,6 +167,7 @@ public static class WebSocketHandler
         var agentId = context.Request.Query["agentId"].FirstOrDefault() ?? "unknown";
         var ws = await context.WebSockets.AcceptWebSocketAsync();
         var wsManager = context.RequestServices.GetRequiredService<ConnectionManager>();
+        var traffic = context.RequestServices.GetRequiredService<AgentTrafficService>();
         var connId = Guid.NewGuid().ToString("N");
         wsManager.AddConnection(connId, ws, agentId, "agent", "agent");
         wsManager.BindToAgent(connId, agentId);
@@ -193,6 +194,8 @@ public static class WebSocketHandler
 
                 if (result.MessageType == WebSocketMessageType.Text)
                 {
+                    traffic.Accumulate(agentId, "unknown", ms.Length, 0);
+
                     var json = Encoding.UTF8.GetString(ms.GetBuffer(), 0, (int)ms.Length);
                     var message = WebSocketMessage.FromJson(json);
                     if (message == null) continue;
@@ -227,6 +230,7 @@ public static class WebSocketHandler
         finally
         {
             wsManager.RemoveConnection(connId);
+            _ = traffic.FlushAsync();
         }
     }
 }

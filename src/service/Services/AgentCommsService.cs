@@ -12,17 +12,20 @@ public class AgentCommsService
     private readonly Repository<TrafficRecord> _traffic;
     private readonly TaskService _taskService;
     private readonly ProfileService _profileService;
+    private readonly AgentTrafficService _trafficAccumulator;
 
     public AgentCommsService(
         Repository<Agent> agents,
         Repository<TrafficRecord> traffic,
         TaskService taskService,
-        ProfileService profileService)
+        ProfileService profileService,
+        AgentTrafficService trafficAccumulator)
     {
         _agents = agents;
         _traffic = traffic;
         _taskService = taskService;
         _profileService = profileService;
+        _trafficAccumulator = trafficAccumulator;
     }
 
     public DefaultProfile GetActiveProfile() =>
@@ -105,15 +108,9 @@ public class AgentCommsService
         return (true, task, agent.Hostname);
     }
 
-    public async Task RecordTrafficAsync(string agentId, string hostname, long bytesReceived, long bytesSent)
+    public void RecordTraffic(string agentId, string hostname, long bytesReceived, long bytesSent)
     {
-        await _traffic.InsertAsync(new TrafficRecord
-        {
-            AgentId = agentId,
-            Hostname = hostname,
-            BytesReceived = bytesReceived,
-            BytesSent = bytesSent
-        });
+        _trafficAccumulator.Accumulate(agentId, hostname, bytesReceived, bytesSent);
     }
 
     public async Task<bool> HandleResultAsync(
@@ -130,13 +127,7 @@ public class AgentCommsService
             result.Error);
 
         var agent = await _agents.GetByIdAsync(agentId);
-        await _traffic.InsertAsync(new TrafficRecord
-        {
-            AgentId = agentId,
-            Hostname = agent?.Hostname ?? "",
-            BytesReceived = bytesReceived,
-            BytesSent = bytesSent
-        });
+        _trafficAccumulator.Accumulate(agentId, agent?.Hostname ?? "unknown", bytesReceived, bytesSent);
 
         return true;
     }

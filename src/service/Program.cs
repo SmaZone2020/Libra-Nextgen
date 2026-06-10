@@ -42,6 +42,7 @@ builder.Services.AddScoped<AgentCommsService>();
 
 // WebSocket
 builder.Services.AddSingleton<ISessionLock, ShellSessionLock>();
+builder.Services.AddSingleton<AgentTrafficService>();
 builder.Services.AddSingleton<ConnectionManager>();
 builder.Services.AddScoped<AuditService>();
 
