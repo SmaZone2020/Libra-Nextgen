@@ -11,6 +11,7 @@ import ShellPage from '../pages/Shell';
 import FileManager from '../pages/FileManager';
 import SystemPage from '../pages/System';
 import ScreenMonitorPage from '../pages/ScreenMonitor';
+import MediaMonitorPage from '../pages/MediaMonitor';
 import { getStoredUser, logout } from '../api/auth';
 import { setOnAuthFailed } from '../api/client';
 import { consoleWs } from '../ws/consoleWs';
@@ -26,7 +27,7 @@ const pageTransition = {
 const SIDEBAR_W = { collapsed: 72, expanded: 256 };
 
 
-const AGENT_ROUTES = new Set(['/agents', '/shell', '/files', '/system', '/screen']);
+const AGENT_ROUTES = new Set(['/agents', '/shell', '/files', '/system', '/screen', '/media']);
 
 function PageHeader() {
   const { pathname } = useLocation();
@@ -207,6 +208,8 @@ function AuthenticatedLayout({
                 <Route path="/audit" element={<AuditLogsPage />} />
                 <Route path="/system" element={<SystemPage />} />
                 <Route path="/screen" element={<ScreenMonitorPage />} />
+                <Route path="/media" element={<MediaMonitorPage />} />
+                <Route path="/media" element={<MediaMonitorPage />} />
               </Routes>
             </motion.div>
           </AnimatePresence>

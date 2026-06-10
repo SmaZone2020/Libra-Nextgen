@@ -53,6 +53,17 @@ public static class WsMessageType
     public const string ScreenFrame = "screen.frame";
     public const string ScreenDiff = "screen.diff";
     public const string ScreenError = "screen.error";
+
+    public const string CameraBind = "camera.bind";
+    public const string CameraUnbind = "camera.unbind";
+    public const string CameraConfig = "camera.config";
+    public const string CameraFrame = "camera.frame";
+    public const string CameraError = "camera.error";
+
+    public const string MicBind = "mic.bind";
+    public const string MicUnbind = "mic.unbind";
+    public const string MicData = "mic.data";
+    public const string MicError = "mic.error";
 }
 
 [JsonSerializable(typeof(WebSocketMessage))]

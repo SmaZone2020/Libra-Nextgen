@@ -134,14 +134,19 @@ public static class WebSocketHandler
             case "screen.bind":
             case "screen.unbind":
             case "screen.config":
-                var screenAgentId = message.Channel;
-                if (string.IsNullOrEmpty(screenAgentId))
+            case "camera.bind":
+            case "camera.unbind":
+            case "camera.config":
+            case "mic.bind":
+            case "mic.unbind":
+                var mediaAgentId = message.Channel;
+                if (string.IsNullOrEmpty(mediaAgentId))
                 {
-                    try { screenAgentId = message.Data?.GetProperty("agentId").GetString(); } catch { }
+                    try { mediaAgentId = message.Data?.GetProperty("agentId").GetString(); } catch { }
                 }
-                if (!string.IsNullOrEmpty(screenAgentId))
+                if (!string.IsNullOrEmpty(mediaAgentId))
                 {
-                    await wsManager.RelayToAgentAsync(screenAgentId, message);
+                    await wsManager.RelayToAgentAsync(mediaAgentId, message);
                 }
                 break;
 
@@ -203,6 +208,14 @@ public static class WebSocketHandler
                     if (message.Type is "screen.frame" or "screen.diff" or "screen.error")
                     {
                         ScreenStreamManager.TryPushFrame(agentId, json);
+                    }
+                    else if (message.Type is "camera.frame" or "camera.error")
+                    {
+                        ScreenStreamManager.TryPushFrame($"camera:{agentId}", json);
+                    }
+                    else if (message.Type is "mic.data" or "mic.error")
+                    {
+                        ScreenStreamManager.TryPushFrame($"mic:{agentId}", json);
                     }
                     else
                     {
