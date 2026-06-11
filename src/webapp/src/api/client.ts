@@ -2,9 +2,20 @@ const API_BASE = 'http://127.0.0.1:5270/api';
 
 let authToken: string | null = localStorage.getItem('token');
 let onAuthFailed: (() => void) | null = null;
+let onNetworkError: (() => void) | null = null;
+let onNetworkRecovered: (() => void) | null = null;
+let isOffline = false;
 
 export function setOnAuthFailed(cb: (() => void) | null) {
   onAuthFailed = cb;
+}
+
+export function setOnNetworkError(cb: (() => void) | null) {
+  onNetworkError = cb;
+}
+
+export function setOnNetworkRecovered(cb: (() => void) | null) {
+  onNetworkRecovered = cb;
 }
 
 export function setToken(token: string | null) {
@@ -30,10 +41,26 @@ async function request<T>(
     headers['Authorization'] = `Bearer ${authToken}`;
   }
 
-  const response = await fetch(`${API_BASE}${path}`, {
-    ...options,
-    headers,
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE}${path}`, {
+      ...options,
+      headers,
+    });
+  } catch {
+    // Network error (ERR_CONNECTION_REFUSED etc.)
+    if (!isOffline) {
+      isOffline = true;
+      onNetworkError?.();
+    }
+    throw new Error('Network unreachable');
+  }
+
+  // Network recovered
+  if (isOffline) {
+    isOffline = false;
+    onNetworkRecovered?.();
+  }
 
   if (response.status === 401) {
     onAuthFailed?.();
