@@ -27,6 +27,7 @@ public enum UserRole
 public enum CommandType
 {
     Shell,
+    PowerShell,
     Upload,
     Download,
     Screenshot,

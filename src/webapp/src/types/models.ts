@@ -1,7 +1,7 @@
 export type AgentStatus = 'Online' | 'Offline' | 'Sleeping' | 'Compromised';
 export type TaskStatus = 'Pending' | 'Sent' | 'Running' | 'Completed' | 'Failed' | 'Cancelled';
 export type UserRole = 'Operator' | 'Admin';
-export type CommandType = 'Shell' | 'Upload' | 'Download' | 'Screenshot' | 'Webcam' | 'WifiScan' | 'Kill' | 'Sleep' | 'Proxy';
+export type CommandType = 'Shell' | 'PowerShell' | 'Upload' | 'Download' | 'Screenshot' | 'Webcam' | 'WifiScan' | 'Kill' | 'Sleep' | 'Proxy';
 
 export interface GeoInfo {
   publicIp: string;

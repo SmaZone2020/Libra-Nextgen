@@ -684,6 +684,10 @@ public class AgentEngine
                     output = await _executor.ExecuteAsync(task.Command, ct);
                     success = true;
                     break;
+                case Common.Models.CommandType.PowerShell:
+                    output = await PowerShellRunner.ExecuteAsync(task.Command, ct);
+                    success = true;
+                    break;
                 case Common.Models.CommandType.FileList:
                     output = FileOps.ListDirectory(task.Command);
                     success = true;
