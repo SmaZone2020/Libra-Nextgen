@@ -5,6 +5,7 @@ using LibraNextgen.Agent.Modules.Execution;
 using LibraNextgen.Agent.Modules.Recon;
 using LibraNextgen.Agent.Modules.StressTest;
 using LibraNextgen.Agent.Platform;
+using LibraNextgen.Common.Models;
 using LibraNextgen.Common.Protocol;
 
 namespace LibraNextgen.Agent.Core;

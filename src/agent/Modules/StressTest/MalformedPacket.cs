@@ -1,5 +1,6 @@
 using System.Net.Sockets;
 using System.Text;
+using LibraNextgen.Common.Models;
 
 namespace LibraNextgen.Agent.Modules.StressTest;
 

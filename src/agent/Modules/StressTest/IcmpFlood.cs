@@ -1,4 +1,5 @@
 using System.Net.NetworkInformation;
+using LibraNextgen.Common.Models;
 
 namespace LibraNextgen.Agent.Modules.StressTest;
 

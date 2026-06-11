@@ -1,4 +1,4 @@
-namespace LibraNextgen.Agent.Modules.StressTest;
+namespace LibraNextgen.Common.Models;
 
 public class StressConfig
 {

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Button, Input, Select, Switch } from '@heroui/react';
+import { Button } from '@heroui/react';
 import type { StressMethod } from '../../types/models';
 
 const LAYER4_METHODS: { id: StressMethod; label: string }[] = [
@@ -33,6 +33,8 @@ export interface FormData {
   threadsPerAgent: number;
   packetSize: number;
 }
+
+const inputClass = 'w-full px-3 py-1.5 text-sm border border-neutral-300 rounded-lg bg-white text-neutral-900 placeholder-neutral-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent disabled:opacity-50 disabled:bg-neutral-100';
 
 export function ConfigForm({ disabled, onStart, onStop }: Props) {
   const { t } = useTranslation();
@@ -71,24 +73,24 @@ export function ConfigForm({ disabled, onStart, onStop }: Props) {
           <label className="block text-xs font-medium text-neutral-600 mb-1">
             {t('stressTest.targetHost')}
           </label>
-          <Input
-            size="sm"
+          <input
+            className={inputClass}
             value={targetHost}
-            onValueChange={setTargetHost}
+            onChange={e => setTargetHost(e.target.value)}
             placeholder="192.168.1.1"
-            isDisabled={disabled}
+            disabled={disabled}
           />
         </div>
         <div className="col-span-2 sm:col-span-1">
           <label className="block text-xs font-medium text-neutral-600 mb-1">
             {t('stressTest.targetPort')}
           </label>
-          <Input
-            size="sm"
+          <input
+            className={inputClass}
             value={targetPort}
-            onValueChange={setTargetPort}
+            onChange={e => setTargetPort(e.target.value)}
             placeholder="80"
-            isDisabled={disabled}
+            disabled={disabled}
           />
         </div>
       </div>
@@ -111,7 +113,7 @@ export function ConfigForm({ disabled, onStart, onStop }: Props) {
                   className={`px-2.5 py-1 rounded-md text-xs font-medium border transition-colors ${
                     methods.includes(m.id)
                       ? 'bg-orange-100 border-orange-300 text-orange-800'
-                      : 'bg-white border-neutral-200 text-neutral-600 hover:bg-neutral-50'
+                      : 'bg-white border-neutral-200 text-neutral-600 hover:bg-neutral-50 disabled:opacity-50'
                   }`}
                 >
                   {m.label}
@@ -130,7 +132,7 @@ export function ConfigForm({ disabled, onStart, onStop }: Props) {
                   className={`px-2.5 py-1 rounded-md text-xs font-medium border transition-colors ${
                     methods.includes(m.id)
                       ? 'bg-violet-100 border-violet-300 text-violet-800'
-                      : 'bg-white border-neutral-200 text-neutral-600 hover:bg-neutral-50'
+                      : 'bg-white border-neutral-200 text-neutral-600 hover:bg-neutral-50 disabled:opacity-50'
                   }`}
                 >
                   {m.label}
@@ -147,37 +149,41 @@ export function ConfigForm({ disabled, onStart, onStop }: Props) {
           <label className="block text-xs font-medium text-neutral-600 mb-1">
             {t('stressTest.duration')}
           </label>
-          <Input size="sm" value={duration} onValueChange={setDuration} isDisabled={disabled} />
+          <input className={inputClass} value={duration} onChange={e => setDuration(e.target.value)} disabled={disabled} />
         </div>
         <div>
           <label className="block text-xs font-medium text-neutral-600 mb-1">
             {t('stressTest.threads')}
           </label>
-          <Input size="sm" value={threads} onValueChange={setThreads} isDisabled={disabled} />
+          <input className={inputClass} value={threads} onChange={e => setThreads(e.target.value)} disabled={disabled} />
         </div>
         <div>
           <label className="block text-xs font-medium text-neutral-600 mb-1">
             {t('stressTest.packetSize')}
           </label>
-          <Input size="sm" value={packetSize} onValueChange={setPacketSize} isDisabled={disabled} />
+          <input className={inputClass} value={packetSize} onChange={e => setPacketSize(e.target.value)} disabled={disabled} />
         </div>
       </div>
 
       {/* Continue after close */}
       <div className="flex items-center justify-between py-1">
         <span className="text-sm text-neutral-700">{t('stressTest.continueAfterClose')}</span>
-        <Switch
-          isSelected={continueAfterClose}
-          onValueChange={setContinueAfterClose}
-          isDisabled={disabled}
-          size="sm"
-        />
+        <label className="relative inline-flex items-center cursor-pointer">
+          <input
+            type="checkbox"
+            checked={continueAfterClose}
+            onChange={e => setContinueAfterClose(e.target.checked)}
+            disabled={disabled}
+            className="sr-only peer"
+          />
+          <div className="w-9 h-5 bg-neutral-200 peer-focus:outline-none rounded-full peer peer-checked:bg-primary-600 peer-disabled:opacity-50 after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-full" />
+        </label>
       </div>
 
       {/* Action buttons */}
       <div className="flex gap-2">
         <Button
-          color="primary"
+          variant="primary"
           isDisabled={disabled || methods.length === 0 || !targetHost}
           onPress={handleStart}
           className="flex-1"
@@ -185,11 +191,10 @@ export function ConfigForm({ disabled, onStart, onStop }: Props) {
           {t('stressTest.startAttack')}
         </Button>
         <Button
-          color="danger"
+          variant="ghost"
           isDisabled={!disabled}
           onPress={onStop}
-          variant="bordered"
-          className="flex-1"
+          className="flex-1 text-danger"
         >
           {t('stressTest.stopAttack')}
         </Button>

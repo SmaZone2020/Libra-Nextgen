@@ -1,7 +1,6 @@
 using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using LibraNextgen.Agent.Modules.StressTest;
 using LibraNextgen.Common.Models;
 using LibraNextgen.Common.Protocol;
 using LibraNextgen.Service.Services;

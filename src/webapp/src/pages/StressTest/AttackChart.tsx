@@ -1,11 +1,5 @@
-import { useEffect, useRef } from 'react';
-import * as echarts from 'echarts/core';
-import { LineChart } from 'echarts/charts';
-import { TitleComponent, TooltipComponent, LegendComponent, GridComponent } from 'echarts/components';
-import { CanvasRenderer } from 'echarts/renderers';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import type { StressAgentStatus } from '../../types/models';
-
-echarts.use([LineChart, TitleComponent, TooltipComponent, LegendComponent, GridComponent, CanvasRenderer]);
 
 interface Props {
   agentStatuses: StressAgentStatus[];
@@ -13,46 +7,36 @@ interface Props {
 }
 
 export function AttackChart({ agentStatuses, history }: Props) {
-  const chartRef = useRef<HTMLDivElement>(null);
-  const instanceRef = useRef<echarts.ECharts | null>(null);
+  const totalMbps = agentStatuses.reduce((sum, s) => sum + s.mbps, 0);
 
-  useEffect(() => {
-    if (!chartRef.current) return;
-    if (!instanceRef.current) {
-      instanceRef.current = echarts.init(chartRef.current);
-    }
+  const data = history.length > 0
+    ? history.map(p => ({ time: new Date(p.ts).toLocaleTimeString(), mbps: +p.mbps.toFixed(1) }))
+    : [{ time: '--:--:--', mbps: 0 }];
 
-    const totalMbps = agentStatuses.reduce((sum, s) => sum + s.mbps, 0);
-    const now = Date.now();
-    const seriesData = history.map((p, i) => [p.ts, p.mbps]);
-
-    instanceRef.current.setOption({
-      tooltip: { trigger: 'axis' },
-      grid: { top: 8, right: 16, bottom: 24, left: 48 },
-      xAxis: {
-        type: 'time',
-        axisLabel: { fontSize: 10, color: '#737373' },
-        splitLine: { show: false },
-      },
-      yAxis: {
-        type: 'value',
-        name: 'Mbps',
-        axisLabel: { fontSize: 10, color: '#737373' },
-        splitLine: { lineStyle: { color: '#e5e5e5' } },
-      },
-      series: [
-        {
-          name: 'Total Mbps',
-          type: 'line',
-          data: seriesData,
-          smooth: true,
-          symbol: 'none',
-          lineStyle: { color: '#6366f1', width: 2 },
-          areaStyle: { color: 'rgba(99, 102, 241, 0.08)' },
-        },
-      ],
-    }, true);
-  }, [agentStatuses, history]);
-
-  return <div ref={chartRef} className="w-full h-48" />;
+  return (
+    <div className="w-full h-48">
+      <div className="text-xs text-neutral-500 mb-1">
+        Live Throughput: <span className="font-semibold text-primary-600">{totalMbps.toFixed(1)} Mbps</span>
+      </div>
+      <ResponsiveContainer width="100%" height="100%">
+        <LineChart data={data} margin={{ top: 4, right: 16, bottom: 4, left: 0 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke="#e5e5e5" />
+          <XAxis dataKey="time" tick={{ fontSize: 10 }} stroke="#a3a3a3" />
+          <YAxis tick={{ fontSize: 10 }} stroke="#a3a3a3" width={48} />
+          <Tooltip
+            contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #e5e5e5' }}
+            formatter={(value: number) => [`${value.toFixed(1)} Mbps`, 'Throughput']}
+          />
+          <Line
+            type="monotone"
+            dataKey="mbps"
+            stroke="#6366f1"
+            strokeWidth={2}
+            dot={false}
+            isAnimationActive={false}
+          />
+        </LineChart>
+      </ResponsiveContainer>
+    </div>
+  );
 }
