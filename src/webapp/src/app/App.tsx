@@ -17,6 +17,7 @@ import ScreenMonitorPage from '../pages/ScreenMonitor';
 import MediaMonitorPage from '../pages/MediaMonitor';
 import OtherSoftwarePage from '../pages/OtherSoftware';
 import ProxyBrowserPage from '../pages/ProxyBrowser';
+import BuilderPage from '../pages/Builder';
 import { getStoredUser, logout, checkSetupStatus } from '../api/auth';
 import { setOnAuthFailed } from '../api/client';
 import { consoleWs } from '../ws/consoleWs';
@@ -46,6 +47,7 @@ const PAGE_META_KEYS: Record<string, [string, string]> = {
   '/system': ['pageMeta.system.label', 'pageMeta.system.subtitle'],
   '/othersoft': ['pageMeta.othersoft.label', 'pageMeta.othersoft.subtitle'],
   '/proxy': ['pageMeta.proxyBrowser.label', 'pageMeta.proxyBrowser.subtitle'],
+  '/builder': ['pageMeta.builder.label', 'pageMeta.builder.subtitle'],
   '/audit': ['pageMeta.audit.label', 'pageMeta.audit.subtitle'],
 };
 
@@ -295,6 +297,7 @@ function AuthenticatedLayout({
                 <Route path="/media" element={<MediaMonitorPage />} />
                 <Route path="/othersoft" element={<OtherSoftwarePage />} />
                 <Route path="/proxy" element={<ProxyBrowserPage />} />
+                <Route path="/builder" element={<BuilderPage />} />
               </Routes>
             </motion.div>
           </AnimatePresence>

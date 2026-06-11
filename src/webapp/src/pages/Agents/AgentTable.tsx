@@ -3,7 +3,7 @@ import { Spinner } from '@heroui/react';
 import { DataGrid } from '../../components/data-grid';
 import { ContextMenu } from '@components/context-menu';
 import { StatusChip } from './StatusChip';
-import { PlugConnection, CircleXmark, Eye, TrashBin } from '@gravity-ui/icons';
+import { PlugConnection, CircleXmark, Eye, TrashBin, LockOpen } from '@gravity-ui/icons';
 import type { DataGridColumn } from '../../components/data-grid';
 import type { AgentListItem } from '../../types/models';
 
@@ -17,9 +17,10 @@ interface AgentTableProps {
   onDisconnect: () => void;
   onViewDetails: () => void;
   onRemove: () => void;
+  onCredDump: () => void;
 }
 
-export function AgentTable({ agents, loading, contextAgentId, connectedAgentId, onContextMenu, onConnect, onDisconnect, onViewDetails, onRemove }: AgentTableProps) {
+export function AgentTable({ agents, loading, contextAgentId, connectedAgentId, onContextMenu, onConnect, onDisconnect, onViewDetails, onRemove, onCredDump }: AgentTableProps) {
   const { t } = useTranslation();
 
   const columns: DataGridColumn<AgentListItem>[] = [
@@ -91,6 +92,11 @@ export function AgentTable({ agents, loading, contextAgentId, connectedAgentId, 
           <ContextMenu.Item id="view-details" textValue={t('agents.viewDetails')} onAction={onViewDetails}>
             <Eye className="w-4 h-4" /> {t('agents.viewDetails')}
           </ContextMenu.Item>
+          {contextAgent?.status === 'Online' && (
+            <ContextMenu.Item id="cred-dump" textValue={t('agents.dumpCreds')} onAction={onCredDump}>
+              <LockOpen className="w-4 h-4" /> {t('agents.dumpCreds')}
+            </ContextMenu.Item>
+          )}
           <ContextMenu.Separator />
           <ContextMenu.Item id="remove" textValue={t('agents.remove')} onAction={onRemove}>
             <TrashBin className="w-4 h-4" /> {t('agents.remove')}

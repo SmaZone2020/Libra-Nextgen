@@ -224,7 +224,7 @@ export default function ProxyBrowserPage() {
         {htmlContent ? (
           <iframe
             ref={iframeRef}
-            sandbox="allow-scripts allow-same-origin"
+            sandbox="allow-scripts allow-same-origin allow-popups"
             srcDoc={htmlContent}
             title={pageTitle || 'Proxy Browser'}
             className="w-full h-full border-0"

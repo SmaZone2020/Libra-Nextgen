@@ -1,6 +1,7 @@
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Accordion, Button, Chip, Modal, Spinner } from '@heroui/react';
-import { ChevronDown } from '@gravity-ui/icons';
+import { ChevronDown, LockOpen } from '@gravity-ui/icons';
 import type { AgentDetail } from '../../types/models';
 
 type GpuVendor = 'NVIDIA' | 'Intel' | 'AMD' | 'Other';
@@ -35,10 +36,28 @@ interface AgentDetailModalProps {
   onOpenChange: (open: boolean) => void;
   agent: AgentDetail | null;
   loading: boolean;
+  onCredDump: () => Promise<string>;
 }
 
-export function AgentDetailModal({ isOpen, onOpenChange, agent, loading }: AgentDetailModalProps) {
+export function AgentDetailModal({ isOpen, onOpenChange, agent, loading, onCredDump }: AgentDetailModalProps) {
   const { t } = useTranslation();
+  const [credLoading, setCredLoading] = useState(false);
+  const [credResult, setCredResult] = useState<string | null>(null);
+  const [credError, setCredError] = useState<string | null>(null);
+
+  const handleCredDump = async () => {
+    setCredLoading(true);
+    setCredResult(null);
+    setCredError(null);
+    try {
+      const output = await onCredDump();
+      setCredResult(output);
+    } catch (err: unknown) {
+      setCredError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setCredLoading(false);
+    }
+  };
 
   const infoFields: [string, string][] = agent ? [
     [t('agents.ip'), agent.ipAddress],
@@ -90,6 +109,27 @@ export function AgentDetailModal({ isOpen, onOpenChange, agent, loading }: Agent
             )}
           </Modal.Body>
           <Modal.Footer>
+            {agent?.status === 'Online' && (
+              <div className="flex-1 space-y-2">
+                <Button
+                  variant="primary"
+                  isDisabled={credLoading}
+                  onPress={handleCredDump}
+                >
+                  {credLoading && <Spinner className="mr-2" />}
+                  {!credLoading && <LockOpen className="w-4 h-4 mr-1" />}
+                  {t('agents.dumpCreds')}
+                </Button>
+                {credError && (
+                  <p className="text-danger text-xs">{credError}</p>
+                )}
+                {credResult && (
+                  <pre className="p-3 bg-default-50 border border-default-200 rounded text-xs font-mono whitespace-pre-wrap max-h-40 overflow-auto">
+                    {credResult}
+                  </pre>
+                )}
+              </div>
+            )}
             <Button slot="close" variant="tertiary">{t('common.close')}</Button>
           </Modal.Footer>
         </Modal.Dialog>

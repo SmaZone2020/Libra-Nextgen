@@ -306,6 +306,45 @@ export interface ProxyResponse {
   error?: string;
 }
 
+// ── Builder types ──────────────────────────────────────────────────────
+
+export interface BuildConfigRequest {
+  platform: string;
+  applicationType: string;
+  serverHost: string;
+  serverPort: number;
+  enableObfuscation: boolean;
+  injectJunkData: boolean;
+  junkDataMb: number;
+  iconUrl?: string;
+  companyName?: string;
+  fileDescription?: string;
+  productName?: string;
+  copyright?: string;
+  fileVersion?: string;
+  trimUnused: boolean;
+  requireAdmin: boolean;
+  copyToAppData: boolean;
+  enablePersistence: boolean;
+}
+
+export type BuildStatus = 'building' | 'completed' | 'failed';
+
+export interface BuildRecord {
+  id: string;
+  platform: string;
+  fileName: string;
+  fileSize: number;
+  status: BuildStatus;
+  error?: string;
+  createdAt: string;
+  completedAt?: string;
+}
+
+export interface BuildRecordDetail extends BuildRecord {
+  config: BuildConfigRequest;
+}
+
 export interface ProxyHistoryEntry {
   url: string;
   title: string;

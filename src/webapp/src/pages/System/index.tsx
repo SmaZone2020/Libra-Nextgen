@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Tabs } from '@heroui/react';
+import { LocalAccountsTab } from './LocalAccountsTab';
 import { ProcessTab } from './ProcessTab';
 import { WindowsTab } from './WindowsTab';
 import { EnvTab } from './EnvTab';
@@ -10,7 +11,7 @@ import { useAgent } from '../../contexts/AgentContext';
 export default function SystemPage() {
   const { t } = useTranslation();
   const { agentId } = useAgent();
-  const [tab, setTab] = useState<string>('processes');
+  const [tab, setTab] = useState<string>('localAccounts');
 
   if (!agentId) {
     return (
@@ -28,12 +29,16 @@ export default function SystemPage() {
       >
         <Tabs.ListContainer className="flex justify-center">
           <Tabs.List aria-label={t('system.infoTabs')} className="mx-auto w-lg">
+            <Tabs.Tab id="localAccounts">{t('system.localAccounts')}<Tabs.Indicator /></Tabs.Tab>
             <Tabs.Tab id="processes">{t('system.processes')}<Tabs.Indicator /></Tabs.Tab>
             <Tabs.Tab id="windows">{t('system.windows')}<Tabs.Indicator /></Tabs.Tab>
             <Tabs.Tab id="env">{t('system.environment')}<Tabs.Indicator /></Tabs.Tab>
             <Tabs.Tab id="network">{t('system.network')}<Tabs.Indicator /></Tabs.Tab>
           </Tabs.List>
         </Tabs.ListContainer>
+        <Tabs.Panel id="localAccounts">
+          <LocalAccountsTab agentId={agentId} />
+        </Tabs.Panel>
         <Tabs.Panel id="processes">
           <ProcessTab agentId={agentId} />
         </Tabs.Panel>

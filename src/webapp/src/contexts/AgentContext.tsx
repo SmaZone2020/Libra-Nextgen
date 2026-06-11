@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useEffect, useMemo, useCallback } from 'react';
 import { getAgents } from '../api/agents';
-import type { AgentListItem } from '../types/models';
+import { consoleWs } from '../ws/consoleWs';
+import type { AgentListItem, WsMessage } from '../types/models';
 
 interface AgentContextValue {
   agents: AgentListItem[];
@@ -33,6 +34,26 @@ export function AgentProvider({ children }: { children: React.ReactNode }) {
     load();
     const timer = setInterval(load, 5000);
     return () => { cancelled = true; clearInterval(timer); };
+  }, []);
+
+  // Real-time agent status updates via WebSocket
+  useEffect(() => {
+    const handler = (msg: WsMessage) => {
+      const data = msg.data as { agentId: string; status: string } | null;
+      if (!data?.agentId) return;
+
+      if (data.status === 'Offline') {
+        setAgents((prev) => prev.map(a =>
+          a.id === data.agentId ? { ...a, status: 'Offline' as const } : a
+        ));
+      } else if (data.status === 'Online') {
+        setAgents((prev) => prev.map(a =>
+          a.id === data.agentId ? { ...a, status: 'Online' as const } : a
+        ));
+      }
+    };
+    const unsub = consoleWs.on('agent.status', handler);
+    return unsub;
   }, []);
 
   const selectAgent = useCallback((id: string) => {

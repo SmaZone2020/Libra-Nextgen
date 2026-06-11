@@ -17,7 +17,7 @@ interface PathBarProps {
 export function PathBar({ path, drives, historyLength, onGoBack, onGoUp, onDriveChange, onNavigate }: PathBarProps) {
   const { t } = useTranslation();
 
-  const driveItems = useMemo(() => drives.map(d => ({ id: d, label: d })), [drives]);
+  const driveItems = useMemo(() => (drives ?? []).map(d => ({ id: d, label: d })), [drives]);
 
   const breadcrumbs = useMemo(() => {
     const parts = path.split('\\').filter(Boolean);

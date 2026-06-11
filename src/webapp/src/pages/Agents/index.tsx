@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Tabs } from '@heroui/react';
 import { getAgents, getAgent, deleteAgent } from '../../api/agents';
+import { createTask, getTask } from '../../api/tasks';
 import { AgentTable } from './AgentTable';
 import { AgentDetailModal } from './AgentDetailModal';
 import { useAgent } from '../../contexts/AgentContext';
@@ -76,6 +77,30 @@ export default function AgentsPage() {
     loadAgents();
   };
 
+  const handleCredDumpFromMenu = async () => {
+    // Open detail modal — user clicks "Dump Credentials" button there
+    await handleViewDetails();
+  };
+
+  const handleCredDump = async (): Promise<string> => {
+    const id = contextAgentRef.current;
+    if (!id) throw new Error('No agent selected');
+
+    const task = await createTask({ agentId: id, commandType: 'CredDump', command: '' });
+    const taskId = task.id;
+
+    // Poll for result (up to 120s)
+    for (let i = 0; i < 40; i++) {
+      await new Promise(r => setTimeout(r, 3000));
+      try {
+        const t = await getTask(taskId);
+        if (t.status === 'Completed') return t.output || '[No output]';
+        if (t.status === 'Failed') return `[Failed] ${t.error || ''}`;
+      } catch { /* retry */ }
+    }
+    throw new Error('Timed out waiting for agent response');
+  };
+
   return (
     <div className="space-y-3">
       <Tabs
@@ -90,13 +115,13 @@ export default function AgentsPage() {
           </Tabs.List>
         </Tabs.ListContainer>
         <Tabs.Panel id="all">
-          <AgentTable agents={agents} loading={loading} contextAgentId={contextAgentRef.current} connectedAgentId={agentId} onContextMenu={handleContextMenu} onConnect={handleConnect} onDisconnect={handleDisconnect} onViewDetails={handleViewDetails} onRemove={handleRemove} />
+          <AgentTable agents={agents} loading={loading} contextAgentId={contextAgentRef.current} connectedAgentId={agentId} onContextMenu={handleContextMenu} onConnect={handleConnect} onDisconnect={handleDisconnect} onViewDetails={handleViewDetails} onRemove={handleRemove} onCredDump={handleCredDumpFromMenu} />
         </Tabs.Panel>
         <Tabs.Panel id="online">
-          <AgentTable agents={agents} loading={loading} contextAgentId={contextAgentRef.current} connectedAgentId={agentId} onContextMenu={handleContextMenu} onConnect={handleConnect} onDisconnect={handleDisconnect} onViewDetails={handleViewDetails} onRemove={handleRemove} />
+          <AgentTable agents={agents} loading={loading} contextAgentId={contextAgentRef.current} connectedAgentId={agentId} onContextMenu={handleContextMenu} onConnect={handleConnect} onDisconnect={handleDisconnect} onViewDetails={handleViewDetails} onRemove={handleRemove} onCredDump={handleCredDumpFromMenu} />
         </Tabs.Panel>
         <Tabs.Panel id="offline">
-          <AgentTable agents={agents} loading={loading} contextAgentId={contextAgentRef.current} connectedAgentId={agentId} onContextMenu={handleContextMenu} onConnect={handleConnect} onDisconnect={handleDisconnect} onViewDetails={handleViewDetails} onRemove={handleRemove} />
+          <AgentTable agents={agents} loading={loading} contextAgentId={contextAgentRef.current} connectedAgentId={agentId} onContextMenu={handleContextMenu} onConnect={handleConnect} onDisconnect={handleDisconnect} onViewDetails={handleViewDetails} onRemove={handleRemove} onCredDump={handleCredDumpFromMenu} />
         </Tabs.Panel>
       </Tabs>
 
@@ -105,6 +130,7 @@ export default function AgentsPage() {
         onOpenChange={setModalOpen}
         agent={modalAgent}
         loading={modalLoading}
+        onCredDump={handleCredDump}
       />
 
       {DialogComponent}
