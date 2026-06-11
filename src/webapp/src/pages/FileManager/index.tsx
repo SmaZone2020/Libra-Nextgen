@@ -41,24 +41,26 @@ export default function FileManagerPage() {
       setEntries([]);
       setHistory([]);
       setDrives([]);
-      setPath('C:\\');
+      setPath('');
       return;
     }
 
     abortRef.current?.abort();
     abortRef.current = new AbortController();
     setEntries([]);
-    setPath('C:\\');
+    setPath('');
     setHistory([]);
     setLoading(true);
 
-    Promise.all([
-      listFiles(agentId, 'C:\\'),
-      getDrives(agentId),
-    ]).then(([fileResult, drivesResult]) => {
-      setPath(fileResult.path);
-      setEntries(fileResult.entries);
-      setDrives(drivesResult.drives);
+    // Fetch drives first, then list the first available drive
+    getDrives(agentId).then((drivesResult) => {
+      const driveList = drivesResult.drives ?? (Array.isArray(drivesResult) ? drivesResult : []);
+      setDrives(driveList);
+      const firstDrive = driveList.length > 0 ? driveList[0] : 'C:\\';
+      return listFiles(agentId, firstDrive).then((fileResult) => {
+        setPath(fileResult.path);
+        setEntries(fileResult.entries);
+      });
     }).catch((e) => {
       setError(e instanceof Error ? e.message : t('fileManager.connectFailed'));
     }).finally(() => { setLoading(false); });

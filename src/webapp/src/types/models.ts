@@ -375,3 +375,52 @@ export interface LocalAccountsResult {
   accounts: LocalAccount[];
   error?: string;
 }
+
+// ── Stress Test (DDoS) types ──────────────────────────────────────────
+
+export type CampaignStatus = 'Running' | 'Stopped' | 'Completed' | 'Failed';
+
+export type StressMethod = 'httpFlood' | 'synFlood' | 'udpFlood' | 'icmpFlood' | 'slowloris' | 'tcpConnFlood' | 'reflection' | 'malformed';
+
+export interface StressStartRequest {
+  name: string;
+  targetHost: string;
+  targetPort: number;
+  methods: StressMethod[];
+  agentIds: string[];
+  durationSeconds: number;
+  continueAfterClose: boolean;
+  threadsPerAgent: number;
+  packetSize: number;
+}
+
+export interface StressTestCampaign {
+  id: string;
+  name: string;
+  targetHost: string;
+  targetPort: number;
+  methods: StressMethod[];
+  agentIds: string[];
+  durationSeconds: number;
+  continueAfterClose: boolean;
+  threadsPerAgent: number;
+  packetSize: number;
+  createdBy: string;
+  createdAt: string;
+  status: CampaignStatus;
+}
+
+export interface StressAgentStatus {
+  agentId: string;
+  hostname: string;
+  packetsSent: number;
+  bytesSent: number;
+  connectionsOpen: number;
+  mbps: number;
+  lastReport: string;
+}
+
+export interface StressCampaignDetail {
+  campaign: StressTestCampaign;
+  agentStatuses: StressAgentStatus[];
+}

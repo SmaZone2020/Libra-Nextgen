@@ -19,6 +19,7 @@ import OtherSoftwarePage from '../pages/OtherSoftware';
 import ProxyBrowserPage from '../pages/ProxyBrowser';
 import BuilderPage from '../pages/Builder';
 import AboutPage from '../pages/About';
+import StressTestPage from '../pages/StressTest';
 import { getStoredUser, logout, checkSetupStatus } from '../api/auth';
 import { setOnAuthFailed } from '../api/client';
 import { consoleWs } from '../ws/consoleWs';
@@ -36,7 +37,7 @@ const pageTransition = {
 const SIDEBAR_W = { collapsed: 72, expanded: 256 };
 
 
-const AGENT_ROUTES = new Set(['/agents', '/shell', '/files', '/system', '/screen', '/media', '/othersoft', '/proxy']);
+const AGENT_ROUTES = new Set(['/agents', '/shell', '/files', '/system', '/screen', '/media', '/othersoft', '/proxy', '/stress-test']);
 
 const PAGE_META_KEYS: Record<string, [string, string]> = {
   '/': ['pageMeta.dashboard.label', 'pageMeta.dashboard.subtitle'],
@@ -49,6 +50,7 @@ const PAGE_META_KEYS: Record<string, [string, string]> = {
   '/othersoft': ['pageMeta.othersoft.label', 'pageMeta.othersoft.subtitle'],
   '/proxy': ['pageMeta.proxyBrowser.label', 'pageMeta.proxyBrowser.subtitle'],
   '/builder': ['pageMeta.builder.label', 'pageMeta.builder.subtitle'],
+  '/stress-test': ['pageMeta.stressTest.label', 'pageMeta.stressTest.subtitle'],
   '/audit': ['pageMeta.audit.label', 'pageMeta.audit.subtitle'],
   '/about': ['pageMeta.about.label', 'pageMeta.about.subtitle'],
 };
@@ -300,6 +302,7 @@ function AuthenticatedLayout({
                 <Route path="/othersoft" element={<OtherSoftwarePage />} />
                 <Route path="/proxy" element={<ProxyBrowserPage />} />
                 <Route path="/builder" element={<BuilderPage />} />
+                <Route path="/stress-test" element={<StressTestPage />} />
                 <Route path="/about" element={<AboutPage />} />
               </Routes>
             </motion.div>
