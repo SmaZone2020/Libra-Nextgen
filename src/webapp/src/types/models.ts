@@ -229,3 +229,60 @@ export interface NetworkResult {
   proxy: ProxyInfo;
   dnsSuffix: string;
 }
+
+// ── Other Software types ─────────────────────────────────────────────
+
+export interface WeChatAccount {
+  wxid: string;
+  fileDirs: string[];
+  path: string;
+}
+
+export interface WeChatResult {
+  accounts: WeChatAccount[];
+}
+
+export interface QQAccount {
+  number: string;
+  path: string;
+}
+
+export interface QQResult {
+  accounts: QQAccount[];
+}
+
+export interface QQUserInfo {
+  qq: string;
+  nick: string;
+  nickname: string;
+  long_nick: string;
+  avatar_url: string;
+  age: number;
+  sex: string;
+  qid: string;
+  qq_level: number;
+  qq_level_icons: {
+    crownNum: number;
+    moonNum: number;
+    penguinNum: number;
+    starNum: number;
+    sunNum: number;
+  };
+  location: string;
+  email: string;
+  is_vip: boolean;
+  is_svip: boolean;
+  is_years_vip: boolean;
+  is_big_club: boolean;
+  vip_level: number;
+  big_club_level: number;
+  reg_time: string;
+  privilege_icons: {
+    big_club: boolean;
+    super: boolean;
+    svip: boolean;
+    vip: boolean;
+    year: boolean;
+    years_vip: boolean;
+  };
+}
