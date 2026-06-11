@@ -2,23 +2,11 @@ import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button, Card, Skeleton } from '@heroui/react';
 import { PersonPlus } from '@gravity-ui/icons';
-import { getQQ } from '../../api/othersoft';
+import { getQQ, getQQPortrait } from '../../api/othersoft';
 import type { QQAccount, QQPortrait } from '../../types/models';
 
 interface QQTabProps {
   agentId: string;
-}
-
-const QZONE_PORTRAIT_URL = 'https://users.qzone.qq.com/fcg-bin/cgi_get_portrait.fcg';
-
-function parsePortraitJsonp(text: string): Record<string, (string | number)[]> | null {
-  const m = text.match(/portraitCallBack\(\s*(\{.*\})\s*\)/s);
-  if (!m) return null;
-  try {
-    return JSON.parse(m[1]);
-  } catch {
-    return null;
-  }
 }
 
 export function QQTab({ agentId }: QQTabProps) {
@@ -34,25 +22,15 @@ export function QQTab({ agentId }: QQTabProps) {
       setAccounts(list);
 
       if (list.length > 0) {
-        const qqStr = list.map(a => a.number).join(',');
         try {
-          const resp = await fetch(`${QZONE_PORTRAIT_URL}?uins=${encodeURIComponent(qqStr)}`);
-          const text = await resp.text();
-          const data = parsePortraitJsonp(text);
+          const qqList = list.map(a => a.number);
+          const data = await getQQPortrait(qqList);
           const map: Record<string, QQPortrait | null> = {};
           for (const acc of list) {
-            const info = data?.[acc.number];
-            if (Array.isArray(info)) {
-              map[acc.number] = {
-                avatar: String(info[0] ?? ''),
-                nickname: String(info[6] ?? acc.number),
-              };
-            } else {
-              map[acc.number] = null;
-            }
+            map[acc.number] = data[acc.number] ?? null;
           }
           setPortraits(map);
-        } catch { /* qzone API unavailable */ }
+        } catch { /* portrait API unavailable */ }
       }
     } catch { /* ignore */ }
     finally { setLoading(false); }
