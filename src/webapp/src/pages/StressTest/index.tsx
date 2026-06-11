@@ -13,6 +13,20 @@ interface ChartPoint {
   mbps: number;
 }
 
+type LogLevel = 'info' | 'success' | 'error';
+
+interface LogEntry {
+  level: LogLevel;
+  msg: string;
+  ts: number;
+}
+
+const LEVEL_STYLES: Record<LogLevel, string> = {
+  info: 'text-neutral-700',
+  success: 'text-emerald-600',
+  error: 'text-red-600',
+};
+
 export default function StressTestPage() {
   const { t } = useTranslation();
 
@@ -20,13 +34,13 @@ export default function StressTestPage() {
   const [campaign, setCampaign] = useState<StressTestCampaign | null>(null);
   const [agentStatuses, setAgentStatuses] = useState<StressAgentStatus[]>([]);
   const [chartHistory, setChartHistory] = useState<ChartPoint[]>([]);
-  const [logs, setLogs] = useState<string[]>([]);
+  const [logs, setLogs] = useState<LogEntry[]>([]);
   const [attacking, setAttacking] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval>>(null);
   const historyRef = useRef<ChartPoint[]>([]);
 
-  const addLog = useCallback((msg: string) => {
-    setLogs(prev => [...prev.slice(-100), msg]);
+  const addLog = useCallback((msg: string, level: LogLevel = 'info') => {
+    setLogs(prev => [...prev.slice(-100), { level, msg, ts: Date.now() }]);
   }, []);
 
   // Listen for WebSocket stress updates
@@ -94,14 +108,14 @@ export default function StressTestPage() {
         packetSize: form.packetSize,
       });
 
-      addLog(`Campaign created: ${result.campaignId}`);
-      addLog(`Dispatched to ${selectedIds.length} agents`);
+      addLog(`Campaign created: ${result.campaignId}`, 'success');
+      addLog(`Dispatched to ${selectedIds.length} agents`, 'success');
 
       // Fetch initial campaign state
       const detail = await getStressStatus(result.campaignId);
       setCampaign(detail.campaign);
     } catch (err: any) {
-      addLog(`Error: ${err.message}`);
+      addLog(`Error: ${err.message}`, 'error');
       setAttacking(false);
     }
   }, [selectedIds, addLog]);
@@ -113,9 +127,9 @@ export default function StressTestPage() {
     try {
       await stopStressTest(campaign.id);
       setAttacking(false);
-      addLog('Attack stopped.');
+      addLog('Attack stopped.', 'success');
     } catch (err: any) {
-      addLog(`Stop error: ${err.message}`);
+      addLog(`Stop error: ${err.message}`, 'error');
     }
 
     // Final status fetch
@@ -146,16 +160,16 @@ export default function StressTestPage() {
           <h3 className="text-sm font-semibold text-neutral-700 mb-2">
             {t('stressTest.log')}
           </h3>
-          <div className="bg-neutral-900 text-emerald-400 text-xs font-mono rounded-lg p-3 space-y-0.5">
+          <div className="text-xs font-mono rounded-lg border border-neutral-200 p-3 space-y-0.5">
             {logs.length === 0 ? (
-              <span className="text-neutral-500">{t('stressTest.logPlaceholder')}</span>
+              <span className="text-neutral-400">{t('stressTest.logPlaceholder')}</span>
             ) : (
-              logs.map((log, i) => (
+              logs.map((entry, i) => (
                 <div key={i}>
-                  <span className="text-neutral-500">
-                    {new Date().toLocaleTimeString()}
+                  <span className="text-neutral-400 select-none">
+                    {new Date(entry.ts).toLocaleTimeString()}
                   </span>{' '}
-                  {log}
+                  <span className={LEVEL_STYLES[entry.level]}>{entry.msg}</span>
                 </div>
               ))
             )}
