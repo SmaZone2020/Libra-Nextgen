@@ -1,11 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Button } from '@heroui/react';
+import { Card } from '@heroui/react';
 import { AgentSelector } from './AgentSelector';
 import { ConfigForm, type FormData } from './ConfigForm';
 import { AttackChart } from './AttackChart';
 import { StatusPanel } from './StatusPanel';
-import { useAgent } from '../../contexts/AgentContext';
 import { consoleWs } from '../../ws/consoleWs';
 import { startStressTest, stopStressTest, getStressStatus } from '../../api/stressTest';
 import type { StressTestCampaign, StressAgentStatus } from '../../types/models';
@@ -17,7 +16,6 @@ interface ChartPoint {
 
 export default function StressTestPage() {
   const { t } = useTranslation();
-  const { agents } = useAgent();
 
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [campaign, setCampaign] = useState<StressTestCampaign | null>(null);
@@ -132,25 +130,20 @@ export default function StressTestPage() {
   return (
     <div className="flex gap-4 h-[calc(100vh-160px)]">
       {/* Left: Agent Selector */}
-      <div className="w-[240px] shrink-0 bg-white border border-neutral-200 rounded-xl p-4 overflow-hidden">
-        <AgentSelector
-          agents={agents}
-          selectedIds={selectedIds}
-          onChange={setSelectedIds}
-        />
-      </div>
+      <AgentSelector
+        selectedIds={selectedIds}
+        onChange={setSelectedIds}
+      />
 
       {/* Middle: Config + Chart */}
       <div className="flex-1 flex flex-col gap-4 min-w-0">
-        <div className="bg-white border border-neutral-200 rounded-xl p-4">
-          <ConfigForm
-            disabled={attacking}
-            onStart={handleStart}
-            onStop={handleStop}
-          />
-        </div>
+        <ConfigForm
+          disabled={attacking}
+          onStart={handleStart}
+          onStop={handleStop}
+        />
 
-        <div className="flex-1 bg-white border border-neutral-200 rounded-xl p-4 min-h-0">
+        <Card className="flex-1 p-4 min-h-0">
           {attacking || chartHistory.length > 0 ? (
             <AttackChart agentStatuses={agentStatuses} history={chartHistory} />
           ) : (
@@ -158,11 +151,11 @@ export default function StressTestPage() {
               {t('stressTest.chartPlaceholder')}
             </div>
           )}
-        </div>
+        </Card>
       </div>
 
       {/* Right: Status Panel */}
-      <div className="w-[320px] shrink-0 bg-white border border-neutral-200 rounded-xl p-4 overflow-y-auto">
+      <div className="w-[320px] shrink-0 overflow-y-auto">
         <StatusPanel
           campaign={campaign}
           agentStatuses={agentStatuses}
