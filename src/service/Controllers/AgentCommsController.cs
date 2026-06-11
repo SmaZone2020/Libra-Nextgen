@@ -1,6 +1,8 @@
 using System.Text;
 using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
+using LibraNextgen.Common.Models;
+using LibraNextgen.Common.Protocol;
 using LibraNextgen.Service.Services;
 
 namespace LibraNextgen.Service.Controllers;
@@ -11,11 +13,13 @@ public class AgentCommsController : ControllerBase
 {
     private readonly AgentCommsService _commsService;
     private readonly AgentTrafficService _traffic;
+    private readonly ConnectionManager _wsManager;
 
-    public AgentCommsController(AgentCommsService commsService, AgentTrafficService traffic)
+    public AgentCommsController(AgentCommsService commsService, AgentTrafficService traffic, ConnectionManager wsManager)
     {
         _commsService = commsService;
         _traffic = traffic;
+        _wsManager = wsManager;
     }
 
     [HttpPost("register")]
@@ -47,7 +51,25 @@ public class AgentCommsController : ControllerBase
         var bytesSent = Encoding.UTF8.GetByteCount(responseJson);
         _traffic.Accumulate(agent.Id, agent.Hostname, bytesReceived, bytesSent);
 
+        // Broadcast online status to console clients
+        _ = BroadcastAgentOnlineAsync(agent.Id);
+
         return Ok(response);
+    }
+
+    private async Task BroadcastAgentOnlineAsync(string agentId)
+    {
+        try
+        {
+            var msg = new WebSocketMessage
+            {
+                Type = "agent.status",
+                Channel = agentId,
+                Data = JsonSerializer.SerializeToElement(new { agentId, status = AgentStatus.Online.ToString() })
+            };
+            await _wsManager.BroadcastToConsoleAsync(msg);
+        }
+        catch { /* best-effort */ }
     }
 
     [HttpPost("heartbeat")]

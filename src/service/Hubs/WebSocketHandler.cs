@@ -1,6 +1,7 @@
 using System.Net.WebSockets;
 using System.Text;
 using System.Text.Json;
+using LibraNextgen.Common.Models;
 using LibraNextgen.Common.Protocol;
 using LibraNextgen.Service.Services;
 
@@ -15,6 +16,27 @@ public static class WebSocketHandler
     {
         app.Map("/ws/console", HandleConsoleWs).RequireAuthorization();
         app.Map("/ws/agent", HandleAgentWs);
+    }
+
+    /// <summary>
+    /// Broadcast an agent status change to all console clients.
+    /// </summary>
+    private static async Task BroadcastAgentStatus(ConnectionManager wsManager, string agentId, AgentStatus status, IServiceProvider sp)
+    {
+        try
+        {
+            var agentService = sp.GetRequiredService<AgentService>();
+            await agentService.UpdateStatusAsync(agentId, status);
+
+            var msg = new WebSocketMessage
+            {
+                Type = "agent.status",
+                Channel = agentId,
+                Data = JsonSerializer.SerializeToElement(new { agentId, status = status.ToString() })
+            };
+            await wsManager.BroadcastToConsoleAsync(msg);
+        }
+        catch { /* best-effort */ }
     }
 
     private static async Task HandleConsoleWs(HttpContext context)
@@ -245,6 +267,11 @@ public static class WebSocketHandler
         {
             wsManager.RemoveConnection(connId);
             _ = traffic.FlushAsync();
+            // Mark agent offline if no WS connection remains (only the agent has reconnection, not the server)
+            if (!wsManager.IsAgentConnected(agentId))
+            {
+                _ = BroadcastAgentStatus(wsManager, agentId, AgentStatus.Offline, context.RequestServices);
+            }
         }
     }
 }

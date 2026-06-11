@@ -185,6 +185,16 @@ public class ConnectionManager
         return _connections.TryGetValue(connectionId, out var info) && info.Type == "console";
     }
 
+    public bool IsAgentConnected(string agentId)
+    {
+        foreach (var (_, info) in _connections)
+        {
+            if (info.Type == "agent" && info.AgentId == agentId && info.Socket.State == WebSocketState.Open)
+                return true;
+        }
+        return false;
+    }
+
     public string GetUserId(string connectionId)
     {
         return _connections.TryGetValue(connectionId, out var info) ? info.UserId : connectionId;

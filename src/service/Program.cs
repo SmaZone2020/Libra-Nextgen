@@ -47,6 +47,7 @@ builder.Services.AddSingleton<ISessionLock, ShellSessionLock>();
 builder.Services.AddSingleton<AgentTrafficService>();
 builder.Services.AddSingleton<ConnectionManager>();
 builder.Services.AddScoped<AuditService>();
+builder.Services.AddHostedService<HeartbeatMonitor>();
 
 // Auth
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
