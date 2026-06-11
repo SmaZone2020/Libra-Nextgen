@@ -16,7 +16,6 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.PowerShell.SDK" Version="7.5.0" />
-    <PackageReference Include="NAudio" Version="2.2.1" />
     <PackageReference Include="System.Drawing.Common" Version="9.0.3" />
     <PackageReference Include="System.Management" Version="9.0.3" />
     <PackageReference Include="System.Text.Encoding.CodePages" Version="9.0.3" />

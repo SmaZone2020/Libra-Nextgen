@@ -28,7 +28,13 @@ export function AgentProvider({ children }: { children: React.ReactNode }) {
     async function load() {
       try {
         const res = await getAgents(1, 100, 'online');
-        if (!cancelled) setAgents(res.agents);
+        if (!cancelled) {
+          setAgents(res.agents);
+          setAgentId((prev) => {
+            if (prev && !res.agents.some(a => a.id === prev)) return '';
+            return prev;
+          });
+        }
       } catch { /* ignore */ }
     }
     load();
@@ -46,6 +52,7 @@ export function AgentProvider({ children }: { children: React.ReactNode }) {
         setAgents((prev) => prev.map(a =>
           a.id === data.agentId ? { ...a, status: 'Offline' as const } : a
         ));
+        setAgentId((prev) => prev === data.agentId ? '' : prev);
       } else if (data.status === 'Online') {
         setAgents((prev) => prev.map(a =>
           a.id === data.agentId ? { ...a, status: 'Online' as const } : a

@@ -36,19 +36,33 @@ export default function MediaMonitorPage() {
 
   // ── Fetch devices ───────────────────────────────────────────────────────
   const fetchDevices = useCallback(async (agentId: string) => {
+    console.log('[MediaMonitor] Fetching camera devices...');
     try {
-      const camData = await api.get<CameraDevice[]>(`/media/camera/devices/${agentId}`);
-      const cams = Array.isArray(camData) ? camData : (camData as any)?.data ?? [];
+      const raw = await api.get<CameraDevice[] | CameraDevice>(`/media/camera/devices/${agentId}`);
+      const cams: CameraDevice[] = Array.isArray(raw) ? raw
+        : (raw as any)?.data ? (raw as any).data
+        : raw ? [raw as CameraDevice]
+        : [];
+      console.log('[MediaMonitor] Camera devices:', cams);
       setCameras(cams);
       if (cams.length > 0) setCameraIndex(0);
-    } catch { }
+    } catch (e) {
+      console.warn('[MediaMonitor] Camera devices fetch failed:', e);
+    }
 
+    console.log('[MediaMonitor] Fetching mic devices...');
     try {
-      const micData = await api.get<MicDevice[]>(`/media/mic/devices/${agentId}`);
-      const mics = Array.isArray(micData) ? micData : (micData as any)?.data ?? [];
+      const raw = await api.get<MicDevice[] | MicDevice>(`/media/mic/devices/${agentId}`);
+      const mics: MicDevice[] = Array.isArray(raw) ? raw
+        : (raw as any)?.data ? (raw as any).data
+        : raw ? [raw as MicDevice]
+        : [];
+      console.log('[MediaMonitor] Mic devices:', mics);
       setMics(mics);
       if (mics.length > 0) setMicIndex(0);
-    } catch { }
+    } catch (e) {
+      console.warn('[MediaMonitor] Mic devices fetch failed:', e);
+    }
   }, []);
 
   // ── Camera ──────────────────────────────────────────────────────────────

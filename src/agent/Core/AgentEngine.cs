@@ -834,8 +834,11 @@ public class AgentEngine
 
     private async Task HandleCameraList(WebSocketMessage msg)
     {
+        Console.WriteLine("[Agent] camera.list requested");
         var json = CameraCapture.GetDevicesJson();
+        Console.WriteLine($"[Agent] camera.list result: {json}");
         await _ws!.SendResultRawAsync("camera.list", _agentId, json, msg.RequestId);
+        Console.WriteLine("[Agent] camera.list response sent");
     }
 
     private void HandleCameraBind(WebSocketMessage msg)
