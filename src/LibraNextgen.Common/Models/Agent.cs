@@ -18,9 +18,20 @@ public class Agent
     public string? Hwid { get; set; }
     public string? PublicKey { get; set; }
     public HardwareInfo? Hardware { get; set; }
+    public GeoInfo? Geo { get; set; }
     public Dictionary<string, string> Metadata { get; set; } = new();
 }
 
+public class GeoInfo
+{
+    public string PublicIp { get; set; } = string.Empty;
+    public string Region { get; set; } = string.Empty;
+    public string Isp { get; set; } = string.Empty;
+    public string Asn { get; set; } = string.Empty;
+    public string Llc { get; set; } = string.Empty;
+    public double Latitude { get; set; }
+    public double Longitude { get; set; }
+}
 
 public class AgentListItem
 {
@@ -30,6 +41,7 @@ public class AgentListItem
     public string OsVersion { get; set; } = string.Empty;
     public AgentStatus Status { get; set; }
     public DateTime LastSeen { get; set; }
+    public GeoInfo? Geo { get; set; }
 }
 
 public class AgentDetail : AgentListItem

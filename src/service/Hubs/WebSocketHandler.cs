@@ -208,6 +208,20 @@ public static class WebSocketHandler
                         continue;
                     }
 
+                    // Handle agent geo update
+                    if (message.Type == "agent.geo.update")
+                    {
+                        try
+                        {
+                            var agentService = context.RequestServices.GetRequiredService<AgentService>();
+                            var geo = message.Data?.Deserialize<LibraNextgen.Common.Models.GeoInfo>();
+                            if (geo != null)
+                                await agentService.UpdateGeoAsync(agentId, geo);
+                        }
+                        catch { /* best-effort */ }
+                        continue;
+                    }
+
                     if (message.Type is "screen.frame" or "screen.diff" or "screen.error")
                     {
                         ScreenStreamManager.TryPushFrame(agentId, json);

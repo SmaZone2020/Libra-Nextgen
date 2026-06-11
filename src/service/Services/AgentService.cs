@@ -48,6 +48,12 @@ public class AgentService
         await _agents.UpdateAsync(id, update, ct);
     }
 
+    public async Task UpdateGeoAsync(string id, GeoInfo geo, CancellationToken ct = default)
+    {
+        var update = Builders<Agent>.Update.Set(a => a.Geo, geo);
+        await _agents.UpdateAsync(id, update, ct);
+    }
+
     public async Task<long> DeleteAsync(string id, CancellationToken ct = default)
     {
         return await _agents.DeleteAsync(id, ct);
@@ -70,7 +76,8 @@ public class AgentService
         IpAddress = a.IpAddress,
         OsVersion = a.OsVersion,
         Status = a.Status,
-        LastSeen = a.LastSeen
+        LastSeen = a.LastSeen,
+        Geo = a.Geo
     };
 
     private static AgentDetail MapToDetail(Agent a) => new()
@@ -90,6 +97,7 @@ public class AgentService
         LastSeen = a.LastSeen,
         HeartbeatInterval = a.HeartbeatInterval,
         Hardware = a.Hardware,
+        Geo = a.Geo,
         Metadata = a.Metadata
     };
 }
