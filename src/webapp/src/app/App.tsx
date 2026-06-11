@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom';
 import { AnimatePresence, motion } from 'motion/react';
 import { Bars } from '@gravity-ui/icons';
-import { Button, Chip, ComboBox, Dropdown, Input, Label, ListBox } from '@heroui/react';
+import { Button, Chip, Dropdown } from '@heroui/react';
 import { useTranslation } from 'react-i18next';
 import { Sidebar } from '../shared/layout/Sidebar';
 import LoginPage from '../pages/Login';
@@ -16,9 +16,11 @@ import SystemPage from '../pages/System';
 import ScreenMonitorPage from '../pages/ScreenMonitor';
 import MediaMonitorPage from '../pages/MediaMonitor';
 import OtherSoftwarePage from '../pages/OtherSoftware';
+import ProxyBrowserPage from '../pages/ProxyBrowser';
 import { getStoredUser, logout, checkSetupStatus } from '../api/auth';
 import { setOnAuthFailed } from '../api/client';
 import { consoleWs } from '../ws/consoleWs';
+import { NetworkOverlay } from '../components/NetworkOverlay';
 import { AgentProvider, useAgent } from '../contexts/AgentContext';
 import type { AgentListItem } from '../types/models';
 import { sidebarItems } from '../config/site';
@@ -32,7 +34,7 @@ const pageTransition = {
 const SIDEBAR_W = { collapsed: 72, expanded: 256 };
 
 
-const AGENT_ROUTES = new Set(['/agents', '/shell', '/files', '/system', '/screen', '/media', '/othersoft']);
+const AGENT_ROUTES = new Set(['/agents', '/shell', '/files', '/system', '/screen', '/media', '/othersoft', '/proxy']);
 
 const PAGE_META_KEYS: Record<string, [string, string]> = {
   '/': ['pageMeta.dashboard.label', 'pageMeta.dashboard.subtitle'],
@@ -43,6 +45,7 @@ const PAGE_META_KEYS: Record<string, [string, string]> = {
   '/files': ['pageMeta.explorer.label', 'pageMeta.explorer.subtitle'],
   '/system': ['pageMeta.system.label', 'pageMeta.system.subtitle'],
   '/othersoft': ['pageMeta.othersoft.label', 'pageMeta.othersoft.subtitle'],
+  '/proxy': ['pageMeta.proxyBrowser.label', 'pageMeta.proxyBrowser.subtitle'],
   '/audit': ['pageMeta.audit.label', 'pageMeta.audit.subtitle'],
 };
 
@@ -76,32 +79,30 @@ function AgentSelector() {
 
   return (
     <div className="flex items-center gap-2 sm:gap-3">
-      <ComboBox
-        defaultItems={agents}
-        selectedKey={agentId || null}
-        onSelectionChange={(key) => key && selectAgent(String(key))}
-        className="flex-1 sm:w-[220px] sm:flex-none"
-      >
-        <Label className="sr-only">Agent</Label>
-        <ComboBox.InputGroup>
-          <Input placeholder={t('common.selectAgent')} />
-          <ComboBox.Trigger />
-        </ComboBox.InputGroup>
-        <ComboBox.Popover>
-          <ListBox>
+      <Dropdown>
+        <Button
+          size="sm"
+          variant="ghost"
+          className="flex-1 sm:w-[220px] sm:flex-none justify-start"
+        >
+          {selectedAgent ? selectedAgent.hostname : t('common.selectAgent')}
+        </Button>
+        <Dropdown.Popover>
+          <Dropdown.Menu
+            onAction={(key) => selectAgent(String(key))}
+            items={agents}
+          >
             {(item: AgentListItem) => (
-              <ListBox.Item id={item.id} textValue={item.hostname}>
+              <Dropdown.Item key={item.id} textValue={item.hostname}>
                 {item.hostname}
-                <ListBox.ItemIndicator />
-              </ListBox.Item>
+              </Dropdown.Item>
             )}
-          </ListBox>
-        </ComboBox.Popover>
-      </ComboBox>
+          </Dropdown.Menu>
+        </Dropdown.Popover>
+      </Dropdown>
 
       {selectedAgent && (
         <>
-          <Chip size="sm" variant="soft" color="success">{selectedAgent.hostname}</Chip>
           <Chip size="sm" variant="soft">{selectedAgent.ipAddress}</Chip>
           <Button size="sm" variant="tertiary" onPress={disconnect}>
             {t('common.disconnect')}
@@ -209,6 +210,7 @@ function AuthenticatedLayout({
 
   return (
     <div className="min-h-screen bg-neutral-50">
+      <NetworkOverlay />
       <Sidebar
         brand="Libra Next"
         collapsed={collapsed}
@@ -292,6 +294,7 @@ function AuthenticatedLayout({
                 <Route path="/screen" element={<ScreenMonitorPage />} />
                 <Route path="/media" element={<MediaMonitorPage />} />
                 <Route path="/othersoft" element={<OtherSoftwarePage />} />
+                <Route path="/proxy" element={<ProxyBrowserPage />} />
               </Routes>
             </motion.div>
           </AnimatePresence>

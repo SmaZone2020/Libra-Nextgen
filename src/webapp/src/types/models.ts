@@ -3,6 +3,16 @@ export type TaskStatus = 'Pending' | 'Sent' | 'Running' | 'Completed' | 'Failed'
 export type UserRole = 'Operator' | 'Admin';
 export type CommandType = 'Shell' | 'Upload' | 'Download' | 'Screenshot' | 'Webcam' | 'WifiScan' | 'Kill' | 'Sleep' | 'Proxy';
 
+export interface GeoInfo {
+  publicIp: string;
+  region: string;
+  isp: string;
+  asn: string;
+  llc: string;
+  latitude: number;
+  longitude: number;
+}
+
 export interface AgentListItem {
   id: string;
   hostname: string;
@@ -11,6 +21,7 @@ export interface AgentListItem {
   osVersion: string;
   status: AgentStatus;
   lastSeen: string;
+  geo?: GeoInfo;
 }
 
 export interface CpuInfo {
@@ -208,6 +219,12 @@ export interface NetworkInterface {
 export interface WanInfo {
   publicIp: string;
   gateway: string;
+  region: string;
+  isp: string;
+  asn: string;
+  llc: string;
+  latitude: number;
+  longitude: number;
 }
 
 export interface WifiProfile {
@@ -228,6 +245,18 @@ export interface NetworkResult {
   wifi: WifiProfile[];
   proxy: ProxyInfo;
   dnsSuffix: string;
+}
+
+export interface LanDevice {
+  ip: string;
+  mac: string;
+  hostname: string;
+  source: string;
+}
+
+export interface LanScanResult {
+  devices: LanDevice[];
+  subnets: string[];
 }
 
 // ── Other Software types ─────────────────────────────────────────────
@@ -285,4 +314,24 @@ export interface QQUserInfo {
     year: boolean;
     years_vip: boolean;
   };
+}
+
+// ── Proxy Browser types ──────────────────────────────────────────────
+
+export interface ProxyResponse {
+  status: number;
+  statusText: string;
+  headers: Record<string, string[]>;
+  body: string;
+  contentType: string;
+  url: string;
+  error?: string;
+}
+
+export interface ProxyHistoryEntry {
+  url: string;
+  title: string;
+  method: string;
+  body?: string;
+  headers?: string;
 }
