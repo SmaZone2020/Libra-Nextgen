@@ -308,6 +308,7 @@ export default {
       files: '文件',
       noFiles: '该文件夹内无文件。',
       regTime: '注册时间',
+      addFriend: '添加好友',
       fileType: '类型',
       fileSize: '大小',
       fileModified: '修改时间',

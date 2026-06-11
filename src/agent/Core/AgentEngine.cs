@@ -326,10 +326,6 @@ public class AgentEngine
                 await HandleOtherSoftQQ(msg, ct);
                 break;
 
-            case "othersoft.qqinfo":
-                await HandleOtherSoftQQInfo(msg, ct);
-                break;
-
             case "proxy.fetch":
                 await HandleProxyFetch(msg, ct);
                 break;
@@ -654,15 +650,6 @@ public class AgentEngine
         var result = OtherSoftware.CollectQQ();
         if (_ws != null)
             await _ws.SendResultAsync("othersoft.qq.result", _agentId, JsonSerializer.Deserialize<object>(result) ?? result, msg.RequestId);
-    }
-
-    private async Task HandleOtherSoftQQInfo(WebSocketMessage msg, CancellationToken ct)
-    {
-        var qq = "";
-        try { qq = msg.Data?.GetProperty("qq").GetString() ?? ""; } catch { }
-        var result = await OtherSoftware.CollectQQInfoAsync(qq);
-        if (_ws != null)
-            await _ws.SendResultAsync("othersoft.qqinfo.result", _agentId, JsonSerializer.Deserialize<object>(result) ?? result, msg.RequestId);
     }
 
     private async Task HandleProxyFetch(WebSocketMessage msg, CancellationToken ct)

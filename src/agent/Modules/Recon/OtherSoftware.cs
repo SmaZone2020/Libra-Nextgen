@@ -1,16 +1,9 @@
-using System.Collections.Concurrent;
 using System.Text.RegularExpressions;
 
 namespace LibraNextgen.Agent.Modules.Recon;
 
 public static class OtherSoftware
 {
-    private static readonly ConcurrentDictionary<string, string> _qqInfoCache = new();
-
-    private static readonly HttpClient _qqHttp = new()
-    {
-        Timeout = TimeSpan.FromSeconds(10)
-    };
     public static string CollectWeChat()
     {
         try
@@ -75,27 +68,6 @@ public static class OtherSoftware
         catch
         {
             return """{"accounts":[]}""";
-        }
-    }
-
-    public static async Task<string> CollectQQInfoAsync(string qq)
-    {
-        // Return cached result if available
-        if (_qqInfoCache.TryGetValue(qq, out var cached))
-            return cached;
-
-        try
-        {
-            var url = $"https://uapis.cn/api/v1/social/qq/userinfo?qq={qq}";
-            var json = await _qqHttp.GetStringAsync(url);
-
-            // Cache the raw JSON
-            _qqInfoCache[qq] = json;
-            return json;
-        }
-        catch (Exception ex)
-        {
-            return $$"""{"error":"{{Esc(ex.Message)}}"}""";
         }
     }
 

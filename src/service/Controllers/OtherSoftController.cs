@@ -58,10 +58,4 @@ public class OtherSoftController : ControllerBase
         return await RelayAndWaitAsync(agentId, "othersoft.qq", null, ct);
     }
 
-    [HttpPost("{agentId}/qqinfo")]
-    public async Task<IActionResult> GetQQInfo(string agentId, [FromBody] JsonElement body, CancellationToken ct)
-    {
-        var qq = body.TryGetProperty("qq", out var q) ? q.GetString() ?? "" : "";
-        return await RelayAndWaitAsync(agentId, "othersoft.qqinfo", new { qq }, ct);
-    }
 }

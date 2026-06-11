@@ -308,6 +308,7 @@ export default {
       files: 'Files',
       noFiles: 'No files in this folder.',
       regTime: 'Registered',
+      addFriend: 'Add Friend',
       fileType: 'Type',
       fileSize: 'Size',
       fileModified: 'Modified',
