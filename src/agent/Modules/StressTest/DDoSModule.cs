@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.Text.Json;
 using LibraNextgen.Agent.Communication;
 using LibraNextgen.Common.Models;
+using LibraNextgen.Common.Protocol;
 
 namespace LibraNextgen.Agent.Modules.StressTest;
 
@@ -26,6 +27,8 @@ public class DDoSModule : IDisposable
         _campaignId = config.CampaignId;
         _reportCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
 
+        Console.WriteLine($"[DDoS] Starting campaign {config.CampaignId}: {config.TargetHost}:{config.TargetPort}, methods=[{string.Join(",", config.Methods)}], threads={config.ThreadsPerAgent}");
+
         var registry = new Dictionary<string, IStressMethod>(StringComparer.OrdinalIgnoreCase)
         {
             ["httpFlood"] = new HttpFlood(),
@@ -42,19 +45,25 @@ public class DDoSModule : IDisposable
 
         foreach (var methodName in config.Methods)
         {
-            if (!registry.TryGetValue(methodName, out var method)) continue;
+            if (!registry.TryGetValue(methodName, out var method))
+            {
+                Console.WriteLine($"[DDoS] Unknown method: {methodName}, skipping");
+                continue;
+            }
             var mcts = CancellationTokenSource.CreateLinkedTokenSource(ct);
             _activeMethods[methodName] = mcts;
 
+            Console.WriteLine($"[DDoS] Starting method: {methodName}");
             _ = Task.Run(async () =>
             {
                 try { await method.ExecuteAsync(config, reporter, mcts.Token); }
-                catch (OperationCanceledException) { }
+                catch (OperationCanceledException) { Console.WriteLine($"[DDoS] {methodName}: cancelled"); }
                 catch (Exception ex) { Console.WriteLine($"[DDoS] {methodName}: {ex.Message}"); }
             }, mcts.Token);
         }
 
         _ = ReportLoopAsync(_reportCts.Token);
+        Console.WriteLine("[DDoS] Report loop started");
 
         if (config.DurationSeconds > 0)
         {
@@ -63,6 +72,7 @@ public class DDoSModule : IDisposable
                 await Task.Delay(TimeSpan.FromSeconds(config.DurationSeconds), ct);
                 await StopAsync();
             }, ct);
+            Console.WriteLine($"[DDoS] Auto-stop scheduled in {config.DurationSeconds}s");
         }
     }
 
@@ -73,7 +83,7 @@ public class DDoSModule : IDisposable
         _reportCts?.Cancel();
 
         var status = BuildStatus();
-        var json = JsonSerializer.Serialize(status);
+        var json = JsonSerializer.Serialize(status, WsJsonContext.Default.StressAgentStatus);
         try { await _ws.SendResultRawAsync("stress.status", _agentId, json); } catch { }
     }
 
@@ -89,7 +99,7 @@ public class DDoSModule : IDisposable
                 Interlocked.Exchange(ref _prevBytes, status.BytesSent);
                 status.Mbps = delta * 8.0 / 5.0 / 1_000_000.0;
 
-                var json = JsonSerializer.Serialize(status);
+                var json = JsonSerializer.Serialize(status, WsJsonContext.Default.StressAgentStatus);
                 if (_ws.IsConnected)
                     await _ws.SendResultRawAsync("stress.status", _agentId, json);
             }

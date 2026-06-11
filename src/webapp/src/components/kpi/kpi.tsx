@@ -3,10 +3,8 @@
 import type { ComponentPropsWithRef, ReactNode, SVGProps } from 'react';
 import { createContext, useContext, useId, useMemo } from 'react';
 import { Area, AreaChart, ResponsiveContainer } from 'recharts';
-import { Button, Card, ProgressBar, Separator } from '@heroui/react';
+import { Button, Card, Chip, ProgressBar, Separator } from '@heroui/react';
 import { composeSlotClassName } from '../../utils/compose';
-import { NumberValue } from '../number-value/index';
-import { TrendChip } from '../trend-chip/index';
 import { kpiVariants } from './kpi.styles';
 
 interface KPIContextValue {
@@ -118,41 +116,50 @@ const KPITitle = ({ children, className, ...props }: KPITitleProps) => {
   );
 };
 
-interface KPIValueProps extends Omit<
-  ComponentPropsWithRef<typeof NumberValue>,
-  'children'
-> {
-  children?: ComponentPropsWithRef<typeof NumberValue>['children'];
+interface KPIValueProps extends ComponentPropsWithRef<'dd'> {
+  value: number;
+  formatOptions?: Intl.NumberFormatOptions;
 }
 
-const KPIValue = ({ children, className, ...props }: KPIValueProps) => {
+const KPIValue = ({ value, formatOptions, className, ...props }: KPIValueProps) => {
   const { slots } = useContext(KPIContext);
+  const formatted = value.toLocaleString(undefined, formatOptions);
 
   return (
-    <NumberValue {...props}>
-      {(formatted) => (
-        <dd
-          className={composeSlotClassName(slots?.value, className)}
-          data-slot="kpi-value"
-        >
-          {typeof children === 'function' ? children(formatted) : formatted}
-        </dd>
-      )}
-    </NumberValue>
+    <dd
+      className={composeSlotClassName(slots?.value, className)}
+      data-slot="kpi-value"
+      {...props}
+    >
+      {formatted}
+    </dd>
   );
 };
 
-interface KPITrendProps extends ComponentPropsWithRef<typeof TrendChip> {}
+interface KPITrendProps extends ComponentPropsWithRef<'div'> {
+  trend?: 'up' | 'down' | 'neutral';
+  children?: ReactNode;
+}
 
-const KPITrend = ({ className, ...props }: KPITrendProps) => {
+const trendColorMap: Record<string, 'success' | 'danger' | 'default'> = {
+  up: 'success',
+  down: 'danger',
+  neutral: 'default',
+};
+
+const KPITrend = ({ trend = 'neutral', children, className, ...props }: KPITrendProps) => {
   const { slots } = useContext(KPIContext);
 
   return (
-    <TrendChip
+    <div
       className={composeSlotClassName(slots?.trend, className)}
       data-slot="kpi-trend"
       {...props}
-    />
+    >
+      <Chip color={trendColorMap[trend]} size="sm" variant="soft">
+        {children}
+      </Chip>
+    </div>
   );
 };
 

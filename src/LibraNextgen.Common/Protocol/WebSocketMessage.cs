@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using LibraNextgen.Common.Models;
 
 namespace LibraNextgen.Common.Protocol;
 
@@ -73,6 +74,8 @@ public static class WsMessageType
 }
 
 [JsonSerializable(typeof(WebSocketMessage))]
-internal partial class WsJsonContext : JsonSerializerContext
+[JsonSerializable(typeof(StressConfig))]
+[JsonSerializable(typeof(StressAgentStatus))]
+public partial class WsJsonContext : JsonSerializerContext
 {
 }

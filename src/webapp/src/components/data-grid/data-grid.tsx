@@ -21,8 +21,26 @@ import { useDragAndDrop } from 'react-aria-components/useDragAndDrop';
 import { TableLayout, Virtualizer } from 'react-aria-components/Virtualizer';
 import { Button, Checkbox, Table } from '@heroui/react';
 import { composeSlotClassName } from '../../utils/compose';
-import { ChevronRight, ChevronUp, Grip } from '../icons';
 import { dataGridVariants } from './data-grid.styles';
+
+// Inline SVG icons (replaced deleted ../icons.tsx)
+const ChevronUp = (props: React.SVGProps<SVGSVGElement>) => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} {...props}>
+    <path d="m18 15-6-6-6 6" />
+  </svg>
+);
+const Grip = (props: React.SVGProps<SVGSVGElement>) => (
+  <svg viewBox="0 0 24 24" fill="currentColor" {...props}>
+    <circle cx="9" cy="5" r="1.5" /><circle cx="15" cy="5" r="1.5" />
+    <circle cx="9" cy="12" r="1.5" /><circle cx="15" cy="12" r="1.5" />
+    <circle cx="9" cy="19" r="1.5" /><circle cx="15" cy="19" r="1.5" />
+  </svg>
+);
+const ChevronRight = (props: React.SVGProps<SVGSVGElement>) => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} {...props}>
+    <path d="m9 18 6-6-6-6" />
+  </svg>
+);
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
