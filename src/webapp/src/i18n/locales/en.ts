@@ -412,6 +412,8 @@ export default {
       consoleAppDesc: 'Output as console application with a terminal window.',
       desktopApp: 'Desktop',
       desktopAppDesc: 'Output as Windows GUI application with no visible console.',
+      buildSuccess: 'Build Successful',
+      buildSuccessDesc: 'Build completed in {{time}}.',
     },
     about: {
       licenseTitle: 'License',

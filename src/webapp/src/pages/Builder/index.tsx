@@ -61,8 +61,10 @@ export default function BuilderPage() {
   const [iconPreview, setIconPreview] = useState<string | null>(null);
   const [logs, setLogs] = useState<string[]>([]);
   const [buildStatus, setBuildStatus] = useState<string | null>(null);
+  const [buildSucceeded, setBuildSucceeded] = useState(false);
   const [elapsed, setElapsed] = useState(0);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const lastBuildResultRef = useRef<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const logEndRef = useRef<HTMLDivElement>(null);
   const esRef = useRef<EventSource | null>(null);
@@ -148,6 +150,8 @@ export default function BuilderPage() {
     setElapsed(0);
     setBuildStatus('builder.preparing');
     setBuildId(null);
+    setBuildSucceeded(false);
+    lastBuildResultRef.current = null;
 
     // Start timer
     const startTime = Date.now();
@@ -175,6 +179,7 @@ export default function BuilderPage() {
               setLogs((prev) => [...prev, msg.text]);
               break;
             case 'status':
+              lastBuildResultRef.current = msg.status;
               setBuildStatus(msg.status === 'completed' ? 'builder.completed' : 'builder.failed');
               if (msg.status === 'failed' && msg.error) {
                 setError(msg.error);
@@ -183,6 +188,9 @@ export default function BuilderPage() {
             case 'done':
               es.close();
               esRef.current = null;
+              if (lastBuildResultRef.current === 'completed') {
+                setBuildSucceeded(true);
+              }
               setBuilding(false);
               if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
               loadHistory();
@@ -585,33 +593,61 @@ export default function BuilderPage() {
         </Card>
       </div>
 
-        {/* Build Log Modal */}
+        {/* Build Log / Success Modal */}
         <Modal.Backdrop
-          isOpen={logs.length > 0 || building}
+          isOpen={logs.length > 0 || building || buildSucceeded}
           isDismissable={!building}
-          onOpenChange={(open) => { if (!open && !building) setLogs([]); }}
+          onOpenChange={(open) => { if (!open && !building) { setLogs([]); setBuildSucceeded(false); } }}
         >
-          <Modal.Container size="cover">
+          <Modal.Container size={buildSucceeded && !building ? "lg" : "cover"}>
             <Modal.Dialog>
               {!building && <Modal.CloseTrigger />}
-              <Modal.Header>
-                <Modal.Heading className="flex items-center gap-3">
-                  {t('builder.buildLog')}
-                  <span className="text-sm font-normal text-default-500 tabular-nums">
-                    {formatElapsed(elapsed)}
-                  </span>
-                </Modal.Heading>
-              </Modal.Header>
-              <Modal.Body>
-                <div className="bg-default-100 rounded p-3 font-mono text-xs overflow-auto">
-                  {logs.map((line, i) => (
-                    <div key={i} className="whitespace-pre-wrap break-all leading-5">
-                      {line}
+              {buildSucceeded && !building ? (
+                <>
+                  <Modal.Body>
+                    <div className="flex flex-col items-center py-10 gap-4">
+                      <div className="w-16 h-16 rounded-full bg-green-500 flex items-center justify-center">
+                        <svg className="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                        </svg>
+                      </div>
+                      <h2 className="text-2xl font-semibold">{t('builder.buildSuccess')}</h2>
+                      <p className="text-default-500 text-lg">{t('builder.buildSuccessDesc', { time: formatElapsed(elapsed) })}</p>
                     </div>
-                  ))}
-                  <div ref={logEndRef} />
-                </div>
-              </Modal.Body>
+                  </Modal.Body>
+                  <Modal.Footer>
+                    {buildId && (
+                      <Button variant="primary" onPress={() => handleDownload(buildId)}>
+                        {t('builder.download')}
+                      </Button>
+                    )}
+                    <Button variant="ghost" onPress={() => { setLogs([]); setBuildSucceeded(false); }}>
+                      {t('common.close')}
+                    </Button>
+                  </Modal.Footer>
+                </>
+              ) : (
+                <>
+                  <Modal.Header>
+                    <Modal.Heading className="flex items-center gap-3">
+                      {t('builder.buildLog')}
+                      <span className="text-sm font-normal text-default-500 tabular-nums">
+                        {formatElapsed(elapsed)}
+                      </span>
+                    </Modal.Heading>
+                  </Modal.Header>
+                  <Modal.Body>
+                    <div className="bg-default-100 rounded p-3 font-mono text-xs overflow-auto">
+                      {logs.map((line, i) => (
+                        <div key={i} className="whitespace-pre-wrap break-all leading-5">
+                          {line}
+                        </div>
+                      ))}
+                      <div ref={logEndRef} />
+                    </div>
+                  </Modal.Body>
+                </>
+              )}
             </Modal.Dialog>
           </Modal.Container>
         </Modal.Backdrop>

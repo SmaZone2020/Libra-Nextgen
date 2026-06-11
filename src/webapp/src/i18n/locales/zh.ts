@@ -412,6 +412,8 @@ export default {
       consoleAppDesc: '编译为控制台程序，带有命令行窗口。',
       desktopApp: '桌面应用程序',
       desktopAppDesc: '编译为 Windows GUI 程序，无可见控制台窗口。',
+      buildSuccess: '构建成功',
+      buildSuccessDesc: '构建完成，用时 {{time}}。',
     },
     about: {
       licenseTitle: '开源协议',
