@@ -3,7 +3,6 @@ import { useTranslation } from 'react-i18next';
 import { Card } from '@heroui/react';
 import { AgentSelector } from './AgentSelector';
 import { ConfigForm, type FormData } from './ConfigForm';
-import { AttackChart } from './AttackChart';
 import { StatusPanel } from './StatusPanel';
 import { consoleWs } from '../../ws/consoleWs';
 import { startStressTest, stopStressTest, getStressStatus } from '../../api/stressTest';
@@ -135,31 +134,41 @@ export default function StressTestPage() {
         onChange={setSelectedIds}
       />
 
-      {/* Middle: Config + Chart */}
-      <div className="flex-1 flex flex-col gap-4 min-w-0">
+      {/* Middle: Config + Console Log */}
+      <div className="w-[50%] shrink-0 flex flex-col gap-4 min-w-0">
         <ConfigForm
           disabled={attacking}
           onStart={handleStart}
           onStop={handleStop}
         />
 
-        <Card className="flex-1 p-4 min-h-0">
-          {attacking || chartHistory.length > 0 ? (
-            <AttackChart agentStatuses={agentStatuses} history={chartHistory} />
-          ) : (
-            <div className="flex items-center justify-center h-full text-sm text-neutral-400">
-              {t('stressTest.chartPlaceholder')}
-            </div>
-          )}
+        <Card className="flex-1 p-4 min-h-0 overflow-y-auto">
+          <h3 className="text-sm font-semibold text-neutral-700 mb-2">
+            {t('stressTest.log')}
+          </h3>
+          <div className="bg-neutral-900 text-emerald-400 text-xs font-mono rounded-lg p-3 space-y-0.5">
+            {logs.length === 0 ? (
+              <span className="text-neutral-500">{t('stressTest.logPlaceholder')}</span>
+            ) : (
+              logs.map((log, i) => (
+                <div key={i}>
+                  <span className="text-neutral-500">
+                    {new Date().toLocaleTimeString()}
+                  </span>{' '}
+                  {log}
+                </div>
+              ))
+            )}
+          </div>
         </Card>
       </div>
 
-      {/* Right: Status Panel */}
-      <div className="w-[320px] shrink-0 overflow-y-auto">
+      {/* Right: Status Panel + Chart */}
+      <div className="flex-1 overflow-y-auto min-w-0">
         <StatusPanel
           campaign={campaign}
           agentStatuses={agentStatuses}
-          logs={logs}
+          chartHistory={chartHistory}
         />
       </div>
     </div>

@@ -2,12 +2,18 @@ import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Card } from '@heroui/react';
 import { ListView } from '../../components/list-view';
+import { AttackChart } from './AttackChart';
 import type { StressAgentStatus, StressTestCampaign } from '../../types/models';
+
+interface ChartPoint {
+  ts: number;
+  mbps: number;
+}
 
 interface Props {
   campaign: StressTestCampaign | null;
   agentStatuses: StressAgentStatus[];
-  logs: string[];
+  chartHistory: ChartPoint[];
 }
 
 function formatMbps(mbps: number): string {
@@ -15,7 +21,7 @@ function formatMbps(mbps: number): string {
   return mbps.toFixed(1) + ' Mbps';
 }
 
-export function StatusPanel({ campaign, agentStatuses, logs }: Props) {
+export function StatusPanel({ campaign, agentStatuses, chartHistory }: Props) {
   const { t } = useTranslation();
 
   const totals = useMemo(() => {
@@ -83,24 +89,13 @@ export function StatusPanel({ campaign, agentStatuses, logs }: Props) {
         )}
       </Card>
 
-      {/* Console log */}
+      {/* Live throughput chart */}
       <Card className="p-4">
         <h3 className="text-sm font-semibold text-neutral-700 mb-2">
-          {t('stressTest.log')}
+          {t('stressTest.chart')}
         </h3>
-        <div className="bg-neutral-900 text-emerald-400 text-xs font-mono rounded-lg p-3 max-h-48 overflow-y-auto space-y-0.5">
-          {logs.length === 0 ? (
-            <span className="text-neutral-500">{t('stressTest.logPlaceholder')}</span>
-          ) : (
-            logs.map((log, i) => (
-              <div key={i}>
-                <span className="text-neutral-500">
-                  {new Date().toLocaleTimeString()}
-                </span>{' '}
-                {log}
-              </div>
-            ))
-          )}
+        <div className="h-48">
+          <AttackChart agentStatuses={agentStatuses} history={chartHistory} />
         </div>
       </Card>
     </div>

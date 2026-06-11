@@ -447,6 +447,7 @@ export default {
       layer7: '七层攻击 (应用层)',
       chartPlaceholder: '开始攻击后可查看实时流量图表',
       logPlaceholder: '等待攻击事件...',
+      chart: '流量图表',
       log: '控制台日志',
       status: {
         title: '攻击状态',

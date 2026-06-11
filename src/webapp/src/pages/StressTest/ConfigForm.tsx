@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Button, Card, Input, Label, TextField } from '@heroui/react';
+import { Button, Card, Input, Label, Switch, TextField } from '@heroui/react';
 import { NumberField } from '@heroui/react/number-field';
 import type { StressMethod } from '../../types/models';
 
@@ -73,9 +73,9 @@ export function ConfigForm({ disabled, onStart, onStop }: Props) {
 
       <div className="space-y-4">
         {/* Target */}
-        <div className="grid grid-cols-4 gap-4">
+        <div className="grid grid-cols-3 gap-3">
           <TextField
-            className="col-span-3"
+            className="min-w-[340px] w-full col-span-2"
             value={targetHost}
             onChange={(v) => setTargetHost(v)}
           >
@@ -83,7 +83,7 @@ export function ConfigForm({ disabled, onStart, onStop }: Props) {
             <Input placeholder="192.168.1.1" />
           </TextField>
           <NumberField
-            className="w-full max-w-64"
+            className="w-full max-w-64 col-span-1"
             value={targetPort}
             minValue={1}
             maxValue={65535}
@@ -92,7 +92,7 @@ export function ConfigForm({ disabled, onStart, onStop }: Props) {
             <Label>{t('stressTest.targetPort')}</Label>
             <NumberField.Group>
               <NumberField.DecrementButton />
-              <NumberField.Input className="w-[80px]" />
+              <NumberField.Input className="w-[80px] text-center" />
               <NumberField.IncrementButton />
             </NumberField.Group>
           </NumberField>
@@ -107,18 +107,19 @@ export function ConfigForm({ disabled, onStart, onStop }: Props) {
               <span className="text-xs text-neutral-500">{t('stressTest.layer4')}</span>
               <div className="flex flex-wrap gap-1.5 mt-1">
                 {LAYER4_METHODS.map(m => (
-                  <button
+                  <Button
                     key={m.id}
-                    disabled={disabled}
+                    isDisabled={disabled}
                     onClick={() => toggleMethod(m.id)}
-                    className={`px-2.5 py-1 rounded-md text-xs font-medium border transition-colors ${
+                    variant='tertiary'
+                    className={`${
                       methods.includes(m.id)
                         ? 'bg-orange-100 border-orange-300 text-orange-800'
-                        : 'bg-white border-neutral-200 text-neutral-600 hover:bg-neutral-50 disabled:opacity-50'
+                        : 'text-neutral-600 hover:bg-neutral-50 disabled:opacity-50'
                     }`}
                   >
                     {m.label}
-                  </button>
+                  </Button>
                 ))}
               </div>
             </div>
@@ -126,18 +127,19 @@ export function ConfigForm({ disabled, onStart, onStop }: Props) {
               <span className="text-xs text-neutral-500">{t('stressTest.layer7')}</span>
               <div className="flex flex-wrap gap-1.5 mt-1">
                 {LAYER7_METHODS.map(m => (
-                  <button
+                  <Button
                     key={m.id}
-                    disabled={disabled}
+                    isDisabled={disabled}
                     onClick={() => toggleMethod(m.id)}
-                    className={`px-2.5 py-1 rounded-md text-xs font-medium border transition-colors ${
+                    variant='tertiary'
+                    className={`${
                       methods.includes(m.id)
                         ? 'bg-violet-100 border-violet-300 text-violet-800'
-                        : 'bg-white border-neutral-200 text-neutral-600 hover:bg-neutral-50 disabled:opacity-50'
+                        : 'border-neutral-200 text-neutral-600 hover:bg-neutral-50 disabled:opacity-50'
                     }`}
                   >
                     {m.label}
-                  </button>
+                  </Button>
                 ))}
               </div>
             </div>
@@ -154,7 +156,9 @@ export function ConfigForm({ disabled, onStart, onStop }: Props) {
           >
             <Label>{t('stressTest.duration')}</Label>
             <NumberField.Group>
-              <NumberField.Input className="w-full" />
+              <NumberField.DecrementButton />
+              <NumberField.Input className="w-full text-center" />
+              <NumberField.IncrementButton />
             </NumberField.Group>
           </NumberField>
           <NumberField
@@ -165,7 +169,9 @@ export function ConfigForm({ disabled, onStart, onStop }: Props) {
           >
             <Label>{t('stressTest.threads')}</Label>
             <NumberField.Group>
-              <NumberField.Input className="w-full" />
+              <NumberField.DecrementButton />
+              <NumberField.Input className="w-full text-center" />
+              <NumberField.IncrementButton />
             </NumberField.Group>
           </NumberField>
           <NumberField
@@ -176,25 +182,26 @@ export function ConfigForm({ disabled, onStart, onStop }: Props) {
           >
             <Label>{t('stressTest.packetSize')}</Label>
             <NumberField.Group>
-              <NumberField.Input className="w-full" />
+              <NumberField.DecrementButton />
+              <NumberField.Input className="w-full text-center" />
+              <NumberField.IncrementButton />
             </NumberField.Group>
           </NumberField>
         </div>
 
         {/* Continue after close */}
-        <div className="flex items-center justify-between py-1">
-          <Label>{t('stressTest.continueAfterClose')}</Label>
-          <label className="relative inline-flex items-center cursor-pointer">
-            <input
-              type="checkbox"
-              checked={continueAfterClose}
-              onChange={e => setContinueAfterClose(e.target.checked)}
-              disabled={disabled}
-              className="sr-only peer"
-            />
-            <div className="w-9 h-5 bg-neutral-200 peer-focus:outline-none rounded-full peer peer-checked:bg-primary-600 peer-disabled:opacity-50 after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-full" />
-          </label>
-        </div>
+        <Switch
+          isSelected={continueAfterClose}
+          onChange={setContinueAfterClose}
+          isDisabled={disabled}
+        >
+          <Switch.Control>
+            <Switch.Thumb />
+          </Switch.Control>
+          <Switch.Content>
+            <Label className="text-sm">{t('stressTest.continueAfterClose')}</Label>
+          </Switch.Content>
+        </Switch>
 
         {/* Action buttons */}
         <div className="flex gap-2">

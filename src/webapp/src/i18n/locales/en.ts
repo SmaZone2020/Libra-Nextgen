@@ -447,6 +447,7 @@ export default {
       layer7: 'Layer 7 (Application)',
       chartPlaceholder: 'Start an attack to see real-time traffic chart',
       logPlaceholder: 'Waiting for attack events...',
+      chart: 'Throughput Chart',
       log: 'Console Log',
       status: {
         title: 'Status',
