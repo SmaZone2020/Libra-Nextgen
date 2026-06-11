@@ -30,6 +30,7 @@ export default {
       othersoft: { label: 'Other Software', subtitle: 'WeChat & QQ account discovery' },
       proxyBrowser: { label: 'Proxy Browser', subtitle: 'Browse web through agent' },
       builder: { label: 'Builder', subtitle: 'Generate customized Agent payload' },
+      about: { label: 'About', subtitle: 'License, disclaimer & legal information' },
     },
     common: {
       connect: 'Connect',
@@ -410,6 +411,20 @@ export default {
       consoleAppDesc: 'Output as console application with a terminal window.',
       desktopApp: 'Desktop',
       desktopAppDesc: 'Output as Windows GUI application with no visible console.',
+    },
+    about: {
+      licenseTitle: 'License',
+      licenseP1: 'Libra-Nextgen is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version.',
+      licenseP2: 'This program is distributed in the hope that it will be useful for authorized security research and enterprise red-team operations, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.',
+      viewFullLicense: 'View the full GPL-3.0 license text',
+      disclaimerTitle: 'Disclaimer',
+      disclaimerP1: 'Libra-Nextgen is designed exclusively for authorized enterprise security testing, red-team operations, and cybersecurity research within the user\'s own infrastructure. Any use of this software must comply with all applicable local, national, and international laws.',
+      disclaimerP2: 'Unauthorized access to computer systems, networks, or data without explicit written authorization from the system owner is illegal. Users must obtain proper authorization before conducting any security assessment or penetration testing activity.',
+      disclaimerP3: 'This tool is intended for use by qualified cybersecurity professionals who understand the legal and ethical implications of their actions. If you are unsure whether your intended use is lawful, consult with legal counsel before proceeding.',
+      waiverTitle: 'Limitation of Liability',
+      waiverP1: 'The developers, contributors, and distributors of Libra-Nextgen assume no liability for any direct, indirect, incidental, special, exemplary, or consequential damages (including but not limited to procurement of substitute goods or services, loss of use, data, or profits, or business interruption) arising from the use or inability to use this software.',
+      waiverP2: 'Users assume full and complete responsibility for all actions taken using this software. The developers shall not be held liable for any claims, damages, or legal consequences resulting from the use, misuse, or abuse of Libra-Nextgen.',
+      waiverP3: 'By using Libra-Nextgen, you acknowledge that you have read, understood, and agreed to these terms. If you do not agree with these terms, you must not use this software.',
     },
   },
 };

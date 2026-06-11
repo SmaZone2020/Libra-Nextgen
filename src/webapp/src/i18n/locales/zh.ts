@@ -30,6 +30,7 @@ export default {
       othersoft: { label: '其他软件', subtitle: '微信 & QQ 账号发现' },
       proxyBrowser: { label: '反向代理', subtitle: '通过设备浏览网页' },
       builder: { label: '构建荷载', subtitle: '生成定制化 Agent 载荷' },
+      about: { label: '关于', subtitle: '开源协议、免责声明与法律信息' },
     },
     common: {
       connect: '连接',
@@ -410,6 +411,20 @@ export default {
       consoleAppDesc: '编译为控制台程序，带有命令行窗口。',
       desktopApp: '桌面应用程序',
       desktopAppDesc: '编译为 Windows GUI 程序，无可见控制台窗口。',
+    },
+    about: {
+      licenseTitle: '开源协议',
+      licenseP1: 'Libra-Nextgen 是自由软件，您可以根据自由软件基金会发布的 GNU 通用公共许可证（版本 3 或更高版本）的条款重新分发和/或修改它。',
+      licenseP2: '本程序基于授权的安全研究和企业红队操作目的而分发，但不提供任何担保；甚至不保证适销性或特定用途的适用性。',
+      viewFullLicense: '查看完整的 GPL-3.0 协议文本',
+      disclaimerTitle: '免责声明',
+      disclaimerP1: 'Libra-Nextgen 专为授权的企业安全测试、红队行动和用户自有基础设施内的网络安全研究而设计。使用本软件必须遵守所有适用的地方、国家和国际法律法规。',
+      disclaimerP2: '未经系统所有者明确的书面授权而访问计算机系统、网络或数据是非法的。用户在开展任何安全评估或渗透测试活动之前，必须获得适当的授权。',
+      disclaimerP3: '本工具仅供了解其行为法律和道德影响的合格网络安全专业人员使用。如果您不确定预期用途是否合法，请在继续之前咨询法律顾问。',
+      waiverTitle: '责任限制',
+      waiverP1: 'Libra-Nextgen 的开发者、贡献者和分发者对因使用或无法使用本软件而产生的任何直接、间接、附带、特殊、惩戒性或后果性损害（包括但不限于替代商品或服务的采购、使用、数据或利润的损失，或业务中断）不承担任何责任。',
+      waiverP2: '用户对使用本软件进行的所有操作承担全部责任。开发者不对因使用、误用或滥用 Libra-Nextgen 而产生的任何索赔、损害或法律后果承担责任。',
+      waiverP3: '使用 Libra-Nextgen 即表示您已阅读、理解并同意这些条款。如果您不同意这些条款，则不得使用本软件。',
     },
   },
 };
