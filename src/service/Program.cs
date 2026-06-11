@@ -17,6 +17,8 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.Configure<MongoSettings>(builder.Configuration.GetSection(MongoSettings.SectionName));
 builder.Services.AddSingleton<MongoDbContext>();
 
+builder.Services.AddHttpClient();
+
 // Typed repositories per collection
 builder.Services.AddScoped<Repository<Agent>>(sp =>
     new Repository<Agent>(sp.GetRequiredService<MongoDbContext>(), "agents"));
