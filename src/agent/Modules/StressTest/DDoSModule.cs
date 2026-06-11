@@ -10,6 +10,7 @@ public class DDoSModule : IDisposable
     private readonly WsCommunicator _ws;
     private readonly string _agentId;
     private readonly string _hostname;
+    private string _campaignId = string.Empty;
     private readonly ConcurrentDictionary<string, CancellationTokenSource> _activeMethods = new();
     private CancellationTokenSource? _reportCts;
 
@@ -22,6 +23,7 @@ public class DDoSModule : IDisposable
 
     public async Task StartAsync(StressConfig config, CancellationToken ct)
     {
+        _campaignId = config.CampaignId;
         _reportCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
 
         var registry = new Dictionary<string, IStressMethod>(StringComparer.OrdinalIgnoreCase)
@@ -98,6 +100,7 @@ public class DDoSModule : IDisposable
 
     private StressAgentStatus BuildStatus() => new()
     {
+        CampaignId = _campaignId,
         AgentId = _agentId,
         Hostname = _hostname,
         PacketsSent = Interlocked.Read(ref _pkt),

@@ -46,6 +46,9 @@ public class StressTestCampaign
 
 public class StressAgentStatus
 {
+    [JsonPropertyName("campaignId")]
+    public string CampaignId { get; set; } = string.Empty;
+
     [JsonPropertyName("agentId")]
     public string AgentId { get; set; } = string.Empty;
 

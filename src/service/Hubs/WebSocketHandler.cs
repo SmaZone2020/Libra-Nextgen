@@ -265,7 +265,7 @@ public static class WebSocketHandler
                             var status = message.Data?.Deserialize<StressAgentStatus>();
                             if (status != null)
                             {
-                                stressSvc.UpdateAgentStatus(agentId, status);
+                                stressSvc.UpdateAgentStatus(status.CampaignId, status);
                             }
                         }
                         catch { }
