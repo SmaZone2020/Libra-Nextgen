@@ -150,25 +150,41 @@ export function Sidebar({
               const label = t(item.label);
               const isActive = location.pathname === item.to;
               return (
-                <motion.div key={item.to} layout className="flex justify-center px-1">
+                <motion.div key={item.to} layout className="flex items-center">
                   <Tooltip delay={0} isDisabled={!collapsed}>
                     <Button
                       isIconOnly={collapsed}
-                      size="sm"
+                      size="lg"
                       variant={isActive ? 'primary' : 'ghost'}
-                      aria-label={label}
-                      className={collapsed ? 'h-9 w-9' : 'flex-1 justify-start px-3'}
+                      className={`flex-1 justify-start px-3 mr-1 transition-all duration-300 ${isActive ? 'rounded-[15px]' : ''}`}
                       onPress={() => navigate(item.to)}
                     >
-                      <item.icon className="w-4 h-4 shrink-0" />
-                      {!collapsed && (
-                        <span className="text-sm font-medium ml-2">{label}</span>
-                      )}
+                      <item.icon className="w-5 h-5 shrink-0" />
+                      <span
+                        className="overflow-hidden whitespace-nowrap transition-all duration-300 font-medium "
+                        style={{
+                          maxWidth: collapsed ? 0 : '14rem',
+                          opacity: collapsed ? 0 : 1,
+                        }}
+                      >
+                        {label}
+                      </span>
                     </Button>
                     <Tooltip.Content showArrow placement="right">
                       {label}
                     </Tooltip.Content>
                   </Tooltip>
+                  <AnimatePresence>
+                    {isActive && (
+                      <motion.div
+                        animate={{ width: 8, opacity: 1 }}
+                        exit={{ width: 0, opacity: 0 }}
+                        initial={{ width: 0, opacity: 0 }}
+                        transition={{ duration: 0.2 }}
+                        className="h-6 bg-blue-500 shrink-0 rounded-md"
+                      />
+                    )}
+                  </AnimatePresence>
                 </motion.div>
               );
             })}
@@ -271,17 +287,19 @@ export function Sidebar({
               const label = t(item.label);
               const isActive = location.pathname === item.to;
               return (
-                <div key={item.to} className="flex justify-center px-1">
+                <div key={item.to} className="flex items-center">
                   <Button
-                    size="sm"
+                    size="lg"
                     variant={isActive ? 'primary' : 'ghost'}
-                    aria-label={label}
-                    className="flex-1 justify-start px-3"
+                    className={`flex-1 justify-start px-3 mr-1 ${isActive ? 'rounded-[15px]' : ''}`}
                     onPress={() => { navigate(item.to); onMobileClose(); }}
                   >
-                    <item.icon className="w-4 h-4 shrink-0" />
-                    <span className="text-sm font-medium ml-2">{label}</span>
+                    <item.icon className="w-5 h-5 shrink-0" />
+                    <span className="font-medium ml-3">{label}</span>
                   </Button>
+                  {isActive && (
+                    <div className="h-6 w-2 bg-blue-500 shrink-0 rounded-md" />
+                  )}
                 </div>
               );
             })}
