@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Globalization;
 using System.Text;
+using Microsoft.Win32;
 
 namespace LibraNextgen.Agent.Platform;
 
@@ -86,14 +87,32 @@ public class WindowsExecutor : IPlatformExecutor
     {
         try
         {
-            var oemCp = CultureInfo.CurrentCulture.TextInfo.OEMCodePage;
-            var enc = Encoding.GetEncoding(oemCp);
-            Console.WriteLine($"[WindowsExecutor] OEM code page: {oemCp}, encoding: {enc.EncodingName}");
-            return enc;
+            // Query system OEM code page from registry — most reliable for cmd.exe output encoding.
+            // CurrentCulture.OEMCodePage can be wrong (e.g. 437) when user locale differs from system locale.
+            using var key = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(
+                @"SYSTEM\CurrentControlSet\Control\Nls\CodePage");
+            var oemCpStr = key?.GetValue("OEMCP")?.ToString();
+            if (int.TryParse(oemCpStr, out var oemCp) && oemCp > 0)
+            {
+                var enc = Encoding.GetEncoding(oemCp);
+                Console.WriteLine($"[WindowsExecutor] System OEM CP: {oemCp} ({enc.EncodingName})");
+                return enc;
+            }
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[WindowsExecutor] OEM encoding failed: {ex.Message}, falling back to UTF-8");
+            Console.WriteLine($"[WindowsExecutor] Registry OEM CP lookup failed: {ex.Message}");
+        }
+
+        try
+        {
+            var oemCp = CultureInfo.CurrentCulture.TextInfo.OEMCodePage;
+            Console.WriteLine($"[WindowsExecutor] Fallback OEM CP: {oemCp}");
+            return Encoding.GetEncoding(oemCp);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[WindowsExecutor] OEM encoding failed: {ex.Message}, using UTF-8");
             return Encoding.UTF8;
         }
     }

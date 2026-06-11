@@ -99,6 +99,7 @@ public static class PowerShellRunner
             RedirectStandardError = true,
             UseShellExecute = false,
             CreateNoWindow = true,
+            WorkingDirectory = "C:\\",
         };
 
         using var process = Process.Start(psi);
