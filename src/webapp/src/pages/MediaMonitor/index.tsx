@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button, ListBox, Select } from '@heroui/react';
 import { useAgent } from '../../contexts/AgentContext';
-import { getToken } from '../../api/client';
+import { api } from '../../api/client';
 import { useCameraSession } from './useCameraSession';
 import { useMicSession } from './useMicSession';
 import type { CameraDevice } from './useCameraSession';
@@ -10,8 +10,6 @@ import type { MicDevice } from './useMicSession';
 import AudioPlayer from './AudioPlayer';
 import type { AudioPlayerHandle } from './AudioPlayer';
 import type { AudioChunk } from './useMicSession';
-
-const API_BASE = 'http://127.0.0.1:5270';
 
 export default function MediaMonitorPage() {
   const { t } = useTranslation();
@@ -38,31 +36,18 @@ export default function MediaMonitorPage() {
 
   // ── Fetch devices ───────────────────────────────────────────────────────
   const fetchDevices = useCallback(async (agentId: string) => {
-    const token = getToken();
-    if (!token) return;
-
     try {
-      const camRes = await fetch(`${API_BASE}/api/media/camera/devices/${agentId}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (camRes.ok) {
-        const camJson = await camRes.json();
-        const camData = Array.isArray(camJson) ? camJson : (camJson.data ?? []);
-        setCameras(camData);
-        if (camData.length > 0) setCameraIndex(0);
-      }
+      const camData = await api.get<CameraDevice[]>(`/media/camera/devices/${agentId}`);
+      const cams = Array.isArray(camData) ? camData : (camData as any)?.data ?? [];
+      setCameras(cams);
+      if (cams.length > 0) setCameraIndex(0);
     } catch { }
 
     try {
-      const micRes = await fetch(`${API_BASE}/api/media/mic/devices/${agentId}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (micRes.ok) {
-        const micJson = await micRes.json();
-        const micData = Array.isArray(micJson) ? micJson : (micJson.data ?? []);
-        setMics(micData);
-        if (micData.length > 0) setMicIndex(0);
-      }
+      const micData = await api.get<MicDevice[]>(`/media/mic/devices/${agentId}`);
+      const mics = Array.isArray(micData) ? micData : (micData as any)?.data ?? [];
+      setMics(mics);
+      if (mics.length > 0) setMicIndex(0);
     } catch { }
   }, []);
 

@@ -1,4 +1,5 @@
 const API_BASE = 'http://127.0.0.1:5270/api';
+export const API_ORIGIN = 'http://127.0.0.1:5270';
 
 let authToken: string | null = localStorage.getItem('token');
 let onAuthFailed: (() => void) | null = null;

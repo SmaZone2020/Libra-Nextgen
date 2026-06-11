@@ -1,8 +1,6 @@
 import { useCallback, useRef, useState } from 'react';
 import { consoleWs } from '../../ws/consoleWs';
-import { getToken } from '../../api/client';
-
-const API_BASE = 'http://127.0.0.1:5270';
+import { getToken, API_ORIGIN } from '../../api/client';
 
 export interface CameraConfig {
   fps: number;
@@ -38,7 +36,7 @@ export function useCameraSession({ onFrame, onError }: UseCameraSessionOptions) 
 
     const run = async () => {
       try {
-        const res = await fetch(`${API_BASE}/api/media/camera/stream/${agentId}`, {
+        const res = await fetch(`${API_ORIGIN}/api/media/camera/stream/${agentId}`, {
           headers: { Authorization: `Bearer ${token}` },
           signal: controller.signal,
         });
