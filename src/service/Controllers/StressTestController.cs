@@ -95,6 +95,17 @@ public class StressTestController : ControllerBase
         return Ok(new { campaign, agentStatuses });
     }
 
+    [HttpGet("active")]
+    public IActionResult GetActive()
+    {
+        var campaign = _stressService.GetActive();
+        if (campaign == null)
+            return Ok(new { campaign = (StressTestCampaign?)null });
+
+        var agentStatuses = _stressService.GetAgentStatuses(campaign.Id);
+        return Ok(new { campaign, agentStatuses });
+    }
+
     [HttpGet("history")]
     public IActionResult GetHistory([FromQuery] int page = 1, [FromQuery] int pageSize = 20)
     {

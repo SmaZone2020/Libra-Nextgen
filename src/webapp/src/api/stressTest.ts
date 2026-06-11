@@ -13,6 +13,10 @@ export function getStressStatus(campaignId: string): Promise<StressCampaignDetai
   return api.get(`/stress-test/${campaignId}`);
 }
 
+export function getActiveStressTest(): Promise<StressCampaignDetail | null> {
+  return api.get('/stress-test/active');
+}
+
 export function getStressHistory(page = 1, pageSize = 20): Promise<{ campaigns: StressTestCampaign[]; page: number; pageSize: number }> {
   return api.get(`/stress-test/history?page=${page}&pageSize=${pageSize}`);
 }

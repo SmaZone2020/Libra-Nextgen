@@ -74,6 +74,14 @@ public class StressTestService
             dict[status.AgentId] = status;
     }
 
+    public StressTestCampaign? GetActive()
+    {
+        return _campaigns.Values
+            .Where(c => c.Status == CampaignStatus.Running)
+            .OrderByDescending(c => c.CreatedAt)
+            .FirstOrDefault();
+    }
+
     public List<StressAgentStatus> GetAgentStatuses(string campaignId)
     {
         if (_agentStatuses.TryGetValue(campaignId, out var dict))

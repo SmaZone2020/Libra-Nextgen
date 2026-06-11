@@ -22,6 +22,7 @@ interface Props {
   disabled: boolean;
   onStart: (data: FormData) => void;
   onStop: () => void;
+  initialData?: Partial<FormData>;
 }
 
 export interface FormData {
@@ -35,15 +36,15 @@ export interface FormData {
   packetSize: number;
 }
 
-export function ConfigForm({ disabled, onStart, onStop }: Props) {
+export function ConfigForm({ disabled, onStart, onStop, initialData }: Props) {
   const { t } = useTranslation();
-  const [methods, setMethods] = useState<StressMethod[]>(['httpFlood']);
-  const [targetHost, setTargetHost] = useState('127.0.0.1');
-  const [targetPort, setTargetPort] = useState(80);
-  const [duration, setDuration] = useState(300);
-  const [threads, setThreads] = useState(100);
-  const [packetSize, setPacketSize] = useState(1024);
-  const [continueAfterClose, setContinueAfterClose] = useState(true);
+  const [methods, setMethods] = useState<StressMethod[]>(initialData?.methods ?? ['httpFlood']);
+  const [targetHost, setTargetHost] = useState(initialData?.targetHost ?? '127.0.0.1');
+  const [targetPort, setTargetPort] = useState(initialData?.targetPort ?? 80);
+  const [duration, setDuration] = useState(initialData?.durationSeconds ?? 300);
+  const [threads, setThreads] = useState(initialData?.threadsPerAgent ?? 100);
+  const [packetSize, setPacketSize] = useState(initialData?.packetSize ?? 1024);
+  const [continueAfterClose, setContinueAfterClose] = useState(initialData?.continueAfterClose ?? true);
 
   const toggleMethod = (m: StressMethod) => {
     setMethods(prev =>

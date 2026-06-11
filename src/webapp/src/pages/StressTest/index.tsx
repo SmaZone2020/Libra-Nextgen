@@ -5,7 +5,7 @@ import { AgentSelector } from './AgentSelector';
 import { ConfigForm, type FormData } from './ConfigForm';
 import { StatusPanel } from './StatusPanel';
 import { consoleWs } from '../../ws/consoleWs';
-import { startStressTest, stopStressTest, getStressStatus } from '../../api/stressTest';
+import { startStressTest, stopStressTest, getStressStatus, getActiveStressTest } from '../../api/stressTest';
 import type { StressTestCampaign, StressAgentStatus } from '../../types/models';
 
 interface ChartPoint {
@@ -42,6 +42,32 @@ export default function StressTestPage() {
   const addLog = useCallback((msg: string, level: LogLevel = 'info') => {
     setLogs(prev => [...prev.slice(-100), { level, msg, ts: Date.now() }]);
   }, []);
+
+  // Resume active campaign on mount
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const detail = await getActiveStressTest();
+        if (cancelled || !detail?.campaign) return;
+
+        const c = detail.campaign;
+        setCampaign(c);
+        setAttacking(true);
+        if (detail.agentStatuses?.length) {
+          setAgentStatuses(detail.agentStatuses);
+          // Seed chart with current status
+          const totalMbps = detail.agentStatuses.reduce((sum, s) => sum + s.mbps, 0);
+          historyRef.current = [{ ts: Date.now(), mbps: totalMbps }];
+          setChartHistory(historyRef.current);
+        }
+        addLog(`Resumed campaign: ${c.name}`, 'info');
+        addLog(`Target: ${c.targetHost}:${c.targetPort}`, 'info');
+        addLog(`Methods: ${c.methods.join(', ')}`, 'info');
+      } catch { /* no active campaign */ }
+    })();
+    return () => { cancelled = true; };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Listen for WebSocket stress updates
   useEffect(() => {
@@ -154,6 +180,7 @@ export default function StressTestPage() {
           disabled={attacking}
           onStart={handleStart}
           onStop={handleStop}
+          initialData={campaign ?? undefined}
         />
 
         <Card className="flex-1 p-4 min-h-0 overflow-y-auto">
