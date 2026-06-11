@@ -354,9 +354,21 @@ export interface ProxyHistoryEntry {
 }
 
 export interface LocalAccount {
-  name: string;
+  Name: string;
+  FullName?: string;
+  Description?: string;
+  Enabled: boolean;
   isAdmin: boolean;
+  sidValue: string;
   groups: string[];
+  PasswordRequired?: boolean;
+  UserMayChangePassword?: boolean;
+  LastLogon?: string;
+  AccountExpires?: string;
+  PasswordLastSet?: string;
+  PasswordExpires?: string;
+  ObjectClass?: string;
+  PrincipalSource?: number;
 }
 
 export interface LocalAccountsResult {

@@ -29,6 +29,7 @@
     "react-markdown": "^10.1.0",
     "react-resizable-panels": "^4.10.0",
     "react-router-dom": "^7.17.0",
+    "react-simple-maps": "^3.0.0",
     "recharts": "^2.15.0",
     "remark-breaks": "^4.0.0",
     "remark-gfm": "^4.0.0",
@@ -36,6 +37,7 @@
     "streamdown": "^2.5.0",
     "tailwind-merge": "^3.2.0",
     "tailwind-variants": "^3.2.0",
+    "world-atlas": "^2.0.2",
     "xterm": "^5.3.0"
   },
   "devDependencies": {
@@ -43,6 +45,7 @@
     "@types/node": "^22.0.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
+    "@types/react-simple-maps": "^3.0.6",
     "@vitejs/plugin-react": "^4.4.0",
     "tailwindcss": "^4.1.0",
     "typescript": "~5.8.0",

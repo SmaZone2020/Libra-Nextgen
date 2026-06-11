@@ -343,6 +343,7 @@ export default function BuilderPage() {
               <Label>{t('builder.icon')}</Label>
               <div className="flex items-center gap-3">
                 <input
+                  title={t('builder.iconUpload')}
                   ref={fileInputRef}
                   type="file"
                   accept=".ico"

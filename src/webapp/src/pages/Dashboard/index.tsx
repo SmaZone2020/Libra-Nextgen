@@ -3,6 +3,7 @@ import { getAgents, getAgentTraffic } from '../../api/agents';
 import { getTasks } from '../../api/tasks';
 import { StatsCards } from './StatsCards';
 import { TrafficChart, RANGES } from './TrafficChart';
+import { GeoMap } from './GeoMap';
 import type { TimeRange } from './TrafficChart';
 import type { AgentListItem, AgentStatus } from '../../types/models';
 
@@ -12,6 +13,7 @@ export default function Dashboard() {
   const [agentIds, setAgentIds] = useState<string[]>([]);
   const [agentHosts, setAgentHosts] = useState<Record<string, string>>({});
   const [range, setRange] = useState<TimeRange>('today');
+  const [agents, setAgents] = useState<AgentListItem[]>([]);
   const agentMap = useRef<Map<string, AgentListItem>>(new Map());
 
   const mergeAgents = useCallback((incoming: AgentListItem[]) => {
@@ -47,6 +49,8 @@ export default function Dashboard() {
         if (cancelled) return;
 
         mergeAgents(agentRes.agents);
+        const allAgents = Array.from(agentMap.current.values());
+        setAgents(allAgents);
         setStats({
           agents: agentRes.total,
           online: agentRes.online,
@@ -92,6 +96,8 @@ export default function Dashboard() {
   return (
     <div className="space-y-6">
       <StatsCards stats={stats} />
+
+      <GeoMap agents={agents} />
 
       {agentIds.length > 0 && (
         <TrafficChart
