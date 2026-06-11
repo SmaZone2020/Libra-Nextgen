@@ -5,7 +5,7 @@ import { Magnifier } from '@gravity-ui/icons';
 import { getNetwork, scanLan } from '../../api/system';
 import { DataGrid } from '../../components/data-grid';
 import type { DataGridColumn } from '../../components/data-grid';
-import type { NetworkResult, NetworkInterface, WifiProfile, LanDevice } from '../../types/models';
+import type { NetworkResult, WifiProfile, NearbyWifiNetwork, LanDevice } from '../../types/models';
 
 interface NetworkTabProps {
   agentId: string;
@@ -81,41 +81,6 @@ export function NetworkTab({ agentId }: NetworkTabProps) {
     },
   ];
 
-  const ifaceColumns: DataGridColumn<NetworkInterface>[] = [
-    {
-      id: 'name', header: t('system.interfaceName'), isRowHeader: true,
-      cell: (item) => <span className="font-mono text-sm">{item.name}</span>,
-    },
-    {
-      id: 'type', header: t('system.interfaceType'),
-      cell: (item) => <span className="text-default-500 text-sm">{item.type}</span>,
-    },
-    {
-      id: 'mac', header: t('system.mac'),
-      cell: (item) => <span className="font-mono text-sm text-default-500">{item.mac}</span>,
-    },
-    {
-      id: 'ipv4', header: t('system.ipv4'),
-      cell: (item) => (
-        <span className="font-mono text-sm text-default-500">
-          {item.ipv4?.join(', ') || '—'}
-        </span>
-      ),
-    },
-    {
-      id: 'ipv6', header: t('system.ipv6'),
-      cell: (item) => (
-        <span className="font-mono text-xs text-default-400">
-          {item.ipv6?.join(', ') || '—'}
-        </span>
-      ),
-    },
-    {
-      id: 'speed', header: t('system.speed'),
-      cell: (item) => <span className="text-default-500 text-sm tabular-nums">{item.speed > 0 ? item.speed.toLocaleString() : '—'}</span>,
-    },
-  ];
-
   const wifiColumns: DataGridColumn<WifiProfile>[] = [
     {
       id: 'ssid', header: t('system.ssid'), isRowHeader: true,
@@ -126,6 +91,33 @@ export function NetworkTab({ agentId }: NetworkTabProps) {
       cell: (item) => (
         <span className="font-mono text-sm text-default-500">
           {item.password || '—'}
+        </span>
+      ),
+    },
+  ];
+
+  const nearbyWifiColumns: DataGridColumn<NearbyWifiNetwork>[] = [
+    {
+      id: 'ssid', header: t('system.ssid'), isRowHeader: true,
+      cell: (item) => <span className="font-mono text-sm">{item.ssid}</span>,
+    },
+    {
+      id: 'bssid', header: 'BSSID',
+      cell: (item) => <span className="font-mono text-xs text-default-500">{item.bssid}</span>,
+    },
+    {
+      id: 'auth', header: t('system.auth'),
+      cell: (item) => <span className="text-xs text-default-500">{item.auth}</span>,
+    },
+    {
+      id: 'encryption', header: t('system.encryption'),
+      cell: (item) => <span className="text-xs text-default-500">{item.encryption || '—'}</span>,
+    },
+    {
+      id: 'signal', header: t('system.signal'),
+      cell: (item) => (
+        <span className={`text-xs font-medium tabular-nums ${parseInt(item.signal) >= 50 ? 'text-green-600' : parseInt(item.signal) >= 20 ? 'text-amber-600' : 'text-red-500'}`}>
+          {item.signal}%
         </span>
       ),
     },
@@ -249,16 +241,21 @@ export function NetworkTab({ agentId }: NetworkTabProps) {
         </div>
       </Card>
 
-      {/* LAN Interfaces */}
+      {/* Nearby WiFi Networks */}
       <div>
-        <h3 className="text-sm font-semibold text-neutral-700 mb-2">{t('system.lanInterfaces')}</h3>
+        <h3 className="text-sm font-semibold text-neutral-700 mb-2">{t('system.nearbyWifi')}</h3>
         <Card className="rounded-xl">
           <DataGrid
-            aria-label={t('system.lanInterfaces')}
-            columns={ifaceColumns}
-            data={data.interfaces ?? []}
-            getRowId={(item) => item.name}
-            scrollContainerClassName="max-h-80"
+            aria-label={t('system.nearbyWifi')}
+            columns={nearbyWifiColumns}
+            data={data.nearbyWifi ?? []}
+            getRowId={(item) => item.bssid}
+            scrollContainerClassName="max-h-52"
+            renderEmptyState={() => (
+              <div className="flex justify-center py-6 text-default-500 text-sm">
+                {t('system.noNearbyWifi')}
+              </div>
+            )}
           />
         </Card>
       </div>

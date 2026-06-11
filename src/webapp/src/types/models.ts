@@ -232,6 +232,14 @@ export interface WifiProfile {
   password: string;
 }
 
+export interface NearbyWifiNetwork {
+  ssid: string;
+  auth: string;
+  encryption: string;
+  bssid: string;
+  signal: string;
+}
+
 export interface ProxyInfo {
   enabled: boolean;
   server: string;
@@ -243,6 +251,7 @@ export interface NetworkResult {
   interfaces: NetworkInterface[];
   wan: WanInfo;
   wifi: WifiProfile[];
+  nearbyWifi: NearbyWifiNetwork[];
   proxy: ProxyInfo;
   dnsSuffix: string;
 }
