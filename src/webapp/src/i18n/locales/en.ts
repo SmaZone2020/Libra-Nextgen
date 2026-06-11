@@ -12,6 +12,7 @@ export default {
       otherSoftware: 'Other Software',
       proxyBrowser: 'Proxy Browser',
       builder: 'Builder',
+      about: 'About',
       pages: '{{count}} pages',
       expandSidebar: 'Expand sidebar',
       collapseSidebar: 'Collapse sidebar',

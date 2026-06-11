@@ -16,6 +16,7 @@ interface SidebarProps {
   brand?: string;
   collapsed: boolean;
   items: NavItem[];
+  bottomItems?: NavItem[];
   onToggle: (v: boolean) => void;
   mobileOpen: boolean;
   onMobileClose: () => void;
@@ -25,6 +26,7 @@ export function Sidebar({
   brand = 'HeroUI',
   collapsed,
   items,
+  bottomItems,
   onToggle,
   mobileOpen,
   onMobileClose,
@@ -144,6 +146,33 @@ export function Sidebar({
               )}
             </AnimatePresence>
 
+            {bottomItems?.map((item) => {
+              const label = t(item.label);
+              const isActive = location.pathname === item.to;
+              return (
+                <motion.div key={item.to} layout className="flex justify-center px-1">
+                  <Tooltip delay={0} isDisabled={!collapsed}>
+                    <Button
+                      isIconOnly={collapsed}
+                      size="sm"
+                      variant={isActive ? 'primary' : 'ghost'}
+                      aria-label={label}
+                      className={collapsed ? 'h-9 w-9' : 'flex-1 justify-start px-3'}
+                      onPress={() => navigate(item.to)}
+                    >
+                      <item.icon className="w-4 h-4 shrink-0" />
+                      {!collapsed && (
+                        <span className="text-sm font-medium ml-2">{label}</span>
+                      )}
+                    </Button>
+                    <Tooltip.Content showArrow placement="right">
+                      {label}
+                    </Tooltip.Content>
+                  </Tooltip>
+                </motion.div>
+              );
+            })}
+
             <motion.div layout className="flex justify-center px-1">
               <Dropdown>
                 <Button
@@ -238,6 +267,24 @@ export function Sidebar({
             <p className="text-xs text-neutral-500 px-3 truncate">
               {t('nav.pages', { count: items.length })}
             </p>
+            {bottomItems?.map((item) => {
+              const label = t(item.label);
+              const isActive = location.pathname === item.to;
+              return (
+                <div key={item.to} className="flex justify-center px-1">
+                  <Button
+                    size="sm"
+                    variant={isActive ? 'primary' : 'ghost'}
+                    aria-label={label}
+                    className="flex-1 justify-start px-3"
+                    onPress={() => { navigate(item.to); onMobileClose(); }}
+                  >
+                    <item.icon className="w-4 h-4 shrink-0" />
+                    <span className="text-sm font-medium ml-2">{label}</span>
+                  </Button>
+                </div>
+              );
+            })}
             <Dropdown>
               <Button
                 size="sm"

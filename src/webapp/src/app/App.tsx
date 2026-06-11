@@ -24,7 +24,7 @@ import { consoleWs } from '../ws/consoleWs';
 import { NetworkOverlay } from '../components/NetworkOverlay';
 import { AgentProvider, useAgent } from '../contexts/AgentContext';
 import type { AgentListItem } from '../types/models';
-import { sidebarItems } from '../config/site';
+import { sidebarItems, sidebarBottomItems } from '../config/site';
 import '../i18n';
 
 const pageTransition = {
@@ -216,6 +216,7 @@ function AuthenticatedLayout({
         brand="Libra Next"
         collapsed={collapsed}
         items={sidebarItems}
+        bottomItems={sidebarBottomItems}
         onToggle={onToggle}
         mobileOpen={mobileSidebarOpen}
         onMobileClose={() => setMobileSidebarOpen(false)}

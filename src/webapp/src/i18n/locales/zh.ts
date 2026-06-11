@@ -12,6 +12,7 @@ export default {
       otherSoftware: '其他软件',
       proxyBrowser: '反向代理',
       builder: '构建荷载',
+      about: '关于',
       pages: '{{count}} 页',
       expandSidebar: '展开侧边栏',
       collapseSidebar: '收起侧边栏',
