@@ -24,8 +24,10 @@ public sealed class CameraCapture : IDisposable
         try
         {
             var devices = new CaptureDevices();
+            var descriptors = devices.EnumerateDescriptors().ToList();
+            Console.WriteLine($"[Camera] Found {descriptors.Count} camera(s)");
             int i = 0;
-            var list = devices.EnumerateDescriptors().Select(desc =>
+            var list = descriptors.Select(desc =>
             {
                 var name = desc.Name;
                 var idx = i++;
@@ -84,8 +86,8 @@ public sealed class CameraCapture : IDisposable
 
             if (_cameraIndex >= descriptors.Count)
             {
-                await _ws.SendResultAsync("camera.error", _agentId,
-                    new { error = $"Camera index {_cameraIndex} not found. Available: {descriptors.Count}" });
+                var msg = descriptors.Count == 0 ? "No cameras found" : $"Camera index {_cameraIndex} not found. Available: {descriptors.Count}";
+                await _ws.SendResultRawAsync("camera.error", _agentId, $$"""{"error":"{{EscapeJson(msg)}}"}""");
                 return;
             }
 
@@ -97,7 +99,7 @@ public sealed class CameraCapture : IDisposable
         }
         catch (Exception ex)
         {
-            await _ws.SendResultAsync("camera.error", _agentId, new { error = ex.Message });
+            await _ws.SendResultRawAsync("camera.error", _agentId, $$"""{"error":"{{EscapeJson(ex.Message)}}"}""");
         }
     }
 
@@ -116,10 +118,8 @@ public sealed class CameraCapture : IDisposable
 
             var jpeg = ToJpeg(imageData, JpegQuality);
 
-            await _ws.SendResultAsync("camera.frame", _agentId, new
-            {
-                data = Convert.ToBase64String(jpeg)
-            });
+            await _ws.SendResultRawAsync("camera.frame", _agentId,
+                $$"""{"data":"{{Convert.ToBase64String(jpeg)}}"}""");
         }
         catch
         {

@@ -70,7 +70,7 @@ public sealed class ScreenCapture : IDisposable
             catch (OperationCanceledException) { break; }
             catch (Exception ex)
             {
-                try { await _ws.SendResultAsync("screen.error", _agentId, new { error = ex.Message }); }
+                try { await _ws.SendResultRawAsync("screen.error", _agentId, $$"""{"error":"{{Esc(ex.Message)}}"}"""); }
                 catch { }
                 await Task.Delay(1000, ct);
                 continue;
@@ -91,8 +91,8 @@ public sealed class ScreenCapture : IDisposable
     {
         if (!OperatingSystem.IsWindows())
         {
-            await _ws.SendResultAsync("screen.error", _agentId,
-                new { error = "Screen capture only supported on Windows" });
+            await _ws.SendResultRawAsync("screen.error", _agentId,
+                """{"error":"Screen capture only supported on Windows"}""");
             _cts?.Cancel();
             return;
         }
@@ -112,12 +112,8 @@ public sealed class ScreenCapture : IDisposable
             _frameHeight = targetH;
             var jpeg = BitmapToJpeg(bmp);
             _previousFrame = pixels;
-            await _ws.SendResultAsync("screen.frame", _agentId, new
-            {
-                width = targetW,
-                height = targetH,
-                jpeg = Convert.ToBase64String(jpeg)
-            });
+            await _ws.SendResultRawAsync("screen.frame", _agentId,
+                $$"""{"width":{{targetW}},"height":{{targetH}},"jpeg":"{{Convert.ToBase64String(jpeg)}}"}""");
         }
         else
         {
@@ -130,17 +126,13 @@ public sealed class ScreenCapture : IDisposable
             if (blocks.Count > totalBlocks * 7 / 10)
             {
                 var jpeg = BitmapToJpeg(bmp);
-                await _ws.SendResultAsync("screen.frame", _agentId, new
-                {
-                    width = targetW,
-                    height = targetH,
-                    jpeg = Convert.ToBase64String(jpeg)
-                });
+                await _ws.SendResultRawAsync("screen.frame", _agentId,
+                    $$"""{"width":{{targetW}},"height":{{targetH}},"jpeg":"{{Convert.ToBase64String(jpeg)}}"}""");
             }
             else
             {
                 var encoded = EncodeBlocks(bmp, blocks);
-                await _ws.SendResultAsync("screen.diff", _agentId, new { blocks = encoded });
+                await _ws.SendResultRawAsync("screen.diff", _agentId, $$"""{"blocks":[{{string.Join(",", encoded)}}]}""");
             }
         }
     }
@@ -261,16 +253,18 @@ public sealed class ScreenCapture : IDisposable
         return true;
     }
 
-    private static List<object> EncodeBlocks(Bitmap bmp, List<BlockInfo> blocks)
+    private static List<string> EncodeBlocks(Bitmap bmp, List<BlockInfo> blocks)
     {
-        var result = new List<object>(blocks.Count);
+        var result = new List<string>(blocks.Count);
         foreach (var b in blocks)
         {
             var jpeg = BlockToJpeg(bmp, b.X, b.Y, b.W, b.H);
-            result.Add(new { x = b.X, y = b.Y, w = b.W, h = b.H, data = Convert.ToBase64String(jpeg) });
+            result.Add($$"""{"x":{{b.X}},"y":{{b.Y}},"w":{{b.W}},"h":{{b.H}},"data":"{{Convert.ToBase64String(jpeg)}}"}""");
         }
         return result;
     }
+
+    private static string Esc(string s) => s.Replace("\\", "\\\\").Replace("\"", "\\\"");
 
     private record struct BlockInfo(int X, int Y, int W, int H);
 

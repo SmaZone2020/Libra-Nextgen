@@ -1,7 +1,6 @@
 using System.Net.WebSockets;
 using System.Text;
 using System.Text.Json;
-using LibraNextgen.Common.Models;
 using LibraNextgen.Common.Protocol;
 
 namespace LibraNextgen.Agent.Communication;
@@ -68,13 +67,17 @@ public class WsCommunicator
         await _ws.SendAsync(new ArraySegment<byte>(bytes), WebSocketMessageType.Text, true, ct);
     }
 
-    public async Task SendResultAsync(string type, string agentId, object data, string? requestId = null, CancellationToken ct = default)
+    /// <summary>
+    /// Send a result using a raw JSON string (AOT-safe — uses JsonDocument instead of reflection).
+    /// </summary>
+    public async Task SendResultRawAsync(string type, string agentId, string dataJson, string? requestId = null, CancellationToken ct = default)
     {
+        using var doc = JsonDocument.Parse(dataJson);
         var msg = new WebSocketMessage
         {
             Type = type,
             Channel = agentId,
-            Data = JsonSerializer.SerializeToElement(data),
+            Data = doc.RootElement.Clone(),
             Timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
             RequestId = requestId
         };
@@ -91,6 +94,12 @@ public class WsCommunicator
             }
             catch { /* ignore */ }
         }
+        _ws?.Dispose();
+        _ws = null;
+    }
+
+    public void Dispose()
+    {
         _ws?.Dispose();
         _ws = null;
     }

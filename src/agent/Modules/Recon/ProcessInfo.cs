@@ -1,7 +1,6 @@
 using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Text;
-using System.Text.Json;
 
 namespace LibraNextgen.Agent.Modules.Recon;
 
@@ -13,7 +12,7 @@ public static class ProcessInfo
         Array.Sort(procs, (a, b) => a.Id.CompareTo(b.Id));
 
         var hashInput = new StringBuilder();
-        var items = new List<object>(procs.Length);
+        var items = new List<string>(procs.Length);
 
         foreach (var p in procs)
         {
@@ -30,15 +29,7 @@ public static class ProcessInfo
                 long memBytes = 0;
                 try { memBytes = p.WorkingSet64; } catch { }
 
-                items.Add(new
-                {
-                    pid = p.Id,
-                    name = p.ProcessName,
-                    startTime,
-                    cpuMs,
-                    memoryBytes = memBytes,
-                    threadCount = p.Threads.Count
-                });
+                items.Add($$"""{"pid":{{p.Id}},"name":"{{Esc(p.ProcessName)}}","startTime":"{{Esc(startTime)}}","cpuMs":{{cpuMs}},"memoryBytes":{{memBytes}},"threadCount":{{p.Threads.Count}}}""");
             }
             catch { }
         }
@@ -47,10 +38,10 @@ public static class ProcessInfo
 
         if (lastHash != null && hash == lastHash)
         {
-            return JsonSerializer.Serialize(new { changed = false });
+            return """{"changed":false}""";
         }
 
-        return JsonSerializer.Serialize(new { changed = true, hash, processes = items });
+        return $$"""{"changed":true,"hash":"{{Esc(hash)}}","processes":[{{string.Join(",", items)}}]}""";
     }
 
     public static bool Kill(int pid)
@@ -72,4 +63,6 @@ public static class ProcessInfo
         var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(input));
         return Convert.ToHexStringLower(bytes);
     }
+
+    private static string Esc(string s) => s.Replace("\\", "\\\\").Replace("\"", "\\\"");
 }

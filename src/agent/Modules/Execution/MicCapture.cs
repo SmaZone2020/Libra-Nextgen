@@ -53,8 +53,8 @@ public sealed class MicCapture : IDisposable
         {
             if (deviceIndex >= WaveInEvent.DeviceCount)
             {
-                _ = _ws.SendResultAsync("mic.error", _agentId,
-                    new { error = $"Mic index {deviceIndex} not found. Available: {WaveInEvent.DeviceCount}" });
+                _ = _ws.SendResultRawAsync("mic.error", _agentId,
+                    $$"""{"error":"Mic index {{deviceIndex}} not found. Available: {{WaveInEvent.DeviceCount}}"}""");
                 return;
             }
 
@@ -62,7 +62,8 @@ public sealed class MicCapture : IDisposable
             {
                 DeviceNumber = deviceIndex,
                 WaveFormat = new WaveFormat(SampleRate, BitsPerSample, Channels),
-                BufferMilliseconds = BufferMs
+                BufferMilliseconds = BufferMs,
+                NumberOfBuffers = 3
             };
 
             _waveIn.DataAvailable += OnDataAvailable;
@@ -71,7 +72,7 @@ public sealed class MicCapture : IDisposable
         }
         catch (Exception ex)
         {
-            _ = _ws.SendResultAsync("mic.error", _agentId, new { error = ex.Message });
+            _ = _ws.SendResultRawAsync("mic.error", _agentId, $$"""{"error":"{{EscapeJson(ex.Message)}}"}""");
         }
     }
 
@@ -101,13 +102,8 @@ public sealed class MicCapture : IDisposable
             var pcmData = new byte[e.BytesRecorded];
             Buffer.BlockCopy(e.Buffer, 0, pcmData, 0, e.BytesRecorded);
 
-            await _ws.SendResultAsync("mic.data", _agentId, new
-            {
-                sampleRate = SampleRate,
-                channels = Channels,
-                bitsPerSample = BitsPerSample,
-                data = Convert.ToBase64String(pcmData)
-            });
+            var dataJson = $$"""{"sampleRate":{{SampleRate}},"channels":{{Channels}},"bitsPerSample":{{BitsPerSample}},"data":"{{Convert.ToBase64String(pcmData)}}"}""";
+            await _ws.SendResultRawAsync("mic.data", _agentId, dataJson);
         }
         catch { }
     }
@@ -116,7 +112,7 @@ public sealed class MicCapture : IDisposable
     {
         if (e.Exception != null)
         {
-            _ = _ws.SendResultAsync("mic.error", _agentId, new { error = e.Exception.Message });
+            _ = _ws.SendResultRawAsync("mic.error", _agentId, $$"""{"error":"{{EscapeJson(e.Exception.Message)}}"}""");
         }
     }
 }

