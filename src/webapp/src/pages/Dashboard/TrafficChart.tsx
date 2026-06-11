@@ -18,11 +18,11 @@ function formatBytes(bytes: number, t: (key: string) => string): string {
 export type TimeRange = '14d' | '7d' | '3d' | 'today' | '12h';
 
 export const RANGES: { key: TimeRange; i18nKey: string; minutes: number; bucketMs: number; xfmt: (d: Date) => string }[] = [
-  { key: '14d',   i18nKey: 'dashboard.ranges.14d',   minutes: 20160, bucketMs: 2 * 86400000, xfmt: (d) => `${d.getMonth() + 1}/${d.getDate()}` },
-  { key: '7d',    i18nKey: 'dashboard.ranges.7d',    minutes: 10080, bucketMs: 1 * 86400000, xfmt: (d) => `${d.getMonth() + 1}/${d.getDate()}` },
-  { key: '3d',    i18nKey: 'dashboard.ranges.3d',    minutes: 4320,  bucketMs: 8 * 3600000,  xfmt: (d) => `${d.getMonth() + 1}/${d.getDate()} ${d.getHours()}:00` },
-  { key: 'today', i18nKey: 'dashboard.ranges.today', minutes: 1440,  bucketMs: 4 * 3600000,  xfmt: (d) => `${String(d.getHours()).padStart(2, '0')}:00` },
-  { key: '12h',   i18nKey: 'dashboard.ranges.12h',   minutes: 720,   bucketMs: 2 * 3600000,  xfmt: (d) => `${String(d.getHours()).padStart(2, '0')}:00` },
+  { key: '14d',   i18nKey: 'dashboard.ranges.14d',   minutes: 20160, bucketMs: 120960000, xfmt: (d) => `${d.getMonth() + 1}/${d.getDate()}` },
+  { key: '7d',    i18nKey: 'dashboard.ranges.7d',    minutes: 10080, bucketMs: 60480000,  xfmt: (d) => `${d.getMonth() + 1}/${d.getDate()}` },
+  { key: '3d',    i18nKey: 'dashboard.ranges.3d',    minutes: 4320,  bucketMs: 25920000,  xfmt: (d) => `${d.getMonth() + 1}/${d.getDate()} ${d.getHours()}:00` },
+  { key: 'today', i18nKey: 'dashboard.ranges.today', minutes: 1440,  bucketMs: 8640000,   xfmt: (d) => `${String(d.getHours()).padStart(2, '0')}:00` },
+  { key: '12h',   i18nKey: 'dashboard.ranges.12h',   minutes: 720,   bucketMs: 4320000,   xfmt: (d) => `${String(d.getHours()).padStart(2, '0')}:00` },
 ];
 
 interface TrafficChartProps {
