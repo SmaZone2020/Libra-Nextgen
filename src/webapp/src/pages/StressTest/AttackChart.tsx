@@ -14,7 +14,7 @@ export function AttackChart({ agentStatuses, history }: Props) {
     : [{ time: '--:--:--', mbps: 0 }];
 
   return (
-    <div className="w-full h-48">
+    <div className="w-full h-full">
       <div className="text-xs text-neutral-500 mb-1">
         Live Throughput: <span className="font-semibold text-primary-600">{totalMbps.toFixed(1)} Mbps</span>
       </div>

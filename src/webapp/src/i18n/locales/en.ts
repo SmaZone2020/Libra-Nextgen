@@ -14,7 +14,6 @@ export default {
       builder: 'Builder',
       stressTest: 'Stress Test',
       about: 'About',
-      pages: '{{count}} pages',
       expandSidebar: 'Expand sidebar',
       collapseSidebar: 'Collapse sidebar',
       toggleSidebar: 'Toggle sidebar',

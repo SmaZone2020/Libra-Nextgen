@@ -160,7 +160,7 @@ export default function StressTestPage() {
           <h3 className="text-sm font-semibold text-neutral-700 mb-2">
             {t('stressTest.log')}
           </h3>
-          <div className="text-xs font-mono rounded-lg border border-neutral-200 p-3 space-y-0.5">
+          <div className="text-sm font-mono rounded-lg p-3 space-y-0.5">
             {logs.length === 0 ? (
               <span className="text-neutral-400">{t('stressTest.logPlaceholder')}</span>
             ) : (

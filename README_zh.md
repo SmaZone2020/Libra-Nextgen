@@ -1,5 +1,7 @@
 # Libra-Nextgen
 
+[English](README.md)
+
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 
 **Libra-Nextgen** 是一款面向企业级红蓝对抗、授权渗透测试与网络安全研究的现代 C2（Command and Control）框架。它提供了全谱系后渗透工具集，基于高性能、低可观测性的三层架构设计：被控端（Agent）、服务端（Server）与基于 Web 的多人协同控制台（Console）。
@@ -49,18 +51,18 @@ Agent 与 Server 之间的所有通信均采用 AES-256-GCM 加密（密钥通�
 
 ### Agent — 被控端
 
-| 类别 | 能力 |
-|---|---|
-| **通信方式** | HTTP(S) 轮询 + WebSocket 长连接；Malleable C2 流量变形；User-Agent 轮换；代理感知 |
-| **跨平台** | Windows + Linux；Native AOT 编译；统一 `IExecutor` 抽象层（Win32 P/Invoke / Linux syscall） |
-| **主机侦察** | 系统指纹、域环境探测（LDAP/RPC）、Wi-Fi 热点扫描、硬件与电池状态枚举、GeoIP 定位 |
-| **反分析** | 反虚拟机/反沙盒检测；CPU/内存/磁盘延时校验；鼠标轨迹启发式判断；高危环境自动休眠/自毁 |
-| **命令执行** | Linux 伪终端（PTY）+ Windows PowerShell Runspace 内存执行；.NET 程序集内存反射加载，全程无磁盘写入 |
-| **凭据收集** | LSASS 内存凭据提取；SAM 数据库读取；浏览器密码导出；Token 窃取与身份模拟 |
-| **持久化** | 注册表 Run 键；计划任务（Windows）；Crontab / systemd 服务（Linux）；WMI 事件订阅 |
-| **内网穿透** | SOCKS4/5 代理；端口转发（RDP、SSH 等） |
-| **文件操作** | 分块上传/下载 + 断点续传；时间戳伪造（Timestomping）；NTFS ADS 流读取 |
-| **物理监控** | 屏幕差分截图；摄像头静默抓拍（DirectShow/Media Foundation） |
+| 类别       | 能力                                                                               |
+| -------- | -------------------------------------------------------------------------------- |
+| **通信方式** | HTTP(S) 轮询 + WebSocket 长连接；Malleable C2 流量变形；User-Agent 轮换；代理感知                  |
+| **跨平台**  | Windows + Linux；Native AOT 编译；统一 `IExecutor` 抽象层（Win32 P/Invoke / Linux syscall） |
+| **主机侦察** | 系统指纹、域环境探测（LDAP/RPC）、Wi-Fi 热点扫描、硬件与电池状态枚举、GeoIP 定位                               |
+| **反分析**  | 反虚拟机/反沙盒检测；CPU/内存/磁盘延时校验；鼠标轨迹启发式判断；高危环境自动休眠/自毁                                   |
+| **命令执行** | Linux 伪终端（PTY）+ Windows PowerShell Runspace 内存执行；.NET 程序集内存反射加载，全程无磁盘写入          |
+| **凭据收集** | LSASS 内存凭据提取；SAM 数据库读取；浏览器密码导出；Token 窃取与身份模拟                                     |
+| **持久化**  | 注册表 Run 键；计划任务（Windows）；Crontab / systemd 服务（Linux）；WMI 事件订阅                     |
+| **内网穿透** | SOCKS4/5 代理；端口转发（RDP、SSH 等）                                                      |
+| **文件操作** | 分块上传/下载 + 断点续传；时间戳伪造（Timestomping）；NTFS ADS 流读取                                  |
+| **物理监控** | 屏幕差分截图；摄像头静默抓拍（DirectShow/Media Foundation）                                      |
 
 ### Server — 服务端
 
@@ -87,22 +89,22 @@ Agent 与 Server 之间的所有通信均采用 AES-256-GCM 加密（密钥通�
 
 ## 技术栈
 
-| 层次 | 技术 |
-|---|---|
-| **Agent 运行时** | .NET 10 Native AOT |
-| **服务端框架** | ASP.NET Core 10 WebAPI |
-| **数据库** | MongoDB 7+ |
-| **实时通信** | System.Net.WebSockets（原始 WebSocket，非 SignalR） |
-| **身份认证** | JWT RS256 + BCrypt 密码哈希 |
-| **数据加密** | AES-256-GCM + RSA 密钥交换 |
-| **前端框架** | React 19 + TypeScript 5.8 |
-| **构建工具** | Vite 6 |
-| **样式方案** | Tailwind CSS v4 + tailwind-variants |
-| **UI 组件库** | HeroUI3 Pro（60+ 组件） |
-| **图表可视化** | Recharts + ECharts |
-| **终端模拟** | xterm.js |
-| **国际化** | react-i18next |
-| **公共库** | .NET 10 类库（共享模型、枚举、协议常量） |
+| 层次            | 技术                                            |
+| ------------- | --------------------------------------------- |
+| **Agent 运行时** | .NET 10 Native AOT                            |
+| **服务端框架**     | ASP.NET Core 10 WebAPI                        |
+| **数据库**       | MongoDB 7+                                    |
+| **实时通信**      | System.Net.WebSockets（原始 WebSocket，非 SignalR） |
+| **身份认证**      | JWT RS256 + BCrypt 密码哈希                       |
+| **数据加密**      | AES-256-GCM + RSA 密钥交换                        |
+| **前端框架**      | React 19 + TypeScript 5.8                     |
+| **构建工具**      | Vite 6                                        |
+| **样式方案**      | Tailwind CSS v4 + tailwind-variants           |
+| **UI 组件库**    | HeroUI3 Pro（60+ 组件）                           |
+| **图表可视化**     | Recharts + ECharts                            |
+| **终端模拟**      | xterm.js                                      |
+| **国际化**       | react-i18next                                 |
+| **公共库**       | .NET 10 类库（共享模型、枚举、协议常量）                      |
 
 ---
 
@@ -294,16 +296,16 @@ Libra-Nextgen 内置**多点分布式 DDoS 压力测试**模块，专为企业�
 
 ### 攻击方式
 
-| 层级 | 方式 | 说明 |
-|---|---|---|
-| 四层 | SYN Flood | TCP SYN 包洪水，随机化源 IP/端口 |
-| 四层 | UDP Flood | 大流量 UDP 数据报洪水，可变载荷 |
-| 四层 | ICMP Flood | ICMP Echo Request 洪水，并发突发 |
-| 四层 | 反射放大 | DNS ANY + NTP monlist 放大，利用开放解析器 |
-| 七层 | HTTP Flood | HTTP GET/POST 洪水，UA/Cookie/Referer 轮换 |
-| 七层 | Slowloris | 慢速 HTTP 头部 drip，保持连接不释放 |
-| 七层 | TCP 连接耗尽 | 大量 TCP 空闲连接占满连接表 |
-| 七层 | 协议畸形包 | 畸形 TLS ClientHello、异常 HTTP 头部、垃圾载荷 |
+| 层级  | 方式         | 说明                                    |
+| --- | ---------- | ------------------------------------- |
+| 四层  | SYN Flood  | TCP SYN 包洪水，随机化源 IP/端口                |
+| 四层  | UDP Flood  | 大流量 UDP 数据报洪水，可变载荷                    |
+| 四层  | ICMP Flood | ICMP Echo Request 洪水，并发突发             |
+| 四层  | 反射放大       | DNS ANY + NTP monlist 放大，利用开放解析器      |
+| 七层  | HTTP Flood | HTTP GET/POST 洪水，UA/Cookie/Referer 轮换 |
+| 七层  | Slowloris  | 慢速 HTTP 头部 drip，保持连接不释放               |
+| 七层  | TCP 连接耗尽   | 大量 TCP 空闲连接占满连接表                      |
+| 七层  | 协议畸形包      | 畸形 TLS ClientHello、异常 HTTP 头部、垃圾载荷    |
 
 ### 隐蔽特性
 

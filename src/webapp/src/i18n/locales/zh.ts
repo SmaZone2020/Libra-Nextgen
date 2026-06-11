@@ -14,7 +14,6 @@ export default {
       builder: '构建荷载',
       stressTest: '压力测试',
       about: '关于',
-      pages: '{{count}} 页',
       expandSidebar: '展开侧边栏',
       collapseSidebar: '收起侧边栏',
       toggleSidebar: '切换侧边栏',

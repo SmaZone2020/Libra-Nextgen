@@ -73,9 +73,9 @@ export function ConfigForm({ disabled, onStart, onStop }: Props) {
 
       <div className="space-y-4">
         {/* Target */}
-        <div className="grid grid-cols-3 gap-3">
+        <div className="flex items-center gap-2">
           <TextField
-            className="min-w-[340px] w-full col-span-2"
+            className="w-6/8 col-span-2"
             value={targetHost}
             onChange={(v) => setTargetHost(v)}
           >
@@ -83,7 +83,7 @@ export function ConfigForm({ disabled, onStart, onStop }: Props) {
             <Input placeholder="192.168.1.1" />
           </TextField>
           <NumberField
-            className="w-full max-w-64 col-span-1"
+            className="w-2/8 col-span-1"
             value={targetPort}
             minValue={1}
             maxValue={65535}

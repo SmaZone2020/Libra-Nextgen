@@ -25,7 +25,7 @@ export function AgentSelector({ selectedIds, onChange }: Props) {
   };
 
   return (
-    <Card className="p-4 w-[300px]">
+    <Card className="p-4 w-[260px]">
       <div className="flex items-center justify-between mb-3">
         <h3 className="text-sm font-semibold text-neutral-700">
           {t('stressTest.selectAgents')}

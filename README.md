@@ -1,5 +1,7 @@
 # Libra-Nextgen
 
+[简体中文](README_zh.md)
+
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 
 **Libra-Nextgen** is a modern enterprise-grade Command & Control (C2) framework purpose-built for red-team operations, authorized penetration testing, and cybersecurity research. It provides a full-spectrum post-exploitation toolkit with a high-performance, low-observable architecture spanning three layers: agent, server, and web-based multi-operator console.
@@ -49,18 +51,18 @@ All agent-server communication is encrypted with AES-256-GCM (key exchange via R
 
 ### Agent — Implant
 
-| Category | Features |
-|---|---|
-| **Communication** | HTTP(S) polling + WebSocket long-connection; Malleable C2 profiles; User-Agent rotation; proxy-aware |
-| **Cross-Platform** | Windows + Linux; Native AOT compilation; unified `IExecutor` over Win32 P/Invoke and Linux syscalls |
-| **Recon** | System fingerprinting; domain enumeration (LDAP/RPC); Wi-Fi AP scanning; hardware & battery profiling; GeoIP location |
-| **Anti-Analysis** | VM/sandbox detection; CPU/memory/disk timing checks; mouse-movement heuristic; self-destruct on high-risk environment |
-| **Execution** | Interactive PTY (Linux) and PowerShell Runspace (Windows); in-memory .NET assembly loading; no disk writes |
-| **Credentials** | LSASS memory dump; SAM extraction; browser password harvesting; token theft & impersonation |
-| **Persistence** | Registry Run keys; Scheduled Tasks (Windows); Crontab / systemd services (Linux); WMI event subscriptions |
-| **Pivoting** | SOCKS4/5 proxy; port forwarding (RDP, SSH, etc.) |
-| **File Ops** | Chunked upload/download with resume; timestomping; NTFS ADS traversal |
-| **Surveillance** | Differential screen capture; webcam snapshot (DirectShow/Media Foundation) |
+| Category           | Features                                                                                                              |
+| ------------------ | --------------------------------------------------------------------------------------------------------------------- |
+| **Communication**  | HTTP(S) polling + WebSocket long-connection; Malleable C2 profiles; User-Agent rotation; proxy-aware                  |
+| **Cross-Platform** | Windows + Linux; Native AOT compilation; unified `IExecutor` over Win32 P/Invoke and Linux syscalls                   |
+| **Recon**          | System fingerprinting; domain enumeration (LDAP/RPC); Wi-Fi AP scanning; hardware & battery profiling; GeoIP location |
+| **Anti-Analysis**  | VM/sandbox detection; CPU/memory/disk timing checks; mouse-movement heuristic; self-destruct on high-risk environment |
+| **Execution**      | Interactive PTY (Linux) and PowerShell Runspace (Windows); in-memory .NET assembly loading; no disk writes            |
+| **Credentials**    | LSASS memory dump; SAM extraction; browser password harvesting; token theft & impersonation                           |
+| **Persistence**    | Registry Run keys; Scheduled Tasks (Windows); Crontab / systemd services (Linux); WMI event subscriptions             |
+| **Pivoting**       | SOCKS4/5 proxy; port forwarding (RDP, SSH, etc.)                                                                      |
+| **File Ops**       | Chunked upload/download with resume; timestomping; NTFS ADS traversal                                                 |
+| **Surveillance**   | Differential screen capture; webcam snapshot (DirectShow/Media Foundation)                                            |
 
 ### Server — Backend
 
@@ -87,22 +89,22 @@ All agent-server communication is encrypted with AES-256-GCM (key exchange via R
 
 ## Tech Stack
 
-| Layer | Technology |
-|---|---|
-| **Agent Runtime** | .NET 10 Native AOT |
-| **Server Framework** | ASP.NET Core 10 WebAPI |
-| **Database** | MongoDB 7+ |
-| **Real-time** | System.Net.WebSockets (raw, no SignalR) |
-| **Auth** | JWT RS256 + BCrypt |
-| **Cryptography** | AES-256-GCM + RSA key exchange |
-| **Console Framework** | React 19 + TypeScript 5.8 |
-| **Build Tool** | Vite 6 |
-| **Styling** | Tailwind CSS v4 + tailwind-variants |
-| **UI Components** | HeroUI3 Pro (60+ components) |
-| **Charts** | Recharts + ECharts |
-| **Terminal** | xterm.js |
-| **I18n** | react-i18next |
-| **Common Library** | .NET 10 Class Library (shared models, enums, protocol) |
+| Layer                 | Technology                                             |
+| --------------------- | ------------------------------------------------------ |
+| **Agent Runtime**     | .NET 10 Native AOT                                     |
+| **Server Framework**  | ASP.NET Core 10 WebAPI                                 |
+| **Database**          | MongoDB 7+                                             |
+| **Real-time**         | System.Net.WebSockets (raw, no SignalR)                |
+| **Auth**              | JWT RS256 + BCrypt                                     |
+| **Cryptography**      | AES-256-GCM + RSA key exchange                         |
+| **Console Framework** | React 19 + TypeScript 5.8                              |
+| **Build Tool**        | Vite 6                                                 |
+| **Styling**           | Tailwind CSS v4 + tailwind-variants                    |
+| **UI Components**     | HeroUI3 Pro (60+ components)                           |
+| **Charts**            | Recharts + ECharts                                     |
+| **Terminal**          | xterm.js                                               |
+| **I18n**              | react-i18next                                          |
+| **Common Library**    | .NET 10 Class Library (shared models, enums, protocol) |
 
 ---
 
@@ -293,16 +295,16 @@ Libra-Nextgen includes a built-in **multi-point DDoS stress testing** module des
 
 ### Attack Methods
 
-| Layer | Method | Description |
-|---|---|---|
-| L4 | SYN Flood | TCP SYN packet flood with randomized source IP/port |
-| L4 | UDP Flood | High-volume UDP datagram flood with variable payload |
-| L4 | ICMP Flood | ICMP Echo Request flood with burst parallelism |
-| L4 | Reflection Amp | DNS ANY + NTP monlist amplification via open resolvers |
-| L7 | HTTP Flood | HTTP GET/POST flood with UA/Cookie/Referer rotation |
-| L7 | Slowloris | Slow HTTP header drip holding connections open |
-| L7 | TCP Conn Flood | TCP connection exhaustion (idle connections) |
-| L7 | Malformed Packet | Malformed TLS ClientHello, bad HTTP headers, garbage payload |
+| Layer | Method           | Description                                                  |
+| ----- | ---------------- | ------------------------------------------------------------ |
+| L4    | SYN Flood        | TCP SYN packet flood with randomized source IP/port          |
+| L4    | UDP Flood        | High-volume UDP datagram flood with variable payload         |
+| L4    | ICMP Flood       | ICMP Echo Request flood with burst parallelism               |
+| L4    | Reflection Amp   | DNS ANY + NTP monlist amplification via open resolvers       |
+| L7    | HTTP Flood       | HTTP GET/POST flood with UA/Cookie/Referer rotation          |
+| L7    | Slowloris        | Slow HTTP header drip holding connections open               |
+| L7    | TCP Conn Flood   | TCP connection exhaustion (idle connections)                 |
+| L7    | Malformed Packet | Malformed TLS ClientHello, bad HTTP headers, garbage payload |
 
 ### Covert Features
 

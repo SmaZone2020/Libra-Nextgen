@@ -132,19 +132,6 @@ export function Sidebar({
             layout
             className="pt-4 border-t border-neutral-200 w-full space-y-2"
           >
-            <AnimatePresence initial={false}>
-              {!collapsed && (
-                <motion.p
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  initial={{ opacity: 0 }}
-                  transition={{ duration: 0.2 }}
-                  className="text-xs text-neutral-500 px-3 truncate"
-                >
-                  {t('nav.pages', { count: items.length })}
-                </motion.p>
-              )}
-            </AnimatePresence>
 
             {bottomItems?.map((item) => {
               const label = t(item.label);
@@ -280,9 +267,6 @@ export function Sidebar({
           </nav>
 
           <div className="pt-4 border-t border-neutral-200 space-y-2">
-            <p className="text-xs text-neutral-500 px-3 truncate">
-              {t('nav.pages', { count: items.length })}
-            </p>
             {bottomItems?.map((item) => {
               const label = t(item.label);
               const isActive = location.pathname === item.to;
@@ -305,10 +289,9 @@ export function Sidebar({
             })}
             <Dropdown>
               <Button
-                size="sm"
                 variant="ghost"
                 aria-label={t('nav.toggleSidebar')}
-                className="flex-1 justify-start px-3 w-full"
+                className="flex-1 justify-start w-full"
               >
                 <Globe className="w-4 h-4 shrink-0" />
                 <span className="text-sm font-medium ml-2">

@@ -224,18 +224,6 @@ export function NetworkTab({ agentId }: NetworkTabProps) {
                 <span className="text-default-500">{t('system.proxyServer')}</span>
                 <span className="font-mono">{data.proxy.server || '—'}</span>
               </div>
-              {data.proxy.port > 0 && (
-                <div className="flex justify-between text-sm">
-                  <span className="text-default-500">{t('system.proxyPort')}</span>
-                  <span className="font-mono tabular-nums">{data.proxy.port}</span>
-                </div>
-              )}
-              {data.proxy.bypass && (
-                <div className="flex justify-between text-sm">
-                  <span className="text-default-500">{t('system.proxyBypass')}</span>
-                  <span className="text-default-700 text-xs max-w-[60%] text-right">{data.proxy.bypass}</span>
-                </div>
-              )}
             </>
           )}
         </div>
