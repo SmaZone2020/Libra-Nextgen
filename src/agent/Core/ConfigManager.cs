@@ -14,6 +14,9 @@ public class ConfigManager
     {
         var config = new ConfigManager();
 
+        if (!string.IsNullOrEmpty(BuildDefaults.ServerUrl))
+            config.ServerUrl = BuildDefaults.ServerUrl;
+
         for (int i = 0; i < args.Length; i++)
         {
             switch (args[i])
