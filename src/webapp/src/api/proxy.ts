@@ -13,8 +13,18 @@ export function fetchPage(
   return api.post<ProxyResponse>(`/proxy/${agentId}/fetch`, { url, method, headers, body });
 }
 
-export function buildResourceUrl(agentId: string, absoluteUrl: string): string {
+export function buildResourceUrl(
+  agentId: string,
+  absoluteUrl: string,
+  method?: string,
+  body?: string,
+  headers?: string
+): string {
   const token = getToken();
   const tokenParam = token ? `&token=${encodeURIComponent(token)}` : '';
-  return `${API_BASE}/proxy/${agentId}/resource?url=${encodeURIComponent(absoluteUrl)}${tokenParam}`;
+  let url = `${API_BASE}/proxy/${agentId}/resource?url=${encodeURIComponent(absoluteUrl)}${tokenParam}`;
+  if (method && method !== 'GET') url += `&method=${encodeURIComponent(method)}`;
+  if (body) url += `&body=${encodeURIComponent(body)}`;
+  if (headers) url += `&headers=${encodeURIComponent(headers)}`;
+  return url;
 }

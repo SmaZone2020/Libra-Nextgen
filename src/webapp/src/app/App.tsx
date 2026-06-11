@@ -83,8 +83,7 @@ function AgentSelector() {
     <div className="flex items-center gap-2 sm:gap-3">
       <Dropdown>
         <Button
-          size="sm"
-          variant="ghost"
+          variant="tertiary"
           className="flex-1 sm:w-[220px] sm:flex-none justify-start"
         >
           {selectedAgent ? selectedAgent.hostname : t('common.selectAgent')}
@@ -105,7 +104,7 @@ function AgentSelector() {
 
       {selectedAgent && (
         <>
-          <Chip size="sm" variant="soft">{selectedAgent.ipAddress}</Chip>
+          <Chip variant="soft">{selectedAgent.ipAddress}</Chip>
           <Button size="sm" variant="tertiary" onPress={disconnect}>
             {t('common.disconnect')}
           </Button>

@@ -1,54 +1,83 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button, Input } from '@heroui/react';
-import { ArrowLeft, ArrowRight, ArrowRotateLeft, ArrowRightToSquare } from '@gravity-ui/icons';
+import { ArrowLeft, ArrowRight, ArrowRotateLeft, ArrowRightToSquare, FolderPlus } from '@gravity-ui/icons';
 import { useAgent } from '../../contexts/AgentContext';
-import { fetchPage } from '../../api/proxy';
+import { fetchPage, API_BASE } from '../../api/proxy';
 import { getToken } from '../../api/client';
 import { rewriteHtml } from './rewriter';
 import type { ProxyHistoryEntry } from '../../types/models';
+
+interface TabSession {
+  id: string;
+  urlInput: string;
+  history: ProxyHistoryEntry[];
+  historyIndex: number;
+  htmlContent: string;
+  pageTitle: string;
+  statusCode: number | null;
+  error: string | null;
+  loading: boolean;
+}
+
+function createTab(id: string): TabSession {
+  return {
+    id,
+    urlInput: '',
+    history: [],
+    historyIndex: -1,
+    htmlContent: '',
+    pageTitle: '',
+    statusCode: null,
+    error: null,
+    loading: false,
+  };
+}
 
 export default function ProxyBrowserPage() {
   const { t } = useTranslation();
   const { agentId } = useAgent();
 
-  const [urlInput, setUrlInput] = useState('');
-  const [history, setHistory] = useState<ProxyHistoryEntry[]>([]);
-  const [historyIndex, setHistoryIndex] = useState(-1);
-  const [loading, setLoading] = useState(false);
-  const [htmlContent, setHtmlContent] = useState('');
-  const [pageTitle, setPageTitle] = useState('');
-  const [statusCode, setStatusCode] = useState<number | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const nextIdRef = useRef(1);
+  const [tabs, setTabs] = useState<TabSession[]>(() => [createTab(String(nextIdRef.current++))]);
+  const [activeTabId, setActiveTabId] = useState(() => tabs[0]!.id);
+  const activeTabIdRef = useRef(activeTabId);
+  activeTabIdRef.current = activeTabId;
   const iframeRef = useRef<HTMLIFrameElement>(null);
 
-  const currentEntry = historyIndex >= 0 ? history[historyIndex] : null;
+  const activeTab = useMemo(
+    () => tabs.find(t => t.id === activeTabId) ?? tabs[0]!,
+    [tabs, activeTabId],
+  );
+
+  const apiBase = API_BASE;
+
+  const updateTab = useCallback((tabId: string, patch: Partial<TabSession>) => {
+    setTabs(prev => prev.map(t => t.id === tabId ? { ...t, ...patch } : t));
+  }, []);
 
   const navigateTo = useCallback(async (url: string, method = 'GET', body?: string, headers?: string) => {
+    const tabId = activeTabIdRef.current;
     if (!agentId) return;
     let fullUrl = url;
-    if (!/^http?:\/\//i.test(fullUrl)) {
+    if (!/^https?:\/\//i.test(fullUrl)) {
       fullUrl = 'http://' + fullUrl;
     }
 
-    setUrlInput(fullUrl);
-    setLoading(true);
-    setError(null);
-    setStatusCode(null);
+    updateTab(tabId, { urlInput: fullUrl, loading: true, error: null, statusCode: null });
 
     try {
       const resp = await fetchPage(agentId, fullUrl, method, headers, body);
       if (resp.error) {
-        setError(resp.error);
-        setLoading(false);
+        updateTab(tabId, { error: resp.error, loading: false });
         return;
       }
 
-      setStatusCode(resp.status);
-
       const isHtml = /text\/html/i.test(resp.contentType);
+
+      // Extract title from response (not from state)
+      let extractedTitle = resp.url;
       if (isHtml && resp.body) {
-        // Decode base64 (handle both standard and URL-safe)
         let decoded: string;
         try {
           const binary = atob(resp.body);
@@ -56,76 +85,143 @@ export default function ProxyBrowserPage() {
           for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
           decoded = new TextDecoder().decode(bytes);
         } catch {
-          decoded = resp.body; // fallback
+          decoded = resp.body;
+        }
+        const titleMatch = decoded.match(/<title[^>]*>([^<]*)<\/title>/i);
+        extractedTitle = titleMatch?.[1]?.trim() || resp.url;
+      }
+
+      if (isHtml && resp.body) {
+        let decoded: string;
+        try {
+          const binary = atob(resp.body);
+          const bytes = new Uint8Array(binary.length);
+          for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+          decoded = new TextDecoder().decode(bytes);
+        } catch {
+          decoded = resp.body;
         }
 
-        const rewritten = rewriteHtml(decoded, agentId, resp.url, getToken());
-        setHtmlContent(rewritten);
+        const rewritten = rewriteHtml(decoded, agentId, resp.url, apiBase, getToken());
 
-        // Extract title
-        const titleMatch = decoded.match(/<title[^>]*>([^<]*)<\/title>/i);
-        setPageTitle(titleMatch?.[1]?.trim() || resp.url);
+        const entry: ProxyHistoryEntry = {
+          url: resp.url,
+          title: extractedTitle,
+          method,
+          body,
+          headers,
+        };
+
+        setTabs(prev => prev.map(t => {
+          if (t.id !== tabId) return t;
+          const newHistory = t.history.slice(0, t.historyIndex + 1);
+          newHistory.push(entry);
+          return {
+            ...t,
+            htmlContent: rewritten,
+            pageTitle: extractedTitle,
+            statusCode: resp.status,
+            history: newHistory,
+            historyIndex: newHistory.length - 1,
+          };
+        }));
       } else {
-        // Non-HTML content — wrap in simple display
+        // Non-HTML response
+        let html = '';
         if (/^image\//i.test(resp.contentType) && resp.body) {
           const imgSrc = `data:${resp.contentType};base64,${resp.body}`;
-          setHtmlContent(`<!DOCTYPE html><html><head><meta charset="utf-8"></head><body style="margin:0;display:flex;align-items:center;justify-content:center;min-height:100vh;background:#f5f5f5;"><img src="${imgSrc}" style="max-width:100%;max-height:100vh;" alt="Image"></body></html>`);
+          html = `<!DOCTYPE html><html><head><meta charset="utf-8"></head><body style="margin:0;display:flex;align-items:center;justify-content:center;min-height:100vh;background:#f5f5f5;"><img src="${imgSrc}" style="max-width:100%;max-height:100vh;" alt="Image"></body></html>`;
         } else if (/^text\/(plain|json|xml|css|javascript)/i.test(resp.contentType) && resp.body) {
           const text = atob(resp.body);
           const escaped = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-          setHtmlContent(`<!DOCTYPE html><html><head><meta charset="utf-8"></head><body style="margin:0;padding:16px;font-family:monospace;white-space:pre-wrap;word-break:break-all;">${escaped}</body></html>`);
+          html = `<!DOCTYPE html><html><head><meta charset="utf-8"></head><body style="margin:0;padding:16px;font-family:monospace;white-space:pre-wrap;word-break:break-all;">${escaped}</body></html>`;
         } else {
-          setHtmlContent(`<!DOCTYPE html><html><head><meta charset="utf-8"></head><body style="margin:0;display:flex;align-items:center;justify-content:center;min-height:100vh;font-family:sans-serif;color:#666;"><div style="text-align:center"><p>${resp.status} ${resp.statusText}</p><p style="font-size:14px">${resp.contentType}</p></div></body></html>`);
+          html = `<!DOCTYPE html><html><head><meta charset="utf-8"></head><body style="margin:0;display:flex;align-items:center;justify-content:center;min-height:100vh;font-family:sans-serif;color:#666;"><div style="text-align:center"><p>${resp.status} ${resp.statusText}</p><p style="font-size:14px">${resp.contentType}</p></div></body></html>`;
         }
-        setPageTitle(resp.url);
+
+        const entry: ProxyHistoryEntry = {
+          url: resp.url,
+          title: extractedTitle,
+          method,
+          body,
+          headers,
+        };
+
+        setTabs(prev => prev.map(t => {
+          if (t.id !== tabId) return t;
+          const newHistory = t.history.slice(0, t.historyIndex + 1);
+          newHistory.push(entry);
+          return {
+            ...t,
+            htmlContent: html,
+            pageTitle: extractedTitle,
+            statusCode: resp.status,
+            history: newHistory,
+            historyIndex: newHistory.length - 1,
+          };
+        }));
       }
-
-      // Update history
-      const entry: ProxyHistoryEntry = {
-        url: resp.url,
-        title: pageTitle || resp.url,
-        method,
-        body,
-        headers,
-      };
-
-      setHistory(prev => {
-        const newHistory = prev.slice(0, historyIndex + 1);
-        newHistory.push(entry);
-        return newHistory;
-      });
-      setHistoryIndex(prev => prev + 1);
     } catch {
-      setError(t('proxyBrowser.fetchError'));
+      updateTab(tabId, { error: t('proxyBrowser.fetchError') });
     } finally {
-      setLoading(false);
+      updateTab(tabId, { loading: false });
     }
-  }, [agentId, historyIndex, pageTitle, t]);
+  }, [agentId, apiBase, t, updateTab]);
 
   const handleGo = () => {
-    if (!urlInput.trim()) return;
-    navigateTo(urlInput.trim());
+    if (!activeTab.urlInput.trim()) return;
+    navigateTo(activeTab.urlInput.trim());
   };
 
   const handleBack = () => {
-    if (historyIndex <= 0) return;
-    const entry = history[historyIndex - 1]!;
-    setHistoryIndex(historyIndex - 1);
-    setUrlInput(entry.url);
+    if (activeTab.historyIndex <= 0) return;
+    const entry = activeTab.history[activeTab.historyIndex - 1]!;
+    const tabId = activeTab.id;
+    updateTab(tabId, { historyIndex: activeTab.historyIndex - 1, urlInput: entry.url });
     navigateTo(entry.url, entry.method, entry.body, entry.headers);
   };
 
   const handleForward = () => {
-    if (historyIndex >= history.length - 1) return;
-    const entry = history[historyIndex + 1]!;
-    setHistoryIndex(historyIndex + 1);
-    setUrlInput(entry.url);
+    if (activeTab.historyIndex >= activeTab.history.length - 1) return;
+    const entry = activeTab.history[activeTab.historyIndex + 1]!;
+    const tabId = activeTab.id;
+    updateTab(tabId, { historyIndex: activeTab.historyIndex + 1, urlInput: entry.url });
     navigateTo(entry.url, entry.method, entry.body, entry.headers);
   };
 
   const handleRefresh = () => {
-    if (!currentEntry) return;
-    navigateTo(currentEntry.url, currentEntry.method, currentEntry.body, currentEntry.headers);
+    const entry = activeTab.history[activeTab.historyIndex] ?? null;
+    if (!entry) return;
+    navigateTo(entry.url, entry.method, entry.body, entry.headers);
+  };
+
+  const addTab = () => {
+    const id = String(nextIdRef.current++);
+    setTabs(prev => [...prev, createTab(id)]);
+    setActiveTabId(id);
+  };
+
+  const closeTab = (tabId: string) => {
+    setTabs(prev => {
+      if (prev.length <= 1) {
+        // Last tab: clear it instead of removing
+        return [createTab(String(nextIdRef.current++))];
+      }
+      const idx = prev.findIndex(t => t.id === tabId);
+      const next = prev.filter(t => t.id !== tabId);
+      if (tabId === activeTabIdRef.current) {
+        const newActiveIdx = Math.min(idx, next.length - 1);
+        setActiveTabId(next[newActiveIdx]!.id);
+      }
+      return next;
+    });
+  };
+
+  const handleTabKeyDown = (e: React.KeyboardEvent, tabId: string) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      setActiveTabId(tabId);
+    }
   };
 
   // Listen for navigation messages from the iframe
@@ -152,12 +248,12 @@ export default function ProxyBrowserPage() {
   return (
     <div className="flex flex-col" style={{ height: 'calc(100vh - 10rem)' }}>
       {/* Toolbar */}
-      <div className="flex items-center gap-2 mb-3">
+      <div className="flex items-center gap-2 mb-2">
         <Button
           isIconOnly
           size="sm"
           variant="ghost"
-          isDisabled={historyIndex <= 0}
+          isDisabled={activeTab.historyIndex <= 0}
           onPress={handleBack}
           aria-label={t('proxyBrowser.back')}
         >
@@ -167,7 +263,7 @@ export default function ProxyBrowserPage() {
           isIconOnly
           size="sm"
           variant="ghost"
-          isDisabled={historyIndex >= history.length - 1}
+          isDisabled={activeTab.historyIndex >= activeTab.history.length - 1}
           onPress={handleForward}
           aria-label={t('proxyBrowser.forward')}
         >
@@ -177,7 +273,7 @@ export default function ProxyBrowserPage() {
           isIconOnly
           size="sm"
           variant="ghost"
-          isDisabled={!currentEntry}
+          isDisabled={activeTab.historyIndex < 0}
           onPress={handleRefresh}
           aria-label={t('proxyBrowser.refresh')}
         >
@@ -185,8 +281,8 @@ export default function ProxyBrowserPage() {
         </Button>
 
         <Input
-          value={urlInput}
-          onChange={(e) => setUrlInput(e.target.value)}
+          value={activeTab.urlInput}
+          onChange={(e) => updateTab(activeTab.id, { urlInput: e.target.value })}
           placeholder={t('proxyBrowser.urlPlaceholder')}
           className="flex-1"
           onKeyDown={(e) => { if (e.key === 'Enter') handleGo(); }}
@@ -195,7 +291,7 @@ export default function ProxyBrowserPage() {
         <Button
           size="sm"
           variant="primary"
-          isDisabled={loading || !urlInput.trim()}
+          isDisabled={activeTab.loading || !activeTab.urlInput.trim()}
           onPress={handleGo}
         >
           <ArrowRightToSquare className="w-4 h-4" />
@@ -203,35 +299,79 @@ export default function ProxyBrowserPage() {
         </Button>
       </div>
 
+      {/* Tab bar */}
+      <div className="flex items-center gap-0.5 mb-2 overflow-x-auto scrollbar-thin">
+        {tabs.map(tab => (
+          <div
+            key={tab.id}
+            role="tab"
+            tabIndex={0}
+            aria-selected={tab.id === activeTabId}
+            className={`group flex items-center gap-1 px-3 py-1.5 rounded-t text-sm cursor-pointer border border-b-0 transition-colors shrink-0 select-none ${
+              tab.id === activeTabId
+                ? 'bg-white border-neutral-200 text-neutral-900 font-medium'
+                : 'bg-neutral-100 border-transparent text-neutral-500 hover:bg-neutral-200 hover:text-neutral-700'
+            }`}
+            onClick={() => setActiveTabId(tab.id)}
+            onKeyDown={(e) => handleTabKeyDown(e, tab.id)}
+          >
+            {tab.loading && (
+              <span className="inline-block w-3 h-3 border-2 border-current border-r-transparent rounded-full animate-spin" />
+            )}
+            <span className="truncate max-w-[140px]">
+              {tab.pageTitle || t('proxyBrowser.noTitle')}
+            </span>
+            <button
+              className="ml-0.5 w-4 h-4 flex items-center justify-center rounded text-neutral-400 hover:text-neutral-700 hover:bg-neutral-300 opacity-0 group-hover:opacity-100 transition-opacity"
+              onClick={(e) => { e.stopPropagation(); closeTab(tab.id); }}
+              aria-label={t('proxyBrowser.closeTab')}
+              tabIndex={-1}
+            >
+              ×
+            </button>
+          </div>
+        ))}
+        <Button
+          isIconOnly
+          size="sm"
+          variant="ghost"
+          className="shrink-0 ml-0.5"
+          onPress={addTab}
+          aria-label={t('proxyBrowser.newTab')}
+        >
+          <FolderPlus className="w-4 h-4" />
+        </Button>
+      </div>
+
       {/* Status bar */}
       <div className="flex items-center gap-3 text-xs text-neutral-500 mb-2 min-h-[20px]">
-        {loading && <span>{t('proxyBrowser.loading')}</span>}
-        {!loading && statusCode != null && (
-          <span className={statusCode < 400 ? 'text-green-600' : 'text-red-500'}>
-            HTTP {statusCode}
+        {activeTab.loading && <span>{t('proxyBrowser.loading')}</span>}
+        {!activeTab.loading && activeTab.statusCode != null && (
+          <span className={activeTab.statusCode < 400 ? 'text-green-600' : 'text-red-500'}>
+            HTTP {activeTab.statusCode}
           </span>
         )}
-        {!loading && pageTitle && (
-          <span className="truncate">{pageTitle}</span>
+        {!activeTab.loading && activeTab.pageTitle && (
+          <span className="truncate">{activeTab.pageTitle}</span>
         )}
-        {!loading && error && (
-          <span className="text-red-500">{error}</span>
+        {!activeTab.loading && activeTab.error && (
+          <span className="text-red-500">{activeTab.error}</span>
         )}
       </div>
 
       {/* Content area */}
       <div className="flex-1 border border-neutral-200 rounded-lg overflow-hidden bg-white">
-        {htmlContent ? (
+        {activeTab.htmlContent ? (
           <iframe
             ref={iframeRef}
-            sandbox="allow-scripts allow-same-origin allow-popups"
-            srcDoc={htmlContent}
-            title={pageTitle || 'Proxy Browser'}
+            sandbox="allow-scripts allow-forms"
+            srcDoc={activeTab.htmlContent}
+            title={activeTab.pageTitle || 'Proxy Browser'}
             className="w-full h-full border-0"
           />
         ) : (
           <div className="flex items-center justify-center h-full text-neutral-400 text-sm">
-            {loading ? t('proxyBrowser.loading') : t('proxyBrowser.urlPlaceholder')}
+            {activeTab.loading ? t('proxyBrowser.loading') : t('proxyBrowser.urlPlaceholder')}
           </div>
         )}
       </div>

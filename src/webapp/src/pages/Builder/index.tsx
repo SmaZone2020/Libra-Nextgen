@@ -6,6 +6,7 @@ import { ListView } from '@components/list-view';
 import type { Selection } from 'react-aria-components';
 import { startBuild, uploadIcon, getBuildStreamUrl, listBuilds, deleteBuild, getBuildDownloadUrl, getBuildInfo } from '../../api/build';
 import type { BuildConfigRequest, BuildRecord, BuildRecordDetail } from '../../types/models';
+import { CircleInfo, Picture } from '@gravity-ui/icons';
 
 interface ToggleOption {
   id: string;
@@ -270,10 +271,251 @@ export default function BuilderPage() {
   };
 
   return (
-    <div className="flex gap-4 max-w-6xl mx-auto items-start">
-      {/* Left sidebar: Build History */}
-      <div className="w-72 shrink-0">
+    <div className="flex flex-col lg:flex-row gap-4 max-w-6xl mx-auto items-start">
+      {/* Left: Build Config */}
+      <div className="flex-1 space-y-4">
+        {/* Connection + Metadata */}
         <Card className="p-4">
+          <h2 className="text-lg font-semibold mb-3">{t('builder.connection')}</h2>
+          <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
+            <TextField
+              className="col-span-2"
+              value={config.serverHost}
+              onChange={(v) => set('serverHost', v)}
+            >
+              <Label>{t('builder.serverHost')}</Label>
+              <Input placeholder="127.0.0.1" />
+            </TextField>
+            <NumberField
+              className="w-full max-w-64"
+              value={config.serverPort}
+              minValue={1}
+              maxValue={65535}
+              onChange={(v) => set('serverPort', v)}
+            >
+              <Label>{t('builder.serverPort')}</Label>
+              <NumberField.Group>
+                <NumberField.DecrementButton />
+                <NumberField.Input className="w-[120px]" />
+                <NumberField.IncrementButton />
+              </NumberField.Group>
+            </NumberField>
+          </div>
+          <hr className="my-4 border-default-200" />
+          <h2 className="text-lg font-semibold mb-3">{t('builder.metadata')}</h2>
+          <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
+            <TextField
+              value={config.productName || ''}
+              onChange={(v) => set('productName', v || undefined)}
+            >
+              <Label>{t('builder.productName')}</Label>
+              <Input />
+            </TextField>
+            <TextField
+              value={config.fileDescription || ''}
+              onChange={(v) => set('fileDescription', v || undefined)}
+            >
+              <Label>{t('builder.fileDescription')}</Label>
+              <Input />
+            </TextField>
+            <TextField
+              value={config.companyName || ''}
+              onChange={(v) => set('companyName', v || undefined)}
+            >
+              <Label>{t('builder.companyName')}</Label>
+              <Input />
+            </TextField>
+            <TextField
+              value={config.copyright || ''}
+              onChange={(v) => set('copyright', v || undefined)}
+            >
+              <Label>{t('builder.copyright')}</Label>
+              <Input />
+            </TextField>
+            <TextField
+              value={config.fileVersion || ''}
+              onChange={(v) => set('fileVersion', v || undefined)}
+            >
+              <Label>{t('builder.fileVersion')}</Label>
+              <Input placeholder="1.0.0.0" />
+            </TextField>
+            <div className="space-y-2">
+              <Label>{t('builder.icon')}</Label>
+              <div className="flex items-center gap-3">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".ico"
+                  className="hidden"
+                  onChange={handleIconUpload}
+                />
+                <div
+                  className="relative shrink-0 w-10 h-10 border-2 border-dashed border-default-300 rounded-lg flex items-center justify-center cursor-pointer hover:border-primary-400 transition-colors overflow-hidden"
+                  role="button"
+                  tabIndex={0}
+                  aria-label={t('builder.iconUpload')}
+                  onClick={() => fileInputRef.current?.click()}
+                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') fileInputRef.current?.click(); }}
+                >
+                  {iconUploading ? (
+                    <Spinner />
+                  ) : iconPreview ? (
+                    <img src={iconPreview} alt="icon" className="w-full h-full object-contain p-0.5" />
+                  ) : (
+                    <Picture />
+                  )}
+                </div>
+                <TextField
+                  className="flex-1 w-[80%]"
+                  value={config.iconUrl || ''}
+                  onChange={(v) => set('iconUrl', v || undefined)}
+                >
+                  <Input placeholder="https://example.com/icon.ico" />
+                </TextField>
+              </div>
+            </div>
+          </div>
+        </Card>
+
+        {/* Platform + Application Type */}
+        <Card className="p-4">
+          <div className="grid grid-cols-2 gap-6">
+            <div>
+              <h2 className="text-lg font-semibold mb-3">{t('builder.platform')}</h2>
+              <Tabs
+                selectedKey={config.platform}
+                onSelectionChange={(key) => set('platform', String(key))}
+              >
+                <Tabs.List>
+                  <Tabs.Tab id="x64">x64<Tabs.Indicator /></Tabs.Tab>
+                  <Tabs.Tab id="x86">x86<Tabs.Indicator /></Tabs.Tab>
+                  <Tabs.Tab id="arm">ARM<Tabs.Indicator /></Tabs.Tab>
+                </Tabs.List>
+              </Tabs>
+            </div>
+            <div>
+              <h2 className="text-lg font-semibold mb-3">{t('builder.applicationType')}</h2>
+              <Tabs
+                selectedKey={config.applicationType}
+                onSelectionChange={(key) => set('applicationType', String(key))}
+              >
+                <Tabs.List>
+                  <Tabs.Tab id="Console">{t('builder.consoleApp')}<Tabs.Indicator /></Tabs.Tab>
+                  <Tabs.Tab id="Desktop">{t('builder.desktopApp')}<Tabs.Indicator /></Tabs.Tab>
+                </Tabs.List>
+              </Tabs>
+              <p className="text-xs text-default-500 mt-2">
+                {t(config.applicationType === 'Desktop' ? 'builder.desktopAppDesc' : 'builder.consoleAppDesc')}
+              </p>
+            </div>
+          </div>
+        </Card>
+
+        {/* Build options + Persistence side by side */}
+        <div className="grid grid-cols-2 gap-4">
+          <Card className="p-4">
+            <h2 className="text-lg font-semibold mb-3">{t('builder.buildOptions')}</h2>
+            <ListView
+              aria-label={t('builder.buildOptions')}
+              items={buildOptions}
+              selectedKeys={selectedBuildKeys}
+              selectionMode="multiple"
+              variant="primary"
+              onSelectionChange={handleBuildSelectionChange}
+            >
+              {(opt) => (
+                <ListView.Item id={opt.id} textValue={t(`builder.${opt.id}`)}>
+                  <ListView.ItemContent>
+                    <div className="flex items-center justify-between w-full">
+                      <ListView.Title>{t(`builder.${opt.id}`)}</ListView.Title>
+                      <Popover >
+                        <Button isIconOnly variant="ghost" className=" h-8 w-8 min-w-0">
+                          <CircleInfo className="h-6 w-6" />
+                        </Button>
+                        <Popover.Content className="max-w-64">
+                          <Popover.Dialog>
+                            <Popover.Heading className="text-sm">{t(`builder.${opt.id}`)}</Popover.Heading>
+                            <p className="mt-1 text-xs text-default-500">{t(`builder.${opt.id}Desc`)}</p>
+                          </Popover.Dialog>
+                        </Popover.Content>
+                      </Popover>
+                    </div>
+                  </ListView.ItemContent>
+                </ListView.Item>
+              )}
+            </ListView>
+            {config.injectJunkData && (
+              <div className="mt-3 pl-4">
+                <Slider
+                  className="w-full max-w-xs"
+                  value={config.junkDataMb}
+                  minValue={1}
+                  maxValue={200}
+                  step={1}
+                  onChange={(v) => set('junkDataMb', (Array.isArray(v) ? v[0] : v) ?? 10)}
+                >
+                  <Label>{t('builder.junkDataMb')}</Label>
+                  <Slider.Output />
+                  <Slider.Track>
+                    <Slider.Fill />
+                    <Slider.Thumb />
+                  </Slider.Track>
+                </Slider>
+              </div>
+            )}
+          </Card>
+
+          <Card className="p-4">
+            <h2 className="text-lg font-semibold mb-3">{t('builder.persistence')}</h2>
+            <ListView
+              aria-label={t('builder.persistence')}
+              items={persistenceOptions}
+              selectedKeys={selectedPersistenceKeys}
+              selectionMode="multiple"
+              variant="primary"
+              onSelectionChange={handlePersistenceSelectionChange}
+            >
+              {(opt) => (
+                <ListView.Item id={opt.id} textValue={t(`builder.${opt.id}`)}>
+                  <ListView.ItemContent>
+                    <div className="flex items-center justify-between w-full">
+                      <ListView.Title>{t(`builder.${opt.id}`)}</ListView.Title>
+                      <Popover>
+                        <Button isIconOnly variant="ghost" className=" h-8 w-8 min-w-0">
+                          <CircleInfo className="h-6 w-6" />
+                        </Button>
+                        <Popover.Content className="max-w-64">
+                          <Popover.Dialog>
+                            <Popover.Heading className="text-sm">{t(`builder.${opt.id}`)}</Popover.Heading>
+                            <p className="mt-1 text-xs text-default-500">{t(`builder.${opt.id}Desc`)}</p>
+                          </Popover.Dialog>
+                        </Popover.Content>
+                      </Popover>
+                    </div>
+                  </ListView.ItemContent>
+                </ListView.Item>
+              )}
+            </ListView>
+          </Card>
+        </div>
+
+      </div>
+
+      {/* Right: Build History */}
+      <div className="w-full lg:w-72 shrink-0">
+        <Card className="p-4">
+          <Button
+            variant="primary"
+            onPress={handleBuild}
+            isDisabled={building}
+            className="w-full mb-3"
+          >
+            {building && <Spinner className="mr-1 w-4 h-4" />}
+            {building ? (buildStatus ? t(buildStatus) : t('builder.building')) : t('builder.generate')}
+          </Button>
+          {error && (
+            <div className="mb-3 p-2 bg-danger-50 text-danger-700 rounded text-xs">{error}</div>
+          )}
           <h2 className="text-lg font-semibold mb-3">{t('builder.history')}</h2>
           {history.length === 0 ? (
             <p className="text-sm text-default-500 py-4 text-center">{t('builder.noHistory')}</p>
@@ -341,257 +583,6 @@ export default function BuilderPage() {
           )}
         </Card>
       </div>
-
-      {/* Right main area */}
-      <div className="flex-1 space-y-4">
-        {/* Connection */}
-        <Card className="p-4">
-          <h2 className="text-lg font-semibold mb-3">{t('builder.connection')}</h2>
-          <div className="grid grid-cols-3 gap-4">
-            <TextField
-              className="col-span-2"
-              value={config.serverHost}
-              onChange={(v) => set('serverHost', v)}
-            >
-              <Label>{t('builder.serverHost')}</Label>
-              <Input placeholder="127.0.0.1" />
-            </TextField>
-            <NumberField
-              className="w-full max-w-64"
-              value={config.serverPort}
-              minValue={1}
-              maxValue={65535}
-              onChange={(v) => set('serverPort', v)}
-            >
-              <Label>{t('builder.serverPort')}</Label>
-              <NumberField.Group>
-                <NumberField.DecrementButton />
-                <NumberField.Input className="w-[120px]" />
-                <NumberField.IncrementButton />
-              </NumberField.Group>
-            </NumberField>
-          </div>
-        </Card>
-
-        {/* Platform + Application Type */}
-        <Card className="p-4">
-          <div className="grid grid-cols-2 gap-6">
-            <div>
-              <h2 className="text-lg font-semibold mb-3">{t('builder.platform')}</h2>
-              <Tabs
-                selectedKey={config.platform}
-                onSelectionChange={(key) => set('platform', String(key))}
-              >
-                <Tabs.List>
-                  <Tabs.Tab id="x64">x64<Tabs.Indicator /></Tabs.Tab>
-                  <Tabs.Tab id="x86">x86<Tabs.Indicator /></Tabs.Tab>
-                  <Tabs.Tab id="arm">ARM<Tabs.Indicator /></Tabs.Tab>
-                </Tabs.List>
-              </Tabs>
-            </div>
-            <div>
-              <h2 className="text-lg font-semibold mb-3">{t('builder.applicationType')}</h2>
-              <Tabs
-                selectedKey={config.applicationType}
-                onSelectionChange={(key) => set('applicationType', String(key))}
-              >
-                <Tabs.List>
-                  <Tabs.Tab id="Console">{t('builder.consoleApp')}<Tabs.Indicator /></Tabs.Tab>
-                  <Tabs.Tab id="Desktop">{t('builder.desktopApp')}<Tabs.Indicator /></Tabs.Tab>
-                </Tabs.List>
-              </Tabs>
-              <p className="text-xs text-default-500 mt-2">
-                {t(config.applicationType === 'Desktop' ? 'builder.desktopAppDesc' : 'builder.consoleAppDesc')}
-              </p>
-            </div>
-          </div>
-        </Card>
-
-        {/* Build options + Persistence side by side */}
-        <div className="grid grid-cols-2 gap-4">
-          <Card className="p-4">
-            <h2 className="text-lg font-semibold mb-3">{t('builder.buildOptions')}</h2>
-            <ListView
-              aria-label={t('builder.buildOptions')}
-              items={buildOptions}
-              selectedKeys={selectedBuildKeys}
-              selectionMode="multiple"
-              variant="primary"
-              onSelectionChange={handleBuildSelectionChange}
-            >
-              {(opt) => (
-                <ListView.Item id={opt.id} textValue={t(`builder.${opt.id}`)}>
-                  <ListView.ItemContent>
-                    <div className="flex items-center justify-between w-full">
-                      <ListView.Title>{t(`builder.${opt.id}`)}</ListView.Title>
-                      <Popover>
-                        <Button isIconOnly size="sm" variant="ghost" className="w-6 h-6 min-w-0">
-                          <svg className="w-4 h-4 text-default-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                          </svg>
-                        </Button>
-                        <Popover.Content className="max-w-64">
-                          <Popover.Dialog>
-                            <Popover.Heading className="text-sm">{t(`builder.${opt.id}`)}</Popover.Heading>
-                            <p className="mt-1 text-xs text-default-500">{t(`builder.${opt.id}Desc`)}</p>
-                          </Popover.Dialog>
-                        </Popover.Content>
-                      </Popover>
-                    </div>
-                  </ListView.ItemContent>
-                </ListView.Item>
-              )}
-            </ListView>
-            {config.injectJunkData && (
-              <div className="mt-3 pl-4">
-                <Slider
-                  className="w-full max-w-xs"
-                  value={config.junkDataMb}
-                  minValue={1}
-                  maxValue={200}
-                  step={1}
-                  onChange={(v) => set('junkDataMb', (Array.isArray(v) ? v[0] : v) ?? 10)}
-                >
-                  <Label>{t('builder.junkDataMb')}</Label>
-                  <Slider.Output />
-                  <Slider.Track>
-                    <Slider.Fill />
-                    <Slider.Thumb />
-                  </Slider.Track>
-                </Slider>
-              </div>
-            )}
-          </Card>
-
-          <Card className="p-4">
-            <h2 className="text-lg font-semibold mb-3">{t('builder.persistence')}</h2>
-            <ListView
-              aria-label={t('builder.persistence')}
-              items={persistenceOptions}
-              selectedKeys={selectedPersistenceKeys}
-              selectionMode="multiple"
-              variant="primary"
-              onSelectionChange={handlePersistenceSelectionChange}
-            >
-              {(opt) => (
-                <ListView.Item id={opt.id} textValue={t(`builder.${opt.id}`)}>
-                  <ListView.ItemContent>
-                    <div className="flex items-center justify-between w-full">
-                      <ListView.Title>{t(`builder.${opt.id}`)}</ListView.Title>
-                      <Popover>
-                        <Button isIconOnly size="sm" variant="ghost" className="w-6 h-6 min-w-0">
-                          <svg className="w-4 h-4 text-default-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                          </svg>
-                        </Button>
-                        <Popover.Content className="max-w-64">
-                          <Popover.Dialog>
-                            <Popover.Heading className="text-sm">{t(`builder.${opt.id}`)}</Popover.Heading>
-                            <p className="mt-1 text-xs text-default-500">{t(`builder.${opt.id}Desc`)}</p>
-                          </Popover.Dialog>
-                        </Popover.Content>
-                      </Popover>
-                    </div>
-                  </ListView.ItemContent>
-                </ListView.Item>
-              )}
-            </ListView>
-          </Card>
-        </div>
-
-        {/* Metadata & Icon */}
-        <Card className="p-4">
-          <h2 className="text-lg font-semibold mb-3">{t('builder.metadata')}</h2>
-          <div className="grid grid-cols-2 gap-3">
-            <TextField
-              value={config.companyName || ''}
-              onChange={(v) => set('companyName', v || undefined)}
-            >
-              <Label>{t('builder.companyName')}</Label>
-              <Input />
-            </TextField>
-            <TextField
-              value={config.fileDescription || ''}
-              onChange={(v) => set('fileDescription', v || undefined)}
-            >
-              <Label>{t('builder.fileDescription')}</Label>
-              <Input />
-            </TextField>
-            <TextField
-              value={config.productName || ''}
-              onChange={(v) => set('productName', v || undefined)}
-            >
-              <Label>{t('builder.productName')}</Label>
-              <Input />
-            </TextField>
-            <TextField
-              value={config.copyright || ''}
-              onChange={(v) => set('copyright', v || undefined)}
-            >
-              <Label>{t('builder.copyright')}</Label>
-              <Input />
-            </TextField>
-            <TextField
-              value={config.fileVersion || ''}
-              onChange={(v) => set('fileVersion', v || undefined)}
-            >
-              <Label>{t('builder.fileVersion')}</Label>
-              <Input placeholder="1.0.0.0" />
-            </TextField>
-            <div className="space-y-2">
-              <Label>{t('builder.icon')}</Label>
-              <div className="flex items-center gap-3">
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept=".ico"
-                  className="hidden"
-                  onChange={handleIconUpload}
-                />
-                <div
-                  className="relative shrink-0 w-10 h-10 border-2 border-dashed border-default-300 rounded-lg flex items-center justify-center cursor-pointer hover:border-primary-400 transition-colors overflow-hidden"
-                  role="button"
-                  tabIndex={0}
-                  aria-label={t('builder.iconUpload')}
-                  onClick={() => fileInputRef.current?.click()}
-                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') fileInputRef.current?.click(); }}
-                >
-                  {iconUploading ? (
-                    <Spinner />
-                  ) : iconPreview ? (
-                    <img src={iconPreview} alt="icon" className="w-full h-full object-contain p-0.5" />
-                  ) : (
-                    <svg className="w-5 h-5 text-default-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                    </svg>
-                  )}
-                </div>
-                <TextField
-                  className="flex-1"
-                  value={config.iconUrl || ''}
-                  onChange={(v) => set('iconUrl', v || undefined)}
-                >
-                <Input placeholder="https://example.com/icon.ico" />
-              </TextField>
-            </div>
-            </div>
-          </div>
-        </Card>
-
-        {/* Build button */}
-        {error && (
-          <div className="p-3 bg-danger-50 text-danger-700 rounded text-sm">{error}</div>
-        )}
-
-        <Button
-          variant="primary"
-          onPress={handleBuild}
-          isDisabled={building}
-          className="w-full"
-        >
-          {building && <Spinner className="mr-2" />}
-          {building ? (buildStatus ? t(buildStatus) : t('builder.building')) : t('builder.generate')}
-        </Button>
 
         {/* Build Log Modal */}
         <Modal.Backdrop
@@ -708,7 +699,6 @@ export default function BuilderPage() {
             </Modal.Dialog>
           </Modal.Container>
         </Modal.Backdrop>
-      </div>
     </div>
   );
 }

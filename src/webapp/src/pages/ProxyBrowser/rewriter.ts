@@ -13,19 +13,12 @@ export function resolveUrl(raw: string, baseUrl: string): string {
 
 const CSS_URL_RE = /url\(\s*(['"]?)(.*?)\1\s*\)/g;
 
-/**
- * Rewrite an HTML document so all resources load through the agent proxy.
- */
-export function rewriteHtml(html: string, agentId: string, pageUrl: string, token?: string | null): string {
+export function rewriteHtml(html: string, agentId: string, pageUrl: string, apiBase: string, token?: string | null): string {
   const parser = new DOMParser();
   const doc = parser.parseFromString(html, 'text/html');
 
-  // Remove existing <base> tags, then inject our own.
-  // This is critical: without <base>, srcdoc resolves relative URLs against
-  // about:srcdoc, which falls back to the parent page origin (localhost:5173).
   doc.head?.querySelectorAll('base').forEach(b => b.remove());
 
-  // Inject <base> as the FIRST element in <head> — before any scripts
   const baseEl = doc.createElement('base');
   baseEl.href = pageUrl;
   if (doc.head) {
@@ -36,7 +29,13 @@ export function rewriteHtml(html: string, agentId: string, pageUrl: string, toke
     }
   }
 
-  // Rewrite src/srcset on media elements and scripts
+  // Strip <meta http-equiv="refresh"> to prevent browser-level redirects
+  doc.querySelectorAll('meta[http-equiv]').forEach(meta => {
+    if (/refresh/i.test(meta.getAttribute('http-equiv') || '')) {
+      meta.remove();
+    }
+  });
+
   doc.querySelectorAll('[src]').forEach(el => {
     rewriteAttr(el, 'src', agentId, pageUrl);
     if (el.hasAttribute('srcset')) {
@@ -48,7 +47,6 @@ export function rewriteHtml(html: string, agentId: string, pageUrl: string, toke
     el.setAttribute('srcset', rewriteSrcset(el.getAttribute('srcset') || '', agentId, pageUrl));
   });
 
-  // Rewrite link href (stylesheets, icons, etc.)
   doc.querySelectorAll('link[href]').forEach(el => {
     const href = el.getAttribute('href') || '';
     const resolved = resolveUrl(href, pageUrl);
@@ -57,7 +55,6 @@ export function rewriteHtml(html: string, agentId: string, pageUrl: string, toke
     }
   });
 
-  // Rewrite <a> href: save original, prevent direct navigation
   doc.querySelectorAll('a[href]').forEach(a => {
     const href = a.getAttribute('href') || '';
     if (href.startsWith('javascript:') || href.startsWith('#')) return;
@@ -66,19 +63,16 @@ export function rewriteHtml(html: string, agentId: string, pageUrl: string, toke
     a.setAttribute('href', 'javascript:void(0)');
   });
 
-  // Rewrite <form> action
   doc.querySelectorAll('form[action]').forEach(form => {
     const action = form.getAttribute('action') || '';
     const resolved = resolveUrl(action, pageUrl);
     form.setAttribute('data-proxy-action', resolved);
   });
 
-  // Rewrite poster on <video>
   doc.querySelectorAll('[poster]').forEach(el => {
     rewriteAttr(el, 'poster', agentId, pageUrl);
   });
 
-  // Rewrite url() in inline <style> tags
   doc.querySelectorAll('style').forEach(style => {
     style.textContent = (style.textContent || '').replace(CSS_URL_RE, (_match, _quote, urlContent) => {
       const resolved = resolveUrl(urlContent, pageUrl);
@@ -89,9 +83,7 @@ export function rewriteHtml(html: string, agentId: string, pageUrl: string, toke
     });
   });
 
-  // Inject comprehensive navigation + resource interception at the TOP of <head>
-  // (before any page scripts run, so our intercepts take precedence)
-  injectInterceptor(doc, agentId, token, pageUrl);
+  injectInterceptor(doc, agentId, token, pageUrl, apiBase);
 
   return new XMLSerializer().serializeToString(doc);
 }
@@ -115,37 +107,86 @@ function rewriteSrcset(srcset: string, agentId: string, baseUrl: string): string
   });
 }
 
-function injectInterceptor(doc: Document, agentId: string, token?: string | null, pageUrl?: string) {
-  // Use JSON.stringify for safe escaping — prevents SyntaxError from special chars in URLs/tokens
+function injectInterceptor(doc: Document, agentId: string, token?: string | null, pageUrl?: string, apiBase?: string) {
   const tokenParam = token ? `&token=${encodeURIComponent(token)}` : '';
   const safePageUrl = pageUrl ? JSON.stringify(pageUrl) : '""';
+  const safeApiBase = apiBase ? JSON.stringify(apiBase) : 'window.location.origin+"/api"';
   const script = doc.createElement('script');
   script.textContent = [
   '(function(){',
   'var AGENT_ID='+JSON.stringify(agentId)+';',
   'var TOKEN_PARAM='+JSON.stringify(tokenParam)+';',
   'var PAGE_URL='+safePageUrl+';',
-  'var API_BASE='+JSON.stringify('http://127.0.0.1:5270/api')+';',
-  'function proxyUrl(u){return API_BASE+"/proxy/"+AGENT_ID+"/resource?url="+encodeURIComponent(u)+TOKEN_PARAM;}',
+  'var API_BASE='+safeApiBase+';',
+  'function proxyUrl(u,m,b,h){',
+  '  var url=API_BASE+"/proxy/"+AGENT_ID+"/resource?url="+encodeURIComponent(u)+TOKEN_PARAM;',
+  '  if(m)url+="&method="+encodeURIComponent(m);',
+  '  if(b)url+="&body="+encodeURIComponent(b);',
+  '  if(h)url+="&headers="+encodeURIComponent(h);',
+  '  return url;',
+  '}',
   'function resolveUrl(raw){',
   '  if(!raw||typeof raw!=="string")return raw;',
   '  if(/^(data|blob|javascript):/i.test(raw))return raw;',
   '  try{return String(new URL(raw,PAGE_URL));}catch(e){return raw;}',
   '}',
+  'var _proxyNav=false;',
   'function nav(u,m,b,h){',
+  '  _proxyNav=true;',
   '  window.parent.postMessage(JSON.stringify({type:"proxy-navigate",url:u,method:m||"GET",body:b||null,headers:h||null}),"*");',
   '}',
   '',
-  '/* Sandbox hardening */',
+  '/* Lock window identity props */',
   'function lockProp(obj,prop,val){',
   '  try{Object.defineProperty(obj,prop,{get:function(){return val;},set:function(){},configurable:false});}catch(e){}',
   '}',
   'lockProp(window,"parent",window);',
   'lockProp(window,"top",window);',
   'lockProp(window,"opener",null);',
-  'lockProp(window,"localStorage",null);',
-  'lockProp(window,"sessionStorage",null);',
-  'try{Object.defineProperty(document,"cookie",{get:function(){return"";},set:function(){},configurable:false});}catch(e){}',
+  '',
+  '/* Intercept window.location = url (separate from Location.prototype.href) */',
+  'try{',
+  '  var _loc=window.location;',
+  '  Object.defineProperty(window,"location",{',
+  '    get:function(){return _loc;},',
+  '    set:function(url){nav(resolveUrl(String(url)),"GET");},',
+  '    configurable:true,enumerable:true',
+  '  });',
+  '}catch(_){}',
+  '',
+  '/* Intercept document.location = url */',
+  'try{',
+  '  Object.defineProperty(document,"location",{',
+  '    get:function(){return window.location;},',
+  '    set:function(url){nav(resolveUrl(String(url)),"GET");},',
+  '    configurable:true,enumerable:true',
+  '  });',
+  '}catch(_){}',
+  '',
+  '/* Intercept Location.prototype.href / assign / replace */',
+  '(function(){',
+  '  var loc=window.location;',
+  '  try{',
+  '    var hd=Object.getOwnPropertyDescriptor(loc.constructor.prototype,"href");',
+  '    if(hd){',
+  '      Object.defineProperty(loc,"href",{',
+  '        get:function(){return hd.get.call(loc);},',
+  '        set:function(url){nav(resolveUrl(url),"GET");},',
+  '        configurable:true',
+  '      });',
+  '    }',
+  '  }catch(e){}',
+  '  try{loc.constructor.prototype.assign=function(url){nav(resolveUrl(url),"GET");};}catch(e){}',
+  '  try{loc.constructor.prototype.replace=function(url){nav(resolveUrl(url),"GET");};}catch(e){}',
+  '})();',
+  '',
+  '/* Intercept history API */',
+  'try{',
+  '  history.pushState=function(s,t,u){if(u)nav(resolveUrl(u),"GET");};',
+  '}catch(_){}',
+  'try{',
+  '  history.replaceState=function(s,t,u){if(u)nav(resolveUrl(u),"GET");};',
+  '}catch(_){}',
   '',
   '/* Intercept <a> clicks */',
   'document.addEventListener("click",function(e){',
@@ -169,60 +210,44 @@ function injectInterceptor(doc: Document, agentId: string, token?: string | null
   '  }catch(_){nav(action,method);}',
   '},true);',
   '',
-  '/* Intercept location.href setter (most common JS navigation) */',
-  '(function(){',
-  '  var loc=window.location;',
-  '  try{',
-  '    var hd=Object.getOwnPropertyDescriptor(loc.constructor.prototype,"href");',
-  '    Object.defineProperty(loc,"href",{',
-  '      get:function(){return hd.get.call(loc);},',
-  '      set:function(url){nav(resolveUrl(url),"GET");},',
-  '      configurable:true',
-  '    });',
-  '  }catch(e){}',
-  '  try{loc.constructor.prototype.assign=function(url){nav(resolveUrl(url),"GET");};}catch(e){}',
-  '  try{loc.constructor.prototype.replace=function(url){nav(resolveUrl(url),"GET");};}catch(e){}',
-  '})();',
-  '',
-  '/* Intercept history API */',
-  'try{',
-  '  var _ps=history.pushState;',
-  '  history.pushState=function(s,t,u){if(u)nav(resolveUrl(u),"GET");};',
-  '}catch(_){}',
-  'try{',
-  '  var _rs=history.replaceState;',
-  '  history.replaceState=function(s,t,u){if(u)nav(resolveUrl(u),"GET");};',
-  '}catch(_){}',
-  '',
-  '/* Proxy fetch() */',
+  '/* Proxy fetch() — pass method/body/headers */',
   'try{',
   '  var _fetch=window.fetch;',
-  '  window.fetch=function(url,opts){return _fetch(proxyUrl(resolveUrl(url)),opts||{});};',
+  '  window.fetch=function(url,opts){',
+  '    var o=opts||{};',
+  '    var m=o.method||"GET";',
+  '    return _fetch(proxyUrl(resolveUrl(url),m,o.body?String(o.body):null,o.headers?JSON.stringify(o.headers):null),o);',
+  '  };',
   '}catch(_){}',
   '',
-  '/* Proxy XMLHttpRequest.prototype.open (catches ALL XHR instances) */',
+  '/* Proxy XMLHttpRequest.prototype.open — pass method/body */',
   'try{',
   '  var _open=XMLHttpRequest.prototype.open;',
   '  XMLHttpRequest.prototype.open=function(method,url,async,user,password){',
-  '    return _open.call(this,method,proxyUrl(resolveUrl(url)),async!==false,user,password);',
+  '    return _open.call(this,method,proxyUrl(resolveUrl(url),method),async!==false,user,password);',
+  '  };',
+  '  var _send=XMLHttpRequest.prototype.send;',
+  '  XMLHttpRequest.prototype.send=function(body){',
+  '    return _send.call(this,body);',
   '  };',
   '}catch(_){}',
   '',
   '/* Intercept window.open */',
   'try{',
-  '  var _wopen=window.open;',
   '  window.open=function(url,target,features){',
   '    if(url&&!/^(javascript|data|blob):/i.test(url)){nav(resolveUrl(url),"GET");}',
   '    return null;',
   '  };',
   '}catch(_){}',
   '',
-  '/* Shadow document.createElement for dynamic resource creation */',
+  '/* Shadow document.createElement — intercept both setAttribute AND property setters */',
   'try{',
   '  var _ce=document.createElement.bind(document);',
   '  document.createElement=function(tag,options){',
   '    var el=_ce(tag,options);',
   '    var tn=tag.toLowerCase();',
+  '',
+  '    /* Override setAttribute */',
   '    var _sa=el.setAttribute.bind(el);',
   '    el.setAttribute=function(name,value){',
   '      if(!value){_sa(name,value);return;}',
@@ -235,13 +260,64 @@ function injectInterceptor(doc: Document, agentId: string, token?: string | null
   '        _sa("data-proxy-action",resolveUrl(sv));',
   '      }else{_sa(name,value);}',
   '    };',
+  '',
+  '    /* Intercept property setters (scripts do el.src = "...", el.href = "...") */',
+  '    try{',
+  '      if(tn==="script"||tn==="img"||tn==="iframe"||tn==="embed"||tn==="source"||tn==="video"||tn==="audio"||tn=="input"||tn=="track"){',
+  '        var _srcDesc=Object.getOwnPropertyDescriptor(el.__proto__,"src")||Object.getOwnPropertyDescriptor(el.__proto__.__proto__,"src");',
+  '        if(_srcDesc&&_srcDesc.set){',
+  '          var _srcSet=_srcDesc.set.bind(el);',
+  '          Object.defineProperty(el,"src",{get:function(){return el.getAttribute("src")||"";},set:function(v){',
+  '            var sv=String(v);',
+  '            if(sv&&!sv.startsWith("data:")&&!sv.startsWith("blob:")&&!sv.startsWith("javascript:")){',
+  '              _sa("src",proxyUrl(resolveUrl(sv)));',
+  '            }else{_sa("src",sv);}',
+  '          },configurable:true,enumerable:true});',
+  '        }',
+  '      }',
+  '      if(tn==="a"||tn==="link"){',
+  '        var _hrefDesc=Object.getOwnPropertyDescriptor(el.__proto__,"href")||Object.getOwnPropertyDescriptor(el.__proto__.__proto__,"href");',
+  '        if(_hrefDesc&&_hrefDesc.set){',
+  '          var _hrefSet=_hrefDesc.set.bind(el);',
+  '          var _hrefGet=_hrefDesc.get.bind(el);',
+  '          Object.defineProperty(el,"href",{get:function(){return _hrefGet();},set:function(v){',
+  '            var sv=String(v);',
+  '            if(sv&&!sv.startsWith("javascript:")&&!sv.startsWith("#")&&tn==="a"){',
+  '              _sa("data-proxy-href",resolveUrl(sv));',
+  '              _sa("href","javascript:void(0)");',
+  '            }else if(sv&&!sv.startsWith("data:")&&!sv.startsWith("javascript:")){',
+  '              _sa("href",proxyUrl(resolveUrl(sv)));',
+  '            }else{_sa("href",sv);}',
+  '          },configurable:true,enumerable:true});',
+  '        }',
+  '      }',
+  '      if(tn==="form"){',
+  '        var _actionDesc=Object.getOwnPropertyDescriptor(el.__proto__,"action")||Object.getOwnPropertyDescriptor(el.__proto__.__proto__,"action");',
+  '        if(_actionDesc&&_actionDesc.set){',
+  '          var _actionSet=_actionDesc.set.bind(el);',
+  '          Object.defineProperty(el,"action",{get:function(){return el.getAttribute("action")||"";},set:function(v){',
+  '            var sv=String(v);',
+  '            _sa("data-proxy-action",resolveUrl(sv));',
+  '            _actionSet(sv);',
+  '          },configurable:true,enumerable:true});',
+  '        }',
+  '      }',
+  '    }catch(_){}',
+  '',
   '    return el;',
   '  };',
   '}catch(_){}',
+  '',
+  '/* beforeunload — last-resort catch for unhandled navigation vectors */',
+  'window.addEventListener("beforeunload",function(e){',
+  '  if(_proxyNav){_proxyNav=false;return;}',
+  '  nav(PAGE_URL,"GET");',
+  '  e.preventDefault();',
+  '  try{e.returnValue="";}catch(_){}',
+  '});',
   '})();'
   ].join('\n');
 
-  // Inject at the top of <head> so it runs before page scripts
   if (doc.head) {
     if (doc.head.firstChild) {
       doc.head.insertBefore(script, doc.head.firstChild);
@@ -249,7 +325,6 @@ function injectInterceptor(doc: Document, agentId: string, token?: string | null
       doc.head.appendChild(script);
     }
   } else {
-    // No <head> — create one
     const head = doc.createElement('head');
     head.appendChild(script);
     if (doc.documentElement?.firstChild) {

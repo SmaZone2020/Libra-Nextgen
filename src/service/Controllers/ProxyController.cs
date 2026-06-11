@@ -59,9 +59,21 @@ public class ProxyController : ControllerBase
     }
 
     [HttpGet("{agentId}/resource")]
-    public async Task<IActionResult> Resource(string agentId, [FromQuery] string url, CancellationToken ct)
+    public async Task<IActionResult> Resource(
+        string agentId,
+        [FromQuery] string url,
+        [FromQuery] string? method = null,
+        [FromQuery] string? body = null,
+        [FromQuery] string? headers = null,
+        CancellationToken ct = default)
     {
-        var result = await RelayAndWaitAsync(agentId, "proxy.fetch", new { url, method = "GET" }, ct);
+        var result = await RelayAndWaitAsync(agentId, "proxy.fetch", new
+        {
+            url,
+            method = method ?? "GET",
+            headers,
+            body
+        }, ct);
 
         if (result is ContentResult content)
         {
