@@ -1,3 +1,4 @@
+import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button, Card } from '@heroui/react';
 import { ComposedChart } from '../../components/composed-chart';
@@ -35,32 +36,31 @@ interface TrafficChartProps {
 
 export function TrafficChart({ trafficData, agentIds, agentHosts, range, onRangeChange }: TrafficChartProps) {
   const { t } = useTranslation();
+  const [hidden, setHidden] = useState<Set<string>>(new Set());
+
+  const toggleAgent = useCallback((id: string) => {
+    setHidden(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }, []);
+
   return (
     <Card className="w-full rounded-2xl">
       <Card.Header>
         <Card.Title className="text-base">{t('dashboard.traffic')}</Card.Title>
-        <div className="flex items-center gap-3">
-          {agentIds.map((id, i) => (
-            <div className="flex items-center gap-1.5" key={id}>
-              <span
-                className="size-3 rounded-full"
-                style={{ backgroundColor: AGENT_COLORS[i % AGENT_COLORS.length] }}
-              />
-              <span className="text-muted text-xs">{agentHosts[id] ?? id.slice(0, 8)}</span>
-            </div>
+        <div className="flex items-center gap-1">
+          {RANGES.map(r => (
+            <Button
+              key={r.key}
+              size="sm"
+              variant={range === r.key ? 'primary' : 'ghost'}
+              onPress={() => onRangeChange(r.key)}
+            >
+              {t(r.i18nKey)}
+            </Button>
           ))}
-          <div className="flex items-center gap-1">
-            {RANGES.map(r => (
-              <Button
-                key={r.key}
-                size="sm"
-                variant={range === r.key ? 'primary' : 'ghost'}
-                onPress={() => onRangeChange(r.key)}
-              >
-                {t(r.i18nKey)}
-              </Button>
-            ))}
-          </div>
         </div>
       </Card.Header>
       <Card.Content>
@@ -76,6 +76,7 @@ export function TrafficChart({ trafficData, agentIds, agentHosts, range, onRange
               key={id}
               dataKey={id}
               dot={false}
+              hide={hidden.has(id)}
               name={agentHosts[id] ?? id.slice(0, 8)}
               stroke={AGENT_COLORS[i % AGENT_COLORS.length]}
               strokeWidth={2}
@@ -106,6 +107,30 @@ export function TrafficChart({ trafficData, agentIds, agentHosts, range, onRange
             }}
           />
         </ComposedChart>
+
+        {/* Agent legend below chart */}
+        <div className="flex flex-wrap items-center gap-3 mt-3">
+          {agentIds.map((id, i) => {
+            const active = !hidden.has(id);
+            return (
+              <button
+                key={id}
+                onClick={() => toggleAgent(id)}
+                className={`flex items-center gap-1.5 text-xs transition-opacity cursor-pointer ${
+                  active ? 'opacity-100' : 'opacity-30'
+                }`}
+              >
+                <span
+                  className="size-3 rounded-full shrink-0"
+                  style={{ backgroundColor: AGENT_COLORS[i % AGENT_COLORS.length] }}
+                />
+                <span className={active ? 'text-neutral-600' : 'text-neutral-400 line-through'}>
+                  {agentHosts[id] ?? id.slice(0, 8)}
+                </span>
+              </button>
+            );
+          })}
+        </div>
       </Card.Content>
     </Card>
   );
