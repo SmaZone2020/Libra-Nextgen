@@ -26,18 +26,24 @@ function extractJson(raw: string): Record<string, unknown> | unknown[] {
   // Try direct parse first
   try { return JSON.parse(raw); } catch { /* fall through */ }
 
-  // Try to find a JSON object: everything from first '{' to last '}'
+  // Find JSON object by counting braces from the first '{'
   const objStart = raw.indexOf('{');
-  const objEnd = raw.lastIndexOf('}');
-  if (objStart >= 0 && objEnd > objStart) {
-    try { return JSON.parse(raw.slice(objStart, objEnd + 1)); } catch { /* fall through */ }
+  if (objStart >= 0) {
+    let depth = 0;
+    for (let i = objStart; i < raw.length; i++) {
+      if (raw[i] === '{') depth++;
+      else if (raw[i] === '}') { depth--; if (depth === 0) { try { return JSON.parse(raw.slice(objStart, i + 1)); } catch { break; } } }
+    }
   }
 
-  // Try to find a JSON array: everything from first '[' to last ']'
+  // Find JSON array by counting brackets from the first '['
   const arrStart = raw.indexOf('[');
-  const arrEnd = raw.lastIndexOf(']');
-  if (arrStart >= 0 && arrEnd > arrStart) {
-    try { return JSON.parse(raw.slice(arrStart, arrEnd + 1)); } catch { /* fall through */ }
+  if (arrStart >= 0) {
+    let depth = 0;
+    for (let i = arrStart; i < raw.length; i++) {
+      if (raw[i] === '[') depth++;
+      else if (raw[i] === ']') { depth--; if (depth === 0) { try { return JSON.parse(raw.slice(arrStart, i + 1)); } catch { break; } } }
+    }
   }
 
   throw new Error('No JSON found in output');
@@ -71,7 +77,7 @@ export function LocalAccountsTab({ agentId }: Props) {
           if (t.status === 'Completed') {
             try {
               const raw = extractJson(t.output || '[]');
-              const list: Record<string, unknown>[] = Array.isArray(raw) ? raw : ((raw as Record<string, unknown>).accounts as Record<string, unknown>[] ?? []);
+              const list: Record<string, unknown>[] = Array.isArray(raw) ? (raw as Record<string, unknown>[]) : ((raw as Record<string, unknown>).accounts as Record<string, unknown>[] ?? []);
               const normalized: LocalAccount[] = list.map((a) => ({
                 Name: (a.Name || a.name || '') as string,
                 FullName: (a.FullName || a.fullName || '') as string,
