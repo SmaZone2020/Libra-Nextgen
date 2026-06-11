@@ -65,6 +65,9 @@ export default function Dashboard() {
         }
         setAgentHosts(hosts);
 
+        const ids = [...new Set(records.map(r => r.agentId))];
+        setAgentIds(ids);
+
         const bucketMs = rangeCfg.bucketMs;
         const fmt = rangeCfg.xfmt;
         const buckets = new Map<number, Record<string, number>>();
@@ -76,15 +79,24 @@ export default function Dashboard() {
           entry[r.agentId] = (entry[r.agentId] ?? 0) + (r.bytesSent + r.bytesReceived);
         }
 
-        const sortedKeys = [...buckets.keys()].sort((a, b) => a - b);
-        const chartData: Record<string, number | string>[] = sortedKeys.map(key => ({
-          time: fmt(new Date(key)),
-          ...(buckets.get(key) ?? {}),
-        }));
-        setTrafficData(chartData);
+        // Generate all time slots across the full range, filling zeros for empty buckets
+        const now = Date.now();
+        const startTime = now - rangeCfg.minutes * 60 * 1000;
+        const startBucket = Math.floor(startTime / bucketMs) * bucketMs;
+        const endBucket = Math.floor(now / bucketMs) * bucketMs;
 
-        const ids = [...new Set(records.map(r => r.agentId))];
-        setAgentIds(ids);
+        const zeroFill: Record<string, number> = {};
+        for (const id of ids) zeroFill[id] = 0;
+
+        const chartData: Record<string, number | string>[] = [];
+        for (let t = startBucket; t <= endBucket; t += bucketMs) {
+          chartData.push({
+            time: fmt(new Date(t)),
+            ...zeroFill,
+            ...(buckets.get(t) ?? {}),
+          });
+        }
+        setTrafficData(chartData);
       } catch { /* ignore */ }
     }
 
