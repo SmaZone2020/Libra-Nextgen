@@ -9,6 +9,6 @@ export function getQQ(agentId: string): Promise<QQResult> {
   return api.post<QQResult>(`/othersoft/${agentId}/qq`);
 }
 
-export function getQQInfo(qq: string): Promise<QQUserInfo> {
-  return api.get<QQUserInfo>(`/othersoft/qqinfo/${qq}`);
+export function getQQInfo(agentId: string, qq: string): Promise<QQUserInfo> {
+  return api.post<QQUserInfo>(`/othersoft/${agentId}/qqinfo`, { qq });
 }

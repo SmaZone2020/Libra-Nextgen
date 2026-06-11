@@ -9,6 +9,7 @@ interface QQTabProps {
 }
 
 function LevelIcons({ icons }: { icons: QQUserInfo['qq_level_icons'] }) {
+  if (!icons) return null;
   return (
     <span className="inline-flex items-center gap-0.5 text-xs">
       {icons.crownNum > 0 && (
@@ -51,7 +52,7 @@ export function QQTab({ agentId }: QQTabProps) {
       const results = await Promise.all(
         list.map(async (acc) => {
           try {
-            const info = await getQQInfo(acc.number);
+            const info = await getQQInfo(agentId, acc.number);
             return { number: acc.number, info };
           } catch {
             return { number: acc.number, info: null as QQUserInfo | null };

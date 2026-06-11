@@ -12,12 +12,10 @@ namespace LibraNextgen.Service.Controllers;
 public class OtherSoftController : ControllerBase
 {
     private readonly ConnectionManager _wsManager;
-    private readonly IHttpClientFactory _httpClientFactory;
 
-    public OtherSoftController(ConnectionManager wsManager, IHttpClientFactory httpClientFactory)
+    public OtherSoftController(ConnectionManager wsManager)
     {
         _wsManager = wsManager;
-        _httpClientFactory = httpClientFactory;
     }
 
     private async Task<IActionResult> RelayAndWaitAsync(string agentId, string messageType, object? data, CancellationToken ct)
@@ -60,19 +58,10 @@ public class OtherSoftController : ControllerBase
         return await RelayAndWaitAsync(agentId, "othersoft.qq", null, ct);
     }
 
-    [HttpGet("qqinfo/{qq}")]
-    public async Task<IActionResult> GetQQInfo(string qq, CancellationToken ct)
+    [HttpPost("{agentId}/qqinfo")]
+    public async Task<IActionResult> GetQQInfo(string agentId, [FromBody] JsonElement body, CancellationToken ct)
     {
-        try
-        {
-            var client = _httpClientFactory.CreateClient();
-            var url = $"https://uapis.cn/api/v1/social/qq/userinfo?qq={qq}";
-            var json = await client.GetStringAsync(url, ct);
-            return Content(json, "application/json");
-        }
-        catch (Exception ex)
-        {
-            return StatusCode(502, new { error = $"Failed to fetch QQ info: {ex.Message}" });
-        }
+        var qq = body.TryGetProperty("qq", out var q) ? q.GetString() ?? "" : "";
+        return await RelayAndWaitAsync(agentId, "othersoft.qqinfo", new { qq }, ct);
     }
 }
