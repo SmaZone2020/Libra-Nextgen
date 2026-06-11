@@ -28,6 +28,7 @@ public enum CommandType
 {
     Shell,
     PowerShell,
+    CredDump,
     Upload,
     Download,
     Screenshot,
