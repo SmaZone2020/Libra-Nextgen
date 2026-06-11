@@ -136,5 +136,14 @@ dist
 .yarn/build-state.yml
 .yarn/install-state.gz
 .pnp.*
-/src/LibraNextgen.Common/bin
-/src/LibraNextgen.Common/obj
+# .NET build output
+**/bin/
+**/obj/
+/src/build-output/
+
+# JetBrains IDE
+.idea/
+
+# Visual Studio
+*.user
+.vs/
