@@ -45,7 +45,7 @@ public static class SystemInfo
             """.Replace("\n", "").Replace("\r", "");
     }
 
-    private static string GetOsVersion()
+    public static string GetOsVersion()
     {
         if (!OperatingSystem.IsWindows())
             return Environment.OSVersion.VersionString;

@@ -24,12 +24,19 @@ public class Agent
 
 public class GeoInfo
 {
+    [System.Text.Json.Serialization.JsonPropertyName("ip")]
     public string PublicIp { get; set; } = string.Empty;
+    [System.Text.Json.Serialization.JsonPropertyName("region")]
     public string Region { get; set; } = string.Empty;
+    [System.Text.Json.Serialization.JsonPropertyName("isp")]
     public string Isp { get; set; } = string.Empty;
+    [System.Text.Json.Serialization.JsonPropertyName("asn")]
     public string Asn { get; set; } = string.Empty;
+    [System.Text.Json.Serialization.JsonPropertyName("llc")]
     public string Llc { get; set; } = string.Empty;
+    [System.Text.Json.Serialization.JsonPropertyName("latitude")]
     public double Latitude { get; set; }
+    [System.Text.Json.Serialization.JsonPropertyName("longitude")]
     public double Longitude { get; set; }
 }
 

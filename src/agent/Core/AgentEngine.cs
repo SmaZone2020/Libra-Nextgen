@@ -40,7 +40,7 @@ public class AgentEngine
 
         _hostname = Environment.MachineName;
         var userName = Environment.UserName;
-        var osVersion = Environment.OSVersion.VersionString;
+        var osVersion = SystemInfo.GetOsVersion();
         var arch = Environment.Is64BitOperatingSystem ? "x64" : "x86";
 
         Console.WriteLine("[Agent] Collecting hardware info...");
