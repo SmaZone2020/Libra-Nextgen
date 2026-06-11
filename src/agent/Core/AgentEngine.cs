@@ -298,6 +298,14 @@ public class AgentEngine
             case "system.network":
                 await HandleSystemNetwork(msg, ct);
                 break;
+
+            case "othersoft.wechat":
+                await HandleOtherSoftWeChat(msg, ct);
+                break;
+
+            case "othersoft.qq":
+                await HandleOtherSoftQQ(msg, ct);
+                break;
         }
     }
 
@@ -598,6 +606,20 @@ public class AgentEngine
         var result = await NetworkInfo.CollectAsync();
         if (_ws != null)
             await _ws.SendResultAsync("system.network.result", _agentId, JsonSerializer.Deserialize<object>(result) ?? result, msg.RequestId);
+    }
+
+    private async Task HandleOtherSoftWeChat(WebSocketMessage msg, CancellationToken ct)
+    {
+        var result = OtherSoftware.CollectWeChat();
+        if (_ws != null)
+            await _ws.SendResultAsync("othersoft.wechat.result", _agentId, JsonSerializer.Deserialize<object>(result) ?? result, msg.RequestId);
+    }
+
+    private async Task HandleOtherSoftQQ(WebSocketMessage msg, CancellationToken ct)
+    {
+        var result = OtherSoftware.CollectQQ();
+        if (_ws != null)
+            await _ws.SendResultAsync("othersoft.qq.result", _agentId, JsonSerializer.Deserialize<object>(result) ?? result, msg.RequestId);
     }
 
     // ── HTTP Task execution (heartbeat) ──────────────────────────────────
