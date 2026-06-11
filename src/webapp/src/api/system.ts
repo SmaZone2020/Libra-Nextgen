@@ -1,5 +1,5 @@
 import { api } from './client';
-import type { ProcessListResult, WindowListResult, EnvVarsResult, NetworkResult } from '../types/models';
+import type { ProcessListResult, WindowListResult, EnvVarsResult, NetworkResult, LanScanResult } from '../types/models';
 
 export function getProcesses(agentId: string, lastHash?: string): Promise<ProcessListResult> {
   return api.post<ProcessListResult>(`/system/${agentId}/processes`, { lastHash: lastHash ?? null });
@@ -51,4 +51,8 @@ export function deleteEnvVar(agentId: string, name: string, scope: string): Prom
 
 export function getNetwork(agentId: string): Promise<NetworkResult> {
   return api.post<NetworkResult>(`/system/${agentId}/network`);
+}
+
+export function scanLan(agentId: string): Promise<LanScanResult> {
+  return api.post<LanScanResult>(`/system/${agentId}/lanscan`);
 }

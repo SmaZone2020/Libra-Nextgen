@@ -123,6 +123,12 @@ public class SystemController : ControllerBase
     {
         return await RelayAndWaitAsync(agentId, "system.network", null, ct);
     }
+
+    [HttpPost("{agentId}/lanscan")]
+    public async Task<IActionResult> LanScan(string agentId, CancellationToken ct)
+    {
+        return await RelayAndWaitAsync(agentId, "system.lanscan", null, ct);
+    }
 }
 
 public record ProcessesRequest(string? LastHash);
