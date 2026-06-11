@@ -14,6 +14,7 @@ import FileManager from '../pages/FileManager';
 import SystemPage from '../pages/System';
 import ScreenMonitorPage from '../pages/ScreenMonitor';
 import MediaMonitorPage from '../pages/MediaMonitor';
+import OtherSoftwarePage from '../pages/OtherSoftware';
 import { getStoredUser, logout, checkSetupStatus } from '../api/auth';
 import { setOnAuthFailed } from '../api/client';
 import { consoleWs } from '../ws/consoleWs';
@@ -30,7 +31,7 @@ const pageTransition = {
 const SIDEBAR_W = { collapsed: 72, expanded: 256 };
 
 
-const AGENT_ROUTES = new Set(['/agents', '/shell', '/files', '/system', '/screen', '/media']);
+const AGENT_ROUTES = new Set(['/agents', '/shell', '/files', '/system', '/screen', '/media', '/othersoft']);
 
 const PAGE_META_KEYS: Record<string, [string, string]> = {
   '/': ['pageMeta.dashboard.label', 'pageMeta.dashboard.subtitle'],
@@ -40,6 +41,7 @@ const PAGE_META_KEYS: Record<string, [string, string]> = {
   '/shell': ['pageMeta.shell.label', 'pageMeta.shell.subtitle'],
   '/files': ['pageMeta.explorer.label', 'pageMeta.explorer.subtitle'],
   '/system': ['pageMeta.system.label', 'pageMeta.system.subtitle'],
+  '/othersoft': ['pageMeta.othersoft.label', 'pageMeta.othersoft.subtitle'],
   '/audit': ['pageMeta.audit.label', 'pageMeta.audit.subtitle'],
 };
 
@@ -247,6 +249,7 @@ function AuthenticatedLayout({
                 <Route path="/system" element={<SystemPage />} />
                 <Route path="/screen" element={<ScreenMonitorPage />} />
                 <Route path="/media" element={<MediaMonitorPage />} />
+                <Route path="/othersoft" element={<OtherSoftwarePage />} />
               </Routes>
             </motion.div>
           </AnimatePresence>

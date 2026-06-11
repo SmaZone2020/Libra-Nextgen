@@ -1,4 +1,4 @@
-import { ChartLine, Cpu, Display, DisplayPulse, Folder, ListTimeline, Microphone, Terminal } from "@gravity-ui/icons";
+import { ChartLine, Cpu, Display, DisplayPulse, Folder, ListTimeline, Camera, Terminal, PlugConnection } from "@gravity-ui/icons";
 
 export const siteConfig = {
   name: 'Libra-Nextgen',
@@ -9,9 +9,10 @@ export const sidebarItems = [
   { icon: ChartLine, to: '/', label: 'nav.dashboard' },
   { icon: Display, to: '/agents', label: 'nav.agents' },
   { icon: DisplayPulse, to: '/screen', label: 'nav.screen' },
-  { icon: Microphone, to: '/media', label: 'nav.media' },
+  { icon: Camera, to: '/media', label: 'nav.media' },
   { icon: Terminal, to: '/shell', label: 'nav.shell' },
   { icon: Folder, to: '/files', label: 'nav.explorer' },
   { icon: Cpu, to: '/system', label: 'nav.system' },
+  { icon: PlugConnection, to: '/othersoft', label: 'nav.otherSoftware' },
   { icon: ListTimeline, to: '/audit', label: 'nav.auditLogs' },
 ];
