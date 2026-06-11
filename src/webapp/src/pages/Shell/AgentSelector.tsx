@@ -1,4 +1,4 @@
-import { Button, Chip, ComboBox, Input, Label, ListBox } from '@heroui/react';
+import { Button, Chip, Dropdown } from '@heroui/react';
 import type { AgentListItem } from '../../types/models';
 
 type LockMode = 'write' | 'readonly' | null;
@@ -17,29 +17,28 @@ export function AgentSelector({ agents, selectedId, connected, lockMode, onSelec
 
   return (
     <div className="flex items-center gap-3 flex-wrap">
-      <ComboBox
-        className="w-[256px]"
-        defaultItems={agents}
-        selectedKey={selectedId || null}
-        onSelectionChange={(key) => onSelect(String(key))}
-        isDisabled={connected}
-      >
-        <Label>Agent</Label>
-        <ComboBox.InputGroup>
-          <Input placeholder="Select agent..." />
-          <ComboBox.Trigger />
-        </ComboBox.InputGroup>
-        <ComboBox.Popover>
-          <ListBox>
+      <Dropdown>
+        <Button
+          size="sm"
+          variant="ghost"
+          className="w-[256px] justify-start"
+          isDisabled={connected}
+        >
+          {selectedAgent ? selectedAgent.hostname : 'Select agent...'}
+        </Button>
+        <Dropdown.Popover>
+          <Dropdown.Menu
+            onAction={(key) => onSelect(String(key))}
+            items={agents}
+          >
             {(item: AgentListItem) => (
-              <ListBox.Item id={item.id} textValue={item.hostname}>
+              <Dropdown.Item key={item.id} textValue={item.hostname}>
                 {item.hostname}
-                <ListBox.ItemIndicator />
-              </ListBox.Item>
+              </Dropdown.Item>
             )}
-          </ListBox>
-        </ComboBox.Popover>
-      </ComboBox>
+          </Dropdown.Menu>
+        </Dropdown.Popover>
+      </Dropdown>
 
       {connected && selectedAgent && (
         <div className="flex items-center gap-2">

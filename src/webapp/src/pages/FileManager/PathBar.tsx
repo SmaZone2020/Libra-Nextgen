@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Button, Card, ComboBox, Input, ListBox, Tooltip } from '@heroui/react';
+import { Button, Card, Dropdown, Tooltip } from '@heroui/react';
 import { Breadcrumbs } from '@heroui/react/breadcrumbs';
 import { FolderArrowLeft, FolderTree } from '@gravity-ui/icons';
 
@@ -47,29 +47,28 @@ export function PathBar({ path, drives, historyLength, onGoBack, onGoUp, onDrive
         </Tooltip.Content>
       </Tooltip>
 
-      <ComboBox
-        className="w-[80px]"
-        defaultItems={driveItems}
-        selectedKey={path.split('\\')[0] + '\\'}
-        onSelectionChange={(key) => {
-          if (key) onDriveChange(String(key));
-        }}
-        aria-label={t('fileManager.selectDrive')}
-      >
-        <ComboBox.InputGroup>
-          <Input placeholder={t('fileManager.drive')} />
-          <ComboBox.Trigger />
-        </ComboBox.InputGroup>
-        <ComboBox.Popover>
-          <ListBox>
+      <Dropdown>
+        <Button
+          size="sm"
+          variant="ghost"
+          className="w-[80px] justify-start"
+        >
+          {path.split('\\')[0] + '\\'}
+        </Button>
+        <Dropdown.Popover>
+          <Dropdown.Menu
+            onAction={(key) => onDriveChange(String(key))}
+            items={driveItems}
+            aria-label={t('fileManager.selectDrive')}
+          >
             {(item: { id: string; label: string }) => (
-              <ListBox.Item id={item.id} textValue={item.label}>
+              <Dropdown.Item key={item.id} textValue={item.label}>
                 {item.label}
-              </ListBox.Item>
+              </Dropdown.Item>
             )}
-          </ListBox>
-        </ComboBox.Popover>
-      </ComboBox>
+          </Dropdown.Menu>
+        </Dropdown.Popover>
+      </Dropdown>
 
       <Card className='flex-1 min-w-0 py-0 h-[40px] rounded-[12px]'>
         <Breadcrumbs
