@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Button, Input } from '@heroui/react';
+import { Button, Card, Input } from '@heroui/react';
 import { ArrowLeft, ArrowRight, ArrowRotateLeft, ArrowRightToSquare, FolderPlus } from '@gravity-ui/icons';
 import { useAgent } from '../../contexts/AgentContext';
 import { fetchPage, API_BASE } from '../../api/proxy';
@@ -307,7 +307,7 @@ export default function ProxyBrowserPage() {
             role="tab"
             tabIndex={0}
             aria-selected={tab.id === activeTabId}
-            className={`group flex items-center gap-1 px-3 py-1.5 rounded-t text-sm cursor-pointer border border-b-0 transition-colors shrink-0 select-none ${
+            className={`group flex items-center gap-1 px-3 py-1.5 rounded-[20px] text-sm cursor-pointer border transition-colors shrink-0 select-none ${
               tab.id === activeTabId
                 ? 'bg-white border-neutral-200 text-neutral-900 font-medium'
                 : 'bg-neutral-100 border-transparent text-neutral-500 hover:bg-neutral-200 hover:text-neutral-700'
@@ -343,24 +343,8 @@ export default function ProxyBrowserPage() {
         </Button>
       </div>
 
-      {/* Status bar */}
-      <div className="flex items-center gap-3 text-xs text-neutral-500 mb-2 min-h-[20px]">
-        {activeTab.loading && <span>{t('proxyBrowser.loading')}</span>}
-        {!activeTab.loading && activeTab.statusCode != null && (
-          <span className={activeTab.statusCode < 400 ? 'text-green-600' : 'text-red-500'}>
-            HTTP {activeTab.statusCode}
-          </span>
-        )}
-        {!activeTab.loading && activeTab.pageTitle && (
-          <span className="truncate">{activeTab.pageTitle}</span>
-        )}
-        {!activeTab.loading && activeTab.error && (
-          <span className="text-red-500">{activeTab.error}</span>
-        )}
-      </div>
-
       {/* Content area */}
-      <div className="flex-1 border border-neutral-200 rounded-lg overflow-hidden bg-white">
+      <Card className="flex-1 overflow-hidden">
         {activeTab.htmlContent ? (
           <iframe
             ref={iframeRef}
@@ -374,7 +358,7 @@ export default function ProxyBrowserPage() {
             {activeTab.loading ? t('proxyBrowser.loading') : t('proxyBrowser.urlPlaceholder')}
           </div>
         )}
-      </div>
+      </Card>
     </div>
   );
 }

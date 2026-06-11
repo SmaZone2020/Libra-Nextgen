@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { ComposableMap, Geographies, Geography, Marker } from 'react-simple-maps';
 import worldTopo from 'world-atlas/countries-110m.json';
 import type { AgentListItem } from '../../types/models';
+import { Card } from '@heroui/react';
 
 interface GeoMapProps {
   agents: AgentListItem[];
@@ -18,14 +19,7 @@ export function GeoMap({ agents }: GeoMapProps) {
   );
 
   return (
-    <div className="bg-white rounded-lg border border-neutral-200">
-      {/* Header */}
-      <div className="flex items-center px-4 py-3 border-b border-neutral-100">
-        <h3 className="text-sm font-semibold text-neutral-900">
-          {t('dashboard.geoMap')}
-        </h3>
-      </div>
-
+    <Card>
       {/* Map area */}
       <div className="relative">
         {geoAgents.length === 0 ? (
@@ -101,6 +95,6 @@ export function GeoMap({ agents }: GeoMapProps) {
         <span>{t('dashboard.agentsWithGeo', { count: geoAgents.length })}</span>
         <span>{agents.length} {t('dashboard.totalAgents').toLowerCase()}</span>
       </div>
-    </div>
+    </Card>
   );
 }

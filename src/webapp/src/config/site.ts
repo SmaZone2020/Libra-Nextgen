@@ -14,9 +14,9 @@ export const sidebarItems = [
   { icon: Folder, to: '/files', label: 'nav.explorer' },
   { icon: PlugConnection, to: '/othersoft', label: 'nav.otherSoftware' },
   { icon: Globe, to: '/proxy', label: 'nav.proxyBrowser' },
+  { icon: Thunderbolt, to: '/stress-test', label: 'nav.stressTest' },
   { icon: Cpu, to: '/system', label: 'nav.system' },
   { icon: Code, to: '/builder', label: 'nav.builder' },
-  { icon: Thunderbolt, to: '/stress-test', label: 'nav.stressTest' },
   { icon: ListTimeline, to: '/audit', label: 'nav.auditLogs' },
 ];
 
