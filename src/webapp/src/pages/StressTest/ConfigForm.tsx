@@ -80,7 +80,7 @@ export function ConfigForm({ disabled, onStart, onStop, initialData }: Props) {
             value={targetHost}
             onChange={(v) => setTargetHost(v)}
           >
-            <Label>{t('stressTest.targetHost')}</Label>
+            <Label className='text-base'>{t('stressTest.targetHost')}</Label>
             <Input placeholder="192.168.1.1" />
           </TextField>
           <NumberField
@@ -90,7 +90,7 @@ export function ConfigForm({ disabled, onStart, onStop, initialData }: Props) {
             maxValue={65535}
             onChange={(v) => setTargetPort(v)}
           >
-            <Label>{t('stressTest.targetPort')}</Label>
+            <Label className='text-base'>{t('stressTest.targetPort')}</Label>
             <NumberField.Group>
               <NumberField.DecrementButton />
               <NumberField.Input className="w-[80px] text-center" />
@@ -101,11 +101,11 @@ export function ConfigForm({ disabled, onStart, onStop, initialData }: Props) {
 
         {/* Attack methods */}
         <div>
-          <Label className="mb-2">{t('stressTest.attackMethods')}</Label>
+          <Label className="mb-2 text-base">{t('stressTest.attackMethods')}</Label>
 
           <div className="space-y-2">
             <div>
-              <span className="text-xs text-neutral-500">{t('stressTest.layer4')}</span>
+              <span className="text-sm text-neutral-500">{t('stressTest.layer4')}</span>
               <div className="flex flex-wrap gap-1.5 mt-1">
                 {LAYER4_METHODS.map(m => (
                   <Button
@@ -125,7 +125,7 @@ export function ConfigForm({ disabled, onStart, onStop, initialData }: Props) {
               </div>
             </div>
             <div>
-              <span className="text-xs text-neutral-500">{t('stressTest.layer7')}</span>
+              <span className="text-sm text-neutral-500">{t('stressTest.layer7')}</span>
               <div className="flex flex-wrap gap-1.5 mt-1">
                 {LAYER7_METHODS.map(m => (
                   <Button
@@ -155,7 +155,7 @@ export function ConfigForm({ disabled, onStart, onStop, initialData }: Props) {
             maxValue={86400}
             onChange={(v) => setDuration(v)}
           >
-            <Label>{t('stressTest.duration')}</Label>
+            <Label className='text-base'>{t('stressTest.duration')}</Label>
             <NumberField.Group>
               <NumberField.DecrementButton />
               <NumberField.Input className="w-full text-center" />
@@ -168,7 +168,7 @@ export function ConfigForm({ disabled, onStart, onStop, initialData }: Props) {
             maxValue={10000}
             onChange={(v) => setThreads(v)}
           >
-            <Label>{t('stressTest.threads')}</Label>
+            <Label className='text-base'>{t('stressTest.threads')}</Label>
             <NumberField.Group>
               <NumberField.DecrementButton />
               <NumberField.Input className="w-full text-center" />
@@ -181,7 +181,7 @@ export function ConfigForm({ disabled, onStart, onStop, initialData }: Props) {
             maxValue={65500}
             onChange={(v) => setPacketSize(v)}
           >
-            <Label>{t('stressTest.packetSize')}</Label>
+            <Label className='text-base'>{t('stressTest.packetSize')}</Label>
             <NumberField.Group>
               <NumberField.DecrementButton />
               <NumberField.Input className="w-full text-center" />

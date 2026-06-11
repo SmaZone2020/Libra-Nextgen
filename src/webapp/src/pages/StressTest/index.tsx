@@ -77,19 +77,17 @@ export default function StressTestPage() {
         if (status) {
           setAgentStatuses(prev => {
             const idx = prev.findIndex(s => s.agentId === status.agentId);
-            if (idx >= 0) {
-              const next = [...prev];
-              next[idx] = status;
-              return next;
-            }
-            return [...prev, status];
-          });
+            const next = idx >= 0
+              ? [...prev.slice(0, idx), status, ...prev.slice(idx + 1)]
+              : [...prev, status];
 
-          // Add to chart history
-          const totalMbps = (status.mbps || 0);
-          const point = { ts: Date.now(), mbps: totalMbps };
-          historyRef.current = [...historyRef.current.slice(-120), point];
-          setChartHistory(historyRef.current);
+            const totalMbps = next.reduce((sum, s) => sum + s.mbps, 0);
+            const point = { ts: Date.now(), mbps: totalMbps };
+            historyRef.current = [...historyRef.current.slice(-120), point];
+            setChartHistory(historyRef.current);
+
+            return next;
+          });
         }
       } catch { /* ignore malformed messages */ }
     });
