@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom';
 import { AnimatePresence, motion } from 'motion/react';
-import { Button, Chip, ComboBox, Input, Label, ListBox } from '@heroui/react';
+import { Bars } from '@gravity-ui/icons';
+import { Button, Chip, ComboBox, Dropdown, Input, Label, ListBox } from '@heroui/react';
 import { useTranslation } from 'react-i18next';
 import { Sidebar } from '../shared/layout/Sidebar';
 import LoginPage from '../pages/Login';
@@ -74,12 +75,12 @@ function AgentSelector() {
   if (!AGENT_ROUTES.has(pathname)) return null;
 
   return (
-    <div className="flex items-center gap-3">
+    <div className="flex items-center gap-2 sm:gap-3">
       <ComboBox
         defaultItems={agents}
         selectedKey={agentId || null}
         onSelectionChange={(key) => key && selectAgent(String(key))}
-        className="w-[220px]"
+        className="flex-1 sm:w-[220px] sm:flex-none"
       >
         <Label className="sr-only">Agent</Label>
         <ComboBox.InputGroup>
@@ -203,6 +204,7 @@ function AuthenticatedLayout({
 }) {
   const { t } = useTranslation();
   const location = useLocation();
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const sidebarWidth = collapsed ? SIDEBAR_W.collapsed : SIDEBAR_W.expanded;
 
   return (
@@ -212,22 +214,62 @@ function AuthenticatedLayout({
         collapsed={collapsed}
         items={sidebarItems}
         onToggle={onToggle}
+        mobileOpen={mobileSidebarOpen}
+        onMobileClose={() => setMobileSidebarOpen(false)}
       />
 
       <main
-        className="sm:pl-[var(--sidebar-w)] pb-14 sm:pb-0 transition-all duration-300"
+        className="sm:pl-[var(--sidebar-w)] transition-all duration-300"
         style={{ '--sidebar-w': `${sidebarWidth}px` } as React.CSSProperties}
       >
-        <header className="border-b border-neutral-200 bg-white px-4 py-4 sm:px-6 lg:px-8 flex justify-between items-center">
-          <PageHeader />
-          <div className="flex items-center gap-3">
-            <AgentSelector />
-            <Chip size="sm" variant="soft">
-              {user.username} ({user.role})
-            </Chip>
-            <Button size="sm" variant="ghost" onPress={onLogout}>
-              {t('common.logout')}
+        <header className="border-b border-neutral-200 bg-white px-4 py-3 sm:px-6 lg:px-8">
+          {/* Mobile: hamburger + title row */}
+          <div className="flex items-center gap-3 sm:hidden">
+            <Button
+              isIconOnly
+              size="sm"
+              variant="ghost"
+              onPress={() => setMobileSidebarOpen(true)}
+            >
+              <Bars className="w-5 h-5" />
             </Button>
+            <div className="flex-1 min-w-0">
+              <PageHeader />
+            </div>
+            <Dropdown>
+              <Button isIconOnly size="sm" variant="ghost">
+                <span className="text-sm font-medium">{user.username.slice(0, 2).toUpperCase()}</span>
+              </Button>
+              <Dropdown.Popover>
+                <Dropdown.Menu onAction={(key) => { if (key === 'logout') onLogout(); }}>
+                  <Dropdown.Item key="user" textValue={user.username} className="opacity-70">
+                    {user.username} ({user.role})
+                  </Dropdown.Item>
+                  <Dropdown.Item key="logout" textValue={t('common.logout')} className="text-danger">
+                    {t('common.logout')}
+                  </Dropdown.Item>
+                </Dropdown.Menu>
+              </Dropdown.Popover>
+            </Dropdown>
+          </div>
+
+          {/* Mobile: agent selector row */}
+          <div className="sm:hidden mt-2">
+            <AgentSelector />
+          </div>
+
+          {/* Desktop header row */}
+          <div className="hidden sm:flex justify-between items-center">
+            <PageHeader />
+            <div className="flex items-center gap-3">
+              <AgentSelector />
+              <Chip size="sm" variant="soft">
+                {user.username} ({user.role})
+              </Chip>
+              <Button size="sm" variant="ghost" onPress={onLogout}>
+                {t('common.logout')}
+              </Button>
+            </div>
           </div>
         </header>
 
