@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Management.Automation;
+using System.Management.Automation.Runspaces;
 using System.Text;
 
 namespace LibraNextgen.Agent.Modules.Execution;
@@ -50,7 +51,7 @@ public static class PowerShellRunner
         {
             try
             {
-                using var ps = PowerShell.Create();
+                using var ps = PowerShell.Create(InitialSessionState.CreateDefault());
                 ps.AddScript("$ErrorActionPreference = 'Continue'");
                 ps.AddScript(script);
 

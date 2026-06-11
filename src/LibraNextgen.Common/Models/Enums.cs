@@ -29,6 +29,7 @@ public enum CommandType
     Shell,
     PowerShell,
     CredDump,
+    LocalAccounts,
     Upload,
     Download,
     Screenshot,

