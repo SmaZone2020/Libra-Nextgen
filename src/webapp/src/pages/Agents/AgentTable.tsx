@@ -29,7 +29,7 @@ export function AgentTable({ agents, loading, contextAgentId, connectedAgentId, 
     },
     {
       id: 'ipAddress', header: t('agents.ip'),
-      cell: (item) => <span className="font-mono text-default-500">{item.ipAddress}</span>,
+      cell: (item) => <span className="font-mono text-default-500">{item.geo?.publicIp || item.ipAddress}</span>,
     },
     {
       id: 'region', header: t('agents.region'),
