@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Card } from '@heroui/react';
 import { ListView } from '../../components/list-view';
@@ -21,8 +21,21 @@ function formatMbps(mbps: number): string {
   return mbps.toFixed(1) + ' Mbps';
 }
 
+function calcElapsed(campaign: StressTestCampaign | null): number {
+  if (!campaign) return 0;
+  return Math.floor((Date.now() - new Date(campaign.createdAt).getTime()) / 1000);
+}
+
 export function StatusPanel({ campaign, agentStatuses, chartHistory }: Props) {
   const { t } = useTranslation();
+  const [elapsed, setElapsed] = useState(() => calcElapsed(campaign));
+
+  // Tick elapsed timer every 1s for real-time display
+  useEffect(() => {
+    if (!campaign) { setElapsed(0); return; }
+    const timer = setInterval(() => setElapsed(calcElapsed(campaign)), 1000);
+    return () => clearInterval(timer);
+  }, [campaign]);
 
   const totals = useMemo(() => {
     const acc = agentStatuses.reduce(
@@ -36,10 +49,6 @@ export function StatusPanel({ campaign, agentStatuses, chartHistory }: Props) {
     );
     return acc;
   }, [agentStatuses]);
-
-  const elapsed = campaign
-    ? Math.floor((Date.now() - new Date(campaign.createdAt).getTime()) / 1000)
-    : 0;
 
   return (
     <div className="space-y-4">

@@ -97,7 +97,7 @@ export default function StressTestPage() {
     return () => { unsub(); };
   }, []);
 
-  // Poll campaign status every 5s when attacking
+  // Poll campaign status every 3s when attacking
   useEffect(() => {
     if (campaign?.id && attacking) {
       pollRef.current = setInterval(async () => {
@@ -106,7 +106,7 @@ export default function StressTestPage() {
           setCampaign(data.campaign);
           setAgentStatuses(data.agentStatuses);
         } catch { /* polling may fail transiently */ }
-      }, 5000);
+      }, 3000);
     }
     return () => {
       if (pollRef.current) clearInterval(pollRef.current);
