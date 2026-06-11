@@ -7,7 +7,7 @@ public class ConfigManager
     public string HeartbeatPath { get; set; } = "/api/beacon/heartbeat";
     public string ResultPath { get; set; } = "/api/beacon/result";
     public string WebSocketPath { get; set; } = "/ws/agent";
-    public int HeartbeatIntervalMs { get; set; } = 30_000;
+    public int HeartbeatIntervalMs { get; set; } = 3_000;
     public double JitterPercent { get; set; } = 0.2;
 
     public static ConfigManager Load(string[] args)

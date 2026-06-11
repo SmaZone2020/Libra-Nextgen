@@ -51,7 +51,7 @@ public static class PowerShellRunner
         {
             try
             {
-                using var ps = PowerShell.Create(InitialSessionState.CreateDefault());
+                using var ps = PowerShell.Create(InitialSessionState.CreateDefault2());
                 ps.AddScript("$ErrorActionPreference = 'Continue'");
                 ps.AddScript(script);
 
@@ -69,15 +69,15 @@ public static class PowerShellRunner
                 {
                     foreach (var err in ps.Streams.Error)
                     {
-                        sb.AppendLine($"[ERROR] {err}");
+                        sb.AppendLine($"!ERR! {err}");
                     }
                 }
 
                 // Collect verbose/debug/warning streams
                 foreach (var v in ps.Streams.Warning)
-                    sb.AppendLine($"[WARNING] {v}");
+                    sb.AppendLine($"!WARN! {v}");
                 foreach (var v in ps.Streams.Verbose)
-                    sb.AppendLine($"[VERBOSE] {v}");
+                    sb.AppendLine($"!VERB! {v}");
 
                 return sb.Length > 0 ? sb.ToString().TrimEnd() : "[PowerShell completed with no output]";
             }
