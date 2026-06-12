@@ -187,11 +187,9 @@ impl AgentEngine {
             }
             ws_type::SHELL_INPUT => {
                 if let Some(ref mut s) = shell_session {
-                    if let Some(input) = data.as_ref().and_then(|d| d["data"].as_str()) {
+                    if let Some(input) = data.as_ref().and_then(|d| d["text"].as_str()) {
                         use tokio::io::AsyncWriteExt;
-                        let mut input_bytes = input.as_bytes().to_vec();
-                        input_bytes.push(b'\n');
-                        let _ = s.stdin.write_all(&input_bytes).await;
+                        let _ = s.stdin.write_all(input.as_bytes()).await;
                     }
                 }
             }
@@ -447,7 +445,7 @@ impl AgentEngine {
                                 match r {
                                     Ok(0) => break,
                                     Ok(n) => {
-                                        let text = String::from_utf8_lossy(&out_buf[..n]);
+                                        let text = libra_platform::decode_shell_bytes(&out_buf[..n]);
                                         let json = serde_json::json!({"text": text}).to_string();
                                         let _ = send_via_channel(&tx, &aid, "shell.output", &json, None);
                                     }
@@ -458,7 +456,7 @@ impl AgentEngine {
                                 match r {
                                     Ok(0) => break,
                                     Ok(n) => {
-                                        let text = String::from_utf8_lossy(&err_buf[..n]);
+                                        let text = libra_platform::decode_shell_bytes(&err_buf[..n]);
                                         let json = serde_json::json!({"text": text}).to_string();
                                         let _ = send_via_channel(&tx, &aid, "shell.output", &json, None);
                                     }
@@ -476,7 +474,7 @@ impl AgentEngine {
                                 match r {
                                     Ok(0) => break,
                                     Ok(n) => {
-                                        let text = String::from_utf8_lossy(&out_buf[..n]);
+                                        let text = libra_platform::decode_shell_bytes(&out_buf[..n]);
                                         let json = serde_json::json!({"text": text}).to_string();
                                         let _ = send_via_channel(&tx, &aid, "shell.output", &json, None);
                                     }

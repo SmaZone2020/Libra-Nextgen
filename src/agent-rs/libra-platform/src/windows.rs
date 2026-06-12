@@ -37,8 +37,8 @@ impl IPlatformExecutor for WindowsExecutor {
 
             match output {
                 Ok(out) => {
-                    let stdout = String::from_utf8_lossy(&out.stdout).to_string();
-                    let stderr = String::from_utf8_lossy(&out.stderr).to_string();
+                    let stdout = crate::decode_shell_bytes(&out.stdout);
+                    let stderr = crate::decode_shell_bytes(&out.stderr);
                     if stdout.is_empty() { stderr } else { stdout }
                 }
                 Err(e) => format!("Failed to start process: {}", e),
