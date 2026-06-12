@@ -13,3 +13,4 @@ serde_json = { workspace = true }
 reqwest = { workspace = true }
 rand = { workspace = true }
 base64 = { workspace = true }
+sysinfo = { workspace = true }
