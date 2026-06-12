@@ -118,6 +118,7 @@ pub mod ws_type {
     pub const SYSTEM_ENV: &str = "system.env";
     pub const SYSTEM_NETWORK: &str = "system.network";
     pub const SYSTEM_LANSCAN: &str = "system.lanscan";
+    pub const SYSTEM_BLUETOOTH: &str = "system.bluetooth";
 
     // Other software
     pub const OTHERSOFT_WECHAT: &str = "othersoft.wechat";

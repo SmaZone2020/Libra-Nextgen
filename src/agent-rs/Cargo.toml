@@ -42,6 +42,11 @@ windows = { version = "0.58", features = [
     "Storage",
     "Storage_Streams",
     "Foundation_Collections",
+    "Devices_Bluetooth",
+    "Devices_Bluetooth_Rfcomm",
+    "Devices_Bluetooth_GenericAttributeProfile",
+    "Devices_Bluetooth_Advertisement",
+    "Devices_Radios",
 ] }
 
 [profile.release]

