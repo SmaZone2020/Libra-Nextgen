@@ -15,7 +15,7 @@ import FileManager from '../pages/FileManager';
 import SystemPage from '../pages/System';
 import ScreenMonitorPage from '../pages/ScreenMonitor';
 import MediaMonitorPage from '../pages/MediaMonitor';
-import OtherSoftwarePage from '../pages/OtherSoftware';
+import SoftwareDataPage from '../pages/SoftwareData';
 import ProxyBrowserPage from '../pages/ProxyBrowser';
 import BuilderPage from '../pages/Builder';
 import AboutPage from '../pages/About';
@@ -299,7 +299,7 @@ function AuthenticatedLayout({
                 <Route path="/system" element={<SystemPage />} />
                 <Route path="/screen" element={<ScreenMonitorPage />} />
                 <Route path="/media" element={<MediaMonitorPage />} />
-                <Route path="/othersoft" element={<OtherSoftwarePage />} />
+                <Route path="/othersoft" element={<SoftwareDataPage />} />
                 <Route path="/proxy" element={<ProxyBrowserPage />} />
                 <Route path="/builder" element={<BuilderPage />} />
                 <Route path="/stress-test" element={<StressTestPage />} />

@@ -268,7 +268,7 @@ export interface LanScanResult {
   subnets: string[];
 }
 
-// ── Other Software types ─────────────────────────────────────────────
+// ── Software Data types ─────────────────────────────────────────────
 
 export interface WeChatAccount {
   wxid: string;
@@ -331,6 +331,22 @@ export interface BrowserPagedResult<T> {
   limit: number;
   items: T[];
   errors: string[];
+}
+
+// ── AI Token Scanner types ─────────────────────────────────────────────
+
+export interface AITokenEntry {
+  vendor: string;
+  source: string;      // 'config-file' | 'env-var'
+  path: string;        // file path or env var name
+  keyName: string;     // key field name
+  keyValue: string;    // raw key value
+}
+
+export interface AITokenResult {
+  total: number;
+  items: AITokenEntry[];
+  error?: string;
 }
 
 // ── Proxy Browser types ──────────────────────────────────────────────

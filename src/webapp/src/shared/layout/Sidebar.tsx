@@ -180,10 +180,9 @@ export function Sidebar({
               <Dropdown>
                 <Button
                   isIconOnly={collapsed}
-                  size="sm"
+                  size="lg"
                   variant="ghost"
-                  aria-label={t('nav.toggleSidebar')}
-                  className={collapsed ? 'h-9 w-9' : 'flex-1 justify-start px-3'}
+                  className={`flex-1 justify-start px-3 mr-1 transition-all duration-300 hover:rounded-[15px]`}
                 >
                   <Globe className="w-4 h-4 shrink-0" />
                   {!collapsed && (

