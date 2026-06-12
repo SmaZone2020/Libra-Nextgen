@@ -6,7 +6,7 @@ import { useAgent } from '../../contexts/AgentContext';
 import { api } from '../../api/client';
 import { useCameraSession } from './useCameraSession';
 import { useMicSession } from './useMicSession';
-import type { CameraDevice } from './useCameraSession';
+import type { CameraDevice, CameraFrame } from './useCameraSession';
 import type { MicDevice } from './useMicSession';
 import AudioPlayer from './AudioPlayer';
 import type { AudioPlayerHandle } from './AudioPlayer';
@@ -77,19 +77,34 @@ export default function MediaMonitorPage() {
   }, []);
 
   // ── Camera ──────────────────────────────────────────────────────────────
-  const onCameraFrame = useCallback((jpegBase64: string) => {
+  const onCameraFrame = useCallback((frame: CameraFrame) => {
     const canvas = cameraCanvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    const img = new Image();
-    img.onload = () => {
-      canvas.width = img.width;
-      canvas.height = img.height;
-      ctx.drawImage(img, 0, 0);
-    };
-    img.src = `data:image/jpeg;base64,${jpegBase64}`;
+    if (frame.type === 'keyframe') {
+      const img = new Image();
+      img.onload = () => {
+        if (frame.width && frame.height) {
+          canvas.width = frame.width;
+          canvas.height = frame.height;
+        } else {
+          canvas.width = img.width;
+          canvas.height = img.height;
+        }
+        ctx.drawImage(img, 0, 0);
+      };
+      img.src = `data:image/jpeg;base64,${frame.data}`;
+    } else if (frame.type === 'diff') {
+      for (const block of frame.blocks) {
+        const img = new Image();
+        img.onload = () => {
+          ctx.drawImage(img, block.x, block.y);
+        };
+        img.src = `data:image/jpeg;base64,${block.data}`;
+      }
+    }
   }, []);
 
   const onCameraError = useCallback((err: string) => setCameraError(err), []);

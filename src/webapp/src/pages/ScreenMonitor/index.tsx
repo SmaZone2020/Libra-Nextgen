@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Button, ListBox, Select } from '@heroui/react';
+import type { Selection } from '@heroui/react';
+import { Button, Dropdown, Header, Label } from '@heroui/react';
 import { useAgent } from '../../contexts/AgentContext';
 import { useScreenSession } from './useScreenSession';
 import { ScreenCanvas } from './ScreenCanvas';
@@ -29,6 +30,10 @@ export default function ScreenMonitorPage() {
     { id: '360p', label: t('screenMonitor.qualityOpts.360p') },
     { id: '240p', label: t('screenMonitor.qualityOpts.240p') },
   ];
+
+  const [selectedScreen, setSelectedScreen] = useState<Selection>(new Set(['0']));
+  const [selectedFps, setSelectedFps] = useState<Selection>(new Set(['5']));
+  const [selectedQuality, setSelectedQuality] = useState<Selection>(new Set(['720p']));
 
   const onFrame = useCallback((frame: ScreenFrame) => {
     if (!canvasRef.current) return;
@@ -73,75 +78,84 @@ export default function ScreenMonitorPage() {
     <div className="flex flex-col gap-3 h-[calc(100vh-180px)]">
       <div className="flex items-center gap-3 shrink-0">
         {screens.length > 0 && (
-          <Select
-            selectedKey={String(config.screenIndex)}
-            onSelectionChange={(key) => {
-              if (key != null) updateConfig({ screenIndex: Number(key) });
-            }}
-            className="w-[160px]"
-            aria-label={t('screenMonitor.screen')}
-          >
-            <Select.Trigger>
-              <Select.Value />
-            </Select.Trigger>
-            <Select.Popover>
-              <ListBox>
-                {screens.map((s) => (
-                  <ListBox.Item key={String(s.index)} id={String(s.index)} textValue={s.caption || `${s.width}x${s.height}`}>
-                    {s.caption || `${s.width}x${s.height}`}
-                    <ListBox.ItemIndicator />
-                  </ListBox.Item>
-                ))}
-              </ListBox>
-            </Select.Popover>
-          </Select>
+          <Dropdown>
+            <Button className="text-black" variant="secondary">
+              {screens.find((s) => String(s.index) === [...selectedScreen][0])?.caption || t('screenMonitor.screen')}
+            </Button>
+            <Dropdown.Popover className="min-w-[200px]">
+              <Dropdown.Menu
+                selectedKeys={selectedScreen}
+                selectionMode="single"
+                onSelectionChange={(sel) => {
+                  setSelectedScreen(sel);
+                  const key = [...sel][0];
+                  if (key != null) updateConfig({ screenIndex: Number(key) });
+                }}
+              >
+                <Dropdown.Section>
+                  {screens.map((s) => (
+                    <Dropdown.Item key={String(s.index)} id={String(s.index)} textValue={s.caption || `${s.width}x${s.height}`}>
+                      <Dropdown.ItemIndicator />
+                      <Label>{s.caption || `${s.width}x${s.height}`}</Label>
+                    </Dropdown.Item>
+                  ))}
+                </Dropdown.Section>
+              </Dropdown.Menu>
+            </Dropdown.Popover>
+          </Dropdown>
         )}
 
-        <Select
-          selectedKey={String(config.fps)}
-          onSelectionChange={(key) => {
-            if (key) updateConfig({ fps: Number(key) });
-          }}
-          className="w-[120px]"
-          aria-label={t('screenMonitor.frameRate')}
-        >
-          <Select.Trigger>
-            <Select.Value />
-          </Select.Trigger>
-          <Select.Popover>
-            <ListBox>
-              {FPS_OPTIONS.map((opt) => (
-                <ListBox.Item key={opt.id} id={opt.id} textValue={opt.label}>
-                  {opt.label}
-                  <ListBox.ItemIndicator />
-                </ListBox.Item>
-              ))}
-            </ListBox>
-          </Select.Popover>
-        </Select>
+        <Dropdown>
+          <Button aria-label={t('screenMonitor.frameRate')} className="text-black" variant="secondary">
+            {FPS_OPTIONS.find((o) => o.id === [...selectedFps][0])?.label || t('screenMonitor.frameRate')}
+          </Button>
+          <Dropdown.Popover className="min-w-[160px]">
+            <Dropdown.Menu
+              selectedKeys={selectedFps}
+              selectionMode="single"
+              onSelectionChange={(sel) => {
+                setSelectedFps(sel);
+                const key = [...sel][0];
+                if (key) updateConfig({ fps: Number(key) });
+              }}
+            >
+              <Dropdown.Section>
+                {FPS_OPTIONS.map((opt) => (
+                  <Dropdown.Item key={opt.id} id={opt.id} textValue={opt.label}>
+                    <Dropdown.ItemIndicator />
+                    <Label>{opt.label}</Label>
+                  </Dropdown.Item>
+                ))}
+              </Dropdown.Section>
+            </Dropdown.Menu>
+          </Dropdown.Popover>
+        </Dropdown>
 
-        <Select
-          selectedKey={config.quality}
-          onSelectionChange={(key) => {
-            if (key) updateConfig({ quality: String(key) });
-          }}
-          className="w-[140px]"
-          aria-label={t('screenMonitor.quality')}
-        >
-          <Select.Trigger>
-            <Select.Value />
-          </Select.Trigger>
-          <Select.Popover>
-            <ListBox>
-              {QUALITY_OPTIONS.map((opt) => (
-                <ListBox.Item key={opt.id} id={opt.id} textValue={opt.label}>
-                  {opt.label}
-                  <ListBox.ItemIndicator />
-                </ListBox.Item>
-              ))}
-            </ListBox>
-          </Select.Popover>
-        </Select>
+        <Dropdown>
+          <Button aria-label={t('screenMonitor.quality')} className="text-black" variant="secondary">
+            {QUALITY_OPTIONS.find((o) => o.id === [...selectedQuality][0])?.label || t('screenMonitor.quality')}
+          </Button>
+          <Dropdown.Popover className="min-w-[160px]">
+            <Dropdown.Menu
+              selectedKeys={selectedQuality}
+              selectionMode="single"
+              onSelectionChange={(sel) => {
+                setSelectedQuality(sel);
+                const key = [...sel][0];
+                if (key) updateConfig({ quality: String(key) });
+              }}
+            >
+              <Dropdown.Section>
+                {QUALITY_OPTIONS.map((opt) => (
+                  <Dropdown.Item key={opt.id} id={opt.id} textValue={opt.label}>
+                    <Dropdown.ItemIndicator />
+                    <Label>{opt.label}</Label>
+                  </Dropdown.Item>
+                ))}
+              </Dropdown.Section>
+            </Dropdown.Menu>
+          </Dropdown.Popover>
+        </Dropdown>
 
         <div className="flex items-center gap-2">
           <span className={`w-2 h-2 rounded-full ${streaming ? 'bg-green-500' : 'bg-neutral-300'}`} />

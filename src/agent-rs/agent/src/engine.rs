@@ -23,6 +23,7 @@ pub struct AgentEngine {
     ws_tx: Option<WsSender>,     // cloneable send-half for spawned tasks
     agent_id: String,
     screen_session: std::sync::Mutex<Option<tokio::sync::watch::Sender<bool>>>,
+    camera_session: std::sync::Mutex<Option<std::sync::Arc<std::sync::atomic::AtomicBool>>>,
 }
 
 impl AgentEngine {
@@ -35,6 +36,7 @@ impl AgentEngine {
             ws_tx: None,
             agent_id: String::new(),
             screen_session: std::sync::Mutex::new(None),
+            camera_session: std::sync::Mutex::new(None),
         }
     }
 
@@ -421,11 +423,72 @@ impl AgentEngine {
                 ws_send(tx, &agent_id, "camera.list.result", &r, rid).await;
             }
             ws_type::CAMERA_BIND | ws_type::CAMERA_CONFIG => {
+                // Stop any existing stream
+                if let Some(cancel) = self.camera_session.lock().unwrap().take() {
+                    cancel.store(true, std::sync::atomic::Ordering::Relaxed);
+                }
+
                 let idx = data_u64(&data, "cameraIndex", 0) as u32;
-                let r = libra_modules::execution::CameraCapture::capture(idx);
-                ws_send(tx, &agent_id, "camera.frame", &r, rid).await;
+                let fps = data_u64(&data, "fps", 5).max(1).min(30) as u32;
+                let interval = std::time::Duration::from_millis(1000u64 / fps as u64);
+                let agent_id2 = agent_id.clone();
+                let tx2 = tx.clone();
+                let cancel = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+                let cancel2 = cancel.clone();
+                self.camera_session.lock().unwrap().replace(cancel);
+
+                let (frame_tx, mut frame_rx) = tokio::sync::mpsc::channel::<String>(4);
+
+                // Dedicated blocking thread — CameraStream stays on the same thread for COM
+                tokio::task::spawn_blocking(move || {
+                    let mut stream = match libra_modules::execution::CameraStream::new(idx) {
+                        Ok(s) => s,
+                        Err(e) => {
+                            let _ = frame_tx.blocking_send(format!(r#"{{"error":"{}"}}"#, e));
+                            return;
+                        }
+                    };
+                    loop {
+                        if cancel2.load(std::sync::atomic::Ordering::Relaxed) { break; }
+                        let frame = match stream.capture_frame() {
+                            Ok(cf) => match cf {
+                                libra_modules::execution::CameraFrame::Keyframe { width, height, jpeg } => {
+                                    format!(r#"{{"type":"keyframe","width":{},"height":{},"data":"{}"}}"#, width, height, jpeg)
+                                }
+                                libra_modules::execution::CameraFrame::Diff { blocks_json } => {
+                                    format!(r#"{{"type":"diff","blocks":{}}}"#, blocks_json)
+                                }
+                                libra_modules::execution::CameraFrame::Empty => {
+                                    String::new()
+                                }
+                            },
+                            Err(e) => format!(r#"{{"error":"{}"}}"#, e.replace('"', "'")),
+                        };
+                        if !frame.is_empty() {
+                            if frame_tx.blocking_send(frame).is_err() { break; }
+                        }
+                        // Interval sleep with cancel check
+                        let deadline = std::time::Instant::now() + interval;
+                        while std::time::Instant::now() < deadline {
+                            if cancel2.load(std::sync::atomic::Ordering::Relaxed) { return; }
+                            std::thread::sleep(std::time::Duration::from_millis(10));
+                        }
+                    }
+                });
+
+                // Forward frames from blocking thread to WebSocket
+                tokio::spawn(async move {
+                    while let Some(frame) = frame_rx.recv().await {
+                        ws_send(&tx2, &agent_id2, "camera.frame", &frame, None).await;
+                    }
+                });
+
+                ws_send(tx, &agent_id, "camera.bind.result", r#"{"status":"streaming"}"#, rid).await;
             }
             ws_type::CAMERA_UNBIND => {
+                if let Some(cancel) = self.camera_session.lock().unwrap().take() {
+                    cancel.store(true, std::sync::atomic::Ordering::Relaxed);
+                }
                 ws_send(tx, &agent_id, "camera.unbind.result", r#"{"status":"ok"}"#, rid).await;
             }
             ws_type::MIC_LIST => {

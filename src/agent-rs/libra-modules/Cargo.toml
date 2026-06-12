@@ -17,3 +17,4 @@ sysinfo = { workspace = true }
 futures-util = { workspace = true }
 uuid = { workspace = true }
 image = { workspace = true }
+windows = { workspace = true }

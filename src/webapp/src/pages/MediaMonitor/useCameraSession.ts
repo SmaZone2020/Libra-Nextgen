@@ -11,8 +11,30 @@ export interface CameraDevice {
   name: string;
 }
 
+export interface CameraDiffBlock {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  data: string;
+}
+
+export interface CameraKeyframe {
+  type: 'keyframe';
+  width: number;
+  height: number;
+  data: string;
+}
+
+export interface CameraDiff {
+  type: 'diff';
+  blocks: CameraDiffBlock[];
+}
+
+export type CameraFrame = CameraKeyframe | CameraDiff;
+
 interface UseCameraSessionOptions {
-  onFrame: (jpegBase64: string) => void;
+  onFrame: (frame: CameraFrame) => void;
   onError?: (error: string) => void;
 }
 
@@ -65,7 +87,17 @@ export function useCameraSession({ onFrame, onError }: UseCameraSessionOptions) 
             try {
               const msg = JSON.parse(dataLine.slice(6));
               if (msg.type === 'camera.frame') {
-                onFrameRef.current(msg.data.data);
+                const d = msg.data;
+                if (d.error) {
+                  onErrorRef.current?.(d.error);
+                } else if (d.type === 'keyframe') {
+                  onFrameRef.current({ type: 'keyframe', width: d.width, height: d.height, data: d.data });
+                } else if (d.type === 'diff') {
+                  onFrameRef.current({ type: 'diff', blocks: d.blocks });
+                } else if (d.data) {
+                  // Legacy full-frame format fallback
+                  onFrameRef.current({ type: 'keyframe', width: 0, height: 0, data: d.data });
+                }
               } else if (msg.type === 'camera.error') {
                 onErrorRef.current?.(msg.data.error);
               }
