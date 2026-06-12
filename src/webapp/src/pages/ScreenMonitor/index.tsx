@@ -72,7 +72,7 @@ export default function ScreenMonitorPage() {
   return (
     <div className="flex flex-col gap-3 h-[calc(100vh-180px)]">
       <div className="flex items-center gap-3 shrink-0">
-        {screens.length > 1 && (
+        {screens.length > 0 && (
           <Select
             selectedKey={String(config.screenIndex)}
             onSelectionChange={(key) => {

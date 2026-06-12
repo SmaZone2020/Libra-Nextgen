@@ -154,22 +154,58 @@ public static class WebSocketHandler
                 break;
 
             case "screen.list":
-            case "screen.bind":
-            case "screen.unbind":
-            case "screen.config":
-            case "camera.bind":
-            case "camera.unbind":
-            case "camera.config":
-            case "mic.bind":
-            case "mic.unbind":
-                var mediaAgentId = message.Channel;
-                if (string.IsNullOrEmpty(mediaAgentId))
+                var slAgentId = message.Channel;
+                if (string.IsNullOrEmpty(slAgentId))
                 {
-                    try { mediaAgentId = message.Data?.GetProperty("agentId").GetString(); } catch { }
+                    try { slAgentId = message.Data?.GetProperty("agentId").GetString(); } catch { }
                 }
-                if (!string.IsNullOrEmpty(mediaAgentId))
+                if (!string.IsNullOrEmpty(slAgentId))
                 {
-                    await wsManager.RelayToAgentAsync(mediaAgentId, message);
+                    wsManager.BindToAgent(connId, slAgentId);
+                    await wsManager.RelayToAgentAsync(slAgentId, message);
+                }
+                break;
+
+            case "screen.bind":
+            case "camera.bind":
+            case "mic.bind":
+                var bindAgentId = message.Channel;
+                if (string.IsNullOrEmpty(bindAgentId))
+                {
+                    try { bindAgentId = message.Data?.GetProperty("agentId").GetString(); } catch { }
+                }
+                if (!string.IsNullOrEmpty(bindAgentId))
+                {
+                    wsManager.BindToAgent(connId, bindAgentId);
+                    await wsManager.RelayToAgentAsync(bindAgentId, message);
+                }
+                break;
+
+            case "screen.unbind":
+            case "camera.unbind":
+            case "mic.unbind":
+                var ubAgentId = message.Channel;
+                if (string.IsNullOrEmpty(ubAgentId))
+                {
+                    try { ubAgentId = message.Data?.GetProperty("agentId").GetString(); } catch { }
+                }
+                if (!string.IsNullOrEmpty(ubAgentId))
+                {
+                    wsManager.BindToAgent(connId, null!);
+                    await wsManager.RelayToAgentAsync(ubAgentId, message);
+                }
+                break;
+
+            case "screen.config":
+            case "camera.config":
+                var cfgAgentId = message.Channel;
+                if (string.IsNullOrEmpty(cfgAgentId))
+                {
+                    try { cfgAgentId = message.Data?.GetProperty("agentId").GetString(); } catch { }
+                }
+                if (!string.IsNullOrEmpty(cfgAgentId))
+                {
+                    await wsManager.RelayToAgentAsync(cfgAgentId, message);
                 }
                 break;
 
