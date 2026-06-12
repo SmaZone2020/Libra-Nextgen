@@ -119,7 +119,6 @@ $ProgressPreference = 'SilentlyContinue'
 [Windows.Media.Capture.MediaCapture,Windows.Media,ContentType=WindowsRuntime] | Out-Null
 [Windows.Media.Capture.MediaCaptureInitializationSettings,Windows.Media,ContentType=WindowsRuntime] | Out-Null
 [Windows.Media.Capture.MediaCaptureVideoProfile,Windows.Media,ContentType=WindowsRuntime] | Out-Null
-[Windows.Media.Capture.CameraCaptureUIVideoCaptureMode,Windows.Media,ContentType=WindowsRuntime] | Out-Null
 
 $capture = New-Object Windows.Media.Capture.MediaCapture
 $settings = New-Object Windows.Media.Capture.MediaCaptureInitializationSettings

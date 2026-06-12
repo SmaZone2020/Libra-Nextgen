@@ -25,6 +25,7 @@ pub struct AgentEngine {
     http: Option<HttpCommunicator>,
     ws: Option<WsRef>,
     agent_id: String,
+    screen_session: std::sync::Mutex<Option<tokio::sync::watch::Sender<bool>>>,
 }
 
 impl AgentEngine {
@@ -35,6 +36,7 @@ impl AgentEngine {
             http: None,
             ws: None,
             agent_id: String::new(),
+            screen_session: std::sync::Mutex::new(None),
         }
     }
 
@@ -325,14 +327,49 @@ impl AgentEngine {
                 let r = libra_modules::execution::ScreenCapture::list_screens();
                 ws_send(&ws, &agent_id, "screen.list.result", &r, rid).await;
             }
-            ws_type::SCREEN_BIND | ws_type::SCREEN_CONFIG => {
+            ws_type::SCREEN_BIND => {
+                // Stop any existing stream
+                if let Some(tx) = self.screen_session.lock().unwrap().take() {
+                    let _ = tx.send(true);
+                }
+
+                let fps = data_u64(&data, "fps", 5).max(1).min(30) as u32;
+                let quality = data_str(&data, "quality", "medium").to_string();
+                let screen_index = data_u64(&data, "screenIndex", 0) as u32;
+
+                let interval_ms = 1000u64 / fps as u64;
+                let agent_id2 = agent_id.clone();
+                let ws2 = ws.clone();
+                let (cancel_tx, mut cancel_rx) = tokio::sync::watch::channel(false);
+                self.screen_session.lock().unwrap().replace(cancel_tx);
+
+                tokio::spawn(async move {
+                    loop {
+                        if *cancel_rx.borrow() { break; }
+                        let r = libra_modules::execution::ScreenCapture::capture(&quality, Some(screen_index));
+                        ws_send(&ws2, &agent_id2, "screen.frame", &r, None).await;
+                        tokio::select! {
+                            _ = cancel_rx.changed() => break,
+                            _ = tokio::time::sleep(std::time::Duration::from_millis(interval_ms)) => {}
+                        }
+                    }
+                });
+
+                ws_send(&ws, &agent_id, "screen.bind.result", r#"{"status":"streaming"}"#, rid).await;
+            }
+            ws_type::SCREEN_UNBIND => {
+                if let Some(tx) = self.screen_session.lock().unwrap().take() {
+                    let _ = tx.send(true);
+                }
+                ws_send(&ws, &agent_id, "screen.unbind.result", r#"{"status":"ok"}"#, rid).await;
+            }
+            ws_type::SCREEN_CONFIG => {
+                // Config updates (fps/quality/screenIndex) are handled by re-binding
+                // For now, send a single capture at the new settings
                 let quality = data_str(&data, "quality", "medium");
                 let screen_index = data_u64(&data, "screenIndex", 0) as u32;
                 let r = libra_modules::execution::ScreenCapture::capture(&quality, Some(screen_index));
                 ws_send(&ws, &agent_id, "screen.frame", &r, rid).await;
-            }
-            ws_type::SCREEN_UNBIND => {
-                ws_send(&ws, &agent_id, "screen.unbind.result", r#"{"status":"ok"}"#, rid).await;
             }
             ws_type::CAMERA_LIST => {
                 let r = libra_modules::execution::CameraCapture::list_cameras();

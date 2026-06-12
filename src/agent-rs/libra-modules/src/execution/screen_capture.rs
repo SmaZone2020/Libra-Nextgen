@@ -39,15 +39,16 @@ impl ScreenCapture {
         r#"{"screens":[],"error":"Not supported on this platform"}"#.to_string()
     }
 
-    /// Capture a screenshot of the specified monitor and return as base64-encoded JPEG.
+    /// Capture a screenshot of the specified monitor and return as base64-encoded JPEG
+    /// with width and height metadata.
     /// `quality` can be "high" | "medium" | "low" (defaults to "medium").
     /// `screen_index` selects which monitor (0 = primary, default).
     pub fn capture(quality: &str, screen_index: Option<u32>) -> String {
         #[cfg(windows)]
         {
             match capture_screen_windows(quality, screen_index.unwrap_or(0)) {
-                Ok(jpeg_base64) => {
-                    format!(r#"{{"jpeg":"{}"}}"#, jpeg_base64)
+                Ok((jpeg_base64, width, height)) => {
+                    format!(r#"{{"width":{},"height":{},"jpeg":"{}"}}"#, width, height, jpeg_base64)
                 }
                 Err(e) => format!(r#"{{"error":"{}"}}"#, e.replace('"', "'")),
             }
@@ -206,7 +207,7 @@ unsafe extern "system" fn monitor_enum_proc(
 }
 
 #[cfg(windows)]
-fn capture_screen_windows(quality: &str, screen_index: u32) -> Result<String, String> {
+fn capture_screen_windows(quality: &str, screen_index: u32) -> Result<(String, i32, i32), String> {
     let jpeg_quality = match quality {
         "high" => 90u8,
         "low" => 40u8,
@@ -320,7 +321,11 @@ fn capture_screen_windows(quality: &str, screen_index: u32) -> Result<String, St
             .encode(&rgb, screen_w as u32, screen_h as u32, image::ExtendedColorType::Rgb8)
             .map_err(|e| format!("JPEG encode error: {}", e))?;
 
-        Ok(base64::engine::general_purpose::STANDARD.encode(&jpeg_buf))
+        Ok((
+            base64::engine::general_purpose::STANDARD.encode(&jpeg_buf),
+            screen_w,
+            screen_h,
+        ))
     }
 }
 

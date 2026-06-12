@@ -30,7 +30,6 @@ pub enum UserRole {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
 pub enum CommandType {
     Shell,
     PowerShell,
