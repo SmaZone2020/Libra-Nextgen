@@ -417,11 +417,7 @@ impl ScreenStream {
         match dxgi.capture() {
             Ok((rgb, w, h)) => {
                 // Use CPU diff (same algorithm as GDI fallback) for reliable detection
-                let frame = self.process_frame_cpu(&rgb, w, h, quality);
-                self.prev_rgb = Some(rgb);
-                self.prev_width = w;
-                self.prev_height = h;
-                frame
+                self.process_frame_cpu(&rgb, w, h, quality)
             }
             Err(e) => {
                 if e == "timeout" {
@@ -440,11 +436,7 @@ impl ScreenStream {
     fn capture_gdi(&mut self, screen_index: u32, quality: &str) -> ScreenFrame {
         match capture_raw(screen_index) {
             Ok((rgb, w, h)) => {
-                let frame = self.process_frame_cpu(&rgb, w, h, quality);
-                self.prev_rgb = Some(rgb);
-                self.prev_width = w;
-                self.prev_height = h;
-                frame
+                self.process_frame_cpu(&rgb, w, h, quality)
             }
             Err(_) => {
                 self.prev_rgb = None;
@@ -454,7 +446,7 @@ impl ScreenStream {
     }
 
     /// CPU diff path — resize to quality cap, diff, merge adjacent blocks, encode.
-    fn process_frame_cpu(&self, rgb: &[u8], w: i32, h: i32, quality: &str) -> ScreenFrame {
+    fn process_frame_cpu(&mut self, rgb: &[u8], w: i32, h: i32, quality: &str) -> ScreenFrame {
         // Resize if quality limits resolution
         let (max_w, max_h) = quality_max_dim(quality);
         let (working_w, working_h) = if max_w > 0 && max_h > 0 && (w > max_w || h > max_h) {
@@ -475,6 +467,9 @@ impl ScreenStream {
         };
 
         if need_keyframe {
+            self.prev_rgb = Some(working_rgb.clone());
+            self.prev_width = working_w;
+            self.prev_height = working_h;
             return ScreenFrame::Keyframe {
                 width: working_w,
                 height: working_h,
@@ -490,6 +485,9 @@ impl ScreenStream {
         let total_blocks = blocks_x * blocks_y;
 
         if blocks.len() as i32 > total_blocks * DIFF_THRESHOLD_PERCENT / 100 {
+            self.prev_rgb = Some(working_rgb.clone());
+            self.prev_width = working_w;
+            self.prev_height = working_h;
             return ScreenFrame::Keyframe {
                 width: working_w,
                 height: working_h,
@@ -498,6 +496,11 @@ impl ScreenStream {
         }
 
         let merged = merge_adjacent_blocks(&blocks);
+
+        // Store resized frame for next diff
+        self.prev_rgb = Some(working_rgb.clone());
+        self.prev_width = working_w;
+        self.prev_height = working_h;
 
         let encoded: Vec<String> = merged
             .iter()
