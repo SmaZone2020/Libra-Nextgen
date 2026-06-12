@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Button, ListBox, Select } from '@heroui/react';
+import type { Selection } from '@heroui/react';
+import { Button, Dropdown, Label } from '@heroui/react';
 import { useAgent } from '../../contexts/AgentContext';
 import { api } from '../../api/client';
 import { useCameraSession } from './useCameraSession';
@@ -26,6 +27,10 @@ export default function MediaMonitorPage() {
   const [micIndex, setMicIndex] = useState(0);
   const [fps, setFps] = useState(10);
 
+  const [selectedMic, setSelectedMic] = useState<Selection>(new Set(['0']));
+  const [selectedCamera, setSelectedCamera] = useState<Selection>(new Set(['0']));
+  const [selectedFps, setSelectedFps] = useState<Selection>(new Set(['10']));
+
   const FPS_OPTIONS = [
     { id: '5', label: t('mediaMonitor.fps.5') },
     { id: '10', label: t('mediaMonitor.fps.10') },
@@ -45,7 +50,10 @@ export default function MediaMonitorPage() {
         : [];
       console.log('[MediaMonitor] Camera devices:', cams);
       setCameras(cams);
-      if (cams.length > 0) setCameraIndex(0);
+      if (cams.length > 0) {
+        setCameraIndex(0);
+        setSelectedCamera(new Set(['0']));
+      }
     } catch (e) {
       console.warn('[MediaMonitor] Camera devices fetch failed:', e);
     }
@@ -59,7 +67,10 @@ export default function MediaMonitorPage() {
         : [];
       console.log('[MediaMonitor] Mic devices:', mics);
       setMics(mics);
-      if (mics.length > 0) setMicIndex(0);
+      if (mics.length > 0) {
+        setMicIndex(0);
+        setSelectedMic(new Set(['0']));
+      }
     } catch (e) {
       console.warn('[MediaMonitor] Mic devices fetch failed:', e);
     }
@@ -143,28 +154,37 @@ export default function MediaMonitorPage() {
         <div className="flex items-center gap-3 flex-wrap">
           <h2 className="text-sm font-semibold text-neutral-700">{t('mediaMonitor.microphone')}</h2>
 
-          <Select
-            selectedKey={String(micIndex)}
-            onSelectionChange={
-              micStreaming ? undefined : (key) => key && setMicIndex(Number(key))
-            }
-            isDisabled={micStreaming || noMic}
-            aria-label={t('mediaMonitor.microphone')}
-          >
-            <Select.Trigger>
-              <Select.Value />
-            </Select.Trigger>
-            <Select.Popover>
-              <ListBox>
-                {mics.map((m) => (
-                  <ListBox.Item key={String(m.index)} id={String(m.index)} textValue={m.name}>
-                    {m.name}
-                    <ListBox.ItemIndicator />
-                  </ListBox.Item>
-                ))}
-              </ListBox>
-            </Select.Popover>
-          </Select>
+          <Dropdown>
+            <Button
+              className="text-black"
+              variant="secondary"
+              isDisabled={micStreaming || noMic}
+            >
+              {mics.find((m) => String(m.index) === [...selectedMic][0])?.name || t('mediaMonitor.microphone')}
+            </Button>
+            <Dropdown.Popover className="min-w-[200px]">
+              <Dropdown.Menu
+                selectedKeys={selectedMic}
+                selectionMode="single"
+                disabledKeys={micStreaming ? [...selectedMic] : []}
+                onSelectionChange={(sel) => {
+                  if (micStreaming) return;
+                  setSelectedMic(sel);
+                  const key = [...sel][0];
+                  if (key != null) setMicIndex(Number(key));
+                }}
+              >
+                <Dropdown.Section>
+                  {mics.map((m) => (
+                    <Dropdown.Item key={String(m.index)} id={String(m.index)} textValue={m.name}>
+                      <Dropdown.ItemIndicator />
+                      <Label>{m.name}</Label>
+                    </Dropdown.Item>
+                  ))}
+                </Dropdown.Section>
+              </Dropdown.Menu>
+            </Dropdown.Popover>
+          </Dropdown>
 
           <span className={`w-2 h-2 rounded-full ${micStreaming ? 'bg-green-500' : 'bg-neutral-300'}`} />
           <span className="text-xs text-default-400">
@@ -202,52 +222,69 @@ export default function MediaMonitorPage() {
         <div className="flex items-center gap-3 shrink-0 flex-wrap">
           <h2 className="text-sm font-semibold text-neutral-700">{t('mediaMonitor.camera')}</h2>
 
-          <Select
-            selectedKey={String(cameraIndex)}
-            onSelectionChange={
-              cameraStreaming ? undefined : (key) => key && setCameraIndex(Number(key))
-            }
-            isDisabled={cameraStreaming || noCamera}
-            className="w-[180px]"
-            aria-label={t('mediaMonitor.camera')}
-          >
-            <Select.Trigger>
-              <Select.Value />
-            </Select.Trigger>
-            <Select.Popover>
-              <ListBox>
-                {cameras.map((c) => (
-                  <ListBox.Item key={String(c.index)} id={String(c.index)} textValue={c.name}>
-                    {c.name}
-                    <ListBox.ItemIndicator />
-                  </ListBox.Item>
-                ))}
-              </ListBox>
-            </Select.Popover>
-          </Select>
+          <Dropdown>
+            <Button
+              className="text-black"
+              variant="secondary"
+              isDisabled={cameraStreaming || noCamera}
+            >
+              {cameras.find((c) => String(c.index) === [...selectedCamera][0])?.name || t('mediaMonitor.camera')}
+            </Button>
+            <Dropdown.Popover className="min-w-[200px]">
+              <Dropdown.Menu
+                selectedKeys={selectedCamera}
+                selectionMode="single"
+                disabledKeys={cameraStreaming ? [...selectedCamera] : []}
+                onSelectionChange={(sel) => {
+                  if (cameraStreaming) return;
+                  setSelectedCamera(sel);
+                  const key = [...sel][0];
+                  if (key != null) setCameraIndex(Number(key));
+                }}
+              >
+                <Dropdown.Section>
+                  {cameras.map((c) => (
+                    <Dropdown.Item key={String(c.index)} id={String(c.index)} textValue={c.name}>
+                      <Dropdown.ItemIndicator />
+                      <Label>{c.name}</Label>
+                    </Dropdown.Item>
+                  ))}
+                </Dropdown.Section>
+              </Dropdown.Menu>
+            </Dropdown.Popover>
+          </Dropdown>
 
-          <Select
-            selectedKey={String(fps)}
-            onSelectionChange={
-              cameraStreaming ? undefined : (key) => key && setFps(Number(key))
-            }
-            className="w-[110px]"
-            aria-label={t('screenMonitor.frameRate')}
-          >
-            <Select.Trigger>
-              <Select.Value />
-            </Select.Trigger>
-            <Select.Popover>
-              <ListBox>
-                {FPS_OPTIONS.map((opt) => (
-                  <ListBox.Item key={opt.id} id={opt.id} textValue={opt.label}>
-                    {opt.label}
-                    <ListBox.ItemIndicator />
-                  </ListBox.Item>
-                ))}
-              </ListBox>
-            </Select.Popover>
-          </Select>
+          <Dropdown>
+            <Button
+              className="text-black"
+              variant="secondary"
+              isDisabled={cameraStreaming}
+            >
+              {FPS_OPTIONS.find((o) => o.id === [...selectedFps][0])?.label || t('screenMonitor.frameRate')}
+            </Button>
+            <Dropdown.Popover className="min-w-[160px]">
+              <Dropdown.Menu
+                selectedKeys={selectedFps}
+                selectionMode="single"
+                disabledKeys={cameraStreaming ? [...selectedFps] : []}
+                onSelectionChange={(sel) => {
+                  if (cameraStreaming) return;
+                  setSelectedFps(sel);
+                  const key = [...sel][0];
+                  if (key) setFps(Number(key));
+                }}
+              >
+                <Dropdown.Section>
+                  {FPS_OPTIONS.map((opt) => (
+                    <Dropdown.Item key={opt.id} id={opt.id} textValue={opt.label}>
+                      <Dropdown.ItemIndicator />
+                      <Label>{opt.label}</Label>
+                    </Dropdown.Item>
+                  ))}
+                </Dropdown.Section>
+              </Dropdown.Menu>
+            </Dropdown.Popover>
+          </Dropdown>
 
           <span className={`w-2 h-2 rounded-full ${cameraStreaming ? 'bg-green-500' : 'bg-neutral-300'}`} />
           <span className="text-xs text-default-400">
