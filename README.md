@@ -25,28 +25,29 @@
 
 ### 子系统
 
-| 组件 | 目录 | 技术栈 |
-|------|------|--------|
-| **Agent** | `src/agent-rs/` | Rust 2021 · Tokio · Win32/WinRT FFI · `windows` crate |
-| **Server** | `src/service/` | ASP.NET Core 10 · MongoDB · JWT (RSA) · WebSocket |
-| **Console** | `src/webapp/` | React 19 · TypeScript · HeroUI 3 · Vite 6 · Tailwind CSS 4 |
+| 组件          | 目录              | 技术栈                                                        |
+| ----------- | --------------- | ---------------------------------------------------------- |
+| **Agent**   | `src/agent-rs/` | Rust 2021 · Tokio · Win32/WinRT FFI · `windows` crate      |
+| **Server**  | `src/service/`  | ASP.NET Core 10 · MongoDB · JWT (RSA) · WebSocket          |
+| **Console** | `src/webapp/`   | React 19 · TypeScript · HeroUI 3 · Vite 6 · Tailwind CSS 4 |
 
 ### Agent 工作区 (`src/agent-rs/`)
 
 6 个 crate 组成的 Rust workspace：
 
-| Crate | 用途 |
-|-------|------|
-| `agent` | 独立可执行文件：配置解析、持久化管理、反沙盒检查、主引擎 |
-| `libra-common` | 共享模型（`InjectedConfig`、`AgentTask`）、协议常量 |
-| `libra-crypto` | RSA-2048 + AES-256-GCM 协商加密 |
-| `libra-comm` | HTTP 轮询 + WebSocket 长连接双模通信 |
+| Crate            | 用途                                             |
+| ---------------- | ---------------------------------------------- |
+| `agent`          | 独立可执行文件：配置解析、持久化管理、反沙盒检查、主引擎                   |
+| `libra-common`   | 共享模型（`InjectedConfig`、`AgentTask`）、协议常量        |
+| `libra-crypto`   | RSA-2048 + AES-256-GCM 协商加密                    |
+| `libra-comm`     | HTTP 轮询 + WebSocket 长连接双模通信                    |
 | `libra-platform` | 硬件信息采集（CPU/GPU/RAM/磁盘/显示器）、WMI 查询、`sysinfo` 回退 |
-| `libra-modules` | 全部作战模块（见下方功能矩阵） |
+| `libra-modules`  | 全部作战模块（见下方功能矩阵）                                |
 
 ### Server 项目 (`src/service/`)
 
 ASP.NET Core WebAPI，包含：
+
 - `Controllers/` — 17 个 REST 控制器（Agents、Tasks、Builder、Files、System、Media、Screen、StressTest、Proxy、Audit 等）
 - `Services/` — 12 个业务服务（AgentService、TaskService、AuthService、HeartbeatMonitor 等）
 - `Hubs/` — WebSocket 连接管理（原生 WebSocket，非 SignalR）
@@ -58,25 +59,25 @@ ASP.NET Core WebAPI，包含：
 
 15 个页面模块：
 
-| 页面 | 路由 | 功能 |
-|------|------|------|
-| Dashboard | `/` | 统计卡片、流量图、代理地理分布地图 |
-| Agents | `/agents` | 代理列表、详情面板（硬件信息折叠面板）、凭据导出 |
-| Shell | `/shell` | 基于 xterm.js 的远程交互式终端 |
-| ScreenMonitor | `/screen` | 屏幕差异流媒体（64x64 块差分 + 关键帧） |
-| MediaMonitor | `/media` | 摄像头 / 麦克风实时流 |
-| FileManager | `/files` | 远程文件浏览、上传、下载、压缩 |
-| System | `/system` | 进程列表、窗口枚举、环境变量、网络信息、WiFi 扫描、LAN 扫描 |
-| SoftwareData | `/othersoft` | 微信/QQ 数据、浏览器凭据（Chrome/Edge v10+v20）、AI Token 扫描 |
-| ProxyBrowser | `/proxy` | 通过受控代理访问网页 |
-| Builder | `/builder` | 代理载荷编译生成 |
-| StressTest | `/stress-test` | 多点 DDoS 攻击管理与执行 |
-| AuditLogs | `/audit` | 操作审计日志查询 |
-| About | `/about` | 许可证、法律免责声明 |
+| 页面            | 路由             | 功能                                              |
+| ------------- | -------------- | ----------------------------------------------- |
+| Dashboard     | `/`            | 统计卡片、流量图、代理地理分布地图                               |
+| Agents        | `/agents`      | 代理列表、详情面板（硬件信息折叠面板）、凭据导出                        |
+| Shell         | `/shell`       | 基于 xterm.js 的远程交互式终端                            |
+| ScreenMonitor | `/screen`      | 屏幕差异流媒体（64x64 块差分 + 关键帧）                        |
+| MediaMonitor  | `/media`       | 摄像头 / 麦克风实时流                                    |
+| FileManager   | `/files`       | 远程文件浏览、上传、下载、压缩                                 |
+| System        | `/system`      | 进程列表、窗口枚举、环境变量、网络信息、WiFi 扫描、LAN 扫描              |
+| SoftwareData  | `/othersoft`   | 微信/QQ 数据、浏览器凭据（Chrome/Edge v10+v20）、AI Token 扫描 |
+| ProxyBrowser  | `/proxy`       | 通过受控代理访问网页                                      |
+| Builder       | `/builder`     | 代理载荷编译生成                                        |
+| StressTest    | `/stress-test` | 多点 DDoS 攻击管理与执行                                 |
+| AuditLogs     | `/audit`       | 操作审计日志查询                                        |
 
 ## Agent 功能矩阵
 
 ### 侦查（Recon）
+
 - **系统指纹**：OS 版本、架构、CPU、GPU、RAM、磁盘序列号、主板/BIOS 版本
 - **网络情报**：公网 IP、GeoIP（城市/ISP/ASN/坐标）、代理设置、DNS 后缀
 - **WiFi 扫描**：Win32 Wlan API（主）+ `netsh wlan show networks mode=bssid` 正则解析（回退）。输出 SSID、BSSID、认证方式、加密算法、信号强度、频段（2.4GHz / 5GHz / 6GHz）
@@ -91,6 +92,7 @@ ASP.NET Core WebAPI，包含：
 - **第三方软件**：微信（WeChat）wxid 与文件目录、QQ 账户数据
 
 ### 执行（Execution）
+
 - **Shell**：CMD / PowerShell（Windows），Bash / Zsh（Linux）
 - **文件操作**：大文件分块上传/下载、移动、复制、删除、时间戳伪造
 - **屏幕捕获**：多显示器支持，64x64 块差异流媒体 + JPEG 关键帧，通过 DXGI Desktop Duplication API 实现
@@ -100,15 +102,18 @@ ASP.NET Core WebAPI，包含：
 - **代理浏览器**：通过受控代理访问任意 URL
 
 ### 压力测试（Stress Test）
+
 - HTTP 泛洪 · SYN 泛洪 · UDP 泛洪 · ICMP 泛洪
 - Slowloris · 反射攻击 · 畸形包
 
 ### 反分析（Anti-Analysis）
+
 - CPU 核心数 · 内存大小 · 磁盘容量基线检查
 - 沙盒诱饵用户名/主机名检测
 - 虚拟机特征检测（VMware/VirtualBox/Hyper-V）
 
 ### 持久化（Persistence）
+
 - **Windows**：注册表 Run 键 · 计划任务（`schtasks /create /rl highest`）· ShellExecuteW + `runas` UAC 提权
 - **Linux**：Crontab @reboot · systemd 服务
 
@@ -156,6 +161,7 @@ cargo build --release
 ### 4. 部署 Agent
 
 将 `agent.exe` 部署至目标 Windows 主机并执行。Agent 启动后：
+
 1. 若启用 `requireAdmin`，通过 UAC 提权
 2. 若启用 `copyToPath`，复制自身到指定路径后重新启动
 3. 若启用 `enablePersistence`，安装计划任务/Cron
@@ -198,6 +204,7 @@ Libra-Nextgen 基于 **GNU General Public License v3.0（GPL-3.0）** 发布。
 ## 免责声明
 
 Libra-Nextgen **仅限**在以下明确授权场景中使用：
+
 - 对自有基础设施或系统的安全评估
 - 已签署书面交战规则（RoE）的红队行动
 - 隔离实验环境中的网络安全研究
