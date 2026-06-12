@@ -378,7 +378,7 @@ export interface BuildConfigRequest {
   productName?: string;
   copyright?: string;
   fileVersion?: string;
-  trimUnused: boolean;
+  stripSymbols: boolean;
   requireAdmin: boolean;
   copyToAppData: boolean;
   enablePersistence: boolean;

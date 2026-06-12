@@ -15,11 +15,10 @@ public class BuildConfigRequest
     public string? ProductName { get; set; }
     public string? Copyright { get; set; }
     public string? FileVersion { get; set; }
-    public bool TrimUnused { get; set; } = true;
+    public bool StripSymbols { get; set; } = true;
     public bool RequireAdmin { get; set; }
     public bool CopyToAppData { get; set; }
     public bool EnablePersistence { get; set; }
-    public string Language { get; set; } = "csharp";
 }
 
 public class InjectedConfig

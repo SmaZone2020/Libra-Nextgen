@@ -43,3 +43,8 @@ windows = { version = "0.58", features = [
     "Storage_Streams",
     "Foundation_Collections",
 ] }
+
+[profile.release]
+strip = true
+lto = true
+opt-level = "s"

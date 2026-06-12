@@ -1,3 +1,5 @@
+#![cfg_attr(feature = "desktop", windows_subsystem = "windows")]
+
 mod config;
 mod engine;
 mod persistence;

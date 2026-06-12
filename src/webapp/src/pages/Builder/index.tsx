@@ -27,7 +27,7 @@ const DEFAULT_CONFIG: BuildConfigRequest = {
   productName: '',
   copyright: '',
   fileVersion: '',
-  trimUnused: true,
+  stripSymbols: true,
   requireAdmin: false,
   copyToAppData: false,
   enablePersistence: false,
@@ -88,7 +88,7 @@ export default function BuilderPage() {
     setConfig((c) => ({ ...c, [key]: value }));
 
   const buildOptions: ToggleOption[] = useMemo(() => [
-    { id: 'trimUnused', key: 'trimUnused' },
+    { id: 'stripSymbols', key: 'stripSymbols' },
     { id: 'enableObfuscation', key: 'enableObfuscation' },
     { id: 'injectJunkData', key: 'injectJunkData' },
   ], []);
@@ -101,7 +101,7 @@ export default function BuilderPage() {
 
   const selectedBuildKeys = useMemo(
     () => new Set(buildOptions.filter((o) => !!config[o.key]).map((o) => o.id)),
-    [config.trimUnused, config.enableObfuscation, config.injectJunkData],
+    [config.stripSymbols, config.enableObfuscation, config.injectJunkData],
   );
 
   const selectedPersistenceKeys = useMemo(
@@ -693,7 +693,7 @@ export default function BuilderPage() {
                           <div>
                             <h4 className="font-semibold mb-1">{t('builder.buildOptions')}</h4>
                             <div className="text-default-600 space-y-0.5">
-                              <div>{t('builder.trimUnused')}: {selectedRecord.config.trimUnused ? t('common.yes') : t('common.no')}</div>
+                              <div>{t('builder.stripSymbols')}: {selectedRecord.config.stripSymbols ? t('common.yes') : t('common.no')}</div>
                               <div>{t('builder.enableObfuscation')}: {selectedRecord.config.enableObfuscation ? t('common.yes') : t('common.no')}</div>
                               <div>{t('builder.injectJunkData')}: {selectedRecord.config.injectJunkData ? `${t('common.yes')} (${selectedRecord.config.junkDataMb} MB)` : t('common.no')}</div>
                             </div>
