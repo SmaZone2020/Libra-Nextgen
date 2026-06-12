@@ -1,0 +1,17 @@
+[package]
+name = "agent"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "agent"
+path = "src/main.rs"
+
+[dependencies]
+libra-common = { path = "../libra-common" }
+libra-crypto = { path = "../libra-crypto" }
+libra-comm = { path = "../libra-comm" }
+libra-platform = { path = "../libra-platform" }
+libra-modules = { path = "../libra-modules" }
+tokio = { workspace = true }
+serde_json = { workspace = true }

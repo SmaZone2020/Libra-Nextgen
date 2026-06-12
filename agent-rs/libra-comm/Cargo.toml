@@ -1,0 +1,13 @@
+[package]
+name = "libra-comm"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+libra-common = { path = "../libra-common" }
+libra-crypto = { path = "../libra-crypto" }
+reqwest = { workspace = true }
+tokio-tungstenite = { workspace = true }
+tokio = { workspace = true }
+futures-util = { workspace = true }
+serde_json = { workspace = true }

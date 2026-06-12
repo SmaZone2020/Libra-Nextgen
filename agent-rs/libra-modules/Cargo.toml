@@ -1,0 +1,15 @@
+[package]
+name = "libra-modules"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+libra-common = { path = "../libra-common" }
+libra-platform = { path = "../libra-platform" }
+libra-comm = { path = "../libra-comm" }
+libra-crypto = { path = "../libra-crypto" }
+tokio = { workspace = true }
+serde_json = { workspace = true }
+reqwest = { workspace = true }
+rand = { workspace = true }
+base64 = { workspace = true }
