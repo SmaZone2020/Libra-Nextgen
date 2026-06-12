@@ -317,6 +317,18 @@ Libra-Nextgen 内置**多点分布式 DDoS 压力测试**模块，专为企业�
 
 ---
 
+## 已知问题
+
+### 浏览器凭据提取 — NativeAOT 加密限制
+
+浏览器凭据提取模块（`BrowserStealer.cs`）支持从 Chrome、Edge、Brave 和 Firefox 读取保存的密码、Cookie 和浏览历史。支持 Chromium v10（基于 DPAPI）和 v20（应用绑定，基于 LSASS 令牌模拟）加密方案。
+
+**当前限制：** 在 **Release / NativeAOT** 编译模式（`PublishAot=true`）下，v10/v20 密码和 Cookie 的 AES-GCM 解密会抛出 `TypeInitializationException` 异常。这是由于 NativeAOT 裁剪器移除了 `AesGcm` 和 `Microsoft.Data.Sqlite` 所依赖的平台特定加密互操作代码。独立的 `BrowserDemo` 项目在 JIT 模式（`dotnet run`）下可正常运行，作为参考实现。
+
+**临时方案：** 使用 Agent 的 Debug/JIT 构建版本进行浏览器凭据收集，或在目标机器上部署 `BrowserDemo` 独立工具。
+
+---
+
 ## 许可证
 
 Libra-Nextgen 依据 **GNU General Public License v3.0**（GPL-3.0）开源发布。您可以自由地再分发和/或修改本软件，但须遵循自由软件基金会发布的 GPL 许可证条款（版本 3 或更高版本）。

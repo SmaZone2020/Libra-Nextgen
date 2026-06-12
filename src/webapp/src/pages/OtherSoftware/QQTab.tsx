@@ -59,7 +59,7 @@ export function QQTab({ agentId }: QQTabProps) {
           <Card key={acc.number} className="p-3">
             <div className="flex items-center gap-3">
               {p?.avatar ? (
-                <img src={p.avatar} alt={p.nickname} className="w-10 h-10 rounded-full shrink-0" />
+                <img src={`http://q1.qlogo.cn/g?b=qq&nk=${acc.number}&s=100`} alt={p.nickname} className="w-10 h-10 rounded-full shrink-0" />
               ) : (
                 <div className="w-10 h-10 rounded-full bg-neutral-200 shrink-0" />
               )}
@@ -67,15 +67,6 @@ export function QQTab({ agentId }: QQTabProps) {
                 <div className="font-semibold text-sm truncate">{p?.nickname || acc.number}</div>
                 <div className="text-xs text-neutral-500">{acc.number}</div>
               </div>
-              <Button
-                size="sm"
-                variant="flat"
-                color="success"
-                startContent={<PersonPlus className="w-4 h-4" />}
-                onPress={() => window.open(`https://wpa.qq.com/msgrd?v=3&uin=${acc.number}&site=qq&menu=yes`, '_blank')}
-              >
-                {t('othersoft.addFriend')}
-              </Button>
             </div>
           </Card>
         );

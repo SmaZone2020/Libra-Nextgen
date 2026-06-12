@@ -316,6 +316,18 @@ Libra-Nextgen includes a built-in **multi-point DDoS stress testing** module des
 
 ---
 
+## Known Issues
+
+### Browser Credential Extraction — NativeAOT Crypto Limitation
+
+The browser credential extraction module (`BrowserStealer.cs`) supports reading saved passwords, cookies, and browsing history from Chrome, Edge, Brave, and Firefox. Chromium v10 (DPAPI-based) and v20 (app-bound, LSASS-impersonation-based) encryption schemes are supported.
+
+**Current limitation:** In **Release / NativeAOT** builds (`PublishAot=true`), AES-GCM decryption of v10/v20 passwords and cookies throws `TypeInitializationException`. This is caused by the NativeAOT trimmer removing platform-specific cryptographic interop code that `AesGcm` and `Microsoft.Data.Sqlite` depend on. The standalone `BrowserDemo` project works correctly under JIT (`dotnet run`) and serves as the reference implementation.
+
+**Workaround:** Use the Debug/JIT build of the agent for browser credential harvesting, or deploy the `BrowserDemo` standalone tool on the target machine.
+
+---
+
 ## License
 
 Libra-Nextgen is free software licensed under the **GNU General Public License v3.0** (GPL-3.0). You may redistribute and/or modify it under the terms of the GPL as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version.
