@@ -336,7 +336,7 @@ impl AgentEngine {
                 }
 
                 let fps = data_u64(&data, "fps", 5).max(1).min(30) as u32;
-                let quality = data_str(&data, "quality", "medium").to_string();
+                let quality = data_str(&data, "quality", "original").to_string();
                 let screen_index = data_u64(&data, "screenIndex", 0) as u32;
 
                 let interval_ms = 1000u64 / fps as u64;
@@ -360,6 +360,7 @@ impl AgentEngine {
                                 let data = format!(r#"{{"blocks":{}}}"#, blocks_json);
                                 ws_send(&tx2, &agent_id2, "screen.diff", &data, None).await;
                             }
+                            libra_modules::execution::ScreenFrame::Empty => {}
                         }
                         tokio::select! {
                             _ = cancel_rx.changed() => break,
@@ -383,7 +384,7 @@ impl AgentEngine {
                 }
 
                 let fps = data_u64(&data, "fps", 5).max(1).min(30) as u32;
-                let quality = data_str(&data, "quality", "medium").to_string();
+                let quality = data_str(&data, "quality", "original").to_string();
                 let screen_index = data_u64(&data, "screenIndex", 0) as u32;
                 let interval_ms = 1000u64 / fps as u64;
                 let agent_id2 = agent_id.clone();
@@ -406,6 +407,7 @@ impl AgentEngine {
                                 let data = format!(r#"{{"blocks":{}}}"#, blocks_json);
                                 ws_send(&tx2, &agent_id2, "screen.diff", &data, None).await;
                             }
+                            libra_modules::execution::ScreenFrame::Empty => {}
                         }
                         tokio::select! {
                             _ = cancel_rx.changed() => break,

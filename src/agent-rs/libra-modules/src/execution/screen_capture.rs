@@ -378,7 +378,9 @@ impl ScreenStream {
                 let frame = self.capture_dxgi(screen_index, quality);
                 match frame {
                     ScreenFrame::Empty => return ScreenFrame::Empty,
-                    f @ ScreenFrame::Keyframe { .. } | f @ ScreenFrame::Diff { .. } => return f,
+                    f @ ScreenFrame::Keyframe { width, .. } if width > 0 => return f,
+                    f @ ScreenFrame::Diff { .. } => return f,
+                    _ => { /* DXGI returned dummy frame — fall through to GDI */ }
                 }
             }
 
