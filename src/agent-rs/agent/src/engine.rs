@@ -802,11 +802,12 @@ async fn execute_task(task: &libra_common::models::AgentTask) -> String {
         }
     };
 
+    let success = !output.contains("\"error\"");
+
     serde_json::json!({
         "taskId": task.id,
-        "agentId": task.agent_id,
-        "commandType": task.command_type,
+        "success": success,
         "output": output,
-        "status": "Completed",
+        "error": null,
     }).to_string()
 }

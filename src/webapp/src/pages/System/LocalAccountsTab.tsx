@@ -74,7 +74,7 @@ export function LocalAccountsTab({ agentId }: Props) {
         await new Promise((r) => setTimeout(r, 1000));
         try {
           const t = await getTask(taskId);
-          if (t.status === 'Completed') {
+          if (t.status === 'Completed' || t.status === 'Failed') {
             try {
               const raw = extractJson(t.output || '[]');
               const list: Record<string, unknown>[] = Array.isArray(raw) ? (raw as Record<string, unknown>[]) : ((raw as Record<string, unknown>).accounts as Record<string, unknown>[] ?? []);
@@ -91,13 +91,15 @@ export function LocalAccountsTab({ agentId }: Props) {
                 AccountExpires: (a.AccountExpires || a.accountExpires || null) as string | undefined,
               }));
               setAccounts(normalized);
+              if (t.status === 'Failed') {
+                setError(t.error || 'Task reported failure but returned partial data');
+              }
             } catch {
               setAccounts([]);
+              if (t.status === 'Failed') {
+                setError(t.error || 'Task failed');
+              }
             }
-            return;
-          }
-          if (t.status === 'Failed') {
-            setError(t.error || 'Task failed');
             return;
           }
         } catch { /* retry */ }
@@ -124,12 +126,11 @@ export function LocalAccountsTab({ agentId }: Props) {
         await new Promise((r) => setTimeout(r, 3000));
         try {
           const t = await getTask(taskId);
-          if (t.status === 'Completed') {
+          if (t.status === 'Completed' || t.status === 'Failed') {
             setCredOutput(t.output || '[No output]');
-            return;
-          }
-          if (t.status === 'Failed') {
-            setCredError(t.error || 'Task failed');
+            if (t.status === 'Failed') {
+              setCredError(t.error || 'Task reported failure');
+            }
             return;
           }
         } catch { /* retry */ }
