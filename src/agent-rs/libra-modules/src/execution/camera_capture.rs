@@ -105,41 +105,50 @@ if ($result.Count -eq 0) { '[]' } else { @($result) | ConvertTo-Json -Compress }
 fn ps_capture_frame(camera_index: u32) -> Result<String, String> {
     use std::os::windows::process::CommandExt;
 
-    // Use PowerShell to take a photo via Windows.Media.Capture WinRT API
-    // Write temp JPEG path
     let temp_dir = std::env::temp_dir();
     let jpeg_path = temp_dir.join(format!("libra_cam_{}.jpg", std::process::id()));
 
+    // Use the SAME device query as list_cameras so indices match.
+    // Also handle WinRT initialization failure gracefully.
     let script = format!(r#"
 [Console]::OutputEncoding=[Text.Encoding]::UTF8
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 
-# Load WinRT types for Media Capture
+# Load WinRT types
 [Windows.Media.Capture.MediaCapture,Windows.Media,ContentType=WindowsRuntime] | Out-Null
 [Windows.Media.Capture.MediaCaptureInitializationSettings,Windows.Media,ContentType=WindowsRuntime] | Out-Null
-[Windows.Media.Capture.MediaCaptureVideoProfile,Windows.Media,ContentType=WindowsRuntime] | Out-Null
 
-$capture = New-Object Windows.Media.Capture.MediaCapture
-$settings = New-Object Windows.Media.Capture.MediaCaptureInitializationSettings
+# Find cameras — same query as list_cameras
+$devices = @(Get-CimInstance Win32_PnPEntity | Where-Object {{ $_.PNPClass -eq 'Camera' -or $_.PNPClass -eq 'Image' -or $_.Name -match 'camera|webcam|cam' }})
+$filtered = @($devices | Where-Object {{ $_.Caption -and $_.Caption -notmatch '^root\\' }})
 
-# Find the requested camera
-$devices = @(Get-CimInstance Win32_PnPEntity | Where-Object {{ $_.PNPClass -eq 'Camera' -or $_.PNPClass -eq 'Image' }})
-if ({0} -ge $devices.Count) {{
-    Write-Error "Camera index {0} out of range"
+if ({0} -ge $filtered.Count) {{
+    Write-Error "Camera index {0} out of range (found $($filtered.Count))"
     exit 1
 }}
 
-$settings.VideoDeviceId = $devices[{0}].DeviceID
+$capture = New-Object Windows.Media.Capture.MediaCapture
+$settings = New-Object Windows.Media.Capture.MediaCaptureInitializationSettings
+$settings.VideoDeviceId = $filtered[{0}].DeviceID
 
-$task = $capture.InitializeAsync($settings)
-$task.GetAwaiter().GetResult()
+try {{
+    $task = $capture.InitializeAsync($settings)
+    $task.GetAwaiter().GetResult()
+}} catch {{
+    Write-Error "MediaCapture init failed: $_"
+    exit 1
+}}
 
-# Take photo
-$file = [Windows.Storage.StorageFile]::GetFileFromPathAsync("{1}").GetAwaiter().GetResult()
-$props = [Windows.Media.MediaProperties.ImageEncodingProperties]::CreateJpeg()
-$task2 = $capture.CapturePhotoToStorageFileAsync($props, $file)
-$task2.GetAwaiter().GetResult()
+try {{
+    $file = [Windows.Storage.StorageFile]::GetFileFromPathAsync("{1}").GetAwaiter().GetResult()
+    $props = [Windows.Media.MediaProperties.ImageEncodingProperties]::CreateJpeg()
+    $task2 = $capture.CapturePhotoToStorageFileAsync($props, $file)
+    $task2.GetAwaiter().GetResult()
+}} catch {{
+    Write-Error "Capture failed: $_"
+    exit 1
+}}
 
 Write-Output "OK"
 "#, camera_index, jpeg_path.display());
@@ -157,11 +166,17 @@ Write-Output "OK"
                 return Ok(base64::engine::general_purpose::STANDARD.encode(&jpeg_data));
             }
         }
+        let _ = std::fs::remove_file(&jpeg_path);
         Err("Camera captured empty frame".into())
     } else {
         let stderr = String::from_utf8_lossy(&output.stderr);
         let stdout = String::from_utf8_lossy(&output.stdout);
         let _ = std::fs::remove_file(&jpeg_path);
-        Err(format!("Camera capture failed: {} {}", stdout.trim(), stderr.trim()).trim().to_string())
+        let err_msg = if !stderr.trim().is_empty() {
+            stderr.trim().to_string()
+        } else {
+            stdout.trim().to_string()
+        };
+        Err(format!("Camera capture failed: {}", err_msg))
     }
 }
