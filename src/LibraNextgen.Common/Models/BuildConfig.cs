@@ -19,4 +19,38 @@ public class BuildConfigRequest
     public bool RequireAdmin { get; set; }
     public bool CopyToAppData { get; set; }
     public bool EnablePersistence { get; set; }
+    public string Language { get; set; } = "csharp";
+}
+
+public class InjectedConfig
+{
+    [System.Text.Json.Serialization.JsonPropertyName("server_url")]
+    public string server_url { get; set; } = "";
+
+    [System.Text.Json.Serialization.JsonPropertyName("register_path")]
+    public string register_path { get; set; } = "";
+
+    [System.Text.Json.Serialization.JsonPropertyName("heartbeat_path")]
+    public string heartbeat_path { get; set; } = "";
+
+    [System.Text.Json.Serialization.JsonPropertyName("result_path")]
+    public string result_path { get; set; } = "";
+
+    [System.Text.Json.Serialization.JsonPropertyName("ws_path")]
+    public string ws_path { get; set; } = "";
+
+    [System.Text.Json.Serialization.JsonPropertyName("heartbeat_interval_ms")]
+    public ulong heartbeat_interval_ms { get; set; } = 3000;
+
+    [System.Text.Json.Serialization.JsonPropertyName("jitter_percent")]
+    public double jitter_percent { get; set; } = 0.2;
+
+    [System.Text.Json.Serialization.JsonPropertyName("require_admin")]
+    public bool require_admin { get; set; }
+
+    [System.Text.Json.Serialization.JsonPropertyName("copy_to_path")]
+    public string? copy_to_path { get; set; }
+
+    [System.Text.Json.Serialization.JsonPropertyName("enable_persistence")]
+    public bool enable_persistence { get; set; }
 }
