@@ -525,7 +525,7 @@ fn scan_wifi_wlanapi() -> Result<Vec<WifiApInfo>, String> {
         let if_count = (*if_list_ptr).dwNumberOfItems as usize;
 
         for i in 0..if_count {
-            let if_info = &(*if_list_ptr).InterfaceInfo[i];
+            let if_info = &*((*if_list_ptr).InterfaceInfo.as_ptr().add(i));
             let guid_ptr = &if_info.InterfaceGuid as *const GUID;
 
             let mut net_list_ptr: *mut WLAN_AVAILABLE_NETWORK_LIST = std::ptr::null_mut();
@@ -543,7 +543,7 @@ fn scan_wifi_wlanapi() -> Result<Vec<WifiApInfo>, String> {
             {
                 let bss_count = (*bss_list_ptr).dwNumberOfItems as usize;
                 for j in 0..bss_count {
-                    let bss = &(*bss_list_ptr).wlanBssEntries[j];
+                    let bss = &*((*bss_list_ptr).wlanBssEntries.as_ptr().add(j));
                     let ssid_bytes = &bss.dot11Ssid.ucSSID[..bss.dot11Ssid.uSSIDLength as usize];
                     let ssid = String::from_utf8_lossy(ssid_bytes).to_string();
                     let band = freq_to_band(bss.ulChCenterFrequency);
@@ -554,7 +554,7 @@ fn scan_wifi_wlanapi() -> Result<Vec<WifiApInfo>, String> {
 
             let net_count = (*net_list_ptr).dwNumberOfItems as usize;
             for j in 0..net_count {
-                let net = &(*net_list_ptr).Network[j];
+                let net = &*((*net_list_ptr).Network.as_ptr().add(j));
                 let ssid_len = net.dot11Ssid.uSSIDLength as usize;
                 if ssid_len == 0 { continue; }
                 let ssid_bytes = &net.dot11Ssid.ucSSID[..ssid_len];
