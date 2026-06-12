@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, useMemo, useCallback } from 'react';
+import { createContext, useContext, useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { getAgents } from '../api/agents';
 import { consoleWs } from '../ws/consoleWs';
 import type { AgentListItem, WsMessage } from '../types/models';
@@ -42,6 +42,16 @@ export function AgentProvider({ children }: { children: React.ReactNode }) {
     return () => { cancelled = true; clearInterval(timer); };
   }, []);
 
+  // Lazy-init notification audio
+  const noticeRef = useRef<HTMLAudioElement | null>(null);
+  const getNotice = useCallback(() => {
+    if (!noticeRef.current) noticeRef.current = new Audio('/notice.mp3');
+    return noticeRef.current;
+  }, []);
+
+  // Known online agent IDs to suppress duplicate notifications
+  const onlineIdsRef = useRef(new Set<string>());
+
   // Real-time agent status updates via WebSocket
   useEffect(() => {
     const handler = (msg: WsMessage) => {
@@ -53,15 +63,23 @@ export function AgentProvider({ children }: { children: React.ReactNode }) {
           a.id === data.agentId ? { ...a, status: 'Offline' as const } : a
         ));
         setAgentId((prev) => prev === data.agentId ? '' : prev);
+        onlineIdsRef.current.delete(data.agentId);
       } else if (data.status === 'Online') {
-        setAgents((prev) => prev.map(a =>
-          a.id === data.agentId ? { ...a, status: 'Online' as const } : a
-        ));
+        const isNew = !onlineIdsRef.current.has(data.agentId);
+        onlineIdsRef.current.add(data.agentId);
+        setAgents((prev) =>
+          prev.some(a => a.id === data.agentId)
+            ? prev.map(a => a.id === data.agentId ? { ...a, status: 'Online' as const } : a)
+            : prev
+        );
+        if (isNew) {
+          getNotice().play().catch(() => { /* browser may block autoplay without user gesture */ });
+        }
       }
     };
     const unsub = consoleWs.on('agent.status', handler);
     return unsub;
-  }, []);
+  }, [getNotice]);
 
   const selectAgent = useCallback((id: string) => {
     if (id) setAgentId(id);
