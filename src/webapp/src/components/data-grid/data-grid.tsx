@@ -394,6 +394,13 @@ export const DataGrid = function DataGrid<T extends object>(
     });
   }, [data, activeSortDescriptor, columns, isControlledSort]);
 
+  // HeroUI's Table.Collection requires each item to have an `id` property.
+  // Inject `id` via getRowId so the collection builder can determine keys.
+  const collectionItems = useMemo(
+    () => sortedData.map((item) => ({ ...item, id: getRowId(item) })),
+    [sortedData, getRowId],
+  );
+
   const hasSort = columns.some((c) => c.allowsSorting);
   const hasDnd = !!(onReorder || dragAndDropHooksProp);
   const pinnedInfo = useMemo(
@@ -768,7 +775,7 @@ export const DataGrid = function DataGrid<T extends object>(
             treeColumnId,
             treeIndent,
           ]}
-          items={sortedData}
+          items={collectionItems}
         >
           {(item) => renderRow(item)}
         </Table.Collection>
