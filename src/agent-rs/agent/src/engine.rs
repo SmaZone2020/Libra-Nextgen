@@ -75,6 +75,7 @@ impl AgentEngine {
             let _ = self.crypto.set_session_key(&key);
         }
 
+        eprintln!("[INFO] registered | agent_id={} | hostname={}", self.agent_id, hostname);
         self.agent_id = agent_id;
         self.http = Some(http);
 
@@ -121,6 +122,11 @@ impl AgentEngine {
         loop {
             tokio::select! {
                 Some(msg) = shell_rx.recv() => {
+                    eprintln!("[SEND] {} | rid={} | data={}",
+                        msg.msg_type,
+                        msg.request_id.as_deref().unwrap_or("-"),
+                        msg.data.as_ref().map(|v| v.to_string()).unwrap_or_else(|| "null".into())
+                    );
                     let mut ws_lock = ws.lock().await;
                     let _ = ws_lock.send(&msg).await;
                 }
@@ -131,6 +137,11 @@ impl AgentEngine {
                 } => {
                     match result {
                         Some(msg) => {
+                            eprintln!("[RECV] {} | rid={} | data={}",
+                                msg.msg_type,
+                                msg.request_id.as_deref().unwrap_or("-"),
+                                msg.data.as_ref().map(|v| v.to_string()).unwrap_or_else(|| "null".into())
+                            );
                             self.handle_ws_message(
                                 msg, &shell_tx, &mut shell_session
                             ).await;
@@ -515,6 +526,11 @@ fn extract_session_key(response: &str) -> Option<Vec<u8>> {
 }
 
 async fn ws_send(ws: &WsRef, agent_id: &str, msg_type: &str, data_str: &str, rid: Option<&str>) {
+    eprintln!("[SEND] {} | rid={} | data={}",
+        msg_type,
+        rid.unwrap_or("-"),
+        data_str
+    );
     let mut ws_lock = ws.lock().await;
     let _ = ws_lock.send_result_raw(msg_type, agent_id, data_str, rid).await;
 }
@@ -548,8 +564,15 @@ fn now_millis() -> i64 {
 
 async fn heartbeat_tick(http: &HttpCommunicator, agent_id: &str) -> Result<(), String> {
     let task = http.heartbeat(agent_id).await?;
-    if let Some(task) = task {
-        let result = execute_task(&task).await;
+    if let Some(ref task) = task {
+        eprintln!("[RECV] task | id={} | type={:?} | cmd={} | timeout={}s",
+            task.id,
+            task.command_type,
+            task.command,
+            task.timeout_seconds
+        );
+        let result = execute_task(task).await;
+        eprintln!("[SEND] task_result | id={} | len={}", task.id, result.len());
         let _ = http.submit_result(agent_id, &result).await;
     }
     Ok(())
