@@ -673,6 +673,7 @@ name = "libra-modules"
 version = "0.1.0"
 dependencies = [
  "base64",
+ "futures-util",
  "libra-comm",
  "libra-common",
  "libra-crypto",
@@ -680,6 +681,7 @@ dependencies = [
  "rand 0.8.6",
  "reqwest",
  "serde_json",
+ "sysinfo",
  "tokio",
 ]
 
