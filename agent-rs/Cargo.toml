@@ -25,3 +25,4 @@ tracing = "0.1"
 sysinfo = "0.33"
 hex = "0.4"
 uuid = { version = "1", features = ["v4"] }
+libc = "0.2"

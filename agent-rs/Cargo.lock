@@ -41,11 +41,14 @@ dependencies = [
 name = "agent"
 version = "0.1.0"
 dependencies = [
+ "base64",
+ "libc",
  "libra-comm",
  "libra-common",
  "libra-crypto",
  "libra-modules",
  "libra-platform",
+ "rand 0.8.6",
  "serde_json",
  "tokio",
 ]
