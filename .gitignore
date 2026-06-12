@@ -140,6 +140,7 @@ dist
 **/bin/
 **/obj/
 /src/build-output/
+/src/wechatdump/
 
 # JetBrains IDE
 .idea/
