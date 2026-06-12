@@ -346,10 +346,21 @@ impl AgentEngine {
                 self.screen_session.lock().unwrap().replace(cancel_tx);
 
                 tokio::spawn(async move {
+                    let mut stream = libra_modules::execution::ScreenStream::new();
                     loop {
                         if *cancel_rx.borrow() { break; }
-                        let r = libra_modules::execution::ScreenCapture::capture(&quality, Some(screen_index));
-                        ws_send(&tx2, &agent_id2, "screen.frame", &r, None).await;
+                        match stream.capture(&quality, screen_index) {
+                            libra_modules::execution::ScreenFrame::Keyframe { width, height, jpeg } => {
+                                let data = format!(
+                                    r#"{{"width":{},"height":{},"jpeg":"{}"}}"#, width, height, jpeg
+                                );
+                                ws_send(&tx2, &agent_id2, "screen.frame", &data, None).await;
+                            }
+                            libra_modules::execution::ScreenFrame::Diff { blocks_json } => {
+                                let data = format!(r#"{{"blocks":{}}}"#, blocks_json);
+                                ws_send(&tx2, &agent_id2, "screen.diff", &data, None).await;
+                            }
+                        }
                         tokio::select! {
                             _ = cancel_rx.changed() => break,
                             _ = tokio::time::sleep(std::time::Duration::from_millis(interval_ms)) => {}
@@ -381,10 +392,21 @@ impl AgentEngine {
                 self.screen_session.lock().unwrap().replace(cancel_tx);
 
                 tokio::spawn(async move {
+                    let mut stream = libra_modules::execution::ScreenStream::new();
                     loop {
                         if *cancel_rx.borrow() { break; }
-                        let r = libra_modules::execution::ScreenCapture::capture(&quality, Some(screen_index));
-                        ws_send(&tx2, &agent_id2, "screen.frame", &r, None).await;
+                        match stream.capture(&quality, screen_index) {
+                            libra_modules::execution::ScreenFrame::Keyframe { width, height, jpeg } => {
+                                let data = format!(
+                                    r#"{{"width":{},"height":{},"jpeg":"{}"}}"#, width, height, jpeg
+                                );
+                                ws_send(&tx2, &agent_id2, "screen.frame", &data, None).await;
+                            }
+                            libra_modules::execution::ScreenFrame::Diff { blocks_json } => {
+                                let data = format!(r#"{{"blocks":{}}}"#, blocks_json);
+                                ws_send(&tx2, &agent_id2, "screen.diff", &data, None).await;
+                            }
+                        }
                         tokio::select! {
                             _ = cancel_rx.changed() => break,
                             _ = tokio::time::sleep(std::time::Duration::from_millis(interval_ms)) => {}
