@@ -114,7 +114,10 @@ fn collect_gpus() -> Vec<GpuInfo> {
                 Some(GpuInfo {
                     name,
                     driver_version: g["DriverVersion"].as_str().filter(|s| !s.is_empty()).map(|s| s.to_string()),
-                    vram_bytes: g["AdapterRAM"].as_u64().filter(|&v| v > 0),
+                    vram_bytes: {
+                        let v = parse_u64_any(&g["AdapterRAM"]);
+                        if v > 0 { Some(v) } else { None }
+                    },
                 })
             }).collect();
             if !gpus.is_empty() { return gpus; }
@@ -156,7 +159,7 @@ fn collect_disks() -> Vec<DiskInfo> {
                 if model.is_empty() { return None; }
                 Some(DiskInfo {
                     model,
-                    size_bytes: d["Size"].as_u64().unwrap_or(0),
+                    size_bytes: parse_u64_any(&d["Size"]),
                     media_type: d["MediaType"].as_str().filter(|s| !s.is_empty()).map(|s| s.to_string()),
                     serial_number: d["SerialNumber"].as_str().filter(|s| !s.is_empty()).map(|s| s.trim().to_string()),
                 })
@@ -208,9 +211,8 @@ fn collect_ram() -> RamInfo {
     {
         let props = &["TotalPhysicalMemory"];
         if let Some(v) = ps_wmi_first("Win32_ComputerSystem", props) {
-            if let Some(total) = v["TotalPhysicalMemory"].as_u64() {
-                if total > 0 { return RamInfo { total_bytes: total }; }
-            }
+            let total = parse_u64_any(&v["TotalPhysicalMemory"]);
+            if total > 0 { return RamInfo { total_bytes: total }; }
         }
         if let Some(s) = wmi_single("Win32_ComputerSystem", "TotalPhysicalMemory") {
             if let Ok(b) = s.parse::<u64>() { if b > 0 { return RamInfo { total_bytes: b }; } }
@@ -271,7 +273,7 @@ fn ps_wmi_first(class: &str, props: &[&str]) -> Option<serde_json::Value> {
     use std::os::windows::process::CommandExt;
     let prop_list = props.join(",");
     let cmd = format!(
-        "Get-CimInstance -Class {} -ErrorAction SilentlyContinue | Select -First 1 -Property {} | ConvertTo-Json -Compress",
+        "[Console]::OutputEncoding=[Text.Encoding]::UTF8;Get-CimInstance -Class {} -ErrorAction SilentlyContinue | Select -First 1 -Property {} | ConvertTo-Json -Compress",
         class, prop_list
     );
     let output = std::process::Command::new("powershell")
@@ -289,7 +291,7 @@ fn ps_wmi_all(class: &str, props: &[&str]) -> Option<Vec<serde_json::Value>> {
     use std::os::windows::process::CommandExt;
     let prop_list = props.join(",");
     let cmd = format!(
-        "Get-CimInstance -Class {} -ErrorAction SilentlyContinue | Select -Property {} | ConvertTo-Json -Compress",
+        "[Console]::OutputEncoding=[Text.Encoding]::UTF8;Get-CimInstance -Class {} -ErrorAction SilentlyContinue | Select -Property {} | ConvertTo-Json -Compress",
         class, prop_list
     );
     let output = std::process::Command::new("powershell")
@@ -317,7 +319,7 @@ fn wmi_single(class: &str, property: &str) -> Option<String> {
         use std::os::windows::process::CommandExt;
         // PowerShell first
         let cmd = format!(
-            "(Get-CimInstance -Class {} -ErrorAction SilentlyContinue | Select -First 1).{}",
+            "[Console]::OutputEncoding=[Text.Encoding]::UTF8;(Get-CimInstance -Class {} -ErrorAction SilentlyContinue | Select -First 1).{}",
             class, property
         );
         if let Ok(output) = std::process::Command::new("powershell")
@@ -363,4 +365,13 @@ fn run_hidden(cmd: &str, args: &[&str]) -> Result<Vec<u8>, ()> {
 
 fn opt_str(s: Option<&str>) -> Option<String> {
     s.filter(|s| !s.is_empty()).map(|s| s.to_string())
+}
+
+/// Parse a serde_json Value as u64, handling both number and string representations.
+fn parse_u64_any(v: &serde_json::Value) -> u64 {
+    if let Some(n) = v.as_u64() { return n; }
+    if let Some(s) = v.as_str() {
+        if let Ok(n) = s.trim().parse::<u64>() { return n; }
+    }
+    0
 }

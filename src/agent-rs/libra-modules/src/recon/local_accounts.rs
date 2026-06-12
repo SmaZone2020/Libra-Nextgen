@@ -25,6 +25,7 @@ impl LocalAccountEnumerator {
         use std::os::windows::process::CommandExt;
 
         let script = r#"
+[Console]::OutputEncoding=[Text.Encoding]::UTF8
 $admins = @{}
 Get-LocalGroupMember -Group 'Administrators' -ErrorAction SilentlyContinue | ForEach-Object {
     $n = $_.Name -replace '^.*\\', ''

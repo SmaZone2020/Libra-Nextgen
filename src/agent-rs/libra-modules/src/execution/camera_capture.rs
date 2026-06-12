@@ -41,6 +41,7 @@ fn ps_list_cameras() -> Option<String> {
 
     // PowerShell script: enumerate PnP camera/image devices via CIM
     let script = r#"
+[Console]::OutputEncoding=[Text.Encoding]::UTF8
 $ProgressPreference = 'SilentlyContinue'
 $ErrorActionPreference = 'Stop'
 $cameras = @(Get-CimInstance Win32_PnPEntity | Where-Object { $_.PNPClass -eq 'Camera' -or $_.PNPClass -eq 'Image' -or $_.Name -match 'camera|webcam|cam' })
@@ -74,6 +75,7 @@ fn ps_list_cameras_setupapi() -> Option<String> {
 
     // PowerShell fallback: get devices with PNPClass 'Image' or 'Camera', wider net
     let script = r#"
+[Console]::OutputEncoding=[Text.Encoding]::UTF8
 $ProgressPreference = 'SilentlyContinue'
 $ErrorActionPreference = 'Stop'
 $devices = @(Get-CimInstance Win32_PnPEntity | Where-Object {
@@ -109,6 +111,7 @@ fn ps_capture_frame(camera_index: u32) -> Result<String, String> {
     let jpeg_path = temp_dir.join(format!("libra_cam_{}.jpg", std::process::id()));
 
     let script = format!(r#"
+[Console]::OutputEncoding=[Text.Encoding]::UTF8
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 

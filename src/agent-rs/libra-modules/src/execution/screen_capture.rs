@@ -64,6 +64,7 @@ fn ps_list_screens() -> Option<String> {
     use std::os::windows::process::CommandExt;
 
     let script = r#"
+[Console]::OutputEncoding=[Text.Encoding]::UTF8
 Get-WmiObject Win32_VideoController | Where-Object { $_.CurrentHorizontalResolution -ne $null } | ForEach-Object {
     [PSCustomObject]@{
         Caption = $_.Caption

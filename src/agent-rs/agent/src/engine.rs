@@ -448,7 +448,8 @@ impl AgentEngine {
                                     Ok(0) => break,
                                     Ok(n) => {
                                         let text = String::from_utf8_lossy(&out_buf[..n]);
-                                        let _ = send_via_channel(&tx, &aid, "shell.output", &text, None);
+                                        let json = serde_json::json!({"text": text}).to_string();
+                                        let _ = send_via_channel(&tx, &aid, "shell.output", &json, None);
                                     }
                                     Err(_) => break,
                                 }
@@ -458,7 +459,8 @@ impl AgentEngine {
                                     Ok(0) => break,
                                     Ok(n) => {
                                         let text = String::from_utf8_lossy(&err_buf[..n]);
-                                        let _ = send_via_channel(&tx, &aid, "shell.output", &text, None);
+                                        let json = serde_json::json!({"text": text}).to_string();
+                                        let _ = send_via_channel(&tx, &aid, "shell.output", &json, None);
                                     }
                                     Err(_) => break,
                                 }
@@ -475,7 +477,8 @@ impl AgentEngine {
                                     Ok(0) => break,
                                     Ok(n) => {
                                         let text = String::from_utf8_lossy(&out_buf[..n]);
-                                        let _ = send_via_channel(&tx, &aid, "shell.output", &text, None);
+                                        let json = serde_json::json!({"text": text}).to_string();
+                                        let _ = send_via_channel(&tx, &aid, "shell.output", &json, None);
                                     }
                                     Err(_) => break,
                                 }
