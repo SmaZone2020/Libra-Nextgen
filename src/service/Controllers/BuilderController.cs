@@ -26,7 +26,7 @@ public class BuilderController : ControllerBase
         ["arm"] = "linux-arm64",
     };
 
-    private static readonly string RustAgentDir = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "agent-rs"));
+    private static readonly string RustAgentDir = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "agent-rs"));
 
     private static readonly Dictionary<string, string> RustTargetTriple = new()
     {
