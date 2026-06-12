@@ -142,13 +142,75 @@ fn num_cpus() -> usize {
     std::thread::available_parallelism().map(|n| n.get()).unwrap_or(1)
 }
 
-fn get_drive_size(_path: &str) -> f64 {
-    // Simplified - use sysinfo would be better
+fn get_drive_size(path: &str) -> f64 {
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::ffi::OsStrExt;
+        let wide: Vec<u16> = std::ffi::OsStr::new(path)
+            .encode_wide()
+            .chain(std::iter::once(0))
+            .collect();
+        let mut total: u64 = 0;
+        unsafe {
+            GetDiskFreeSpaceExW(
+                wide.as_ptr(),
+                std::ptr::null_mut(),
+                &mut total,
+                std::ptr::null_mut(),
+            );
+        }
+        if total > 0 {
+            return total as f64 / 1_073_741_824.0; // bytes → GiB
+        }
+    }
+    // Fallback: use sysinfo
+    for disk in sysinfo::Disks::new_with_refreshed_list().iter() {
+        let mount = disk.mount_point().to_string_lossy();
+        if mount.as_ref().starts_with(path) || path.starts_with(mount.as_ref()) {
+            return disk.total_space() as f64 / 1_073_741_824.0;
+        }
+    }
     0.0
 }
 
-fn get_drive_free(_path: &str) -> f64 {
+fn get_drive_free(path: &str) -> f64 {
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::ffi::OsStrExt;
+        let wide: Vec<u16> = std::ffi::OsStr::new(path)
+            .encode_wide()
+            .chain(std::iter::once(0))
+            .collect();
+        let mut free: u64 = 0;
+        unsafe {
+            GetDiskFreeSpaceExW(
+                wide.as_ptr(),
+                std::ptr::null_mut(),
+                std::ptr::null_mut(),
+                &mut free,
+            );
+        }
+        if free > 0 {
+            return free as f64 / 1_073_741_824.0;
+        }
+    }
+    for disk in sysinfo::Disks::new_with_refreshed_list().iter() {
+        let mount = disk.mount_point().to_string_lossy();
+        if mount.as_ref().starts_with(path) || path.starts_with(mount.as_ref()) {
+            return disk.available_space() as f64 / 1_073_741_824.0;
+        }
+    }
     0.0
+}
+
+#[cfg(target_os = "windows")]
+extern "system" {
+    fn GetDiskFreeSpaceExW(
+        lpDirectoryName: *const u16,
+        lpFreeBytesAvailableToCaller: *mut u64,
+        lpTotalNumberOfBytes: *mut u64,
+        lpTotalNumberOfFreeBytes: *mut u64,
+    ) -> i32;
 }
 
 fn escape(s: &str) -> String {

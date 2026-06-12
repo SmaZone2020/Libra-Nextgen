@@ -215,7 +215,7 @@ function HardwareAccordion({ hardware, t }: { hardware: NonNullable<AgentDetail[
           </Accordion.Panel>
         </Accordion.Item>
       )}
-      {hardware.displays.length > 0 && (
+      {hardware.displays.filter(d => d.width > 0 && d.height > 0).length > 0 && (
         <Accordion.Item key="displays">
           <Accordion.Heading>
             <Accordion.Trigger>
@@ -227,7 +227,7 @@ function HardwareAccordion({ hardware, t }: { hardware: NonNullable<AgentDetail[
           </Accordion.Heading>
           <Accordion.Panel>
             <Accordion.Body>
-              {hardware.displays.map((d, i) => (
+              {hardware.displays.filter(d => d.width > 0 && d.height > 0).map((d, i) => (
                 <p key={i} className="text-sm">
                   {d.name} &mdash; {d.width}x{d.height}
                 </p>

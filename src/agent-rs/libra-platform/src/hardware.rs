@@ -150,6 +150,9 @@ fn wmi_gpus() -> Result<Vec<GpuInfo>, ()> {
 // ── Disks ────────────────────────────────────────────────────────────────
 
 fn collect_disks() -> Vec<DiskInfo> {
+    // sysinfo provides reliable disk sizes even when WMI fails
+    let sys_disks = sysinfo_disks();
+
     #[cfg(windows)]
     {
         let props = &["Model", "Size", "MediaType", "SerialNumber"];
@@ -157,9 +160,15 @@ fn collect_disks() -> Vec<DiskInfo> {
             let disks: Vec<_> = arr.iter().filter_map(|d| {
                 let model = d["Model"].as_str().unwrap_or("").trim().to_string();
                 if model.is_empty() { return None; }
+                let wmi_size = parse_u64_any(&d["Size"]);
+                // Fall back to sysinfo size if WMI size is 0 or if model matches
+                let size_bytes = if wmi_size > 0 { wmi_size } else {
+                    sys_disks.iter().find(|sd| sd.model.contains(&model) || model.contains(&sd.model))
+                        .map(|sd| sd.size_bytes).unwrap_or(0)
+                };
                 Some(DiskInfo {
                     model,
-                    size_bytes: parse_u64_any(&d["Size"]),
+                    size_bytes,
                     media_type: d["MediaType"].as_str().filter(|s| !s.is_empty()).map(|s| s.to_string()),
                     serial_number: d["SerialNumber"].as_str().filter(|s| !s.is_empty()).map(|s| s.trim().to_string()),
                 })
@@ -168,7 +177,7 @@ fn collect_disks() -> Vec<DiskInfo> {
         }
         if let Ok(disks) = wmi_disks() { if !disks.is_empty() { return disks; } }
     }
-    sysinfo_disks()
+    sys_disks
 }
 
 fn sysinfo_disks() -> Vec<DiskInfo> {
@@ -207,19 +216,22 @@ fn wmi_disks() -> Result<Vec<DiskInfo>, ()> {
 // ── RAM ──────────────────────────────────────────────────────────────────
 
 fn collect_ram() -> RamInfo {
+    // Always query sysinfo as a reliable baseline
+    let sys = sysinfo::System::new_all();
+    let sys_total = sys.total_memory();
+
     #[cfg(windows)]
     {
         let props = &["TotalPhysicalMemory"];
         if let Some(v) = ps_wmi_first("Win32_ComputerSystem", props) {
-            let total = parse_u64_any(&v["TotalPhysicalMemory"]);
-            if total > 0 { return RamInfo { total_bytes: total }; }
+            let wmi_total = parse_u64_any(&v["TotalPhysicalMemory"]);
+            if wmi_total > 0 { return RamInfo { total_bytes: wmi_total }; }
         }
         if let Some(s) = wmi_single("Win32_ComputerSystem", "TotalPhysicalMemory") {
             if let Ok(b) = s.parse::<u64>() { if b > 0 { return RamInfo { total_bytes: b }; } }
         }
     }
-    let sys = sysinfo::System::new_all();
-    RamInfo { total_bytes: sys.total_memory() }
+    RamInfo { total_bytes: sys_total }
 }
 
 // ── Displays ─────────────────────────────────────────────────────────────
@@ -232,11 +244,10 @@ fn collect_displays() -> Vec<DisplayInfo> {
             let displays: Vec<_> = arr.iter().filter_map(|d| {
                 let name = d["Name"].as_str().unwrap_or("").to_string();
                 if name.is_empty() { return None; }
-                Some(DisplayInfo {
-                    name,
-                    width: d["ScreenWidth"].as_u64().unwrap_or(0) as u32,
-                    height: d["ScreenHeight"].as_u64().unwrap_or(0) as u32,
-                })
+                let w = d["ScreenWidth"].as_u64().unwrap_or(0) as u32;
+                let h = d["ScreenHeight"].as_u64().unwrap_or(0) as u32;
+                if w == 0 || h == 0 { return None; }
+                Some(DisplayInfo { name, width: w, height: h })
             }).collect();
             if !displays.is_empty() { return displays; }
         }
@@ -255,11 +266,10 @@ fn wmi_displays() -> Result<Vec<DisplayInfo>, ()> {
         if parts.len() >= 4 {
             let name = parts[1].trim().to_string();
             if name.is_empty() { continue; }
-            displays.push(DisplayInfo {
-                name,
-                width: parts[2].trim().parse().unwrap_or(0),
-                height: parts[3].trim().parse().unwrap_or(0),
-            });
+            let w: u32 = parts[2].trim().parse().unwrap_or(0);
+            let h: u32 = parts[3].trim().parse().unwrap_or(0);
+            if w == 0 || h == 0 { continue; }
+            displays.push(DisplayInfo { name, width: w, height: h });
         }
     }
     Ok(displays)
