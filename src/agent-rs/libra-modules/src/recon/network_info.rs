@@ -463,6 +463,13 @@ mod wlan_ffi {
 
     #[repr(C)]
     #[derive(Clone, Copy)]
+    pub struct WLAN_RATE_SET {
+        pub uRateSetLength: ULONG,
+        pub usRateSet: [USHORT; 126],
+    }
+
+    #[repr(C)]
+    #[derive(Clone, Copy)]
     pub struct WLAN_BSS_ENTRY {
         pub dot11Ssid: DOT11_SSID,
         pub uPhyId: DWORD,
@@ -481,6 +488,9 @@ mod wlan_ffi {
         pub usCapabilityInformation: USHORT,
         _pad4: USHORT,
         pub ulChCenterFrequency: DWORD,
+        pub wlanRateSet: WLAN_RATE_SET,
+        pub ulIeOffset: ULONG,
+        pub ulIeSize: ULONG,
     }
 
     #[repr(C)]
