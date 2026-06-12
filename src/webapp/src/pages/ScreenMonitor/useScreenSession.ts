@@ -47,6 +47,7 @@ const API_BASE = 'http://127.0.0.1:5270';
 
 export function useScreenSession({ onFrame, onError }: UseScreenSessionOptions) {
   const agentIdRef = useRef<string>('');
+  const configRef = useRef<ScreenConfig>({ fps: 5, quality: '720p', screenIndex: 0 });
   const [streaming, setStreaming] = useState(false);
   const [config, setConfig] = useState<ScreenConfig>({ fps: 5, quality: '720p', screenIndex: 0 });
   const [screens, setScreens] = useState<ScreenInfo[]>([]);
@@ -162,7 +163,8 @@ export function useScreenSession({ onFrame, onError }: UseScreenSessionOptions) 
   const bind = useCallback((agentId: string, cfg?: Partial<ScreenConfig>) => {
     unbind();
     agentIdRef.current = agentId;
-    const finalCfg = { ...config, ...cfg };
+    const finalCfg = { ...configRef.current, ...cfg };
+    configRef.current = finalCfg;
     setConfig(finalCfg);
     setStreaming(true);
 
@@ -174,16 +176,18 @@ export function useScreenSession({ onFrame, onError }: UseScreenSessionOptions) 
     });
 
     startSSE(agentId);
-  }, [config, unbind, startSSE]);
+  }, [unbind, startSSE]);
 
   const updateConfig = useCallback((cfg: Partial<ScreenConfig>) => {
     const id = agentIdRef.current;
     if (!id) return;
-    setConfig(prev => ({ ...prev, ...cfg }));
+    const merged = { ...configRef.current, ...cfg };
+    configRef.current = merged;
+    setConfig(merged);
     consoleWs.send({
       type: 'screen.config',
       channel: id,
-      data: cfg,
+      data: { fps: merged.fps, quality: merged.quality, screenIndex: merged.screenIndex },
       ts: Date.now(),
     });
   }, []);

