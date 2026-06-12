@@ -16,3 +16,4 @@ base64 = { workspace = true }
 sysinfo = { workspace = true }
 futures-util = { workspace = true }
 uuid = { workspace = true }
+image = { workspace = true }

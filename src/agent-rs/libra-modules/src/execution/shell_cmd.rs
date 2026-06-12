@@ -1,45 +1,49 @@
-use tokio::process::Command;
+use std::process::Command;
 
 pub struct ShellCommand;
 
 impl ShellCommand {
     pub async fn execute(command: &str, timeout_ms: u64) -> String {
+        let cmd = command.to_string();
         let result = tokio::time::timeout(
             std::time::Duration::from_millis(timeout_ms),
-            Self::execute_inner(command),
+            tokio::task::spawn_blocking(move || execute_sync(&cmd)),
         )
         .await;
 
         match result {
-            Ok(output) => output,
+            Ok(Ok(Ok(output))) => output,
+            Ok(Ok(Err(e))) => e,
+            Ok(Err(_join_err)) => "Process panicked".to_string(),
             Err(_) => "Command timed out".to_string(),
         }
     }
+}
 
-    async fn execute_inner(command: &str) -> String {
-        let (shell, arg) = get_shell_and_arg(command);
+fn execute_sync(command: &str) -> Result<String, String> {
+    let (shell, arg) = get_shell_and_arg(command);
 
-        let output = match Command::new(&shell)
-            .arg(&arg)
-            .stdout(std::process::Stdio::piped())
-            .stderr(std::process::Stdio::piped())
-            .stdin(std::process::Stdio::null())
-            .kill_on_drop(true)
-            .output()
-            .await
-        {
-            Ok(o) => o,
-            Err(e) => return format!("Failed to start process: {}", e),
-        };
+    let mut cmd = Command::new(&shell);
+    cmd.arg(&arg)
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .stdin(std::process::Stdio::null());
 
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        let stderr = String::from_utf8_lossy(&output.stderr);
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+    }
 
-        if stdout.trim().is_empty() {
-            stderr.to_string()
-        } else {
-            stdout.to_string()
-        }
+    let output = cmd.output().map_err(|e| e.to_string())?;
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+
+    if stdout.trim().is_empty() {
+        Ok(stderr.to_string())
+    } else {
+        Ok(stdout.to_string())
     }
 }
 

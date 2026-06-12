@@ -200,10 +200,10 @@ impl AgentEngine {
             ws_type::FILE_DRIVES => {
                 let executor = get_executor();
                 let drives = executor.get_drives();
-                let items: Vec<String> = drives.iter()
-                    .map(|d| format!(r#"{{"name":"{}","type":"fixed","size":0}}"#, d))
+                let escaped: Vec<String> = drives.iter()
+                    .map(|d| format!(r#""{}""#, d.replace('\\', "\\\\")))
                     .collect();
-                let json = format!(r#"[{}]"#, items.join(","));
+                let json = format!(r#"{{"drives":[{}]}}"#, escaped.join(","));
                 ws_send(&ws, &agent_id, "file.drives.result", &json, rid).await;
             }
             ws_type::FILE_LIST => {
@@ -606,10 +606,11 @@ async fn execute_task(task: &libra_common::models::AgentTask) -> String {
         CommandType::FileDrives => {
             let executor = get_executor();
             let drives = executor.get_drives();
-            let items: Vec<String> = drives.iter()
-                .map(|d| format!(r#"{{"name":"{}","type":"fixed","size":0}}"#, d))
+            let escaped: Vec<String> = drives.iter()
+                .map(|d| format!(r#""{}""#, d.replace('\\', "\\\\")))
                 .collect();
-            format!(r#"[{}]"#, items.join(","))
+            let json = format!(r#"{{"drives":[{}]}}"#, escaped.join(","));
+            return json;
         }
         CommandType::Upload | CommandType::Download => {
             // File transfer with arguments: FileOps read/write

