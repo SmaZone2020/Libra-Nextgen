@@ -322,10 +322,15 @@ impl AgentEngine {
                 ws_send(&ws, &agent_id, "proxy.fetch.result", &r, rid).await;
             }
 
-            // ── Screen/Camera/Mic (stubbed) ───────────────────────
+            // ── Screen ─────────────────────────────────────────
+            ws_type::SCREEN_LIST => {
+                let r = libra_modules::execution::ScreenCapture::list_screens();
+                ws_send(&ws, &agent_id, "screen.list.result", &r, rid).await;
+            }
             ws_type::SCREEN_BIND | ws_type::SCREEN_CONFIG => {
                 let quality = data_str(&data, "quality", "medium");
-                let r = libra_modules::execution::ScreenCapture::capture(&quality);
+                let screen_index = data_u64(&data, "screenIndex", 0) as u32;
+                let r = libra_modules::execution::ScreenCapture::capture(&quality, Some(screen_index));
                 ws_send(&ws, &agent_id, "screen.frame", &r, rid).await;
             }
             ws_type::SCREEN_UNBIND => {
@@ -625,7 +630,7 @@ async fn execute_task(task: &libra_common::models::AgentTask) -> String {
             }
         }
         CommandType::Screenshot => {
-            libra_modules::execution::ScreenCapture::capture("medium")
+            libra_modules::execution::ScreenCapture::capture("medium", None)
         }
         CommandType::Webcam => {
             libra_modules::execution::CameraCapture::capture(0)

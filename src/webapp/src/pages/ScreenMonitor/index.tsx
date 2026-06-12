@@ -43,7 +43,14 @@ export default function ScreenMonitorPage() {
     setError(err);
   }, []);
 
-  const { bind, disconnect, updateConfig, streaming, config } = useScreenSession({ onFrame, onError });
+  const { bind, disconnect, updateConfig, listScreens, streaming, config, screens } = useScreenSession({ onFrame, onError });
+
+  // Fetch screen list when agent changes (not streaming)
+  useEffect(() => {
+    if (agentId && !streaming) {
+      listScreens(agentId);
+    }
+  }, [agentId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!agentId) {
@@ -65,6 +72,31 @@ export default function ScreenMonitorPage() {
   return (
     <div className="flex flex-col gap-3 h-[calc(100vh-180px)]">
       <div className="flex items-center gap-3 shrink-0">
+        {screens.length > 1 && (
+          <Select
+            selectedKey={String(config.screenIndex)}
+            onSelectionChange={(key) => {
+              if (key != null) updateConfig({ screenIndex: Number(key) });
+            }}
+            className="w-[160px]"
+            aria-label={t('screenMonitor.screen')}
+          >
+            <Select.Trigger>
+              <Select.Value />
+            </Select.Trigger>
+            <Select.Popover>
+              <ListBox>
+                {screens.map((s) => (
+                  <ListBox.Item key={String(s.index)} id={String(s.index)} textValue={s.caption || `${s.width}x${s.height}`}>
+                    {s.caption || `${s.width}x${s.height}`}
+                    <ListBox.ItemIndicator />
+                  </ListBox.Item>
+                ))}
+              </ListBox>
+            </Select.Popover>
+          </Select>
+        )}
+
         <Select
           selectedKey={String(config.fps)}
           onSelectionChange={(key) => {

@@ -153,6 +153,7 @@ public static class WebSocketHandler
                 }
                 break;
 
+            case "screen.list":
             case "screen.bind":
             case "screen.unbind":
             case "screen.config":

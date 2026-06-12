@@ -13,6 +13,7 @@ public sealed class ScreenCapture : IDisposable
 
     private int _fps = 5;
     private string _quality = "720p";
+    private int _screenIndex = 0;
     private const int BlockSize = 64;
     private const int JpegQuality = 70;
 
@@ -28,11 +29,117 @@ public sealed class ScreenCapture : IDisposable
         _agentId = agentId;
     }
 
-    public void Start(int fps, string quality)
+    /// <summary>List available screens via PowerShell Get-WmiObject Win32_VideoController.</summary>
+    public static string ListScreens()
+    {
+        if (!OperatingSystem.IsWindows())
+            return """{"screens":[],"error":"Not supported on this platform"}""";
+
+        try
+        {
+            var script = @"
+Get-WmiObject Win32_VideoController | Where-Object { $_.CurrentHorizontalResolution -ne $null } | ForEach-Object {
+    [PSCustomObject]@{
+        Caption = $_.Caption
+        CurrentHorizontalResolution = $_.CurrentHorizontalResolution
+        CurrentVerticalResolution = $_.CurrentVerticalResolution
+    }
+} | ConvertTo-Json -Compress
+";
+            using var proc = new System.Diagnostics.Process
+            {
+                StartInfo = new System.Diagnostics.ProcessStartInfo
+                {
+                    FileName = "powershell",
+                    Arguments = $"-NoProfile -NonInteractive -ExecutionPolicy Bypass -Command \"{script}\"",
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = false,
+                }
+            };
+            proc.Start();
+            var json = proc.StandardOutput.ReadToEnd().Trim();
+            proc.WaitForExit(3000);
+
+            if (string.IsNullOrEmpty(json) || !json.Contains('['))
+                return """{"screens":[]}""";
+
+            // Parse the PowerShell array and reformat with index
+            var screens = new List<string>();
+            int idx = 0;
+            // Simple JSON array parser for the PowerShell output
+            var objs = ParseJsonArray(json);
+            foreach (var obj in objs)
+            {
+                if (obj.TryGetValue("CurrentHorizontalResolution", out var wVal) &&
+                    obj.TryGetValue("CurrentVerticalResolution", out var hVal) &&
+                    int.TryParse(wVal?.ToString(), out var w) && w > 0 &&
+                    int.TryParse(hVal?.ToString(), out var h) && h > 0)
+                {
+                    var caption = obj.TryGetValue("Caption", out var c) ? c?.ToString() ?? "" : "";
+                    screens.Add($$"""{"index":{{idx}},"width":{{w}},"height":{{h}},"caption":"{{Esc(caption!)}}"}""");
+                    idx++;
+                }
+            }
+            return $$"""{"screens":[{{string.Join(",", screens)}}]}""";
+        }
+        catch
+        {
+            return """{"screens":[]}""";
+        }
+    }
+
+    private static List<Dictionary<string, object?>> ParseJsonArray(string json)
+    {
+        var result = new List<Dictionary<string, object?>>();
+        var start = json.IndexOf('[');
+        var end = json.LastIndexOf(']');
+        if (start < 0 || end < 0) return result;
+
+        var inner = json.Substring(start + 1, end - start - 1);
+        var depth = 0;
+        var objStart = -1;
+        for (int i = 0; i < inner.Length; i++)
+        {
+            if (inner[i] == '{') { if (depth == 0) objStart = i; depth++; }
+            else if (inner[i] == '}')
+            {
+                depth--;
+                if (depth == 0 && objStart >= 0)
+                {
+                    var objStr = inner.Substring(objStart, i - objStart + 1);
+                    var dict = new Dictionary<string, object?>();
+                    // Simple key-value parser
+                    var inKey = true; var inStr = false; var key = ""; var val = "";
+                    for (int j = 1; j < objStr.Length - 1; j++)
+                    {
+                        var c = objStr[j];
+                        if (c == '"' && (j == 0 || objStr[j - 1] != '\\')) { inStr = !inStr; continue; }
+                        if (!inStr && c == ':') { inKey = false; continue; }
+                        if (!inStr && c == ',')
+                        {
+                            dict[key.Trim('"', ' ')] = val.Trim('"', ' ');
+                            key = ""; val = ""; inKey = true;
+                            continue;
+                        }
+                        if (inKey) key += c; else val += c;
+                    }
+                    if (!string.IsNullOrEmpty(key))
+                        dict[key.Trim('"', ' ')] = val.Trim('"', ' ');
+                    result.Add(dict);
+                }
+            }
+        }
+        return result;
+    }
+
+    public void Start(int fps, string quality, int screenIndex = 0)
     {
         Stop();
         _fps = Math.Clamp(fps, 1, 15);
         _quality = quality;
+        _screenIndex = screenIndex;
         _previousFrame = null;
         _cts = new CancellationTokenSource();
         _captureTask = Task.Run(() => CaptureLoopAsync(_cts.Token));
@@ -49,6 +156,12 @@ public sealed class ScreenCapture : IDisposable
     }
 
     public void SetFps(int fps) => _fps = Math.Clamp(fps, 1, 15);
+
+    public void SetScreenIndex(int index)
+    {
+        _screenIndex = index;
+        _previousFrame = null;
+    }
 
     public void SetQuality(string quality)
     {
@@ -97,13 +210,21 @@ public sealed class ScreenCapture : IDisposable
             return;
         }
 
-        int screenW = GetSystemMetrics(SM_CXSCREEN);
-        int screenH = GetSystemMetrics(SM_CYSCREEN);
+        var monitors = GetMonitorRects();
+        if (monitors.Count == 0) return;
+
+        int idx = Math.Min(_screenIndex, monitors.Count - 1);
+        var m = monitors[idx];
+        int capX = m.Left;
+        int capY = m.Top;
+        int screenW = m.Right - m.Left;
+        int screenH = m.Bottom - m.Top;
+
         if (screenW == 0 || screenH == 0) return;
 
         var (targetW, targetH) = GetTargetDimensions(screenW, screenH, _quality);
 
-        using var bmp = CaptureScreen(screenW, screenH, targetW, targetH);
+        using var bmp = CaptureScreenRegion(capX, capY, screenW, screenH, targetW, targetH);
         var pixels = GetPixelBytes(bmp);
 
         if (_previousFrame == null || _frameWidth != targetW || _frameHeight != targetH)
@@ -137,12 +258,12 @@ public sealed class ScreenCapture : IDisposable
         }
     }
 
-    private static Bitmap CaptureScreen(int screenW, int screenH, int targetW, int targetH)
+    private static Bitmap CaptureScreenRegion(int capX, int capY, int screenW, int screenH, int targetW, int targetH)
     {
         using var full = new Bitmap(screenW, screenH, PixelFormat.Format24bppRgb);
         using (var g = Graphics.FromImage(full))
         {
-            g.CopyFromScreen(0, 0, 0, 0, new Size(screenW, screenH), CopyPixelOperation.SourceCopy);
+            g.CopyFromScreen(capX, capY, 0, 0, new Size(screenW, screenH), CopyPixelOperation.SourceCopy);
         }
 
         if (targetW == screenW && targetH == screenH)
@@ -266,10 +387,57 @@ public sealed class ScreenCapture : IDisposable
 
     private static string Esc(string s) => s.Replace("\\", "\\\\").Replace("\"", "\\\"");
 
-    private record struct BlockInfo(int X, int Y, int W, int H);
+    // ── Multi-monitor enumeration ──────────────────────────────────────
 
-    private const int SM_CXSCREEN = 0;
-    private const int SM_CYSCREEN = 1;
+    private static List<MonitorRect> GetMonitorRects()
+    {
+        var rects = new List<MonitorRect>();
+        EnumDisplayMonitors(IntPtr.Zero, IntPtr.Zero, (IntPtr hMonitor, IntPtr hdc, ref RECT lprc, IntPtr lParam) =>
+        {
+            var mi = new MONITORINFO();
+            mi.cbSize = Marshal.SizeOf<MONITORINFO>();
+            if (GetMonitorInfoW(hMonitor, ref mi))
+            {
+                rects.Add(new MonitorRect(mi.rcMonitor.Left, mi.rcMonitor.Top,
+                    mi.rcMonitor.Right, mi.rcMonitor.Bottom));
+            }
+            return true;
+        }, IntPtr.Zero);
+        return rects;
+    }
+
+    private record struct BlockInfo(int X, int Y, int W, int H);
+    private record struct MonitorRect(int Left, int Top, int Right, int Bottom);
+
+    // ── P/Invoke ──────────────────────────────────────────────────────
+
+    [DllImport("user32.dll")]
+    private static extern bool EnumDisplayMonitors(IntPtr hdc, IntPtr lprcClip,
+        MonitorEnumDelegate lpfnEnum, IntPtr dwData);
+
+    private delegate bool MonitorEnumDelegate(IntPtr hMonitor, IntPtr hdc,
+        ref RECT lprcMonitor, IntPtr dwData);
+
+    [DllImport("user32.dll")]
+    private static extern bool GetMonitorInfoW(IntPtr hMonitor, ref MONITORINFO lpmi);
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct RECT
+    {
+        public int Left;
+        public int Top;
+        public int Right;
+        public int Bottom;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct MONITORINFO
+    {
+        public int cbSize;
+        public RECT rcMonitor;
+        public RECT rcWork;
+        public uint dwFlags;
+    }
 
     [DllImport("user32.dll")]
     private static extern int GetSystemMetrics(int nIndex);

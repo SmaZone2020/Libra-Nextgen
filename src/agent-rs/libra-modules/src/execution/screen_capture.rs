@@ -1,28 +1,51 @@
 use base64::Engine;
+use std::sync::Mutex;
 
 /// Screen capture — Windows GDI-based with JPEG encoding.
 /// Uses raw Win32 FFI (no external crate needed for GDI calls).
+/// Supports multi-monitor enumeration and per-monitor capture.
 pub struct ScreenCapture;
 
+/// Cached monitor rectangles from EnumDisplayMonitors.
+static MONITOR_RECTS: Mutex<Vec<MonitorRect>> = Mutex::new(Vec::new());
+
+#[derive(Clone, Debug)]
+struct MonitorRect {
+    left: i32,
+    top: i32,
+    right: i32,
+    bottom: i32,
+}
+
 impl ScreenCapture {
+    /// List available screens.
+    /// Primary: PowerShell Get-WmiObject Win32_VideoController (as user requested).
+    /// Fallback: EnumDisplayMonitors Win32 API.
     pub fn list_screens() -> String {
         #[cfg(windows)]
         {
-            let screen_w = unsafe { GetSystemMetrics(SM_CXSCREEN) };
-            let screen_h = unsafe { GetSystemMetrics(SM_CYSCREEN) };
-            if screen_w > 0 && screen_h > 0 {
-                return format!(r#"{{"screens":[{{"index":0,"width":{},"height":{}}}]}}"#, screen_w, screen_h);
+            if let Some(json) = ps_list_screens() {
+                return json;
+            }
+            let monitors = enum_display_monitors();
+            if !monitors.is_empty() {
+                let items: Vec<String> = monitors.iter().enumerate().map(|(i, m)| {
+                    format!(r#"{{"index":{},"width":{},"height":{},"caption":"Monitor {}"}}"#,
+                        i, m.right - m.left, m.bottom - m.top, i + 1)
+                }).collect();
+                return format!(r#"{{"screens":[{}]}}"#, items.join(","));
             }
         }
         r#"{"screens":[],"error":"Not supported on this platform"}"#.to_string()
     }
 
-    /// Capture a screenshot of the primary monitor and return as base64-encoded JPEG.
+    /// Capture a screenshot of the specified monitor and return as base64-encoded JPEG.
     /// `quality` can be "high" | "medium" | "low" (defaults to "medium").
-    pub fn capture(quality: &str) -> String {
+    /// `screen_index` selects which monitor (0 = primary, default).
+    pub fn capture(quality: &str, screen_index: Option<u32>) -> String {
         #[cfg(windows)]
         {
-            match capture_screen_windows(quality) {
+            match capture_screen_windows(quality, screen_index.unwrap_or(0)) {
                 Ok(jpeg_base64) => {
                     format!(r#"{{"jpeg":"{}"}}"#, jpeg_base64)
                 }
@@ -37,25 +60,184 @@ impl ScreenCapture {
 }
 
 #[cfg(windows)]
-fn capture_screen_windows(quality: &str) -> Result<String, String> {
+fn ps_list_screens() -> Option<String> {
+    use std::os::windows::process::CommandExt;
+
+    let script = r#"
+Get-WmiObject Win32_VideoController | Where-Object { $_.CurrentHorizontalResolution -ne $null } | ForEach-Object {
+    [PSCustomObject]@{
+        Caption = $_.Caption
+        CurrentHorizontalResolution = $_.CurrentHorizontalResolution
+        CurrentVerticalResolution = $_.CurrentVerticalResolution
+    }
+} | ConvertTo-Json -Compress
+"#;
+    let output = std::process::Command::new("powershell")
+        .args(["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", script])
+        .creation_flags(0x08000000)
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::null())
+        .output()
+        .ok()?;
+
+    let json = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    if json.is_empty() || !json.contains('[') {
+        return None;
+    }
+
+    // Parse the raw PowerShell array and convert to our screens format
+    let start = json.find('[')?;
+    let end = json.rfind(']')?;
+    let inner = &json[start..=end];
+
+    // Parse each object: Caption, CurrentHorizontalResolution, CurrentVerticalResolution
+    let mut screens = Vec::new();
+    let mut idx: u32 = 0;
+    let mut pos = 0;
+    let chars: Vec<char> = inner.chars().collect();
+    while pos < chars.len() {
+        if chars[pos] == '{' {
+            let mut caption = String::new();
+            let mut width: i32 = 0;
+            let mut height: i32 = 0;
+            let mut in_key = String::new();
+            let mut in_value = String::new();
+            let mut parsing_key = true;
+            let mut in_string = false;
+            pos += 1; // skip '{'
+
+            while pos < chars.len() && chars[pos] != '}' {
+                let c = chars[pos];
+                if c == '"' {
+                    in_string = !in_string;
+                } else if !in_string && c == ':' {
+                    parsing_key = false;
+                    pos += 1;
+                    continue;
+                } else if !in_string && c == ',' {
+                    // commit key-value pair
+                    let key = in_key.trim_matches(|c| c == '"' || c == ' ');
+                    let val = in_value.trim_matches(|c| c == '"' || c == ' ');
+                    match key {
+                        "Caption" => caption = val.to_string(),
+                        "CurrentHorizontalResolution" => width = val.parse().unwrap_or(0),
+                        "CurrentVerticalResolution" => height = val.parse().unwrap_or(0),
+                        _ => {}
+                    }
+                    in_key.clear();
+                    in_value.clear();
+                    parsing_key = true;
+                    pos += 1;
+                    continue;
+                }
+
+                if parsing_key {
+                    in_key.push(c);
+                } else {
+                    in_value.push(c);
+                }
+                pos += 1;
+            }
+            // commit last key-value
+            let key = in_key.trim_matches(|c| c == '"' || c == ' ');
+            let val = in_value.trim_matches(|c| c == '"' || c == ' ');
+            match key {
+                "Caption" => caption = val.to_string(),
+                "CurrentHorizontalResolution" => width = val.parse().unwrap_or(0),
+                "CurrentVerticalResolution" => height = val.parse().unwrap_or(0),
+                _ => {}
+            }
+
+            if width > 0 && height > 0 {
+                screens.push(format!(
+                    r#"{{"index":{},"width":{},"height":{},"caption":"{}"}}"#,
+                    idx, width, height, caption.replace('"', "'")
+                ));
+                idx += 1;
+            }
+        }
+        pos += 1;
+    }
+
+    Some(format!(r#"{{"screens":[{}]}}"#, screens.join(",")))
+}
+
+#[cfg(windows)]
+fn enum_display_monitors() -> Vec<MonitorRect> {
+    let mut rects: Vec<MonitorRect> = Vec::new();
+    let data_ptr = &mut rects as *mut Vec<MonitorRect> as isize;
+
+    unsafe {
+        EnumDisplayMonitors(
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+            Some(monitor_enum_proc),
+            data_ptr,
+        );
+    }
+
+    rects
+}
+
+#[cfg(windows)]
+unsafe extern "system" fn monitor_enum_proc(
+    h_monitor: *mut std::ffi::c_void,
+    _hdc: *mut std::ffi::c_void,
+    _rect: *mut RECT,
+    data: isize,
+) -> i32 {
+    if data == 0 {
+        return 0; // stop enumeration
+    }
+    let rects = &mut *(data as *mut Vec<MonitorRect>);
+
+    let mut mi: MONITORINFOEXW = std::mem::zeroed();
+    mi.monitorInfo.cbSize = std::mem::size_of::<MONITORINFOEXW>() as u32;
+    if GetMonitorInfoW(h_monitor, &mut mi as *mut MONITORINFOEXW as *mut MONITORINFO) != 0 {
+        rects.push(MonitorRect {
+            left: mi.monitorInfo.rcMonitor.left,
+            top: mi.monitorInfo.rcMonitor.top,
+            right: mi.monitorInfo.rcMonitor.right,
+            bottom: mi.monitorInfo.rcMonitor.bottom,
+        });
+    }
+    1 // continue enumeration
+}
+
+#[cfg(windows)]
+fn capture_screen_windows(quality: &str, screen_index: u32) -> Result<String, String> {
     let jpeg_quality = match quality {
         "high" => 90u8,
         "low" => 40u8,
         _ => 70u8,
     };
 
+    // EnumDisplayMonitors to get monitor rects
+    let monitors = enum_display_monitors();
+    if monitors.is_empty() {
+        return Err("No monitors found".into());
+    }
+
+    let idx = screen_index as usize;
+    if idx >= monitors.len() {
+        return Err(format!("Screen index {} not found. Available: {}", screen_index, monitors.len()));
+    }
+
+    let m = &monitors[idx];
+    let cap_x = m.left;
+    let cap_y = m.top;
+    let screen_w = m.right - m.left;
+    let screen_h = m.bottom - m.top;
+
+    if screen_w <= 0 || screen_h <= 0 {
+        return Err("Invalid monitor dimensions".into());
+    }
+
     unsafe {
         // Get desktop DC
         let hdc_screen = GetDC(std::ptr::null_mut());
         if hdc_screen.is_null() {
             return Err("GetDC failed".into());
-        }
-
-        let screen_w = GetSystemMetrics(SM_CXSCREEN);
-        let screen_h = GetSystemMetrics(SM_CYSCREEN);
-        if screen_w <= 0 || screen_h <= 0 {
-            DeleteDC(hdc_screen);
-            return Err("Invalid screen dimensions".into());
         }
 
         // Create compatible DC and bitmap
@@ -74,8 +256,8 @@ fn capture_screen_windows(quality: &str) -> Result<String, String> {
 
         let old_bmp = SelectObject(hdc_mem, hbitmap as _);
 
-        // Copy screen to bitmap
-        if BitBlt(hdc_mem, 0, 0, screen_w, screen_h, hdc_screen, 0, 0, SRCCOPY) == 0 {
+        // Copy screen region (specific monitor) to bitmap
+        if BitBlt(hdc_mem, 0, 0, screen_w, screen_h, hdc_screen, cap_x, cap_y, SRCCOPY) == 0 {
             SelectObject(hdc_mem, old_bmp);
             DeleteObject(hbitmap as _);
             DeleteDC(hdc_mem);
@@ -141,7 +323,7 @@ fn capture_screen_windows(quality: &str) -> Result<String, String> {
     }
 }
 
-// ── Win32 GDI FFI ────────────────────────────────────────────────────────
+// ── Win32 GDI + Monitor FFI ────────────────────────────────────────────
 
 #[cfg(windows)]
 const SM_CXSCREEN: i32 = 0;
@@ -149,6 +331,31 @@ const SM_CXSCREEN: i32 = 0;
 const SM_CYSCREEN: i32 = 1;
 #[cfg(windows)]
 const SRCCOPY: u32 = 0x00CC0020;
+
+#[cfg(windows)]
+#[repr(C)]
+struct RECT {
+    left: i32,
+    top: i32,
+    right: i32,
+    bottom: i32,
+}
+
+#[cfg(windows)]
+#[repr(C)]
+struct MONITORINFO {
+    cbSize: u32,
+    rcMonitor: RECT,
+    rcWork: RECT,
+    dwFlags: u32,
+}
+
+#[cfg(windows)]
+#[repr(C)]
+struct MONITORINFOEXW {
+    monitorInfo: MONITORINFO,
+    szDevice: [u16; 32],
+}
 
 #[cfg(windows)]
 #[repr(C)]
@@ -207,4 +414,19 @@ extern "system" {
     ) -> i32;
     fn DeleteDC(hdc: *mut std::ffi::c_void) -> i32;
     fn DeleteObject(ho: *mut std::ffi::c_void) -> i32;
+    fn EnumDisplayMonitors(
+        hdc: *mut std::ffi::c_void,
+        lprcClip: *mut RECT,
+        lpfnEnum: Option<unsafe extern "system" fn(
+            *mut std::ffi::c_void,
+            *mut std::ffi::c_void,
+            *mut RECT,
+            isize,
+        ) -> i32>,
+        dwData: isize,
+    ) -> i32;
+    fn GetMonitorInfoW(
+        hMonitor: *mut std::ffi::c_void,
+        lpmi: *mut MONITORINFO,
+    ) -> i32;
 }

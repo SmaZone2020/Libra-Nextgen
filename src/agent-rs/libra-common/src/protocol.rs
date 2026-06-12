@@ -77,6 +77,7 @@ pub mod ws_type {
     pub const SHELL_LOCK_ACQUIRED: &str = "shell.lock.acquired";
     pub const SHELL_LOCK_RELEASED: &str = "shell.lock.released";
 
+    pub const SCREEN_LIST: &str = "screen.list";
     pub const SCREEN_BIND: &str = "screen.bind";
     pub const SCREEN_UNBIND: &str = "screen.unbind";
     pub const SCREEN_CONFIG: &str = "screen.config";

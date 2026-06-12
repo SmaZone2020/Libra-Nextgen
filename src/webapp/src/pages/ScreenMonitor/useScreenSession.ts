@@ -1,10 +1,19 @@
 import { useCallback, useRef, useState } from 'react';
 import { consoleWs } from '../../ws/consoleWs';
 import { getToken } from '../../api/client';
+import type { WsMessage } from '../../types/models';
 
 export interface ScreenConfig {
   fps: number;
   quality: string;
+  screenIndex: number;
+}
+
+export interface ScreenInfo {
+  index: number;
+  width: number;
+  height: number;
+  caption: string;
 }
 
 export interface ScreenKeyframe {
@@ -39,7 +48,8 @@ const API_BASE = 'http://127.0.0.1:5270';
 export function useScreenSession({ onFrame, onError }: UseScreenSessionOptions) {
   const agentIdRef = useRef<string>('');
   const [streaming, setStreaming] = useState(false);
-  const [config, setConfig] = useState<ScreenConfig>({ fps: 5, quality: '720p' });
+  const [config, setConfig] = useState<ScreenConfig>({ fps: 5, quality: '720p', screenIndex: 0 });
+  const [screens, setScreens] = useState<ScreenInfo[]>([]);
   const onFrameRef = useRef(onFrame);
   const onErrorRef = useRef(onError);
   const abortRef = useRef<AbortController | null>(null);
@@ -111,6 +121,31 @@ export function useScreenSession({ onFrame, onError }: UseScreenSessionOptions) 
     abortRef.current = null;
   }, []);
 
+  const listScreens = useCallback((agentId: string): Promise<ScreenInfo[]> => {
+    return new Promise((resolve) => {
+      const rid = `sl_${Date.now()}`;
+      const unsub = consoleWs.on('screen.list.result', (msg: WsMessage) => {
+        if (msg.rid !== rid) return;
+        unsub();
+        const data = msg.data as { screens?: ScreenInfo[] };
+        const list = data?.screens ?? [];
+        setScreens(list);
+        resolve(list);
+      });
+
+      consoleWs.send({
+        type: 'screen.list',
+        channel: agentId,
+        data: { agentId },
+        ts: Date.now(),
+        rid,
+      });
+
+      // Timeout after 5 seconds
+      setTimeout(() => { unsub(); resolve([]); }, 5000);
+    });
+  }, []);
+
   const unbind = useCallback(() => {
     const id = agentIdRef.current;
     if (!id) return;
@@ -134,7 +169,7 @@ export function useScreenSession({ onFrame, onError }: UseScreenSessionOptions) 
     consoleWs.send({
       type: 'screen.bind',
       channel: agentId,
-      data: { agentId, fps: finalCfg.fps, quality: finalCfg.quality },
+      data: { agentId, fps: finalCfg.fps, quality: finalCfg.quality, screenIndex: finalCfg.screenIndex },
       ts: Date.now(),
     });
 
@@ -158,5 +193,5 @@ export function useScreenSession({ onFrame, onError }: UseScreenSessionOptions) 
     agentIdRef.current = '';
   }, [unbind]);
 
-  return { bind, disconnect, updateConfig, streaming, config };
+  return { bind, disconnect, updateConfig, listScreens, streaming, config, screens };
 }

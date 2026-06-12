@@ -137,6 +137,7 @@ export interface WsMessage {
   channel: string;
   data: unknown;
   ts: number;
+  rid?: string;
 }
 
 export interface PagedResponse<T> {

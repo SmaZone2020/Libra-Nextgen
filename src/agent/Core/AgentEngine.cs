@@ -186,6 +186,10 @@ public class AgentEngine
                 KillShell();
                 break;
 
+            case "screen.list":
+                await HandleScreenList(msg);
+                break;
+
             case "screen.bind":
                 HandleScreenBind(msg);
                 break;
@@ -823,22 +827,31 @@ public class AgentEngine
 
     // ── Screen Capture ────────────────────────────────────────────────────
 
+    private async Task HandleScreenList(WebSocketMessage msg)
+    {
+        var json = ScreenCapture.ListScreens();
+        await _ws!.SendResultRawAsync("screen.list.result", _agentId, json, msg.RequestId);
+    }
+
     private void HandleScreenBind(WebSocketMessage msg)
     {
         HandleScreenUnbind();
         int fps = 5;
         string quality = "720p";
+        int screenIndex = 0;
         try
         {
             if (msg.Data?.TryGetProperty("fps", out var fpsEl) == true)
                 fps = fpsEl.GetInt32();
             if (msg.Data?.TryGetProperty("quality", out var qEl) == true)
                 quality = qEl.GetString() ?? "720p";
+            if (msg.Data?.TryGetProperty("screenIndex", out var siEl) == true)
+                screenIndex = siEl.GetInt32();
         }
         catch { }
 
         _screenCapture = new ScreenCapture(_ws!, _agentId);
-        _screenCapture.Start(fps, quality);
+        _screenCapture.Start(fps, quality, screenIndex);
     }
 
     private void HandleScreenUnbind()
@@ -857,6 +870,8 @@ public class AgentEngine
                 _screenCapture.SetFps(fpsEl.GetInt32());
             if (msg.Data?.TryGetProperty("quality", out var qEl) == true)
                 _screenCapture.SetQuality(qEl.GetString() ?? "720p");
+            if (msg.Data?.TryGetProperty("screenIndex", out var siEl) == true)
+                _screenCapture.SetScreenIndex(siEl.GetInt32());
         }
         catch { }
     }
