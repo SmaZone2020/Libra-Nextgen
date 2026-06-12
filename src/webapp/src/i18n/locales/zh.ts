@@ -307,6 +307,7 @@ export default {
       auth: '认证',
       encryption: '加密',
       signal: '信号',
+      band: '频段',
       proxySettings: '代理',
       proxyEnabled: '已启用',
       proxyServer: '服务器',

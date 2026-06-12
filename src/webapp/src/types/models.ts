@@ -238,7 +238,8 @@ export interface NearbyWifiNetwork {
   auth: string;
   encryption: string;
   bssid: string;
-  signal: string;
+  signal: number;
+  band: string;
 }
 
 export interface ProxyInfo {

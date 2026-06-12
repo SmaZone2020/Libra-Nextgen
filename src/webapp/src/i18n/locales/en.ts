@@ -307,6 +307,7 @@ export default {
       auth: 'Auth',
       encryption: 'Encryption',
       signal: 'Signal',
+      band: 'Band',
       proxySettings: 'Proxy',
       proxyEnabled: 'Enabled',
       proxyServer: 'Server',

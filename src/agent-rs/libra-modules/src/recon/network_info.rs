@@ -232,9 +232,12 @@ impl NetworkInfo {
 
             let items: Vec<String> = networks.iter().map(|w| {
                 format!(
-                    r#"{{"ssid":"{}","authentication":"{}","band":"{}"}}"#,
+                    r#"{{"ssid":"{}","auth":"{}","encryption":"{}","bssid":"{}","signal":{},"band":"{}"}}"#,
                     escape(&w.ssid),
-                    escape(&w.authentication),
+                    escape(&w.auth),
+                    escape(&w.encryption),
+                    escape(&w.bssid),
+                    w.signal,
                     escape(&w.band),
                 )
             }).collect();
@@ -255,6 +258,8 @@ impl NetworkInfo {
                     if parts.len() >= 6 {
                         let ssid = parts[0].replace("\\:", ":");
                         if ssid.is_empty() { continue; }
+                        let bssid = parts.get(1).map(|s| s.replace("\\:", ":")).unwrap_or_default();
+                        let signal: u32 = parts.get(4).unwrap_or(&"0").parse().unwrap_or(0);
                         let security = parts.get(5).unwrap_or(&"");
                         let auth = match *security {
                             "" => "开放",
@@ -263,12 +268,16 @@ impl NetworkInfo {
                             s if s.contains("WPA") => "WPA-PSK",
                             _ => security,
                         };
+                        let encryption = if security.is_empty() { "无" } else { "" };
                         let freq_mhz: u32 = parts.get(3).unwrap_or(&"0").parse().unwrap_or(0);
-                        let band = freq_to_band(freq_mhz * 1000); // MHz → kHz
+                        let band = freq_to_band(freq_mhz * 1000).to_string(); // MHz → kHz
                         ap_list.push(WifiApInfo {
                             ssid,
-                            authentication: auth.to_string(),
-                            band: band.to_string(),
+                            auth: auth.to_string(),
+                            encryption: encryption.to_string(),
+                            bssid,
+                            signal,
+                            band,
                         });
                     }
                 }
@@ -281,48 +290,69 @@ impl NetworkInfo {
                 {
                     let text = String::from_utf8_lossy(&output.stdout);
                     let mut ssid = String::new();
+                    let mut bssid = String::new();
                     let mut freq: u32 = 0;
+                    let mut signal: u32 = 0;
 
                     for line in text.lines() {
                         let t = line.trim();
                         if t.starts_with("Cell ") {
                             if !ssid.is_empty() {
-                                let band = freq_to_band(freq);
+                                let band = freq_to_band(freq).to_string();
                                 ap_list.push(WifiApInfo {
                                     ssid: ssid.clone(),
-                                    authentication: String::new(),
-                                    band: band.to_string(),
+                                    auth: String::new(),
+                                    encryption: String::new(),
+                                    bssid: bssid.clone(),
+                                    signal,
+                                    band,
                                 });
                             }
                             ssid.clear();
-                            freq_khz = 0;
+                            bssid.clear();
+                            freq = 0;
+                            signal = 0;
                         } else if t.starts_with("ESSID:") {
                             ssid = t.trim_start_matches("ESSID:").trim_matches('"').to_string();
+                        } else if t.starts_with("Address:") {
+                            bssid = t.trim_start_matches("Address:").trim().to_string();
                         } else if t.contains("Frequency:") {
                             if let Some(f) = t.split_whitespace().nth(2) {
                                 freq = (f.parse::<f64>().unwrap_or(0.0) * 1_000_000.0) as u32; // GHz → kHz
                             }
+                        } else if let Some(q) = t.strip_prefix("Quality=") {
+                            if let Some(slash) = q.find('/') {
+                                let num: u32 = q[..slash].trim().parse().unwrap_or(0);
+                                let den: u32 = q[slash+1..].split_whitespace().next().unwrap_or("1").parse().unwrap_or(1);
+                                signal = (num * 100 / den).min(100);
+                            }
                         }
                     }
                     if !ssid.is_empty() {
-                        let band = freq_to_band(freq);
+                        let band = freq_to_band(freq).to_string();
                         ap_list.push(WifiApInfo {
                             ssid,
-                            authentication: String::new(),
-                            band: band.to_string(),
+                            auth: String::new(),
+                            encryption: String::new(),
+                            bssid,
+                            signal,
+                            band,
                         });
                     }
                 }
             }
-            // Deduplicate by SSID
+            // Deduplicate by BSSID
             let mut seen = std::collections::HashSet::new();
-            ap_list.retain(|w| seen.insert(w.ssid.clone()));
+            ap_list.retain(|w| seen.insert(w.bssid.clone()));
 
             let items: Vec<String> = ap_list.iter().map(|w| {
                 format!(
-                    r#"{{"ssid":"{}","authentication":"{}","band":"{}"}}"#,
+                    r#"{{"ssid":"{}","auth":"{}","encryption":"{}","bssid":"{}","signal":{},"band":"{}"}}"#,
                     escape(&w.ssid),
-                    escape(&w.authentication),
+                    escape(&w.auth),
+                    escape(&w.encryption),
+                    escape(&w.bssid),
+                    w.signal,
                     escape(&w.band),
                 )
             }).collect();
@@ -337,7 +367,10 @@ impl NetworkInfo {
 #[derive(Clone)]
 struct WifiApInfo {
     ssid: String,
-    authentication: String,
+    auth: String,
+    encryption: String,
+    bssid: String,
+    signal: u32,
     band: String,
 }
 
@@ -501,7 +534,7 @@ mod wlan_ffi {
 
 #[cfg(target_os = "windows")]
 fn scan_wifi_wlanapi() -> Result<Vec<WifiApInfo>, String> {
-    use std::collections::{HashMap, HashSet};
+    use std::collections::HashMap;
     use wlan_ffi::*;
 
     const FLAG_ADHOC: DWORD = 1;
@@ -528,13 +561,29 @@ fn scan_wifi_wlanapi() -> Result<Vec<WifiApInfo>, String> {
             let if_info = &*((*if_list_ptr).InterfaceInfo.as_ptr().add(i));
             let guid_ptr = &if_info.InterfaceGuid as *const GUID;
 
+            // First pass: collect auth + encryption per SSID from available network list
+            let mut sec_map: HashMap<String, (String, String)> = HashMap::new();
             let mut net_list_ptr: *mut WLAN_AVAILABLE_NETWORK_LIST = std::ptr::null_mut();
             let flags = FLAG_ADHOC | FLAG_HIDDEN;
-            if WlanGetAvailableNetworkList(handle, guid_ptr, flags, std::ptr::null(), &mut net_list_ptr) != 0 {
-                continue;
+            if WlanGetAvailableNetworkList(handle, guid_ptr, flags, std::ptr::null(), &mut net_list_ptr) == 0
+                && !net_list_ptr.is_null()
+            {
+                let net_count = (*net_list_ptr).dwNumberOfItems as usize;
+                for j in 0..net_count {
+                    let net = &*((*net_list_ptr).Network.as_ptr().add(j));
+                    let ssid_len = net.dot11Ssid.uSSIDLength as usize;
+                    if ssid_len == 0 { continue; }
+                    let ssid_bytes = &net.dot11Ssid.ucSSID[..ssid_len];
+                    let ssid = String::from_utf8_lossy(ssid_bytes).to_string();
+                    if ssid.is_empty() { continue; }
+                    let auth = auth_algo_label(net.dot11DefaultAuthAlgorithm);
+                    let enc = cipher_algo_label(net.dot11DefaultCipherAlgorithm);
+                    sec_map.entry(ssid).or_insert((auth, enc));
+                }
+                WlanFreeMemory(net_list_ptr as *const _);
             }
 
-            let mut ssid_bands: HashMap<String, HashSet<&'static str>> = HashMap::new();
+            // Second pass: collect BSS entries with BSSID, signal, band
             let mut bss_list_ptr: *mut WLAN_BSS_LIST = std::ptr::null_mut();
             if WlanGetNetworkBssList(
                 handle, guid_ptr, std::ptr::null(),
@@ -546,34 +595,33 @@ fn scan_wifi_wlanapi() -> Result<Vec<WifiApInfo>, String> {
                     let bss = &*((*bss_list_ptr).wlanBssEntries.as_ptr().add(j));
                     let ssid_bytes = &bss.dot11Ssid.ucSSID[..bss.dot11Ssid.uSSIDLength as usize];
                     let ssid = String::from_utf8_lossy(ssid_bytes).to_string();
-                    let band = freq_to_band(bss.ulChCenterFrequency);
-                    ssid_bands.entry(ssid).or_default().insert(band);
+                    if ssid.is_empty() { continue; }
+
+                    let bssid = format!(
+                        "{:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X}",
+                        bss.dot11Bssid[0], bss.dot11Bssid[1], bss.dot11Bssid[2],
+                        bss.dot11Bssid[3], bss.dot11Bssid[4], bss.dot11Bssid[5],
+                    );
+                    let band = freq_to_band(bss.ulChCenterFrequency).to_string();
+                    let signal = bss.uLinkQuality;
+
+                    let (auth, encryption) = sec_map
+                        .get(&ssid)
+                        .map(|(a, e)| (a.clone(), e.clone()))
+                        .unwrap_or_default();
+
+                    // Key by BSSID (unique per AP radio)
+                    result_map.entry(bssid.clone()).or_insert(WifiApInfo {
+                        ssid,
+                        auth,
+                        encryption,
+                        bssid,
+                        signal,
+                        band,
+                    });
                 }
                 WlanFreeMemory(bss_list_ptr as *const _);
             }
-
-            let net_count = (*net_list_ptr).dwNumberOfItems as usize;
-            for j in 0..net_count {
-                let net = &*((*net_list_ptr).Network.as_ptr().add(j));
-                let ssid_len = net.dot11Ssid.uSSIDLength as usize;
-                if ssid_len == 0 { continue; }
-                let ssid_bytes = &net.dot11Ssid.ucSSID[..ssid_len];
-                let ssid = String::from_utf8_lossy(ssid_bytes).to_string();
-                if ssid.is_empty() { continue; }
-
-                let auth = auth_algo_label(net.dot11DefaultAuthAlgorithm);
-                let band = ssid_bands.get(&ssid)
-                    .map(|bands| {
-                        let mut v: Vec<&str> = bands.iter().copied().collect();
-                        v.sort();
-                        v.join("/")
-                    })
-                    .unwrap_or_else(|| "未知".to_string());
-
-                result_map.entry(ssid.clone()).or_insert(WifiApInfo { ssid, authentication: auth, band });
-            }
-
-            WlanFreeMemory(net_list_ptr as *const _);
         }
 
         WlanFreeMemory(if_list_ptr as *const _);
@@ -597,6 +645,22 @@ fn auth_algo_label(algo: u32) -> String {
         7 => "WPA3".into(),
         8 => "WPA3-SAE".into(),
         9 => "OWE".into(),
+        v => format!("未知({})", v),
+    }
+}
+
+#[cfg(target_os = "windows")]
+fn cipher_algo_label(algo: u32) -> String {
+    match algo {
+        0 => "无".into(),
+        1 => "WEP40".into(),
+        2 => "TKIP".into(),
+        3 => "AES".into(),
+        4 => "WEP104".into(),
+        7 => "WEP".into(),
+        8 => "GCMP".into(),
+        9 => "GCMP-256".into(),
+        10 => "CCMP-256".into(),
         v => format!("未知({})", v),
     }
 }
@@ -645,7 +709,10 @@ fn parse_netsh_output(text: &str) -> Result<Vec<WifiApInfo>, String> {
                 };
                 networks.push(WifiApInfo {
                     ssid,
-                    authentication: current_auth.take().unwrap_or_else(|| "未知".into()),
+                    auth: current_auth.take().unwrap_or_else(|| "未知".into()),
+                    encryption: String::new(),
+                    bssid: String::new(),
+                    signal: 0,
                     band,
                 });
             }
@@ -672,7 +739,10 @@ fn parse_netsh_output(text: &str) -> Result<Vec<WifiApInfo>, String> {
         };
         networks.push(WifiApInfo {
             ssid,
-            authentication: current_auth.unwrap_or_else(|| "未知".into()),
+            auth: current_auth.unwrap_or_else(|| "未知".into()),
+            encryption: String::new(),
+            bssid: String::new(),
+            signal: 0,
             band,
         });
     }

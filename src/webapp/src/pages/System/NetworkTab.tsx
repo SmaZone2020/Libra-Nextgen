@@ -103,7 +103,7 @@ export function NetworkTab({ agentId }: NetworkTabProps) {
     },
     {
       id: 'bssid', header: 'BSSID',
-      cell: (item) => <span className="font-mono text-xs text-default-500">{item.bssid}</span>,
+      cell: (item) => <span className="font-mono text-xs text-default-500">{item.bssid || '—'}</span>,
     },
     {
       id: 'auth', header: t('system.auth'),
@@ -116,10 +116,14 @@ export function NetworkTab({ agentId }: NetworkTabProps) {
     {
       id: 'signal', header: t('system.signal'),
       cell: (item) => (
-        <span className={`text-xs font-medium tabular-nums ${parseInt(item.signal) >= 50 ? 'text-green-600' : parseInt(item.signal) >= 20 ? 'text-amber-600' : 'text-red-500'}`}>
+        <span className={`text-xs font-medium tabular-nums ${item.signal >= 50 ? 'text-green-600' : item.signal >= 20 ? 'text-amber-600' : 'text-red-500'}`}>
           {item.signal}%
         </span>
       ),
+    },
+    {
+      id: 'band', header: t('system.band'),
+      cell: (item) => <span className="text-xs text-default-500">{item.band || '—'}</span>,
     },
   ];
 
@@ -237,7 +241,7 @@ export function NetworkTab({ agentId }: NetworkTabProps) {
             aria-label={t('system.nearbyWifi')}
             columns={nearbyWifiColumns}
             data={data.nearbyWifi ?? []}
-            getRowId={(item) => item.bssid}
+            getRowId={(item) => item.bssid || item.ssid}
             scrollContainerClassName="max-h-52"
             renderEmptyState={() => (
               <div className="flex justify-center py-6 text-default-500 text-sm">
