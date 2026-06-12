@@ -8,6 +8,6 @@ libra-common = { path = "../libra-common" }
 tokio = { workspace = true }
 serde_json = { workspace = true }
 sysinfo = { workspace = true }
+sha2 = { workspace = true }
+hex = { workspace = true }
 
-[target.'cfg(windows)'.dependencies]
-winapi = { version = "0.3", features = ["winreg", "psapi", "tlhelp32", "memoryapi", "processthreadsapi", "handleapi", "sysinfoapi", "winuser", "wincrypt", "shellapi"] }
