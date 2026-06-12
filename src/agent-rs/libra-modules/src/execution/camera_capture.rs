@@ -1,13 +1,11 @@
 use base64::Engine;
 
 /// Camera capture — Windows-only.
-/// Listing via PowerShell/WMI + SetupAPI FFI.
-/// Capture via PowerShell WinRT MediaCapture.
+/// Uses WinRT DeviceInformation for enumeration and MediaCapture for capture.
 pub struct CameraCapture;
 
 impl CameraCapture {
     /// List available cameras as JSON array.
-    /// Uses PowerShell WMI as primary, falls back to empty array.
     pub fn list_cameras() -> String {
         #[cfg(windows)]
         {
@@ -39,19 +37,25 @@ impl CameraCapture {
 fn ps_list_cameras() -> Option<String> {
     use std::os::windows::process::CommandExt;
 
-    // PowerShell script: enumerate PnP camera/image devices via CIM
+    // Use WinRT DeviceInformation.FindAllAsync(VideoCapture) —
+    // returns devices with IDs compatible with MediaCapture.
     let script = r#"
 [Console]::OutputEncoding=[Text.Encoding]::UTF8
 $ProgressPreference = 'SilentlyContinue'
 $ErrorActionPreference = 'Stop'
-$cameras = @(Get-CimInstance Win32_PnPEntity | Where-Object { $_.PNPClass -eq 'Camera' -or $_.PNPClass -eq 'Image' -or $_.Name -match 'camera|webcam|cam' })
+
+[Windows.Devices.Enumeration.DeviceInformation,Windows.Devices.Enumeration,ContentType=WindowsRuntime] | Out-Null
+[Windows.Devices.Enumeration.DeviceClass,Windows.Devices.Enumeration,ContentType=WindowsRuntime] | Out-Null
+
+$devices = [Windows.Devices.Enumeration.DeviceInformation]::FindAllAsync(
+    [Windows.Devices.Enumeration.DeviceClass]::VideoCapture
+).GetAwaiter().GetResult()
+
 $i = 0
-$result = foreach ($cam in $cameras) {
-    if ($cam.Caption -and $cam.Caption -notmatch '^root\\') {
-        [PSCustomObject]@{ index = $i; name = $cam.Caption; characteristics = @() }
-        $i++
-    }
-}
+$result = @($devices | ForEach-Object {
+    [PSCustomObject]@{ index = $i; name = $_.Name; characteristics = @() }
+    $i++
+})
 if ($result.Count -eq 0) { '[]' } else { @($result) | ConvertTo-Json -Compress }
 "#;
 
@@ -63,17 +67,15 @@ if ($result.Count -eq 0) { '[]' } else { @($result) | ConvertTo-Json -Compress }
 
     let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
     if stdout.is_empty() || stdout == "[]" {
-        // Fall back to SetupAPI via another PS approach
-        return ps_list_cameras_setupapi();
+        return ps_list_cameras_fallback();
     }
     Some(stdout)
 }
 
 #[cfg(windows)]
-fn ps_list_cameras_setupapi() -> Option<String> {
+fn ps_list_cameras_fallback() -> Option<String> {
     use std::os::windows::process::CommandExt;
 
-    // PowerShell fallback: get devices with PNPClass 'Image' or 'Camera', wider net
     let script = r#"
 [Console]::OutputEncoding=[Text.Encoding]::UTF8
 $ProgressPreference = 'SilentlyContinue'
@@ -108,29 +110,32 @@ fn ps_capture_frame(camera_index: u32) -> Result<String, String> {
     let temp_dir = std::env::temp_dir();
     let jpeg_path = temp_dir.join(format!("libra_cam_{}.jpg", std::process::id()));
 
-    // Use the SAME device query as list_cameras so indices match.
-    // Also handle WinRT initialization failure gracefully.
+    // Use the SAME WinRT DeviceInformation API as list_cameras so
+    // camera indices match AND device IDs are MediaCapture-compatible.
     let script = format!(r#"
 [Console]::OutputEncoding=[Text.Encoding]::UTF8
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 
 # Load WinRT types
+[Windows.Devices.Enumeration.DeviceInformation,Windows.Devices.Enumeration,ContentType=WindowsRuntime] | Out-Null
+[Windows.Devices.Enumeration.DeviceClass,Windows.Devices.Enumeration,ContentType=WindowsRuntime] | Out-Null
 [Windows.Media.Capture.MediaCapture,Windows.Media,ContentType=WindowsRuntime] | Out-Null
 [Windows.Media.Capture.MediaCaptureInitializationSettings,Windows.Media,ContentType=WindowsRuntime] | Out-Null
 
-# Find cameras — same query as list_cameras
-$devices = @(Get-CimInstance Win32_PnPEntity | Where-Object {{ $_.PNPClass -eq 'Camera' -or $_.PNPClass -eq 'Image' -or $_.Name -match 'camera|webcam|cam' }})
-$filtered = @($devices | Where-Object {{ $_.Caption -and $_.Caption -notmatch '^root\\' }})
+# Find cameras — same API as list_cameras
+$devices = [Windows.Devices.Enumeration.DeviceInformation]::FindAllAsync(
+    [Windows.Devices.Enumeration.DeviceClass]::VideoCapture
+).GetAwaiter().GetResult()
 
-if ({0} -ge $filtered.Count) {{
-    Write-Error "Camera index {0} out of range (found $($filtered.Count))"
+if ({0} -ge $devices.Count) {{
+    Write-Error "Camera index {0} out of range (found $($devices.Count))"
     exit 1
 }}
 
 $capture = New-Object Windows.Media.Capture.MediaCapture
 $settings = New-Object Windows.Media.Capture.MediaCaptureInitializationSettings
-$settings.VideoDeviceId = $filtered[{0}].DeviceID
+$settings.VideoDeviceId = $devices[{0}].Id
 
 try {{
     $task = $capture.InitializeAsync($settings)
