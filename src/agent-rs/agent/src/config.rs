@@ -52,10 +52,11 @@ impl ConfigManager {
     pub fn result_url(&self) -> String { format!("{}{}", self.server_url, self.result_path) }
 
     pub fn ws_url(&self) -> String {
+        let ws_scheme = if self.server_url.starts_with("https://") { "wss://" } else { "ws://" };
         let without_scheme = self.server_url
             .trim_start_matches("https://")
             .trim_start_matches("http://");
-        format!("ws://{}{}", without_scheme, self.web_socket_path)
+        format!("{}{}{}", ws_scheme, without_scheme, self.web_socket_path)
     }
 
     pub fn get_jittered_interval(&self) -> u64 {

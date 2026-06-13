@@ -123,7 +123,6 @@ public class BuilderController : ControllerBase
     // ── SSE stream ─────────────────────────────────────────────────────
 
     [HttpGet("stream/{buildId}")]
-    [AllowAnonymous]
     public async Task StreamBuild(string buildId, CancellationToken ct)
     {
         Response.Headers["Content-Type"] = "text/event-stream";

@@ -12,9 +12,34 @@ public class JwtSettings
 
     public RSA Rsa { get; }
 
+    private static readonly string KeyDir = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+        "Libra-Nextgen");
+    private static readonly string KeyPath = Path.Combine(KeyDir, "jwt-rsa-key.xml");
+
     public JwtSettings()
     {
         Rsa = RSA.Create(2048);
+
+        try
+        {
+            if (File.Exists(KeyPath))
+            {
+                var xml = File.ReadAllText(KeyPath);
+                Rsa.FromXmlString(xml);
+            }
+            else
+            {
+                Directory.CreateDirectory(KeyDir);
+                var xml = Rsa.ToXmlString(true);
+                File.WriteAllText(KeyPath, xml);
+            }
+        }
+        catch
+        {
+            // Fallback to in-memory key if persistence fails
+            Rsa = RSA.Create(2048);
+        }
     }
 
     public string GetPublicKeyPem() => Rsa.ExportSubjectPublicKeyInfoPem();

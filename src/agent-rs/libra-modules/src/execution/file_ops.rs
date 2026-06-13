@@ -405,6 +405,15 @@ fn extract_zip(src: &Path, dest: &Path) -> Result<(), String> {
 
         if comp_method == 0 {
             let out_path = dest.join(&*name);
+            let canonical_dest = dest.canonicalize().unwrap_or_else(|_| dest.to_path_buf());
+            let canonical_out = out_path.canonicalize().unwrap_or_else(|_| {
+                let mut p = out_path.clone();
+                while !p.exists() { if !p.pop() { break; } }
+                p
+            });
+            if !canonical_out.starts_with(&canonical_dest) {
+                return Err(format!("ZIP entry '{}' attempts path traversal", name));
+            }
             if name.ends_with('/') {
                 std::fs::create_dir_all(&out_path).map_err(|e| e.to_string())?;
             } else {

