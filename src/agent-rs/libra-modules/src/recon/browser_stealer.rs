@@ -661,6 +661,10 @@ fn read_history(name: &str, db_path: &str, items: &mut Vec<String>) {
 fn decrypt_aes_gcm(encrypted: &[u8], key: &[u8], is_cookie: bool) -> Option<String> {
     use aes_gcm::{Aes256Gcm, Nonce, KeyInit, aead::Aead};
 
+    // Determine version prefix
+    let ver = if encrypted.len() >= 3 { &encrypted[..3] } else { b"???" };
+    let is_v20 = ver == b"v20";
+
     let nonce = Nonce::from_slice(&encrypted[3..15]);
     let tag_start = encrypted.len() - 16;
     let ct = &encrypted[15..tag_start];
@@ -671,7 +675,9 @@ fn decrypt_aes_gcm(encrypted: &[u8], key: &[u8], is_cookie: bool) -> Option<Stri
     combined.extend_from_slice(tag);
     let plaintext = cipher.decrypt(nonce, combined.as_slice()).ok()?;
 
-    if is_cookie && plaintext.len() > 32 {
+    // v10 cookies have a 32-byte nonce prefix before the actual value
+    // v20 cookies do NOT have this prefix — the plaintext IS the value
+    if is_cookie && !is_v20 && plaintext.len() > 32 {
         Some(String::from_utf8_lossy(&plaintext[32..]).to_string())
     } else {
         Some(String::from_utf8_lossy(&plaintext).to_string())
