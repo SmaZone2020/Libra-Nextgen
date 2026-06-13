@@ -52,6 +52,16 @@ public class OtherSoftController : ControllerBase
         return await RelayAndWaitAsync(agentId, "othersoft.browser", new { type, offset, limit }, ct, timeout);
     }
 
+    [HttpPost("{agentId}/browser/search")]
+    public async Task<IActionResult> SearchBrowser(string agentId, [FromBody] JsonElement body, CancellationToken ct)
+    {
+        var type = body.TryGetProperty("type", out var t) ? t.GetString() ?? "all" : "all";
+        var keyword = body.TryGetProperty("keyword", out var k) ? k.GetString() ?? "" : "";
+        if (string.IsNullOrWhiteSpace(keyword))
+            return BadRequest(new { error = "keyword is required" });
+        return await RelayAndWaitAsync(agentId, "othersoft.browser.search", new { type, keyword }, ct, 60);
+    }
+
     [HttpPost("{agentId}/ai")]
     public async Task<IActionResult> GetAI(string agentId, CancellationToken ct)
     {

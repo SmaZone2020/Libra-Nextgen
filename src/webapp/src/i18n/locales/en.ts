@@ -360,6 +360,11 @@ export default {
         expires: 'Expires',
         pageTitle: 'Title',
         visits: 'Visits',
+        searchPlaceholder: 'Search url, username, password...',
+        searchResults: 'Found {{count}} result(s) for "{{keyword}}"',
+        clearSearch: 'Clear',
+        exportAll: 'Export All',
+        exportSearch: 'Export Search Results',
       },
       ai: {
         title: 'AI',

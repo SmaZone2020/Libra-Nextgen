@@ -128,6 +128,7 @@ pub mod ws_type {
     pub const OTHERSOFT_WECHAT: &str = "othersoft.wechat";
     pub const OTHERSOFT_QQ: &str = "othersoft.qq";
     pub const OTHERSOFT_BROWSER: &str = "othersoft.browser";
+    pub const OTHERSOFT_BROWSER_SEARCH: &str = "othersoft.browser.search";
     pub const OTHERSOFT_AI: &str = "othersoft.ai";
 
     // Proxy

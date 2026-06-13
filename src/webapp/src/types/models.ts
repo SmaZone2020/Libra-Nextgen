@@ -335,6 +335,11 @@ export interface BrowserPagedResult<T> {
   errors: string[];
 }
 
+export interface BrowserSearchResult<T> {
+  total: number;
+  items: T[];
+}
+
 // ── AI Token Scanner types ─────────────────────────────────────────────
 
 export interface AITokenEntry {

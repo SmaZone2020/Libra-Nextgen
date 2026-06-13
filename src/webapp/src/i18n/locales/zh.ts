@@ -360,6 +360,11 @@ export default {
         expires: '过期时间',
         pageTitle: '标题',
         visits: '访问次数',
+        searchPlaceholder: '搜索 url、用户名、密码...',
+        searchResults: '搜索 "{{keyword}}" 找到 {{count}} 条结果',
+        clearSearch: '清除',
+        exportAll: '导出全部',
+        exportSearch: '导出搜索结果',
       },
       ai: {
         title: 'AI',

