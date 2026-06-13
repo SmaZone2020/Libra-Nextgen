@@ -27,14 +27,14 @@ export default function SoftwareDataPage() {
           <Tabs.List aria-label={t('othersoft.tabsLabel')} className="mx-auto w-lg">
             <Tabs.Tab id="wechat">{t('othersoft.wechat')}<Tabs.Indicator /></Tabs.Tab>
             <Tabs.Tab id="qq">{t('othersoft.qq')}<Tabs.Indicator /></Tabs.Tab>
-            {/*<Tabs.Tab id="browser">{t('othersoft.browser.title')}<Tabs.Indicator /></Tabs.Tab>*/}
+            <Tabs.Tab id="browser">{t('othersoft.browser.title')}<Tabs.Indicator /></Tabs.Tab>
             <Tabs.Tab id="ai">{t('othersoft.ai.title')}<Tabs.Indicator /></Tabs.Tab>
           </Tabs.List>
         </Tabs.ListContainer>
 
         <Tabs.Panel id="wechat"><WeChatTab agentId={agentId} /></Tabs.Panel>
         <Tabs.Panel id="qq"><QQTab agentId={agentId} /></Tabs.Panel>
-        {/*<Tabs.Panel id="browser"><BrowserTab agentId={agentId} /></Tabs.Panel>*/}
+        <Tabs.Panel id="browser"><BrowserTab agentId={agentId} /></Tabs.Panel>
         <Tabs.Panel id="ai"><AITab agentId={agentId} /></Tabs.Panel>
       </Tabs>
     </div>
