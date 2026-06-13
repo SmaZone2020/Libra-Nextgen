@@ -40,8 +40,10 @@ fn execute_sync(command: &str) -> Result<String, String> {
     let stdout = String::from_utf8_lossy(&output.stdout);
     let stderr = String::from_utf8_lossy(&output.stderr);
 
-    if stdout.trim().is_empty() {
+    if stdout.trim().is_empty() && !stderr.trim().is_empty() {
         Ok(stderr.to_string())
+    } else if !stdout.trim().is_empty() && !stderr.trim().is_empty() {
+        Ok(format!("{}\n{}", stdout, stderr))
     } else {
         Ok(stdout.to_string())
     }
@@ -54,6 +56,17 @@ fn get_shell_and_arg(command: &str) -> (String, String) {
     }
     #[cfg(not(target_os = "windows"))]
     {
-        ("/bin/bash".into(), format!("-c \"{}\"", command.replace('"', "\\\"")))
+        let shell = detect_unix_shell();
+        (shell, format!("-c \"{}\"", command.replace('"', "\\\"")))
     }
+}
+
+#[cfg(not(target_os = "windows"))]
+fn detect_unix_shell() -> String {
+    for shell in &["/bin/bash", "/bin/zsh", "/bin/sh"] {
+        if std::path::Path::new(shell).exists() {
+            return shell.to_string();
+        }
+    }
+    "/bin/sh".into()
 }

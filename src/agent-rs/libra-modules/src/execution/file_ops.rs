@@ -247,10 +247,11 @@ impl FileOps {
                     r#"{{"path":"{}","status":"shortcut_created"}}"#,
                     escape(&lnk_path)
                 ),
-                _ => format!(
-                    r#"{{"path":"{}","status":"shortcut_created"}}"#,
-                    escape(&lnk_path)
-                ), // Report success even if powershell fails
+                Ok(s) => format!(
+                    r#"{{"error":"PowerShell exited with code {}"}}"#, 
+                    s.code().unwrap_or(-1)
+                ),
+                Err(e) => format!(r#"{{"error":"{}"}}"#, escape(&e.to_string())),
             }
         }
         #[cfg(not(target_os = "windows"))]
