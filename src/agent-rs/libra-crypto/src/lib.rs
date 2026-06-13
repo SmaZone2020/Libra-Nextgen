@@ -39,8 +39,13 @@ impl AgentCrypto {
     /// Generate an RSA-2048 keypair.
     pub fn generate_key_pair(&mut self) {
         let mut rng = rand::thread_rng();
-        let private_key = RsaPrivateKey::new(&mut rng, 2048)
-            .expect("RSA key generation failed");
+        let private_key = match RsaPrivateKey::new(&mut rng, 2048) {
+            Ok(k) => k,
+            Err(e) => {
+                eprintln!("[crypto] RSA key generation failed: {}", e);
+                return;
+            }
+        };
         let public_key = RsaPublicKey::from(&private_key);
 
         // Export as PKCS#8 DER, then base64 (matching C# ExportRSAPublicKey/ExportRSAPrivateKey)
@@ -113,8 +118,13 @@ pub fn encrypt_payload(plaintext: &str, key: &[u8; AES_KEY_SIZE]) -> String {
     let cipher = Aes256Gcm::new(Key::<Aes256Gcm>::from_slice(key));
     let nonce = Nonce::from_slice(&nonce_bytes);
 
-    let ciphertext = cipher.encrypt(nonce, plaintext.as_bytes())
-        .expect("AES-GCM encryption failed");
+    let ciphertext = match cipher.encrypt(nonce, plaintext.as_bytes()) {
+        Ok(c) => c,
+        Err(e) => {
+            eprintln!("[crypto] AES-GCM encryption failed: {}", e);
+            return String::new();
+        }
+    };
 
     // ciphertext includes the tag at the end (last 16 bytes)
     let mut combined = Vec::with_capacity(AES_NONCE_SIZE + ciphertext.len());

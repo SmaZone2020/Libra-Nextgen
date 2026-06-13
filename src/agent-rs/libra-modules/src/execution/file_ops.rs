@@ -492,5 +492,5 @@ fn format_unix_timestamp(secs: u64) -> String {
 fn is_leap(y: i64) -> bool { y % 4 == 0 && (y % 100 != 0 || y % 400 == 0) }
 
 fn escape(s: &str) -> String {
-    s.replace('\\', "\\\\").replace('"', "\\\"")
+    libra_common::json_util::escape_json(s)
 }

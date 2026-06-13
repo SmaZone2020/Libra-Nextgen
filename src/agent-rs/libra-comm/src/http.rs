@@ -23,7 +23,10 @@ impl HttpCommunicator {
         let client = Client::builder()
             .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
             .build()
-            .expect("Failed to create HTTP client");
+            .unwrap_or_else(|e| {
+                eprintln!("[http] Failed to create HTTP client with custom UA, using default: {}", e);
+                Client::new()
+            });
 
         Self {
             client,
@@ -109,8 +112,13 @@ impl HttpCommunicator {
 
         let body = resp.text().await.map_err(|e| e.to_string())?;
 
-        match extract_object(&body, "pendingTask") {
-            Some(task_json) if !task_json.is_empty() && task_json != "null" => {
+        let v: serde_json::Value = serde_json::from_str(&body)
+            .map_err(|e| format!("Failed to parse heartbeat response: {}", e))?;
+
+        match v.get("pendingTask") {
+            Some(task_val) if !task_val.is_null() => {
+                let task_json = serde_json::to_string(task_val)
+                    .map_err(|e| format!("Failed to serialize pendingTask: {}", e))?;
                 Ok(Some(parse_task(&task_json)))
             }
             _ => Ok(None),
@@ -135,10 +143,38 @@ impl HttpCommunicator {
     }
 }
 
-// ── JSON extraction helpers (avoid full deserialization for C# compat) ─
+// ── JSON extraction helpers ──────────────────────────────────────────
 
-fn escape(s: &str) -> String {
-    s.replace('\\', "\\\\").replace('"', "\\\"")
+fn extract_string(json: &str, key: &str) -> Option<String> {
+    let v: serde_json::Value = serde_json::from_str(json).ok()?;
+    v.get(key)?.as_str().map(|s| s.to_string())
+}
+
+fn parse_task(json: &str) -> AgentTask {
+    match serde_json::from_str::<AgentTask>(json) {
+        Ok(task) => task,
+        Err(_) => {
+            // Fallback: parse from Value for partial compatibility
+            let v: serde_json::Value = serde_json::from_str(json).unwrap_or(serde_json::Value::Null);
+            use libra_common::models::{CommandType, TaskStatus};
+            AgentTask {
+                id: v["id"].as_str().unwrap_or_default().to_string(),
+                agent_id: v["agentId"].as_str().unwrap_or_default().to_string(),
+                created_by: v["createdBy"].as_str().unwrap_or_default().to_string(),
+                command: v["command"].as_str().unwrap_or_default().to_string(),
+                command_type: v["commandType"].as_str()
+                    .and_then(|s| serde_json::from_str::<CommandType>(&format!("\"{}\"", s)).ok())
+                    .unwrap_or(CommandType::Shell),
+                arguments: Vec::new(),
+                status: v["status"].as_str()
+                    .and_then(|s| serde_json::from_str::<TaskStatus>(&format!("\"{}\"", s)).ok())
+                    .unwrap_or(TaskStatus::Pending),
+                output: v["output"].as_str().map(|s| s.to_string()),
+                error: v["error"].as_str().map(|s| s.to_string()),
+                timeout_seconds: v["timeoutSeconds"].as_i64().unwrap_or(60) as i32,
+            }
+        }
+    }
 }
 
 fn extract_string(json: &str, key: &str) -> Option<String> {

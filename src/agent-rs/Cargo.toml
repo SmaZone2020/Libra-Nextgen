@@ -21,7 +21,6 @@ rsa = { version = "0.9", features = ["sha2"] }
 reqwest = { version = "0.12", features = ["rustls-tls"], default-features = false }
 tokio-tungstenite = { version = "0.24", features = ["__rustls-tls"] }
 futures-util = "0.3"
-tracing = "0.1"
 sysinfo = "0.33"
 hex = "0.4"
 uuid = { version = "1", features = ["v4"] }
@@ -59,4 +58,4 @@ windows = { version = "0.58", features = [
 [profile.release]
 strip = true
 lto = true
-opt-level = "s"
+opt-level = 2
