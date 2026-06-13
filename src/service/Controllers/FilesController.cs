@@ -11,42 +11,21 @@ namespace LibraNextgen.Service.Controllers;
 [Authorize]
 public class FilesController : ControllerBase
 {
-    private readonly ConnectionManager _wsManager;
+    private readonly RelayService _relay;
 
-    public FilesController(ConnectionManager wsManager)
+    public FilesController(RelayService relay)
     {
-        _wsManager = wsManager;
+        _relay = relay;
     }
 
-    /// <summary>
-    /// Send a file operation request to the agent and await its response.
-    /// </summary>
     private async Task<IActionResult> RelayAndWaitAsync(string agentId, string messageType, object? data, CancellationToken ct)
     {
-        var requestId = Guid.NewGuid().ToString("N");
-
-        var msg = new WebSocketMessage
-        {
-            Type = messageType,
-            Channel = agentId,
-            Data = data != null ? JsonSerializer.SerializeToElement(data) : null,
-            RequestId = requestId
-        };
-
-        var tcs = _wsManager.RegisterPendingRequest(requestId);
-        await _wsManager.RelayToAgentAsync(agentId, msg, ct);
-
-        try
-        {
-            var response = await tcs.Task.WaitAsync(TimeSpan.FromSeconds(30), ct);
-            return response.Data != null
-                ? Content(response.Data.Value.GetRawText(), "application/json")
-                : Ok(new { status = "ok" });
-        }
-        catch (TimeoutException)
-        {
+        var response = await _relay.RelayAndWaitAsync(agentId, messageType, data, ct);
+        if (response == null)
             return StatusCode(504, new { error = "Agent did not respond in time." });
-        }
+        return response.Data != null
+            ? Content(response.Data.Value.GetRawText(), "application/json")
+            : Ok(new { status = "ok" });
     }
 
     [HttpPost("{agentId}/list")]

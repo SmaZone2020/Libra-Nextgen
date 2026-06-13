@@ -44,6 +44,7 @@ builder.Services.AddScoped<ProfileService>();
 builder.Services.AddScoped<AgentService>();
 builder.Services.AddScoped<TaskService>();
 builder.Services.AddScoped<AgentCommsService>();
+builder.Services.AddScoped<RelayService>();
 
 // WebSocket
 builder.Services.AddSingleton<ISessionLock, ShellSessionLock>();

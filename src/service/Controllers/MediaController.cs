@@ -12,11 +12,11 @@ namespace LibraNextgen.Service.Controllers;
 [Authorize]
 public class MediaController : ControllerBase
 {
-    private readonly ConnectionManager _wsManager;
+    private readonly RelayService _relay;
 
-    public MediaController(ConnectionManager wsManager)
+    public MediaController(RelayService relay)
     {
-        _wsManager = wsManager;
+        _relay = relay;
     }
 
     [HttpGet("camera/devices/{agentId}")]
@@ -85,30 +85,11 @@ public class MediaController : ControllerBase
 
     private async Task<IActionResult> RelayAndWaitAsync(string agentId, string messageType, object? data, CancellationToken ct)
     {
-        var requestId = Guid.NewGuid().ToString("N");
-
-        var msg = new WebSocketMessage
-        {
-            Type = messageType,
-            Channel = agentId,
-            Data = data != null ? JsonSerializer.SerializeToElement(data) : null,
-            RequestId = requestId
-        };
-
-        var tcs = _wsManager.RegisterPendingRequest(requestId);
-        await _wsManager.RelayToAgentAsync(agentId, msg, ct);
-
-        try
-        {
-            var response = await tcs.Task.WaitAsync(TimeSpan.FromSeconds(15), ct);
-            return response.Data != null
-                ? Content(response.Data.Value.GetRawText(), "application/json")
-                : Ok(new { status = "ok" });
-        }
-        catch (TimeoutException)
-        {
-            _wsManager.CompletePendingRequest(requestId, null!);
+        var response = await _relay.RelayAndWaitAsync(agentId, messageType, data, ct, TimeSpan.FromSeconds(15));
+        if (response == null)
             return StatusCode(504, new { error = "Request timed out" });
-        }
+        return response.Data != null
+            ? Content(response.Data.Value.GetRawText(), "application/json")
+            : Ok(new { status = "ok" });
     }
 }
