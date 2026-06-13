@@ -306,16 +306,6 @@ export interface BrowserPassword {
   password: string;
 }
 
-export interface BrowserCookie {
-  browser: string;
-  profile: string;
-  host: string;
-  name: string;
-  value: string;
-  path: string;
-  expires: number;
-}
-
 export interface BrowserHistory {
   browser: string;
   profile: string;
@@ -325,7 +315,7 @@ export interface BrowserHistory {
   lastVisit: number;
 }
 
-export type BrowserDataType = 'passwords' | 'cookies' | 'history';
+export type BrowserDataType = 'passwords' | 'history';
 
 export interface BrowserPagedResult<T> {
   total: number;
