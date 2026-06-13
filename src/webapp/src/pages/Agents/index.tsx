@@ -12,32 +12,23 @@ export default function AgentsPage() {
   const { t } = useTranslation();
   const { agentId, selectAgent, disconnect: disconnectAgent } = useAgent();
   const { confirm, DialogComponent } = useDialog();
-  const [agents, setAgents] = useState<AgentListItem[]>([]);
-  const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<string>('online');
   const [modalOpen, setModalOpen] = useState(false);
   const [modalAgent, setModalAgent] = useState<AgentDetail | null>(null);
   const [modalLoading, setModalLoading] = useState(false);
   const contextAgentRef = useRef<string | null>(null);
 
-  const loadAgents = useCallback(async () => {
-    try {
-      const statusParam = tab === 'all' ? undefined : tab;
-      const res = await getAgents(1, 100, statusParam);
-      setAgents(res.agents);
-    } catch { /* ignore */ }
-    finally { setLoading(false); }
-  }, [tab]);
+  // Use shared agent context (real-time via WebSocket)
+  const { agents: allAgents } = useAgent();
+  const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    loadAgents();
-    const timer = setInterval(loadAgents, 10000);
-    return () => clearInterval(timer);
-  }, [loadAgents]);
+  // Filter by tab
+  const agents = tab === 'all'
+    ? allAgents
+    : allAgents.filter(a => a.status.toLowerCase() === tab);
 
   const handleTabChange = useCallback((key: string) => {
     setTab(key);
-    setLoading(true);
   }, []);
 
   const handleContextMenu = (e: React.MouseEvent) => {
@@ -73,7 +64,6 @@ export default function AgentsPage() {
     const { confirmed } = await confirm(t('agents.removeConfirm'));
     if (!confirmed) return;
     await deleteAgent(id);
-    loadAgents();
   };
 
   return (

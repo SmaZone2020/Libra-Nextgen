@@ -30,7 +30,8 @@ export function AgentProvider({ children }: { children: React.ReactNode }) {
     let cancelled = false;
     async function load() {
       try {
-        const res = await getAgents(1, 100, 'online');
+        // Fetch all agents (not just online) to keep full list
+        const res = await getAgents(1, 100);
         if (!cancelled) {
           setAgents(res.agents);
           setAgentId((prev) => {

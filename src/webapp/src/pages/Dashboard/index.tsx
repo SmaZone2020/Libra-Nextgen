@@ -1,62 +1,58 @@
-import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
-import { getAgents, getAgentTraffic } from '../../api/agents';
+import { useState, useEffect, useMemo, useCallback } from 'react';
+import { getAgentTraffic } from '../../api/agents';
 import { getTasks } from '../../api/tasks';
 import { StatsCards } from './StatsCards';
 import { TrafficChart, RANGES } from './TrafficChart';
 import { GeoMap } from './GeoMap';
+import { useAgent } from '../../contexts/AgentContext';
 import type { TimeRange } from './TrafficChart';
-import type { AgentListItem, AgentStatus } from '../../types/models';
 
 export default function Dashboard() {
-  const [stats, setStats] = useState({ agents: 0, online: 0, tasks: 0, pending: 0 });
+  // Use shared agent context (real-time via WebSocket)
+  const { agents } = useAgent();
+
   const [trafficData, setTrafficData] = useState<Record<string, number | string>[]>([]);
   const [agentIds, setAgentIds] = useState<string[]>([]);
   const [agentHosts, setAgentHosts] = useState<Record<string, string>>({});
   const [range, setRange] = useState<TimeRange>('today');
-  const [agents, setAgents] = useState<AgentListItem[]>([]);
-  const agentMap = useRef<Map<string, AgentListItem>>(new Map());
-
-  const mergeAgents = useCallback((incoming: AgentListItem[]) => {
-    const current = agentMap.current;
-    const incomingIds = new Set(incoming.map(a => a.id));
-
-    for (const a of incoming) {
-      current.set(a.id, a);
-    }
-
-    for (const [id, a] of current) {
-      if (!incomingIds.has(id) && a.status === 'Online') {
-        current.set(id, { ...a, status: 'Offline' as AgentStatus });
-      }
-    }
-
-    return Array.from(current.values());
-  }, []);
+  const [taskStats, setTaskStats] = useState({ tasks: 0, pending: 0 });
 
   const rangeCfg = useMemo(() => RANGES.find(r => r.key === range)!, [range]);
 
+  // Compute stats from real-time agents
+  const stats = useMemo(() => ({
+    agents: agents.length,
+    online: agents.filter(a => a.status === 'Online').length,
+    tasks: taskStats.tasks,
+    pending: taskStats.pending,
+  }), [agents, taskStats]);
+
+  // Fetch tasks periodically
   useEffect(() => {
     let cancelled = false;
-
-    async function tick() {
+    async function fetchTasks() {
       try {
-        const [agentRes, taskRes, trafficRes] = await Promise.all([
-          getAgents(1, 50),
-          getTasks(undefined, undefined, 1, 50),
-          getAgentTraffic(rangeCfg.minutes),
-        ]);
+        const taskRes = await getTasks(undefined, undefined, 1, 50);
+        if (!cancelled) {
+          setTaskStats({
+            tasks: taskRes.total,
+            pending: taskRes.tasks?.filter((t: { status: string }) => t.status === 'Pending').length ?? 0,
+          });
+        }
+      } catch { /* ignore */ }
+    }
+    fetchTasks();
+    const timer = setInterval(fetchTasks, 10_000);
+    return () => { cancelled = true; clearInterval(timer); };
+  }, []);
 
+  // Fetch traffic data periodically
+  useEffect(() => {
+    let cancelled = false;
+    async function fetchTraffic() {
+      try {
+        const trafficRes = await getAgentTraffic(rangeCfg.minutes);
         if (cancelled) return;
-
-        mergeAgents(agentRes.agents);
-        const allAgents = Array.from(agentMap.current.values());
-        setAgents(allAgents);
-        setStats({
-          agents: agentRes.total,
-          online: agentRes.online,
-          tasks: taskRes.total,
-          pending: taskRes.tasks?.filter((t: { status: string }) => t.status === 'Pending').length ?? 0,
-        });
 
         const records = trafficRes.traffic ?? [];
         const hosts: Record<string, string> = {};
@@ -79,7 +75,6 @@ export default function Dashboard() {
           entry[r.agentId] = (entry[r.agentId] ?? 0) + (r.bytesSent + r.bytesReceived);
         }
 
-        // Generate all time slots across the full range, filling zeros for empty buckets
         const now = Date.now();
         const startTime = now - rangeCfg.minutes * 60 * 1000;
         const startBucket = Math.floor(startTime / bucketMs) * bucketMs;
@@ -100,10 +95,10 @@ export default function Dashboard() {
       } catch { /* ignore */ }
     }
 
-    tick();
-    const timer = setInterval(tick, 10_000);
+    fetchTraffic();
+    const timer = setInterval(fetchTraffic, 10_000);
     return () => { cancelled = true; clearInterval(timer); };
-  }, [mergeAgents, rangeCfg]);
+  }, [rangeCfg]);
 
   return (
     <div className="space-y-6">
