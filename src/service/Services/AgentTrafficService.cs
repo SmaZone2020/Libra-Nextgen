@@ -12,18 +12,24 @@ public class AgentTrafficService
     private readonly object _lock = new();
     private readonly Dictionary<string, TrafficEntry> _entries = new();
     private readonly IServiceScopeFactory _scopeFactory;
+    private readonly CancellationToken _shutdownCt;
 
-    public AgentTrafficService(IServiceScopeFactory scopeFactory)
+    public AgentTrafficService(IServiceScopeFactory scopeFactory, IHostApplicationLifetime lifetime)
     {
         _scopeFactory = scopeFactory;
+        _shutdownCt = lifetime.ApplicationStopping;
         _ = Task.Run(FlushLoopAsync);
     }
 
     private async Task FlushLoopAsync()
     {
-        while (true)
+        while (!_shutdownCt.IsCancellationRequested)
         {
-            await Task.Delay(TimeSpan.FromSeconds(30));
+            try
+            {
+                await Task.Delay(TimeSpan.FromSeconds(30), _shutdownCt);
+            }
+            catch (OperationCanceledException) { break; }
             try { await FlushAsync(); }
             catch { /* best-effort periodic flush */ }
         }

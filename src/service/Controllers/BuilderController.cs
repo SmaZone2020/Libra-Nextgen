@@ -54,7 +54,10 @@ public class BuilderController : ControllerBase
             var json = JsonSerializer.Serialize(records);
             System.IO.File.WriteAllText(HistoryFile, json);
         }
-        catch { }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"[WARN] Failed to save build history: {ex.Message}");
+        }
     }
 
     // ── Icon upload ────────────────────────────────────────────────────

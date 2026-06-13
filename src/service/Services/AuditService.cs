@@ -41,7 +41,7 @@ public class AuditService
 
         if (!string.IsNullOrWhiteSpace(query))
         {
-            var q = query.Trim();
+            var q = System.Text.RegularExpressions.Regex.Escape(query.Trim());
             var searchFilter = builder.Or(
                 builder.Regex(l => l.UserName, new MongoDB.Bson.BsonRegularExpression(q, "i")),
                 builder.Regex(l => l.Action, new MongoDB.Bson.BsonRegularExpression(q, "i")),

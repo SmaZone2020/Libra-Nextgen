@@ -29,7 +29,14 @@ public class TasksController : ControllerBase
         [FromQuery] int pageSize = 50,
         CancellationToken ct = default)
     {
-        TaskStatus? taskStatus = status != null ? Enum.Parse<TaskStatus>(status) : null;
+        TaskStatus? taskStatus = null;
+        if (status != null)
+        {
+            if (Enum.TryParse<TaskStatus>(status, true, out var parsed))
+                taskStatus = parsed;
+            else
+                return BadRequest(new { error = $"Invalid task status: {status}" });
+        }
         var tasks = await _taskService.GetAllAsync(taskStatus, agentId, page, pageSize, ct);
         var total = await _taskService.CountAsync(taskStatus, ct);
         return Ok(new { tasks, total, page, pageSize });
