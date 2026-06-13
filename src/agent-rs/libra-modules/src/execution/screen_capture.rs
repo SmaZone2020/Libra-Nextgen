@@ -480,10 +480,10 @@ impl ScreenStream {
         }
 
         let prev = self.prev_rgb.as_ref().unwrap();
-        let blocks = compute_changed_blocks(&working_rgb, prev, working_w, working_h);
+        let blocks = super::diff_codec::compute_changed_blocks(&working_rgb, prev, working_w, working_h);
 
-        let blocks_x = (working_w + BLOCK_SIZE - 1) / BLOCK_SIZE;
-        let blocks_y = (working_h + BLOCK_SIZE - 1) / BLOCK_SIZE;
+        let blocks_x = (working_w + super::diff_codec::BLOCK_SIZE - 1) / super::diff_codec::BLOCK_SIZE;
+        let blocks_y = (working_h + super::diff_codec::BLOCK_SIZE - 1) / super::diff_codec::BLOCK_SIZE;
         let total_blocks = blocks_x * blocks_y;
 
         if blocks.len() as i32 > total_blocks * DIFF_THRESHOLD_PERCENT / 100 {
@@ -497,7 +497,7 @@ impl ScreenStream {
             };
         }
 
-        let merged = merge_adjacent_blocks(&blocks);
+        let merged = super::diff_codec::merge_adjacent_blocks(&blocks);
 
         // Store resized frame for next diff
         self.prev_rgb = Some(working_rgb.clone());
@@ -506,7 +506,9 @@ impl ScreenStream {
 
         let encoded: Vec<String> = merged
             .iter()
-            .map(|b| encode_diff_block(&working_rgb, working_w, b))
+            .map(|b| super::diff_codec::encode_diff_block(&working_rgb, working_w, b, |pixels, w, h| {
+                rgb_to_jpeg(pixels, w, h)
+            }))
             .collect();
         ScreenFrame::Diff { blocks_json: format!("[{}]", encoded.join(",")) }
     }
@@ -695,6 +697,20 @@ fn capture_single(_quality: &str, screen_index: u32) -> Result<(String, i32, i32
 }
 
 /// Encode RGB pixels to JPEG and return base64 string.
+fn rgb_to_jpeg(rgb: &[u8], width: i32, height: i32) -> Option<Vec<u8>> {
+    let mut jpeg_buf = Vec::new();
+    let mut encoder =
+        image::codecs::jpeg::JpegEncoder::new_with_quality(&mut jpeg_buf, JPEG_QUALITY);
+    if encoder
+        .encode(rgb, width as u32, height as u32, image::ExtendedColorType::Rgb8)
+        .is_ok()
+    {
+        Some(jpeg_buf)
+    } else {
+        None
+    }
+}
+
 fn rgb_to_jpeg_base64(rgb: &[u8], width: i32, height: i32) -> String {
     let mut jpeg_buf = Vec::new();
     let mut encoder =

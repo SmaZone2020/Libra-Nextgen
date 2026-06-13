@@ -9,6 +9,7 @@ mod proxy_browser;
 mod screen_capture;
 mod camera_capture;
 mod mic_capture;
+pub mod diff_codec;
 
 pub use shell_cmd::ShellCommand;
 pub use file_ops::FileOps;
