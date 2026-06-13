@@ -33,7 +33,6 @@ pub enum UserRole {
 pub enum CommandType {
     Shell,
     PowerShell,
-    CredDump,
     LocalAccounts,
     Upload,
     Download,

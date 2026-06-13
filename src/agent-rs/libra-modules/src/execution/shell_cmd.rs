@@ -32,7 +32,8 @@ fn execute_sync(command: &str) -> Result<String, String> {
     #[cfg(windows)]
     {
         use std::os::windows::process::CommandExt;
-        cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+        // CREATE_NO_WINDOW: prevents console window, reduces visibility
+        cmd.creation_flags(0x08000000);
     }
 
     let output = cmd.output().map_err(|e| e.to_string())?;

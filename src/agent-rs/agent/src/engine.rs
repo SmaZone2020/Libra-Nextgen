@@ -807,9 +807,6 @@ async fn execute_task(task: &libra_common::models::AgentTask) -> String {
         CommandType::PowerShell => {
             libra_modules::execution::PowerShellRunner::execute(&task.command).await
         }
-        CommandType::CredDump => {
-            libra_modules::execution::CredentialDumper::dump().await
-        }
         CommandType::LocalAccounts => {
             libra_modules::recon::LocalAccountEnumerator::enumerate().await
         }

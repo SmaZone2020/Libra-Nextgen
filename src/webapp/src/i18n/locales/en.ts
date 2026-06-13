@@ -113,7 +113,6 @@ export default {
       lastSeen: 'Last Seen',
       viewDetails: 'View Details',
       remove: 'Remove',
-      dumpCreds: 'Dump Credentials',
       removeConfirm: 'Remove this agent?',
       noAgents: 'No agents connected.',
       agentFilters: 'Agent filters',
@@ -238,8 +237,6 @@ export default {
     system: {
       selectAgent: 'Select an online agent to view system information.',
       localAccounts: 'Local Accounts',
-      dumpCredentials: 'Dump Credentials',
-      credDumpNote: 'Performs in-memory credential harvesting (Mimikatz) on the target. May require admin privileges.',
       noLocalAccounts: 'No local accounts found.',
       accountName: 'Account',
       fullName: 'Full Name',

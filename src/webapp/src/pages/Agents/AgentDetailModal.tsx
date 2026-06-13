@@ -1,7 +1,6 @@
-import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Accordion, Button, Chip, Modal, Spinner } from '@heroui/react';
-import { ChevronDown, LockOpen } from '@gravity-ui/icons';
+import { Accordion, Chip, Modal, Spinner } from '@heroui/react';
+import { ChevronDown } from '@gravity-ui/icons';
 import type { AgentDetail } from '../../types/models';
 
 type GpuVendor = 'NVIDIA' | 'Intel' | 'AMD' | 'Other';
@@ -36,28 +35,10 @@ interface AgentDetailModalProps {
   onOpenChange: (open: boolean) => void;
   agent: AgentDetail | null;
   loading: boolean;
-  onCredDump: () => Promise<string>;
 }
 
-export function AgentDetailModal({ isOpen, onOpenChange, agent, loading, onCredDump }: AgentDetailModalProps) {
+export function AgentDetailModal({ isOpen, onOpenChange, agent, loading }: AgentDetailModalProps) {
   const { t } = useTranslation();
-  const [credLoading, setCredLoading] = useState(false);
-  const [credResult, setCredResult] = useState<string | null>(null);
-  const [credError, setCredError] = useState<string | null>(null);
-
-  const handleCredDump = async () => {
-    setCredLoading(true);
-    setCredResult(null);
-    setCredError(null);
-    try {
-      const output = await onCredDump();
-      setCredResult(output);
-    } catch (err: unknown) {
-      setCredError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setCredLoading(false);
-    }
-  };
 
   const infoFields: [string, string][] = agent ? [
     [t('agents.ip'), agent.ipAddress],
@@ -108,154 +89,63 @@ export function AgentDetailModal({ isOpen, onOpenChange, agent, loading, onCredD
               </p>
             )}
           </Modal.Body>
-          <Modal.Footer>
-            {agent?.status === 'Online' && (
-              <div className="flex-1 space-y-2">
-                <Button
-                  variant="primary"
-                  isDisabled={credLoading}
-                  onPress={handleCredDump}
-                >
-                  {credLoading && <Spinner className="mr-2" />}
-                  {!credLoading && <LockOpen className="w-4 h-4 mr-1" />}
-                  {t('agents.dumpCreds')}
-                </Button>
-                {credError && (
-                  <p className="text-danger text-xs">{credError}</p>
-                )}
-                {credResult && (
-                  <pre className="p-3 bg-default-50 border border-default-200 rounded text-xs font-mono whitespace-pre-wrap max-h-40 overflow-auto">
-                    {credResult}
-                  </pre>
-                )}
-              </div>
-            )}
-            <Button slot="close" variant="tertiary">{t('common.close')}</Button>
-          </Modal.Footer>
         </Modal.Dialog>
       </Modal.Container>
     </Modal.Backdrop>
   );
 }
 
-function HardwareAccordion({ hardware, t }: { hardware: NonNullable<AgentDetail['hardware']>; t: (key: string, opts?: Record<string, unknown>) => string }) {
+function HardwareAccordion({ hardware, t }: { hardware: AgentDetail['hardware']; t: (key: string) => string }) {
+  if (!hardware) return null;
+
+  const cpu = hardware.cpu;
+  const gpu = hardware.gpu;
+  const cpuInfo = cpu ? cpuVendor(cpu.model || '') : null;
+  const gpuInfo = gpu ? gpuVendor(gpu.model || '') : null;
+
   return (
-    <Accordion className="border-t border-default-200 pt-3">
-      {(hardware.cpu || hardware.gpus.length > 0) && (
-        <Accordion.Item key="cpu-gpu">
-          <Accordion.Heading>
-            <Accordion.Trigger>
-              {t('agents.cpuGpu')}
-              <Accordion.Indicator>
-                <ChevronDown />
-              </Accordion.Indicator>
-            </Accordion.Trigger>
-          </Accordion.Heading>
-          <Accordion.Panel>
-            <Accordion.Body className="space-y-3">
-              {hardware.cpu && (
-                <div>
-                  <p className="text-md font-bold mb-1">{t('agents.cpu')}</p>
-                  <div className="flex items-center gap-2 mb-1">
-                    {(() => { const v = cpuVendor(hardware.cpu.name); return <Chip color={v.color} size="sm" variant="soft">{v.label}</Chip>; })()}
-                    <span className="text-sm">{hardware.cpu.name}</span>
-                  </div>
-                  <p className="text-xs text-default-500">
-                    {t('agents.cores', { physical: hardware.cpu.physicalCores, logical: hardware.cpu.logicalCores })} &middot; {hardware.cpu.maxClockMHz} MHz
-                  </p>
-                </div>
-              )}
-              {hardware.gpus.length > 0 && (
-                <div>
-                  <p className="text-md font-bold mb-1">{t('agents.gpu')}</p>
-                  {hardware.gpus.map((g, i) => {
-                    const v = gpuVendor(g.name);
-                    return (
-                      <div key={i} className="flex items-center gap-2 text-sm">
-                        <Chip color={v.color} size="sm" variant="soft">{v.label}</Chip>
-                        <span>{g.name}{g.vramBytes ? ` (${formatBytes(g.vramBytes, t)})` : ''}</span>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </Accordion.Body>
-          </Accordion.Panel>
-        </Accordion.Item>
-      )}
-      {(hardware.ram || hardware.disks.length > 0) && (
-        <Accordion.Item key="ram-disks">
-          <Accordion.Heading>
-            <Accordion.Trigger>
-              {t('agents.ramDisks')}
-              <Accordion.Indicator>
-                <ChevronDown />
-              </Accordion.Indicator>
-            </Accordion.Trigger>
-          </Accordion.Heading>
-          <Accordion.Panel>
-            <Accordion.Body className="space-y-3">
-              {hardware.ram && (
-                <div>
-                  <p className="text-md font-bold mb-1">{t('agents.ram')}</p>
-                  <p className="text-sm">{formatBytes(hardware.ram.totalBytes, t)}</p>
-                </div>
-              )}
-              {hardware.disks.length > 0 && (
-                <div>
-                  <p className="text-md font-bold mb-1">{t('agents.disks')}</p>
-                  {hardware.disks.map((d, i) => (
-                    <p key={i} className="text-sm">
-                      {d.model} &mdash; {formatBytes(d.sizeBytes, t)}{d.mediaType ? ` (${d.mediaType})` : ''}
-                    </p>
-                  ))}
-                </div>
-              )}
-            </Accordion.Body>
-          </Accordion.Panel>
-        </Accordion.Item>
-      )}
-      {hardware.displays.filter(d => d.width > 0 && d.height > 0).length > 0 && (
-        <Accordion.Item key="displays">
-          <Accordion.Heading>
-            <Accordion.Trigger>
-              {t('agents.displays')}
-              <Accordion.Indicator>
-                <ChevronDown />
-              </Accordion.Indicator>
-            </Accordion.Trigger>
-          </Accordion.Heading>
-          <Accordion.Panel>
-            <Accordion.Body>
-              {hardware.displays.filter(d => d.width > 0 && d.height > 0).map((d, i) => (
-                <p key={i} className="text-sm">
-                  {d.name} &mdash; {d.width}x{d.height}
-                </p>
-              ))}
-            </Accordion.Body>
-          </Accordion.Panel>
-        </Accordion.Item>
-      )}
-      {(hardware.motherboardVendor || hardware.biosVersion) && (
-        <Accordion.Item key="motherboard">
-          <Accordion.Heading>
-            <Accordion.Trigger>
-              {t('agents.motherboardBios')}
-              <Accordion.Indicator>
-                <ChevronDown />
-              </Accordion.Indicator>
-            </Accordion.Trigger>
-          </Accordion.Heading>
-          <Accordion.Panel>
-            <Accordion.Body>
-              <p className="text-sm">
-                {hardware.motherboardVendor}{hardware.motherboardVendor && hardware.biosVersion ? ' / ' : ''}
-                {hardware.biosVersion}
-              </p>
-            </Accordion.Body>
-          </Accordion.Panel>
-        </Accordion.Item>
-      )}
+    <Accordion>
+      <Accordion.Item id="hardware">
+        <Accordion.Trigger>
+          {t('agents.hardwareInfo')}
+          <ChevronDown className="w-4 h-4 ml-1" />
+        </Accordion.Trigger>
+        <Accordion.Content>
+          <div className="space-y-1 text-sm">
+            {cpu && (
+              <div className="flex justify-between">
+                <span className="text-default-500">CPU</span>
+                <span className="text-default-700">
+                  {cpu.model || '—'}
+                  {cpuInfo && <Chip size="sm" variant="soft" color={cpuInfo.color} className="ml-2">{cpuInfo.label}</Chip>}
+                  {cpu.cores ? ` (${cpu.cores} cores)` : ''}
+                </span>
+              </div>
+            )}
+            {gpu && (
+              <div className="flex justify-between">
+                <span className="text-default-500">GPU</span>
+                <span className="text-default-700">
+                  {gpu.model || '—'}
+                  {gpuInfo && <Chip size="sm" variant="soft" color={gpuInfo.color} className="ml-2">{gpuInfo.label}</Chip>}
+                </span>
+              </div>
+            )}
+            {hardware.ram && (
+              <div className="flex justify-between">
+                <span className="text-default-500">RAM</span>
+                <span className="text-default-700">{formatBytes(hardware.ram.totalBytes, t)}</span>
+              </div>
+            )}
+            {hardware.disks && hardware.disks.length > 0 && (
+              <div className="flex justify-between">
+                <span className="text-default-500">Disk</span>
+                <span className="text-default-700">{formatBytes(hardware.disks[0].sizeBytes, t)}</span>
+              </div>
+            )}
+          </div>
+        </Accordion.Content>
+      </Accordion.Item>
     </Accordion>
   );
 }

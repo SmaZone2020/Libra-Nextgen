@@ -113,7 +113,6 @@ export default {
       lastSeen: '最后心跳',
       viewDetails: '查看详情',
       remove: '移除',
-      dumpCreds: '抓取密码',
       removeConfirm: '确认移除该设备？',
       noAgents: '暂无设备连接。',
       agentFilters: 'Agent 筛选',
@@ -238,8 +237,6 @@ export default {
     system: {
       selectAgent: '选择一台在线设备以查看系统信息。',
       localAccounts: '本地账户',
-      dumpCredentials: '抓取凭据',
-      credDumpNote: '在目标主机上执行内存凭据抓取（Mimikatz），可能需要管理员权限。',
       noLocalAccounts: '未发现本地账户。',
       accountName: '账户名',
       fullName: '全名',

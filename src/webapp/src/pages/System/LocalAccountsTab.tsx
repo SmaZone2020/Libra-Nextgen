@@ -16,17 +16,14 @@ function fmtDate(raw: string | undefined): string {
   if (!raw) return '-';
   const m = /\/Date\((\d+)\)\//.exec(raw);
   if (m?.[1]) return new Date(+m[1]).toLocaleString();
-  // Handle ISO 8601 dates too
   const d = new Date(raw);
   if (!isNaN(d.getTime())) return d.toLocaleString();
   return raw;
 }
 
 function extractJson(raw: string): Record<string, unknown> | unknown[] {
-  // Try direct parse first
   try { return JSON.parse(raw); } catch { /* fall through */ }
 
-  // Find JSON object by counting braces from the first '{'
   const objStart = raw.indexOf('{');
   if (objStart >= 0) {
     let depth = 0;
@@ -36,7 +33,6 @@ function extractJson(raw: string): Record<string, unknown> | unknown[] {
     }
   }
 
-  // Find JSON array by counting brackets from the first '['
   const arrStart = raw.indexOf('[');
   if (arrStart >= 0) {
     let depth = 0;
@@ -54,9 +50,6 @@ export function LocalAccountsTab({ agentId }: Props) {
   const [accounts, setAccounts] = useState<LocalAccount[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [credOutput, setCredOutput] = useState<string | null>(null);
-  const [credLoading, setCredLoading] = useState(false);
-  const [credError, setCredError] = useState<string | null>(null);
 
   const rows = useMemo<AccountRow[]>(
     () => (accounts ?? []).map((a, i) => ({ ...a, id: a.sidValue || a.Name || String(i) })),
@@ -114,35 +107,6 @@ export function LocalAccountsTab({ agentId }: Props) {
 
   useEffect(() => { loadAccounts(); }, [loadAccounts]);
 
-  const handleCredDump = useCallback(async () => {
-    setCredLoading(true);
-    setCredOutput(null);
-    setCredError(null);
-    try {
-      const task = await createTask({ agentId, commandType: 'CredDump', command: '' });
-      const taskId = task.id;
-
-      for (let i = 0; i < 40; i++) {
-        await new Promise((r) => setTimeout(r, 3000));
-        try {
-          const t = await getTask(taskId);
-          if (t.status === 'Completed' || t.status === 'Failed') {
-            setCredOutput(t.output || '[No output]');
-            if (t.status === 'Failed') {
-              setCredError(t.error || 'Task reported failure');
-            }
-            return;
-          }
-        } catch { /* retry */ }
-      }
-      setCredError('Timed out waiting for agent response');
-    } catch (err: unknown) {
-      setCredError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setCredLoading(false);
-    }
-  }, [agentId]);
-
   return (
     <div className="space-y-4">
       <div>
@@ -199,27 +163,6 @@ export function LocalAccountsTab({ agentId }: Props) {
               </Table.Content>
             </Table.ScrollContainer>
           </Table>
-        )}
-      </div>
-
-      <hr className="border-default-200" />
-
-      <div>
-        <div className="flex items-center gap-3 mb-2">
-          <Button variant="primary" isDisabled={credLoading} onPress={handleCredDump}>
-            {t('system.dumpCredentials')}
-          </Button>
-          <span className="text-xs text-default-400">{t('system.credDumpNote')}</span>
-        </div>
-
-        {credLoading && <div className="flex justify-center py-4"><Spinner /></div>}
-
-        {credError && (
-          <div className="p-3 bg-danger-50 text-danger-700 rounded text-sm font-mono whitespace-pre-wrap">{credError}</div>
-        )}
-
-        {credOutput && (
-          <div className="p-3 bg-default-50 border border-default-200 rounded text-sm font-mono whitespace-pre-wrap max-h-96 overflow-auto">{credOutput}</div>
         )}
       </div>
     </div>
