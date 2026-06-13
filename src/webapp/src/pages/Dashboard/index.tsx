@@ -101,7 +101,7 @@ export default function Dashboard() {
     }
 
     tick();
-    const timer = setInterval(tick, 2000);
+    const timer = setInterval(tick, 10_000);
     return () => { cancelled = true; clearInterval(timer); };
   }, [mergeAgents, rangeCfg]);
 

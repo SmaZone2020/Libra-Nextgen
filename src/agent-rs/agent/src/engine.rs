@@ -346,45 +346,7 @@ impl AgentEngine {
                 ws_send(tx, &agent_id, "screen.list.result", &r, rid).await;
             }
             ws_type::SCREEN_BIND => {
-                // Stop any existing stream
-                if let Some(old_tx) = self.screen_session.lock().unwrap().take() {
-                    let _ = old_tx.send(true);
-                }
-
-                let fps = data_u64(&data, "fps", 5).max(1).min(30) as u32;
-                let quality = data_str(&data, "quality", "original").to_string();
-                let screen_index = data_u64(&data, "screenIndex", 0) as u32;
-
-                let interval_ms = 1000u64 / fps as u64;
-                let agent_id2 = agent_id.clone();
-                let tx2 = tx.clone();
-                let (cancel_tx, mut cancel_rx) = tokio::sync::watch::channel(false);
-                self.screen_session.lock().unwrap().replace(cancel_tx);
-
-                tokio::spawn(async move {
-                    let mut stream = libra_modules::execution::ScreenStream::new();
-                    loop {
-                        if *cancel_rx.borrow() { break; }
-                        match stream.capture(&quality, screen_index) {
-                            libra_modules::execution::ScreenFrame::Keyframe { width, height, jpeg } => {
-                                let data = format!(
-                                    r#"{{"width":{},"height":{},"jpeg":"{}"}}"#, width, height, jpeg
-                                );
-                                ws_send(&tx2, &agent_id2, "screen.frame", &data, None).await;
-                            }
-                            libra_modules::execution::ScreenFrame::Diff { blocks_json } => {
-                                let data = format!(r#"{{"blocks":{}}}"#, blocks_json);
-                                ws_send(&tx2, &agent_id2, "screen.diff", &data, None).await;
-                            }
-                            libra_modules::execution::ScreenFrame::Empty => {}
-                        }
-                        tokio::select! {
-                            _ = cancel_rx.changed() => break,
-                            _ = tokio::time::sleep(std::time::Duration::from_millis(interval_ms)) => {}
-                        }
-                    }
-                });
-
+                self.start_screen_stream(data, agent_id.clone(), tx.clone()).await;
                 ws_send(tx, &agent_id, "screen.bind.result", r#"{"status":"streaming"}"#, rid).await;
             }
             ws_type::SCREEN_UNBIND => {
@@ -394,43 +356,7 @@ impl AgentEngine {
                 ws_send(tx, &agent_id, "screen.unbind.result", r#"{"status":"ok"}"#, rid).await;
             }
             ws_type::SCREEN_CONFIG => {
-                // Restart the capture loop with updated settings
-                if let Some(old_tx) = self.screen_session.lock().unwrap().take() {
-                    let _ = old_tx.send(true);
-                }
-
-                let fps = data_u64(&data, "fps", 5).max(1).min(30) as u32;
-                let quality = data_str(&data, "quality", "original").to_string();
-                let screen_index = data_u64(&data, "screenIndex", 0) as u32;
-                let interval_ms = 1000u64 / fps as u64;
-                let agent_id2 = agent_id.clone();
-                let tx2 = tx.clone();
-                let (cancel_tx, mut cancel_rx) = tokio::sync::watch::channel(false);
-                self.screen_session.lock().unwrap().replace(cancel_tx);
-
-                tokio::spawn(async move {
-                    let mut stream = libra_modules::execution::ScreenStream::new();
-                    loop {
-                        if *cancel_rx.borrow() { break; }
-                        match stream.capture(&quality, screen_index) {
-                            libra_modules::execution::ScreenFrame::Keyframe { width, height, jpeg } => {
-                                let data = format!(
-                                    r#"{{"width":{},"height":{},"jpeg":"{}"}}"#, width, height, jpeg
-                                );
-                                ws_send(&tx2, &agent_id2, "screen.frame", &data, None).await;
-                            }
-                            libra_modules::execution::ScreenFrame::Diff { blocks_json } => {
-                                let data = format!(r#"{{"blocks":{}}}"#, blocks_json);
-                                ws_send(&tx2, &agent_id2, "screen.diff", &data, None).await;
-                            }
-                            libra_modules::execution::ScreenFrame::Empty => {}
-                        }
-                        tokio::select! {
-                            _ = cancel_rx.changed() => break,
-                            _ = tokio::time::sleep(std::time::Duration::from_millis(interval_ms)) => {}
-                        }
-                    }
-                });
+                self.start_screen_stream(data, agent_id.clone(), tx.clone()).await;
             }
             ws_type::CAMERA_LIST => {
                 let r = libra_modules::execution::CameraCapture::list_cameras();
@@ -661,6 +587,43 @@ impl AgentEngine {
             s.child.kill().await.ok();
         }
         ws_send(ws_tx, agent_id, "shell.lock.released", r#"{"status":"unbound"}"#, rid).await;
+    }
+
+    async fn start_screen_stream(&self, data: Option<Value>, agent_id: String, tx: WsSender) {
+        if let Some(old_tx) = self.screen_session.lock().unwrap().take() {
+            let _ = old_tx.send(true);
+        }
+
+        let fps = data_u64(&data, "fps", 5).max(1).min(30) as u32;
+        let quality = data_str(&data, "quality", "original").to_string();
+        let screen_index = data_u64(&data, "screenIndex", 0) as u32;
+        let interval_ms = 1000u64 / fps as u64;
+        let (cancel_tx, mut cancel_rx) = tokio::sync::watch::channel(false);
+        self.screen_session.lock().unwrap().replace(cancel_tx);
+
+        tokio::spawn(async move {
+            let mut stream = libra_modules::execution::ScreenStream::new();
+            loop {
+                if *cancel_rx.borrow() { break; }
+                match stream.capture(&quality, screen_index) {
+                    libra_modules::execution::ScreenFrame::Keyframe { width, height, jpeg } => {
+                        let data = format!(
+                            r#"{{"width":{},"height":{},"jpeg":"{}"}}"#, width, height, jpeg
+                        );
+                        ws_send(&tx, &agent_id, "screen.frame", &data, None).await;
+                    }
+                    libra_modules::execution::ScreenFrame::Diff { blocks_json } => {
+                        let data = format!(r#"{{"blocks":{}}}"#, blocks_json);
+                        ws_send(&tx, &agent_id, "screen.diff", &data, None).await;
+                    }
+                    libra_modules::execution::ScreenFrame::Empty => {}
+                }
+                tokio::select! {
+                    _ = cancel_rx.changed() => break,
+                    _ = tokio::time::sleep(std::time::Duration::from_millis(interval_ms)) => {}
+                }
+            }
+        });
     }
 }
 
