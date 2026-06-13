@@ -200,6 +200,31 @@ export function BrowserTab({ agentId }: BrowserTabProps) {
     }
   }, [subTab, pw.items, ck.items, hs.items, filteredPasswords, filteredCookies, filteredHistory, searchKeyword]);
 
+  // Group passwords by domain
+  const passwordsByDomain = useMemo(() => {
+    const map = new Map<string, (BrowserPassword & { key: string })[]>();
+    for (let i = 0; i < filteredPasswords.length; i++) {
+      const p = filteredPasswords[i]!;
+      let domain: string;
+      try { domain = new URL(p.url).hostname; } catch { domain = p.url || '(other)'; }
+      if (!map.has(domain)) map.set(domain, []);
+      map.get(domain)!.push({ ...p, key: `${i}` });
+    }
+    return [...map.entries()].sort((a, b) => b[1].length - a[1].length);
+  }, [filteredPasswords]);
+
+  // Group cookies by host
+  const cookiesByHost = useMemo(() => {
+    const map = new Map<string, (BrowserCookie & { key: string })[]>();
+    for (let i = 0; i < filteredCookies.length; i++) {
+      const c = filteredCookies[i]!;
+      const host = c.host || '(other)';
+      if (!map.has(host)) map.set(host, []);
+      map.get(host)!.push({ ...c, key: `${i}` });
+    }
+    return [...map.entries()].sort((a, b) => b[1].length - a[1].length);
+  }, [filteredCookies]);
+
   const historyByHost = useMemo(() => {
     const source = searchResults && subTab === 'history'
       ? (searchResults as BrowserHistory[])
@@ -321,27 +346,45 @@ export function BrowserTab({ agentId }: BrowserTabProps) {
           {filteredPasswords.length === 0 && !pw.loading ? (
             <div className="text-center text-neutral-500 py-8">{t('othersoft.browser.noData')}</div>
           ) : (
-            <div className="overflow-x-auto max-h-[600px] overflow-y-auto">
-              <table className="w-full text-sm">
-                <thead className="sticky top-0 bg-white dark:bg-neutral-950 z-10">
-                  <tr className="border-b border-neutral-200 dark:border-neutral-700">
-                    <th className="text-left py-2 px-2">{t('othersoft.browser.source')}</th>
-                    <th className="text-left py-2 px-2">URL</th>
-                    <th className="text-left py-2 px-2">{t('othersoft.browser.username')}</th>
-                    <th className="text-left py-2 px-2">{t('othersoft.browser.password')}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredPasswords.map((p, idx) => (
-                    <tr key={idx} className="border-b border-neutral-100 dark:border-neutral-800 hover:bg-neutral-50 dark:hover:bg-neutral-900">
-                      <td className="py-1.5 px-2"><Chip size="sm" variant="soft">{p.browser}</Chip></td>
-                      <td className="py-1.5 px-2 max-w-[300px] truncate" title={p.url}>{p.url}</td>
-                      <td className="py-1.5 px-2">{p.username}</td>
-                      <td className="py-1.5 px-2 font-mono">{showAllPasswords ? p.password : '••••••••'}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <div className="max-h-[600px] overflow-y-auto">
+              <Accordion className="w-full">
+                {passwordsByDomain.map(([domain, items]) => (
+                  <Accordion.Item key={domain}>
+                    <Accordion.Heading>
+                      <Accordion.Trigger>
+                        <span className="mr-3 size-4 shrink-0 text-muted"><Globe /></span>
+                        <span className="flex-1 text-left">{domain}</span>
+                        <Chip size="sm" variant="soft" className="mr-2">{items.length}</Chip>
+                        <Accordion.Indicator><ChevronDown /></Accordion.Indicator>
+                      </Accordion.Trigger>
+                    </Accordion.Heading>
+                    <Accordion.Panel>
+                      <Accordion.Body>
+                        <table className="w-full text-sm">
+                          <thead>
+                            <tr className="border-b border-neutral-200 dark:border-neutral-700">
+                              <th className="text-left py-1.5 px-2">{t('othersoft.browser.source')}</th>
+                              <th className="text-left py-1.5 px-2">URL</th>
+                              <th className="text-left py-1.5 px-2">{t('othersoft.browser.username')}</th>
+                              <th className="text-left py-1.5 px-2">{t('othersoft.browser.password')}</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {items.map((p) => (
+                              <tr key={p.key} className="border-b border-neutral-100 dark:border-neutral-800">
+                                <td className="py-1.5 px-2"><Chip size="sm" variant="soft">{p.browser}</Chip></td>
+                                <td className="py-1.5 px-2 max-w-[300px] truncate font-mono text-xs" title={p.url}>{p.url}</td>
+                                <td className="py-1.5 px-2">{p.username}</td>
+                                <td className="py-1.5 px-2 font-mono">{showAllPasswords ? p.password : '••••••••'}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </Accordion.Body>
+                    </Accordion.Panel>
+                  </Accordion.Item>
+                ))}
+              </Accordion>
               {!isSearching && <ScrollLoader loading={pw.loading} hasMore={pw.hasMore.current} onLoadMore={() => pw.fetchPage()} />}
             </div>
           )}
@@ -351,29 +394,45 @@ export function BrowserTab({ agentId }: BrowserTabProps) {
           {filteredCookies.length === 0 && !ck.loading ? (
             <div className="text-center text-neutral-500 py-8">{t('othersoft.browser.noData')}</div>
           ) : (
-            <div className="overflow-x-auto max-h-[600px] overflow-y-auto">
-              <table className="w-full text-sm">
-                <thead className="sticky top-0 bg-white dark:bg-neutral-950 z-10">
-                  <tr className="border-b border-neutral-200 dark:border-neutral-700">
-                    <th className="text-left py-2 px-2">{t('othersoft.browser.source')}</th>
-                    <th className="text-left py-2 px-2">{t('othersoft.browser.domain')}</th>
-                    <th className="text-left py-2 px-2">{t('othersoft.browser.cookieName')}</th>
-                    <th className="text-left py-2 px-2">{t('othersoft.browser.cookieValue')}</th>
-                    <th className="text-left py-2 px-2">{t('othersoft.browser.expires')}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredCookies.map((c, idx) => (
-                    <tr key={idx} className="border-b border-neutral-100 dark:border-neutral-800 hover:bg-neutral-50 dark:hover:bg-neutral-900">
-                      <td className="py-1.5 px-2"><Chip size="sm" variant="soft">{c.browser}</Chip></td>
-                      <td className="py-1.5 px-2">{c.host}</td>
-                      <td className="py-1.5 px-2">{c.name}</td>
-                      <td className="py-1.5 px-2 max-w-[200px] truncate font-mono text-xs" title={c.value}>{c.value}</td>
-                      <td className="py-1.5 px-2 text-xs">{c.expires > 0 ? new Date(c.expires / 1000).toLocaleDateString() : '-'}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <div className="max-h-[600px] overflow-y-auto">
+              <Accordion className="w-full">
+                {cookiesByHost.map(([host, items]) => (
+                  <Accordion.Item key={host}>
+                    <Accordion.Heading>
+                      <Accordion.Trigger>
+                        <span className="mr-3 size-4 shrink-0 text-muted"><Globe /></span>
+                        <span className="flex-1 text-left">{host}</span>
+                        <Chip size="sm" variant="soft" className="mr-2">{items.length}</Chip>
+                        <Accordion.Indicator><ChevronDown /></Accordion.Indicator>
+                      </Accordion.Trigger>
+                    </Accordion.Heading>
+                    <Accordion.Panel>
+                      <Accordion.Body>
+                        <table className="w-full text-sm">
+                          <thead>
+                            <tr className="border-b border-neutral-200 dark:border-neutral-700">
+                              <th className="text-left py-1.5 px-2">{t('othersoft.browser.source')}</th>
+                              <th className="text-left py-1.5 px-2">{t('othersoft.browser.cookieName')}</th>
+                              <th className="text-left py-1.5 px-2">{t('othersoft.browser.cookieValue')}</th>
+                              <th className="text-left py-1.5 px-2">{t('othersoft.browser.expires')}</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {items.map((c) => (
+                              <tr key={c.key} className="border-b border-neutral-100 dark:border-neutral-800">
+                                <td className="py-1.5 px-2"><Chip size="sm" variant="soft">{c.browser}</Chip></td>
+                                <td className="py-1.5 px-2">{c.name}</td>
+                                <td className="py-1.5 px-2 max-w-[200px] truncate font-mono text-xs" title={c.value}>{c.value}</td>
+                                <td className="py-1.5 px-2 text-xs">{c.expires > 0 ? new Date(c.expires / 1000).toLocaleDateString() : '-'}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </Accordion.Body>
+                    </Accordion.Panel>
+                  </Accordion.Item>
+                ))}
+              </Accordion>
               {!isSearching && <ScrollLoader loading={ck.loading} hasMore={ck.hasMore.current} onLoadMore={() => ck.fetchPage()} />}
             </div>
           )}
