@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button, Skeleton, Tabs, Chip, Accordion } from '@heroui/react';
-import { Eye, EyeSlash, ArrowRotateLeft, ChevronDown, Globe, Magnifier, Download } from '@gravity-ui/icons';
+import { Eye, EyeSlash, ArrowRotateLeft, ChevronDown, Globe, Magnifier, ArrowDownToLine } from '@gravity-ui/icons';
 import { getBrowser, searchBrowser } from '../../api/othersoft';
 import type { BrowserPassword, BrowserCookie, BrowserHistory, BrowserDataType } from '../../types/models';
 
@@ -273,7 +273,7 @@ export function BrowserTab({ agentId }: BrowserTabProps) {
           {/* Export button */}
           <div className="relative">
             <Button size="sm" variant="ghost" onPress={() => setShowExportMenu(v => !v)}>
-              <Download className="w-4 h-4" />
+              <ArrowDownToLine className="w-4 h-4" />
             </Button>
             {showExportMenu && (
               <div className="absolute right-0 top-full mt-1 z-50 bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-700 rounded-lg shadow-lg py-1 min-w-[160px]">
