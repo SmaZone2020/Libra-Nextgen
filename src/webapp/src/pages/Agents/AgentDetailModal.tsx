@@ -99,9 +99,9 @@ function HardwareAccordion({ hardware, t }: { hardware: AgentDetail['hardware'];
   if (!hardware) return null;
 
   const cpu = hardware.cpu;
-  const gpu = hardware.gpu;
-  const cpuInfo = cpu ? cpuVendor(cpu.model || '') : null;
-  const gpuInfo = gpu ? gpuVendor(gpu.model || '') : null;
+  const gpu = hardware.gpus?.[0];
+  const cpuInfo = cpu ? cpuVendor(cpu.name || '') : null;
+  const gpuInfo = gpu ? gpuVendor(gpu.name || '') : null;
 
   const items = [];
 
@@ -113,9 +113,9 @@ function HardwareAccordion({ hardware, t }: { hardware: AgentDetail['hardware'];
         <div key="cpu" className="flex justify-between">
           <span className="text-default-500">CPU</span>
           <span className="text-default-700">
-            {cpu.model || '—'}
+            {cpu.name || '—'}
             {cpuInfo && <Chip size="sm" variant="soft" color={cpuInfo.color} className="ml-2">{cpuInfo.label}</Chip>}
-            {cpu.cores ? ` (${cpu.cores} cores)` : ''}
+            {cpu.physicalCores ? ` (${cpu.physicalCores} cores)` : ''}
           </span>
         </div>
       );
@@ -125,7 +125,7 @@ function HardwareAccordion({ hardware, t }: { hardware: AgentDetail['hardware'];
         <div key="gpu" className="flex justify-between">
           <span className="text-default-500">GPU</span>
           <span className="text-default-700">
-            {gpu.model || '—'}
+            {gpu.name || '—'}
             {gpuInfo && <Chip size="sm" variant="soft" color={gpuInfo.color} className="ml-2">{gpuInfo.label}</Chip>}
           </span>
         </div>

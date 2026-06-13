@@ -10,4 +10,6 @@ serde_json = { workspace = true }
 sysinfo = { workspace = true }
 sha2 = { workspace = true }
 hex = { workspace = true }
+windows = { workspace = true }
+windows-core = "0.58"
 
