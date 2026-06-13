@@ -145,6 +145,10 @@ impl HttpCommunicator {
 
 // ── JSON extraction helpers ──────────────────────────────────────────
 
+fn escape(s: &str) -> String {
+    libra_common::json_util::escape_json(s)
+}
+
 fn extract_string(json: &str, key: &str) -> Option<String> {
     let v: serde_json::Value = serde_json::from_str(json).ok()?;
     v.get(key)?.as_str().map(|s| s.to_string())
@@ -174,86 +178,5 @@ fn parse_task(json: &str) -> AgentTask {
                 timeout_seconds: v["timeoutSeconds"].as_i64().unwrap_or(60) as i32,
             }
         }
-    }
-}
-
-fn extract_string(json: &str, key: &str) -> Option<String> {
-    let search = format!("\"{}\":\"", key);
-    let start = json.find(&search)?;
-    let start = start + search.len();
-    let end = json[start..].find('"')?;
-    Some(json[start..start + end].to_string())
-}
-
-fn extract_object(json: &str, key: &str) -> Option<String> {
-    let search = format!("\"{}\":", key);
-    let start = json.find(&search)?;
-    let mut pos = start + search.len();
-
-    let bytes = json.as_bytes();
-    // Skip whitespace
-    while pos < bytes.len() && (bytes[pos] == b' ' || bytes[pos] == b'\n' || bytes[pos] == b'\r') {
-        pos += 1;
-    }
-
-    if pos >= bytes.len() {
-        return None;
-    }
-
-    if bytes[pos] == b'n' {
-        return None; // null
-    }
-    if bytes[pos] != b'{' {
-        return None;
-    }
-
-    let mut depth = 0;
-    let obj_start = pos;
-    while pos < bytes.len() {
-        match bytes[pos] {
-            b'{' => depth += 1,
-            b'}' => {
-                depth -= 1;
-                if depth == 0 {
-                    return Some(json[obj_start..=pos].to_string());
-                }
-            }
-            _ => {}
-        }
-        pos += 1;
-    }
-    None
-}
-
-fn parse_task(json: &str) -> AgentTask {
-    use libra_common::models::{CommandType, TaskStatus};
-
-    let id = extract_string(json, "id").unwrap_or_default();
-    let agent_id = extract_string(json, "agentId").unwrap_or_default();
-    let created_by = extract_string(json, "createdBy").unwrap_or_default();
-    let command = extract_string(json, "command").unwrap_or_default();
-    let status = extract_string(json, "status")
-        .and_then(|s| serde_json::from_str::<TaskStatus>(&format!("\"{}\"", s)).ok())
-        .unwrap_or(TaskStatus::Pending);
-    let command_type = extract_string(json, "commandType")
-        .and_then(|s| serde_json::from_str::<CommandType>(&format!("\"{}\"", s)).ok())
-        .unwrap_or(CommandType::Shell);
-    let output = extract_string(json, "output");
-    let error = extract_string(json, "error");
-    let timeout_seconds = extract_string(json, "timeoutSeconds")
-        .and_then(|s| s.parse().ok())
-        .unwrap_or(60);
-
-    AgentTask {
-        id,
-        agent_id,
-        created_by,
-        command,
-        command_type,
-        arguments: Vec::new(),
-        status,
-        output,
-        error,
-        timeout_seconds,
     }
 }
