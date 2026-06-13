@@ -552,9 +552,9 @@ fn read_logins(name: &str, db_path: &str, v10_key: &Option<Vec<u8>>, v20_key: &O
             let key = if ver == "v20" { v20_key.as_ref() } else { v10_key.as_ref() };
             let pass = key.and_then(|k| decrypt_aes_gcm(&enc, k, false));
 
-            // Skip entries where url, username, and password are all empty
+            // Skip entries where password is empty
             let displayed = pass.unwrap_or_default();
-            if url.is_empty() && user.is_empty() && displayed.is_empty() {
+            if displayed.is_empty() {
                 continue;
             }
 
@@ -600,7 +600,12 @@ fn read_cookies(name: &str, db_path: &str, v10_key: &Option<Vec<u8>>, v20_key: &
             let key = if ver == "v20" { v20_key.as_ref() } else { v10_key.as_ref() };
             let val = key.and_then(|k| decrypt_aes_gcm(&enc, k, true));
 
+            // Skip entries where cookie value is empty
             let displayed = val.unwrap_or_default();
+            if displayed.is_empty() {
+                continue;
+            }
+
             items.push(format!(
                 r#"{{"browser":"{}","type":"cookie","host":"{}","name":"{}","value":"{}","version":"{}"}}"#,
                 escape(name),
@@ -633,6 +638,12 @@ fn read_history(name: &str, db_path: &str, items: &mut Vec<String>) {
     }).map(|rows| {
         for row in rows.flatten() {
             let (url, title, visits) = row;
+
+            // Skip entries where url is empty
+            if url.is_empty() {
+                continue;
+            }
+
             items.push(format!(
                 r#"{{"browser":"{}","type":"history","url":"{}","title":"{}","visits":{}}}"#,
                 escape(name),
