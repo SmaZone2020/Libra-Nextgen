@@ -106,6 +106,30 @@ public class SystemController : ControllerBase
         return await RelayAndWaitAsync(agentId, "system.network", null, ct);
     }
 
+    [HttpPost("{agentId}/network/wan")]
+    public async Task<IActionResult> GetNetworkWan(string agentId, CancellationToken ct)
+    {
+        return await RelayAndWaitAsync(agentId, "system.network.wan", null, ct, timeoutSeconds: 15);
+    }
+
+    [HttpPost("{agentId}/network/wifi")]
+    public async Task<IActionResult> GetNetworkWifi(string agentId, CancellationToken ct)
+    {
+        return await RelayAndWaitAsync(agentId, "system.network.wifi", null, ct, timeoutSeconds: 30);
+    }
+
+    [HttpPost("{agentId}/network/nearby")]
+    public async Task<IActionResult> GetNetworkNearby(string agentId, CancellationToken ct)
+    {
+        return await RelayAndWaitAsync(agentId, "system.network.nearby", null, ct, timeoutSeconds: 30);
+    }
+
+    [HttpPost("{agentId}/network/proxy")]
+    public async Task<IActionResult> GetNetworkProxy(string agentId, CancellationToken ct)
+    {
+        return await RelayAndWaitAsync(agentId, "system.network.proxy", null, ct, timeoutSeconds: 10);
+    }
+
     [HttpPost("{agentId}/lanscan")]
     public async Task<IActionResult> LanScan(string agentId, CancellationToken ct)
     {

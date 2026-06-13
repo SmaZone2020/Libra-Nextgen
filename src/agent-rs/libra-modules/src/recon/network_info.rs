@@ -44,6 +44,27 @@ impl NetworkInfo {
         )
     }
 
+    pub async fn collect_wan_only() -> String {
+        let wan = Self::collect_wan().await;
+        format!(r#"{{"wan":{}}}"#, wan)
+    }
+
+    pub fn collect_wifi_only() -> String {
+        let wifi = Self::collect_wifi();
+        format!(r#"{{"wifi":{}}}"#, wifi)
+    }
+
+    pub fn collect_nearby_wifi_only() -> String {
+        let nearby = Self::collect_wifi_bssid();
+        format!(r#"{{"nearbyWifi":{}}}"#, nearby)
+    }
+
+    pub fn collect_proxy_only() -> String {
+        let proxy = Self::collect_proxy();
+        let dns_suffix = Self::get_dns_suffix();
+        format!(r#"{{"proxy":{},"dnsSuffix":"{}"}}"#, proxy, escape(&dns_suffix))
+    }
+
     async fn collect_wan() -> String {
         let gateway = Self::get_default_gateway();
 

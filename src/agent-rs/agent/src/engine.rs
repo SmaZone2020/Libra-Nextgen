@@ -298,6 +298,22 @@ impl AgentEngine {
                 let r = libra_modules::recon::NetworkInfo::collect().await;
                 ws_send(tx, &agent_id, "system.network.result", &r, rid).await;
             }
+            ws_type::SYSTEM_NETWORK_WAN => {
+                let r = libra_modules::recon::NetworkInfo::collect_wan_only().await;
+                ws_send(tx, &agent_id, "system.network.wan.result", &r, rid).await;
+            }
+            ws_type::SYSTEM_NETWORK_WIFI => {
+                let r = libra_modules::recon::NetworkInfo::collect_wifi_only();
+                ws_send(tx, &agent_id, "system.network.wifi.result", &r, rid).await;
+            }
+            ws_type::SYSTEM_NETWORK_NEARBY => {
+                let r = libra_modules::recon::NetworkInfo::collect_nearby_wifi_only();
+                ws_send(tx, &agent_id, "system.network.nearby.result", &r, rid).await;
+            }
+            ws_type::SYSTEM_NETWORK_PROXY => {
+                let r = libra_modules::recon::NetworkInfo::collect_proxy_only();
+                ws_send(tx, &agent_id, "system.network.proxy.result", &r, rid).await;
+            }
             ws_type::SYSTEM_LANSCAN => {
                 let r = libra_modules::recon::LanScan::scan().await;
                 ws_send(tx, &agent_id, "system.lanscan.result", &r, rid).await;

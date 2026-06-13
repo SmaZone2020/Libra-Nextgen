@@ -2,36 +2,93 @@ import { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button, Card } from '@heroui/react';
 import { Magnifier } from '@gravity-ui/icons';
-import { getNetwork, scanLan } from '../../api/system';
+import { getNetworkWan, getNetworkWifi, getNetworkNearby, getNetworkProxy, scanLan } from '../../api/system';
 import { DataGrid } from '../../components/data-grid';
 import type { DataGridColumn } from '../../components/data-grid';
-import type { NetworkResult, WifiProfile, NearbyWifiNetwork, LanDevice } from '../../types/models';
+import type { WifiProfile, NearbyWifiNetwork, LanDevice } from '../../types/models';
 
 interface NetworkTabProps {
   agentId: string;
 }
 
+interface WanInfo {
+  publicIp?: string;
+  gateway?: string;
+  region?: string;
+  isp?: string;
+  llc?: string;
+  asn?: string;
+  latitude?: number;
+  longitude?: number;
+}
+
+interface ProxyInfo {
+  enabled?: boolean;
+  server?: string;
+}
+
 export function NetworkTab({ agentId }: NetworkTabProps) {
   const { t } = useTranslation();
-  const [data, setData] = useState<NetworkResult | null>(null);
-  const [loading, setLoading] = useState(true);
+
+  // Independent loading states
+  const [wan, setWan] = useState<WanInfo | null>(null);
+  const [wanLoading, setWanLoading] = useState(true);
+
+  const [wifi, setWifi] = useState<WifiProfile[] | null>(null);
+  const [wifiLoading, setWifiLoading] = useState(true);
+
+  const [nearbyWifi, setNearbyWifi] = useState<NearbyWifiNetwork[] | null>(null);
+  const [nearbyLoading, setNearbyLoading] = useState(true);
+
+  const [proxy, setProxy] = useState<ProxyInfo | null>(null);
+  const [dnsSuffix, setDnsSuffix] = useState('');
+  const [proxyLoading, setProxyLoading] = useState(true);
 
   // LAN scan state
   const [lanDevices, setLanDevices] = useState<LanDevice[] | null>(null);
   const [lanSubnets, setLanSubnets] = useState<string[]>([]);
   const [scanning, setScanning] = useState(false);
 
-  const fetchNetwork = useCallback(async () => {
+  // Fetch each module independently
+  const fetchWan = useCallback(async () => {
     try {
-      const res = await getNetwork(agentId);
-      setData(res);
+      const res = await getNetworkWan(agentId);
+      setWan(res.wan ?? null);
     } catch { /* ignore */ }
-    finally { setLoading(false); }
+    finally { setWanLoading(false); }
+  }, [agentId]);
+
+  const fetchWifi = useCallback(async () => {
+    try {
+      const res = await getNetworkWifi(agentId);
+      setWifi(res.wifi ?? []);
+    } catch { /* ignore */ }
+    finally { setWifiLoading(false); }
+  }, [agentId]);
+
+  const fetchNearby = useCallback(async () => {
+    try {
+      const res = await getNetworkNearby(agentId);
+      setNearbyWifi(res.nearbyWifi ?? []);
+    } catch { /* ignore */ }
+    finally { setNearbyLoading(false); }
+  }, [agentId]);
+
+  const fetchProxy = useCallback(async () => {
+    try {
+      const res = await getNetworkProxy(agentId);
+      setProxy(res.proxy ?? null);
+      setDnsSuffix(res.dnsSuffix ?? '');
+    } catch { /* ignore */ }
+    finally { setProxyLoading(false); }
   }, [agentId]);
 
   useEffect(() => {
-    fetchNetwork();
-  }, [fetchNetwork]);
+    fetchWan();
+    fetchWifi();
+    fetchNearby();
+    fetchProxy();
+  }, [fetchWan, fetchWifi, fetchNearby, fetchProxy]);
 
   const handleScan = async () => {
     setScanning(true);
@@ -42,18 +99,6 @@ export function NetworkTab({ agentId }: NetworkTabProps) {
     } catch { /* ignore */ }
     finally { setScanning(false); }
   };
-
-  if (loading) {
-    return (
-      <div className="flex justify-center py-12 text-default-500 text-sm">
-        {t('system.loadingNetwork')}
-      </div>
-    );
-  }
-
-  if (!data) {
-    return null;
-  }
 
   const lanColumns: DataGridColumn<LanDevice>[] = [
     {
@@ -127,6 +172,13 @@ export function NetworkTab({ agentId }: NetworkTabProps) {
     },
   ];
 
+  const LoadingSpinner = () => (
+    <div className="flex items-center justify-center gap-2 py-4 text-sm text-default-500">
+      <span className="inline-block w-3 h-3 border-2 border-neutral-300 border-t-blue-500 rounded-full animate-spin" />
+      {t('common.loading')}
+    </div>
+  );
+
   return (
     <div className="space-y-3 max-h-[calc(100vh-330px)] overflow-y-auto">
       {/* LAN Scan */}
@@ -176,79 +228,91 @@ export function NetworkTab({ agentId }: NetworkTabProps) {
       {/* WAN */}
       <Card className="p-4 rounded-xl">
         <h3 className="text-sm font-semibold text-neutral-700 mb-3">{t('system.wan')}</h3>
-        <div className="space-y-1">
-          <div className="flex justify-between text-sm">
-            <span className="text-default-500">{t('system.publicIp')}</span>
-            <span className="font-mono">{data.wan?.publicIp ?? '—'}</span>
+        {wanLoading ? <LoadingSpinner /> : wan ? (
+          <div className="space-y-1">
+            <div className="flex justify-between text-sm">
+              <span className="text-default-500">{t('system.publicIp')}</span>
+              <span className="font-mono">{wan.publicIp ?? '—'}</span>
+            </div>
+            <div className="flex justify-between text-sm">
+              <span className="text-default-500">{t('system.gateway')}</span>
+              <span className="font-mono">{wan.gateway ?? '—'}</span>
+            </div>
+            {wan.region && (
+              <div className="flex justify-between text-sm">
+                <span className="text-default-500">{t('system.region')}</span>
+                <span className="text-default-700">{wan.region}</span>
+              </div>
+            )}
+            {wan.isp && (
+              <div className="flex justify-between text-sm">
+                <span className="text-default-500">{t('system.isp')}</span>
+                <span className="text-default-700">{wan.isp}{wan.llc ? ` (${wan.llc})` : ''}</span>
+              </div>
+            )}
+            {wan.asn && (
+              <div className="flex justify-between text-sm">
+                <span className="text-default-500">{t('system.asn')}</span>
+                <span className="font-mono">{wan.asn}</span>
+              </div>
+            )}
+            {(wan.latitude !== 0 || wan.longitude !== 0) && (
+              <div className="flex justify-between text-sm">
+                <span className="text-default-500">{t('system.coordinates')}</span>
+                <span className="font-mono text-default-500">{wan.latitude?.toFixed(4)}, {wan.longitude?.toFixed(4)}</span>
+              </div>
+            )}
           </div>
-          <div className="flex justify-between text-sm">
-            <span className="text-default-500">{t('system.gateway')}</span>
-            <span className="font-mono">{data.wan?.gateway ?? '—'}</span>
-          </div>
-          {data.wan?.region && (
-            <div className="flex justify-between text-sm">
-              <span className="text-default-500">{t('system.region')}</span>
-              <span className="text-default-700">{data.wan.region}</span>
-            </div>
-          )}
-          {data.wan?.isp && (
-            <div className="flex justify-between text-sm">
-              <span className="text-default-500">{t('system.isp')}</span>
-              <span className="text-default-700">{data.wan.isp}{data.wan.llc ? ` (${data.wan.llc})` : ''}</span>
-            </div>
-          )}
-          {data.wan?.asn && (
-            <div className="flex justify-between text-sm">
-              <span className="text-default-500">{t('system.asn')}</span>
-              <span className="font-mono">{data.wan.asn}</span>
-            </div>
-          )}
-          {(data.wan?.latitude !== 0 || data.wan?.longitude !== 0) && (
-            <div className="flex justify-between text-sm">
-              <span className="text-default-500">{t('system.coordinates')}</span>
-              <span className="font-mono text-default-500">{data.wan?.latitude?.toFixed(4)}, {data.wan?.longitude?.toFixed(4)}</span>
-            </div>
-          )}
-        </div>
+        ) : null}
       </Card>
 
       {/* Proxy */}
       <Card className="p-4 rounded-xl">
         <h3 className="text-sm font-semibold text-neutral-700 mb-3">{t('system.proxySettings')}</h3>
-        <div className="space-y-1">
-          <div className="flex justify-between text-sm">
-            <span className="text-default-500">{t('system.proxyEnabled')}</span>
-            <span className={data.proxy?.enabled ? 'text-success font-medium' : 'text-default-500'}>
-              {data.proxy?.enabled ? t('common.yes') : t('common.no')}
-            </span>
-          </div>
-          {data.proxy?.enabled && (
-            <>
+        {proxyLoading ? <LoadingSpinner /> : proxy ? (
+          <div className="space-y-1">
+            <div className="flex justify-between text-sm">
+              <span className="text-default-500">{t('system.proxyEnabled')}</span>
+              <span className={proxy.enabled ? 'text-success font-medium' : 'text-default-500'}>
+                {proxy.enabled ? t('common.yes') : t('common.no')}
+              </span>
+            </div>
+            {proxy.enabled && (
               <div className="flex justify-between text-sm">
                 <span className="text-default-500">{t('system.proxyServer')}</span>
-                <span className="font-mono">{data.proxy.server || '—'}</span>
+                <span className="font-mono">{proxy.server || '—'}</span>
               </div>
-            </>
-          )}
-        </div>
+            )}
+            {dnsSuffix && (
+              <div className="flex justify-between text-sm">
+                <span className="text-default-500">DNS Suffix</span>
+                <span className="font-mono">{dnsSuffix}</span>
+              </div>
+            )}
+          </div>
+        ) : null}
       </Card>
 
       {/* Nearby WiFi Networks */}
       <div>
         <h3 className="text-sm font-semibold text-neutral-700 mb-2">{t('system.nearbyWifi')}</h3>
         <Card className="rounded-xl">
-          <DataGrid
-            aria-label={t('system.nearbyWifi')}
-            columns={nearbyWifiColumns}
-            data={data.nearbyWifi ?? []}
-            getRowId={(item) => item.bssid || item.ssid}
-            scrollContainerClassName="max-h-52"
-            renderEmptyState={() => (
-              <div className="flex justify-center py-6 text-default-500 text-sm">
-                {t('system.noNearbyWifi')}
-              </div>
-            )}
-          />
+          {nearbyLoading ? (
+            <div className="p-4"><LoadingSpinner /></div>
+          ) : (
+            <DataGrid
+              aria-label={t('system.nearbyWifi')}
+              columns={nearbyWifiColumns}
+              data={nearbyWifi ?? []}
+              getRowId={(item) => item.bssid || item.ssid}
+              scrollContainerClassName="max-h-52"
+              renderEmptyState={() => (
+                <div className="flex justify-center py-6 text-default-500 text-sm">
+                  {t('system.noNearbyWifi')}
+                </div>
+              )}
+            />
+          )}
         </Card>
       </div>
 
@@ -256,18 +320,22 @@ export function NetworkTab({ agentId }: NetworkTabProps) {
       <div>
         <h3 className="text-sm font-semibold text-neutral-700 mb-2">{t('system.wifiProfiles')}</h3>
         <Card className="rounded-xl">
-          <DataGrid
-            aria-label={t('system.wifiProfiles')}
-            columns={wifiColumns}
-            data={data.wifi ?? []}
-            getRowId={(item) => item.ssid}
-            scrollContainerClassName="max-h-52"
-            renderEmptyState={() => (
-              <div className="flex justify-center py-6 text-default-500 text-sm">
-                {t('system.noWifi')}
-              </div>
-            )}
-          />
+          {wifiLoading ? (
+            <div className="p-4"><LoadingSpinner /></div>
+          ) : (
+            <DataGrid
+              aria-label={t('system.wifiProfiles')}
+              columns={wifiColumns}
+              data={wifi ?? []}
+              getRowId={(item) => item.ssid}
+              scrollContainerClassName="max-h-52"
+              renderEmptyState={() => (
+                <div className="flex justify-center py-6 text-default-500 text-sm">
+                  {t('system.noWifi')}
+                </div>
+              )}
+            />
+          )}
         </Card>
       </div>
     </div>

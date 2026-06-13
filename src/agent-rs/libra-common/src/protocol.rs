@@ -117,6 +117,10 @@ pub mod ws_type {
     pub const SYSTEM_WINDOWS: &str = "system.windows";
     pub const SYSTEM_ENV: &str = "system.env";
     pub const SYSTEM_NETWORK: &str = "system.network";
+    pub const SYSTEM_NETWORK_WAN: &str = "system.network.wan";
+    pub const SYSTEM_NETWORK_WIFI: &str = "system.network.wifi";
+    pub const SYSTEM_NETWORK_NEARBY: &str = "system.network.nearby";
+    pub const SYSTEM_NETWORK_PROXY: &str = "system.network.proxy";
     pub const SYSTEM_LANSCAN: &str = "system.lanscan";
     pub const SYSTEM_BLUETOOTH: &str = "system.bluetooth";
 

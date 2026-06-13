@@ -53,6 +53,22 @@ export function getNetwork(agentId: string): Promise<NetworkResult> {
   return api.post<NetworkResult>(`/system/${agentId}/network`);
 }
 
+export function getNetworkWan(agentId: string): Promise<Pick<NetworkResult, 'wan'>> {
+  return api.post(`/system/${agentId}/network/wan`);
+}
+
+export function getNetworkWifi(agentId: string): Promise<Pick<NetworkResult, 'wifi'>> {
+  return api.post(`/system/${agentId}/network/wifi`);
+}
+
+export function getNetworkNearby(agentId: string): Promise<Pick<NetworkResult, 'nearbyWifi'>> {
+  return api.post(`/system/${agentId}/network/nearby`);
+}
+
+export function getNetworkProxy(agentId: string): Promise<Pick<NetworkResult, 'proxy' | 'dnsSuffix'>> {
+  return api.post(`/system/${agentId}/network/proxy`);
+}
+
 export function scanLan(agentId: string): Promise<LanScanResult> {
   return api.post<LanScanResult>(`/system/${agentId}/lanscan`);
 }
