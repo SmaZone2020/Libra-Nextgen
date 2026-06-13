@@ -1,7 +1,8 @@
 import { createContext, useContext, useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { toast } from '@heroui/react';
+import { useTranslation } from 'react-i18next';
 import { getAgents } from '../api/agents';
 import { consoleWs } from '../ws/consoleWs';
-import { toastQueue } from '../components/toast-queue';
 import type { AgentListItem, WsMessage } from '../types/models';
 
 interface AgentContextValue {
@@ -21,6 +22,7 @@ const AgentContext = createContext<AgentContextValue>({
 });
 
 export function AgentProvider({ children }: { children: React.ReactNode }) {
+  const { t } = useTranslation();
   const [agents, setAgents] = useState<AgentListItem[]>([]);
   const [agentId, setAgentId] = useState<string>('');
 
@@ -59,12 +61,22 @@ export function AgentProvider({ children }: { children: React.ReactNode }) {
       const data = msg.data as { agentId: string; status: string } | null;
       if (!data?.agentId) return;
 
+      const shortId = data.agentId.slice(0, 8);
+
       if (data.status === 'Offline') {
+        const wasOnline = onlineIdsRef.current.has(data.agentId);
         setAgents((prev) => prev.map(a =>
           a.id === data.agentId ? { ...a, status: 'Offline' as const } : a
         ));
         setAgentId((prev) => prev === data.agentId ? '' : prev);
         onlineIdsRef.current.delete(data.agentId);
+
+        if (wasOnline) {
+          getNotice().play().catch(() => {});
+          toast.danger(t('agents.toastOffline'), {
+            description: t('agents.toastOfflineDesc', { id: shortId }),
+          });
+        }
       } else if (data.status === 'Online') {
         const isNew = !onlineIdsRef.current.has(data.agentId);
         onlineIdsRef.current.add(data.agentId);
@@ -74,18 +86,16 @@ export function AgentProvider({ children }: { children: React.ReactNode }) {
             : prev
         );
         if (isNew) {
-          getNotice().play().catch(() => { /* browser may block autoplay without user gesture */ });
-          toastQueue.add({
-            title: 'Agent Online',
-            description: `${data.agentId.slice(0, 8)}... is now online`,
-            variant: 'default',
+          getNotice().play().catch(() => {});
+          toast.success(t('agents.toastOnline'), {
+            description: t('agents.toastOnlineDesc', { id: shortId }),
           });
         }
       }
     };
     const unsub = consoleWs.on('agent.status', handler);
     return unsub;
-  }, [getNotice]);
+  }, [getNotice, t]);
 
   const selectAgent = useCallback((id: string) => {
     if (id) setAgentId(id);

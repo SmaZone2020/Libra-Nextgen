@@ -136,6 +136,10 @@ export default {
       region: 'Region',
       publicIp: 'Public IP',
       isp: 'ISP',
+      toastOnline: 'Agent Online',
+      toastOnlineDesc: '{{id}} is now online',
+      toastOffline: 'Agent Offline',
+      toastOfflineDesc: '{{id}} has gone offline',
     },
     shell: {
       selectAgent: 'Select an online agent to open a remote shell session.',

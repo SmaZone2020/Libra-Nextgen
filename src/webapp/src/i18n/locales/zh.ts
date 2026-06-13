@@ -136,6 +136,10 @@ export default {
       region: '地区',
       publicIp: '公网 IP',
       isp: '运营商',
+      toastOnline: '设备上线',
+      toastOnlineDesc: '{{id}} 已上线',
+      toastOffline: '设备离线',
+      toastOfflineDesc: '{{id}} 已离线',
     },
     shell: {
       selectAgent: '选择一台在线设备以打开远程终端会话。',
