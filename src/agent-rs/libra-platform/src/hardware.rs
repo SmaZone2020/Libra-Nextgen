@@ -2,8 +2,7 @@ use libra_common::models::{CpuInfo, DiskInfo, DisplayInfo, GpuInfo, HardwareInfo
 use sha2::{Digest, Sha256};
 
 /// Collect hardware information from the current machine.
-/// Windows: Uses PowerShell Get-CimInstance (modern WMI) as primary, wmic fallback, sysinfo last resort.
-/// Linux: Uses sysinfo + /proc /sys filesystem.
+/// Uses wmic (primary) and sysinfo (fallback) — no PowerShell dependency.
 pub fn collect() -> HardwareInfo {
     let cpu = collect_cpu();
     let gpus = collect_gpus();
@@ -55,20 +54,9 @@ pub fn serialize(info: &HardwareInfo) -> String {
 // ── CPU ──────────────────────────────────────────────────────────────────
 
 fn collect_cpu() -> CpuInfo {
-    #[cfg(windows)]
-    {
-        let props = &["Name", "NumberOfCores", "ThreadCount", "MaxClockSpeed"];
-        if let Some(v) = ps_wmi_first("Win32_Processor", props) {
-            let name = v["Name"].as_str().unwrap_or("").to_string();
-            let cores = v["NumberOfCores"].as_u64().unwrap_or(0) as usize;
-            let threads = v["ThreadCount"].as_u64().unwrap_or(0) as usize;
-            let clock = v["MaxClockSpeed"].as_u64().unwrap_or(0);
-            if !name.is_empty() {
-                return CpuInfo { name, physical_cores: cores, logical_cores: threads, max_clock_mhz: clock };
-            }
-        }
-        if let Ok(c) = wmi_cpu() { return c; }
-    }
+    // Try wmic first
+    if let Ok(info) = wmi_cpu() { return info; }
+    // sysinfo fallback
     sysinfo_cpu()
 }
 
@@ -104,26 +92,9 @@ fn wmi_cpu() -> Result<CpuInfo, ()> {
 // ── GPU ──────────────────────────────────────────────────────────────────
 
 fn collect_gpus() -> Vec<GpuInfo> {
-    #[cfg(windows)]
-    {
-        let props = &["Name", "DriverVersion", "AdapterRAM"];
-        if let Some(arr) = ps_wmi_all("Win32_VideoController", props) {
-            let gpus: Vec<_> = arr.iter().filter_map(|g| {
-                let name = g["Name"].as_str().unwrap_or("").to_string();
-                if name.is_empty() { return None; }
-                Some(GpuInfo {
-                    name,
-                    driver_version: g["DriverVersion"].as_str().filter(|s| !s.is_empty()).map(|s| s.to_string()),
-                    vram_bytes: {
-                        let v = parse_u64_any(&g["AdapterRAM"]);
-                        if v > 0 { Some(v) } else { None }
-                    },
-                })
-            }).collect();
-            if !gpus.is_empty() { return gpus; }
-        }
-        if let Ok(gpus) = wmi_gpus() { if !gpus.is_empty() { return gpus; } }
-    }
+    // Try wmic first
+    if let Ok(gpus) = wmi_gpus() { if !gpus.is_empty() { return gpus; } }
+    // sysinfo fallback
     vec![GpuInfo { name: "Unknown GPU".into(), driver_version: None, vram_bytes: None }]
 }
 
@@ -150,33 +121,12 @@ fn wmi_gpus() -> Result<Vec<GpuInfo>, ()> {
 // ── Disks ────────────────────────────────────────────────────────────────
 
 fn collect_disks() -> Vec<DiskInfo> {
-    // sysinfo provides reliable disk sizes even when WMI fails
+    // sysinfo provides reliable disk sizes
     let sys_disks = sysinfo_disks();
 
-    #[cfg(windows)]
-    {
-        let props = &["Model", "Size", "MediaType", "SerialNumber"];
-        if let Some(arr) = ps_wmi_all("Win32_DiskDrive", props) {
-            let disks: Vec<_> = arr.iter().filter_map(|d| {
-                let model = d["Model"].as_str().unwrap_or("").trim().to_string();
-                if model.is_empty() { return None; }
-                let wmi_size = parse_u64_any(&d["Size"]);
-                // Fall back to sysinfo size if WMI size is 0 or if model matches
-                let size_bytes = if wmi_size > 0 { wmi_size } else {
-                    sys_disks.iter().find(|sd| sd.model.contains(&model) || model.contains(&sd.model))
-                        .map(|sd| sd.size_bytes).unwrap_or(0)
-                };
-                Some(DiskInfo {
-                    model,
-                    size_bytes,
-                    media_type: d["MediaType"].as_str().filter(|s| !s.is_empty()).map(|s| s.to_string()),
-                    serial_number: d["SerialNumber"].as_str().filter(|s| !s.is_empty()).map(|s| s.trim().to_string()),
-                })
-            }).collect();
-            if !disks.is_empty() { return disks; }
-        }
-        if let Ok(disks) = wmi_disks() { if !disks.is_empty() { return disks; } }
-    }
+    // Try wmic for model/serial info
+    if let Ok(disks) = wmi_disks() { if !disks.is_empty() { return disks; } }
+
     sys_disks
 }
 
@@ -202,11 +152,12 @@ fn wmi_disks() -> Result<Vec<DiskInfo>, ()> {
         if parts.len() >= 5 {
             let model = parts[1].trim().to_string();
             if model.is_empty() { continue; }
+            let size_bytes: u64 = parts[2].trim().parse().unwrap_or(0);
             disks.push(DiskInfo {
                 model,
-                size_bytes: parts[2].trim().parse().unwrap_or(0),
-                media_type: opt_str(Some(parts[3].trim())),
-                serial_number: opt_str(Some(parts[4].trim())),
+                size_bytes,
+                media_type: opt_str(parts.get(3).map(|s| s.trim())),
+                serial_number: opt_str(parts.get(4).map(|s| s.trim())),
             });
         }
     }
@@ -216,44 +167,19 @@ fn wmi_disks() -> Result<Vec<DiskInfo>, ()> {
 // ── RAM ──────────────────────────────────────────────────────────────────
 
 fn collect_ram() -> RamInfo {
-    // Always query sysinfo as a reliable baseline
+    // sysinfo is the most reliable for RAM
     let sys = sysinfo::System::new_all();
-    let sys_total = sys.total_memory();
-
-    #[cfg(windows)]
-    {
-        let props = &["TotalPhysicalMemory"];
-        if let Some(v) = ps_wmi_first("Win32_ComputerSystem", props) {
-            let wmi_total = parse_u64_any(&v["TotalPhysicalMemory"]);
-            if wmi_total > 0 { return RamInfo { total_bytes: wmi_total }; }
-        }
-        if let Some(s) = wmi_single("Win32_ComputerSystem", "TotalPhysicalMemory") {
-            if let Ok(b) = s.parse::<u64>() { if b > 0 { return RamInfo { total_bytes: b }; } }
-        }
-    }
-    RamInfo { total_bytes: sys_total }
+    let total = sys.total_memory();
+    RamInfo { total_bytes: total }
 }
 
 // ── Displays ─────────────────────────────────────────────────────────────
 
 fn collect_displays() -> Vec<DisplayInfo> {
-    #[cfg(windows)]
-    {
-        let props = &["Name", "ScreenWidth", "ScreenHeight"];
-        if let Some(arr) = ps_wmi_all("Win32_DesktopMonitor", props) {
-            let displays: Vec<_> = arr.iter().filter_map(|d| {
-                let name = d["Name"].as_str().unwrap_or("").to_string();
-                if name.is_empty() { return None; }
-                let w = d["ScreenWidth"].as_u64().unwrap_or(0) as u32;
-                let h = d["ScreenHeight"].as_u64().unwrap_or(0) as u32;
-                if w == 0 || h == 0 { return None; }
-                Some(DisplayInfo { name, width: w, height: h })
-            }).collect();
-            if !displays.is_empty() { return displays; }
-        }
-        if let Ok(displays) = wmi_displays() { if !displays.is_empty() { return displays; } }
-    }
-    vec![DisplayInfo { name: "Primary Display".into(), width: 1920, height: 1080 }]
+    // Try wmic first
+    if let Ok(displays) = wmi_displays() { if !disks_is_empty(&displays) { return displays; } }
+    // Fallback: empty
+    vec![]
 }
 
 #[cfg(windows)]
@@ -261,88 +187,47 @@ fn wmi_displays() -> Result<Vec<DisplayInfo>, ()> {
     let output = run_hidden("wmic", &["path", "Win32_DesktopMonitor", "get", "Name,ScreenWidth,ScreenHeight", "/format:csv"])?;
     let text = String::from_utf8_lossy(&output);
     let mut displays = Vec::new();
+    let mut idx = 0;
     for line in text.lines().skip(2) {
         let parts: Vec<&str> = line.split(',').collect();
         if parts.len() >= 4 {
             let name = parts[1].trim().to_string();
-            if name.is_empty() { continue; }
-            let w: u32 = parts[2].trim().parse().unwrap_or(0);
-            let h: u32 = parts[3].trim().parse().unwrap_or(0);
-            if w == 0 || h == 0 { continue; }
-            displays.push(DisplayInfo { name, width: w, height: h });
+            let width: u32 = parts[2].trim().parse().unwrap_or(0);
+            let height: u32 = parts[3].trim().parse().unwrap_or(0);
+            if width > 0 && height > 0 {
+                let display_name = if name.is_empty() {
+                    format!("Monitor {}", idx + 1)
+                } else {
+                    name
+                };
+                displays.push(DisplayInfo { name: display_name, width, height });
+                idx += 1;
+            }
         }
     }
     Ok(displays)
 }
 
-// ── WMI helpers ──────────────────────────────────────────────────────────
-
-/// Run a PowerShell Get-CimInstance query and return the first result as a Value object.
-#[cfg(windows)]
-fn ps_wmi_first(class: &str, props: &[&str]) -> Option<serde_json::Value> {
-    use std::os::windows::process::CommandExt;
-    let prop_list = props.join(",");
-    let cmd = format!(
-        "[Console]::OutputEncoding=[Text.Encoding]::UTF8;Get-CimInstance -Class {} -ErrorAction SilentlyContinue | Select -First 1 -Property {} | ConvertTo-Json -Compress",
-        class, prop_list
-    );
-    let output = std::process::Command::new("powershell")
-        .args(["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", &cmd])
-        .creation_flags(0x08000000)
-        .output().ok()?;
-    if !output.status.success() { return None; }
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    serde_json::from_str(stdout.trim()).ok()
+fn disks_is_empty(_displays: &[DisplayInfo]) -> bool {
+    _displays.is_empty()
 }
 
-/// Run a PowerShell Get-CimInstance query and return all results as a Vec of Value objects.
+// ── Helpers ──────────────────────────────────────────────────────────────
+
 #[cfg(windows)]
-fn ps_wmi_all(class: &str, props: &[&str]) -> Option<Vec<serde_json::Value>> {
+fn run_hidden(cmd: &str, args: &[&str]) -> Result<Vec<u8>, ()> {
     use std::os::windows::process::CommandExt;
-    let prop_list = props.join(",");
-    let cmd = format!(
-        "[Console]::OutputEncoding=[Text.Encoding]::UTF8;Get-CimInstance -Class {} -ErrorAction SilentlyContinue | Select -Property {} | ConvertTo-Json -Compress",
-        class, prop_list
-    );
-    let output = std::process::Command::new("powershell")
-        .args(["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", &cmd])
+    std::process::Command::new(cmd)
+        .args(args)
         .creation_flags(0x08000000)
-        .output().ok()?;
-    if !output.status.success() { return None; }
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let val: serde_json::Value = serde_json::from_str(stdout.trim()).ok()?;
-    // If it's a single object, wrap in vec; if array, return as-is
-    if val.is_object() {
-        Some(vec![val])
-    } else if val.is_array() {
-        let arr: Vec<serde_json::Value> = serde_json::from_value(val).unwrap_or_default();
-        Some(arr)
-    } else {
-        None
-    }
+        .output()
+        .map(|o| o.stdout)
+        .map_err(|_| ())
 }
 
-/// Get a single string value from WMI. Tries PowerShell first, then wmic.
 fn wmi_single(class: &str, property: &str) -> Option<String> {
     #[cfg(windows)]
     {
-        use std::os::windows::process::CommandExt;
-        // PowerShell first
-        let cmd = format!(
-            "[Console]::OutputEncoding=[Text.Encoding]::UTF8;(Get-CimInstance -Class {} -ErrorAction SilentlyContinue | Select -First 1).{}",
-            class, property
-        );
-        if let Ok(output) = std::process::Command::new("powershell")
-            .args(["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", &cmd])
-            .creation_flags(0x08000000)
-            .output()
-        {
-            if output.status.success() {
-                let val = String::from_utf8_lossy(&output.stdout).trim().to_string();
-                if !val.is_empty() { return Some(val); }
-            }
-        }
-        // Fallback to wmic
         if let Ok(output) = run_hidden("wmic", &["path", class, "get", property, "/format:csv"]) {
             let text = String::from_utf8_lossy(&output);
             for line in text.lines().skip(2) {
@@ -362,26 +247,6 @@ fn wmi_single(class: &str, property: &str) -> Option<String> {
     }
 }
 
-#[cfg(windows)]
-fn run_hidden(cmd: &str, args: &[&str]) -> Result<Vec<u8>, ()> {
-    use std::os::windows::process::CommandExt;
-    std::process::Command::new(cmd)
-        .args(args)
-        .creation_flags(0x08000000)
-        .output()
-        .map(|o| o.stdout)
-        .map_err(|_| ())
-}
-
 fn opt_str(s: Option<&str>) -> Option<String> {
     s.filter(|s| !s.is_empty()).map(|s| s.to_string())
-}
-
-/// Parse a serde_json Value as u64, handling both number and string representations.
-fn parse_u64_any(v: &serde_json::Value) -> u64 {
-    if let Some(n) = v.as_u64() { return n; }
-    if let Some(s) = v.as_str() {
-        if let Ok(n) = s.trim().parse::<u64>() { return n; }
-    }
-    0
 }
