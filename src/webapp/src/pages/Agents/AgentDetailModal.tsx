@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next';
 import { Accordion, Chip, Modal, Spinner } from '@heroui/react';
-import { ChevronDown } from '@gravity-ui/icons';
+import { ChevronDown, Cpu, Gpu, HardDrive, Display } from '@gravity-ui/icons';
 import type { AgentDetail } from '../../types/models';
 
 type GpuVendor = 'NVIDIA' | 'Intel' | 'AMD' | 'Other';
@@ -103,53 +103,92 @@ function HardwareAccordion({ hardware, t }: { hardware: AgentDetail['hardware'];
   const cpuInfo = cpu ? cpuVendor(cpu.model || '') : null;
   const gpuInfo = gpu ? gpuVendor(gpu.model || '') : null;
 
+  const items = [];
+
+  // CPU + GPU
+  if (cpu || gpu) {
+    const lines: React.ReactNode[] = [];
+    if (cpu) {
+      lines.push(
+        <div key="cpu" className="flex justify-between">
+          <span className="text-default-500">CPU</span>
+          <span className="text-default-700">
+            {cpu.model || '—'}
+            {cpuInfo && <Chip size="sm" variant="soft" color={cpuInfo.color} className="ml-2">{cpuInfo.label}</Chip>}
+            {cpu.cores ? ` (${cpu.cores} cores)` : ''}
+          </span>
+        </div>
+      );
+    }
+    if (gpu) {
+      lines.push(
+        <div key="gpu" className="flex justify-between">
+          <span className="text-default-500">GPU</span>
+          <span className="text-default-700">
+            {gpu.model || '—'}
+            {gpuInfo && <Chip size="sm" variant="soft" color={gpuInfo.color} className="ml-2">{gpuInfo.label}</Chip>}
+          </span>
+        </div>
+      );
+    }
+    items.push({ id: 'processor', icon: <Cpu />, title: t('agents.processorGpu'), content: lines });
+  }
+
+  // RAM + Disk
+  if (hardware.ram || (hardware.disks && hardware.disks.length > 0)) {
+    const lines: React.ReactNode[] = [];
+    if (hardware.ram) {
+      lines.push(
+        <div key="ram" className="flex justify-between">
+          <span className="text-default-500">RAM</span>
+          <span className="text-default-700">{formatBytes(hardware.ram.totalBytes, t)}</span>
+        </div>
+      );
+    }
+    if (hardware.disks && hardware.disks.length > 0) {
+      lines.push(
+        <div key="disk" className="flex justify-between">
+          <span className="text-default-500">Disk</span>
+          <span className="text-default-700">{formatBytes(hardware.disks[0].sizeBytes, t)}</span>
+        </div>
+      );
+    }
+    items.push({ id: 'memory', icon: <HardDrive />, title: t('agents.ramDisks'), content: lines });
+  }
+
+  // Display
+  if (hardware.displays && hardware.displays.length > 0) {
+    const lines = hardware.displays.map((d, i) => (
+      <div key={i} className="flex justify-between">
+        <span className="text-default-500">{t('agents.display')} {i + 1}</span>
+        <span className="text-default-700">{d.width}×{d.height}</span>
+      </div>
+    ));
+    items.push({ id: 'display', icon: <Display />, title: t('agents.displayInfo'), content: lines });
+  }
+
+  if (items.length === 0) return null;
+
   return (
-    <Accordion>
-      <Accordion.Item id="hardware">
-        <Accordion.Heading>
-          <Accordion.Trigger>
-            {t('agents.hardwareInfo')}
-            <Accordion.Indicator><ChevronDown /></Accordion.Indicator>
-          </Accordion.Trigger>
-        </Accordion.Heading>
-        <Accordion.Panel>
-          <Accordion.Body>
-            <div className="space-y-1 text-sm">
-              {cpu && (
-                <div className="flex justify-between">
-                  <span className="text-default-500">CPU</span>
-                  <span className="text-default-700">
-                    {cpu.model || '—'}
-                    {cpuInfo && <Chip size="sm" variant="soft" color={cpuInfo.color} className="ml-2">{cpuInfo.label}</Chip>}
-                    {cpu.cores ? ` (${cpu.cores} cores)` : ''}
-                  </span>
-                </div>
-              )}
-              {gpu && (
-                <div className="flex justify-between">
-                  <span className="text-default-500">GPU</span>
-                  <span className="text-default-700">
-                    {gpu.model || '—'}
-                    {gpuInfo && <Chip size="sm" variant="soft" color={gpuInfo.color} className="ml-2">{gpuInfo.label}</Chip>}
-                  </span>
-                </div>
-              )}
-              {hardware.ram && (
-                <div className="flex justify-between">
-                  <span className="text-default-500">RAM</span>
-                  <span className="text-default-700">{formatBytes(hardware.ram.totalBytes, t)}</span>
-                </div>
-              )}
-              {hardware.disks && hardware.disks.length > 0 && (
-                <div className="flex justify-between">
-                  <span className="text-default-500">Disk</span>
-                  <span className="text-default-700">{formatBytes(hardware.disks[0].sizeBytes, t)}</span>
-                </div>
-              )}
-            </div>
-          </Accordion.Body>
-        </Accordion.Panel>
-      </Accordion.Item>
+    <Accordion className="w-full">
+      {items.map((item) => (
+        <Accordion.Item key={item.id}>
+          <Accordion.Heading>
+            <Accordion.Trigger>
+              <span className="mr-3 size-4 shrink-0 text-muted">{item.icon}</span>
+              {item.title}
+              <Accordion.Indicator>
+                <ChevronDown />
+              </Accordion.Indicator>
+            </Accordion.Trigger>
+          </Accordion.Heading>
+          <Accordion.Panel>
+            <Accordion.Body>
+              <div className="space-y-1 text-sm">{item.content}</div>
+            </Accordion.Body>
+          </Accordion.Panel>
+        </Accordion.Item>
+      ))}
     </Accordion>
   );
 }
