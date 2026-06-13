@@ -106,45 +106,49 @@ function HardwareAccordion({ hardware, t }: { hardware: AgentDetail['hardware'];
   return (
     <Accordion>
       <Accordion.Item id="hardware">
-        <Accordion.Trigger>
-          {t('agents.hardwareInfo')}
-          <ChevronDown className="w-4 h-4 ml-1" />
-        </Accordion.Trigger>
-        <Accordion.Content>
-          <div className="space-y-1 text-sm">
-            {cpu && (
-              <div className="flex justify-between">
-                <span className="text-default-500">CPU</span>
-                <span className="text-default-700">
-                  {cpu.model || '—'}
-                  {cpuInfo && <Chip size="sm" variant="soft" color={cpuInfo.color} className="ml-2">{cpuInfo.label}</Chip>}
-                  {cpu.cores ? ` (${cpu.cores} cores)` : ''}
-                </span>
-              </div>
-            )}
-            {gpu && (
-              <div className="flex justify-between">
-                <span className="text-default-500">GPU</span>
-                <span className="text-default-700">
-                  {gpu.model || '—'}
-                  {gpuInfo && <Chip size="sm" variant="soft" color={gpuInfo.color} className="ml-2">{gpuInfo.label}</Chip>}
-                </span>
-              </div>
-            )}
-            {hardware.ram && (
-              <div className="flex justify-between">
-                <span className="text-default-500">RAM</span>
-                <span className="text-default-700">{formatBytes(hardware.ram.totalBytes, t)}</span>
-              </div>
-            )}
-            {hardware.disks && hardware.disks.length > 0 && (
-              <div className="flex justify-between">
-                <span className="text-default-500">Disk</span>
-                <span className="text-default-700">{formatBytes(hardware.disks[0].sizeBytes, t)}</span>
-              </div>
-            )}
-          </div>
-        </Accordion.Content>
+        <Accordion.Heading>
+          <Accordion.Trigger>
+            {t('agents.hardwareInfo')}
+            <Accordion.Indicator><ChevronDown /></Accordion.Indicator>
+          </Accordion.Trigger>
+        </Accordion.Heading>
+        <Accordion.Panel>
+          <Accordion.Body>
+            <div className="space-y-1 text-sm">
+              {cpu && (
+                <div className="flex justify-between">
+                  <span className="text-default-500">CPU</span>
+                  <span className="text-default-700">
+                    {cpu.model || '—'}
+                    {cpuInfo && <Chip size="sm" variant="soft" color={cpuInfo.color} className="ml-2">{cpuInfo.label}</Chip>}
+                    {cpu.cores ? ` (${cpu.cores} cores)` : ''}
+                  </span>
+                </div>
+              )}
+              {gpu && (
+                <div className="flex justify-between">
+                  <span className="text-default-500">GPU</span>
+                  <span className="text-default-700">
+                    {gpu.model || '—'}
+                    {gpuInfo && <Chip size="sm" variant="soft" color={gpuInfo.color} className="ml-2">{gpuInfo.label}</Chip>}
+                  </span>
+                </div>
+              )}
+              {hardware.ram && (
+                <div className="flex justify-between">
+                  <span className="text-default-500">RAM</span>
+                  <span className="text-default-700">{formatBytes(hardware.ram.totalBytes, t)}</span>
+                </div>
+              )}
+              {hardware.disks && hardware.disks.length > 0 && (
+                <div className="flex justify-between">
+                  <span className="text-default-500">Disk</span>
+                  <span className="text-default-700">{formatBytes(hardware.disks[0].sizeBytes, t)}</span>
+                </div>
+              )}
+            </div>
+          </Accordion.Body>
+        </Accordion.Panel>
       </Accordion.Item>
     </Accordion>
   );
