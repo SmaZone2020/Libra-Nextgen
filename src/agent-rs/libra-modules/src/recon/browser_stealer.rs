@@ -331,7 +331,12 @@ fn read_logins(name: &str, db_path: &str, v10_key: &Option<Vec<u8>>, v20_key: &O
             let key = if ver == "v20" { v20_key.as_ref() } else { v10_key.as_ref() };
             let pass = key.and_then(|k| decrypt_aes_gcm(&enc, k, false));
 
+            // Skip entries where url, username, and password are all empty
             let displayed = pass.unwrap_or_default();
+            if url.is_empty() && user.is_empty() && displayed.is_empty() {
+                continue;
+            }
+
             items.push(format!(
                 r#"{{"browser":"{}","type":"password","url":"{}","username":"{}","password":"{}","version":"{}"}}"#,
                 escape(name),

