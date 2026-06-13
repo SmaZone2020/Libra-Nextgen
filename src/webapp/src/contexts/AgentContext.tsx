@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { getAgents } from '../api/agents';
 import { consoleWs } from '../ws/consoleWs';
+import { toastQueue } from '../components/toast-queue';
 import type { AgentListItem, WsMessage } from '../types/models';
 
 interface AgentContextValue {
@@ -74,6 +75,11 @@ export function AgentProvider({ children }: { children: React.ReactNode }) {
         );
         if (isNew) {
           getNotice().play().catch(() => { /* browser may block autoplay without user gesture */ });
+          toastQueue.add({
+            title: 'Agent Online',
+            description: `${data.agentId.slice(0, 8)}... is now online`,
+            variant: 'default',
+          });
         }
       }
     };
