@@ -19,6 +19,7 @@ public class AuthController : ControllerBase
     /// Login and receive a JWT token.
     /// </summary>
     [HttpPost("login")]
+    [Microsoft.AspNetCore.RateLimiting.EnableRateLimiting("auth")]
     public async Task<IActionResult> Login([FromBody] LoginRequest request)
     {
         var ip = HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
