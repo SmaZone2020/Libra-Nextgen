@@ -1,7 +1,7 @@
-import { api, getToken } from './client';
+import { api, getToken, API_ORIGIN } from './client';
 import type { ProxyResponse } from '../types/models';
 
-export const API_BASE = 'http://127.0.0.1:5270/api';
+export const API_BASE = `${API_ORIGIN}/api`;
 
 export function fetchPage(
   agentId: string,

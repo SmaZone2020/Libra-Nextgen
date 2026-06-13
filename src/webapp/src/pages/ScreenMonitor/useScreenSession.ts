@@ -1,6 +1,6 @@
 import { useCallback, useRef, useState } from 'react';
 import { consoleWs } from '../../ws/consoleWs';
-import { getToken } from '../../api/client';
+import { getToken, API_ORIGIN } from '../../api/client';
 import type { WsMessage } from '../../types/models';
 
 export interface ScreenConfig {
@@ -43,7 +43,7 @@ interface UseScreenSessionOptions {
   onError?: (error: string) => void;
 }
 
-const API_BASE = 'http://127.0.0.1:5270';
+const API_BASE = API_ORIGIN;
 
 export function useScreenSession({ onFrame, onError }: UseScreenSessionOptions) {
   const agentIdRef = useRef<string>('');

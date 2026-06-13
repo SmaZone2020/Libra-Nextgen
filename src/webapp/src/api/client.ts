@@ -1,5 +1,5 @@
-const API_BASE = 'http://127.0.0.1:5270/api';
-export const API_ORIGIN = 'http://127.0.0.1:5270';
+export const API_ORIGIN = import.meta.env.VITE_API_BASE || 'http://127.0.0.1:5270';
+const API_BASE = `${API_ORIGIN}/api`;
 
 let authToken: string | null = localStorage.getItem('token');
 let onAuthFailed: (() => void) | null = null;

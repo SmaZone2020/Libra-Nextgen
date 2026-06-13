@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import { Button } from '@heroui/react';
 import { ArrowRotateLeft } from '@gravity-ui/icons';
-import { getToken, setOnNetworkError, setOnNetworkRecovered } from '../api/client';
+import { getToken, setOnNetworkError, setOnNetworkRecovered, API_ORIGIN } from '../api/client';
 import { consoleWs } from '../ws/consoleWs';
 
-const API_BASE = 'http://127.0.0.1:5270/api';
+const API_BASE = `${API_ORIGIN}/api`;
 const RETRY_INTERVAL = 10_000;
 const MAX_RETRIES = 15;
 

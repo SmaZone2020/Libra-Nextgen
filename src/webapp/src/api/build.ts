@@ -1,7 +1,7 @@
-import { getToken } from './client';
+import { getToken, API_ORIGIN } from './client';
 import type { BuildConfigRequest, BuildRecord, BuildRecordDetail } from '../types/models';
 
-const API_BASE = 'http://127.0.0.1:5270/api';
+const API_BASE = `${API_ORIGIN}/api`;
 
 export async function uploadIcon(file: File): Promise<string> {
   const formData = new FormData();

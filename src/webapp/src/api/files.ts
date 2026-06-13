@@ -1,6 +1,6 @@
-import { api, getToken } from './client';
+import { api, getToken, API_ORIGIN } from './client';
 
-const API_BASE = 'http://127.0.0.1:5270/api';
+const API_BASE = `${API_ORIGIN}/api`;
 
 export interface FileListResult {
   path: string;
