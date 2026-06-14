@@ -32,6 +32,7 @@ image = { version = "0.25", default-features = false, features = ["jpeg"] }
 rusqlite = { version = "0.32", features = ["bundled"] }
 chacha20poly1305 = "0.10"
 regex = "1"
+obfstr = "0.4"
 windows = { version = "0.58", features = [
     "Win32_Graphics_Direct3D",
     "Win32_Graphics_Direct3D11",
@@ -60,5 +61,7 @@ windows = { version = "0.58", features = [
 
 [profile.release]
 strip = true
-lto = true
+lto = "fat"
 opt-level = 2
+panic = "abort"
+codegen-units = 1

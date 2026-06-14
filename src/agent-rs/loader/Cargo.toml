@@ -19,3 +19,4 @@ sha2 = "0.10"
 reqwest = { version = "0.12", features = ["rustls-tls"], default-features = false }
 sysinfo = "0.33"
 libc = "0.2"
+obfstr = { workspace = true }
