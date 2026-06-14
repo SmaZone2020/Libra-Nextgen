@@ -1,0 +1,15 @@
+[package]
+name = "core"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "core"
+crate-type = ["cdylib"]
+
+[dependencies]
+libra-engine = { path = "../libra-engine" }
+libra-common = { path = "../libra-common" }
+libra-modules = { path = "../libra-modules" }
+tokio = { workspace = true }
+serde_json = { workspace = true }
