@@ -363,22 +363,34 @@ export interface ProxyResponse {
 export interface AntiAnalysisConfig {
   /** Master toggle: enable sandbox/VM detection */
   enabled: boolean;
-  /** Check CPU core count (< 2 = suspicious) */
+  /** Check CPU core count */
   checkCpuCores: boolean;
-  /** Check physical memory (< 2 GB = suspicious) */
+  /** Minimum CPU cores threshold */
+  minCpuCores: number;
+  /** Check physical memory */
   checkMemory: boolean;
-  /** Check system uptime (< 5 min = suspicious) */
-  checkUptime: boolean;
+  /** Minimum memory in GB */
+  minMemoryGb: number;
+  /** Check total disk size */
+  checkDiskSize: boolean;
+  /** Minimum disk size in GB */
+  minDiskGb: number;
   /** Check for debugger (PEB, NtGlobalFlag, hardware breakpoints, debug port) */
   checkDebugger: boolean;
-  /** Check if parent process is an analysis tool (x64dbg, procmon, vmtoolsd, etc.) */
-  checkParentProcess: boolean;
   /** Check network adapter MAC prefix for VMware/VirtualBox/Hyper-V */
   checkVmMac: boolean;
-  /** Check total disk size (< 60 GB = suspicious VM) */
-  checkDiskSize: boolean;
-  /** Check for suspicious usernames (admin, malware, sandbox, etc.) */
+  /** Check for suspicious usernames (admin, malware, sandbox, user, etc.) */
   checkUsername: boolean;
+  /** Check USB device history count in registry */
+  checkUsbHistory: boolean;
+  /** Minimum USB devices seen */
+  minUsbDevices: number;
+  /** Check if Windows Test Signing mode is enabled */
+  checkTestSigning: boolean;
+  /** Delay-based anti-sandbox (detect sleep acceleration) */
+  checkDelaySandbox: boolean;
+  /** Delay duration in seconds */
+  delaySeconds: number;
 }
 
 export interface BuildConfigRequest {
@@ -417,6 +429,13 @@ export interface BuildRecord {
 
 export interface BuildRecordDetail extends BuildRecord {
   config: BuildConfigRequest;
+}
+
+export interface TemplateInfo {
+  platform: string;
+  fileName: string;
+  fileSize: number;
+  updatedAt: string;
 }
 
 export interface ProxyHistoryEntry {

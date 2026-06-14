@@ -1,5 +1,5 @@
 import { getToken, API_ORIGIN } from './client';
-import type { BuildConfigRequest, BuildRecord, BuildRecordDetail } from '../types/models';
+import type { BuildConfigRequest, BuildRecord, BuildRecordDetail, TemplateInfo } from '../types/models';
 
 const API_BASE = `${API_ORIGIN}/api`;
 
@@ -77,6 +77,46 @@ export function getBuildDownloadUrl(buildId: string): string {
 
 export async function deleteBuild(buildId: string): Promise<void> {
   const response = await fetch(`${API_BASE}/builder/${buildId}`, {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${getToken()}` },
+  });
+
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({ error: 'Delete failed' }));
+    throw new Error(err.error || `Delete failed (HTTP ${response.status})`);
+  }
+}
+
+export async function listTemplates(): Promise<TemplateInfo[]> {
+  const response = await fetch(`${API_BASE}/builder/template`, {
+    headers: { Authorization: `Bearer ${getToken()}` },
+  });
+
+  if (!response.ok) throw new Error(`Failed to list templates (HTTP ${response.status})`);
+  return response.json();
+}
+
+export async function uploadTemplate(file: File, platform: string): Promise<TemplateInfo> {
+  const formData = new FormData();
+  formData.append('file', file);
+  formData.append('platform', platform);
+
+  const response = await fetch(`${API_BASE}/builder/template/upload`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${getToken()}` },
+    body: formData,
+  });
+
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({ error: 'Upload failed' }));
+    throw new Error(err.error || `Upload failed (HTTP ${response.status})`);
+  }
+
+  return response.json();
+}
+
+export async function deleteTemplate(platform: string): Promise<void> {
+  const response = await fetch(`${API_BASE}/builder/template/${platform}`, {
     method: 'DELETE',
     headers: { Authorization: `Bearer ${getToken()}` },
   });
