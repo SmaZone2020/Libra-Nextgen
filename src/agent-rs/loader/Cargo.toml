@@ -1,0 +1,21 @@
+[package]
+name = "loader"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "loader"
+path = "src/main.rs"
+
+[dependencies]
+libra-common = { path = "../libra-common" }
+tokio = { version = "1", features = ["rt"] }
+serde_json = "1"
+base64 = "0.22"
+rand = "0.8"
+aes-gcm = "0.10"
+rsa = { version = "0.9", features = ["sha2"] }
+sha2 = "0.10"
+reqwest = { version = "0.12", features = ["rustls-tls"], default-features = false }
+sysinfo = "0.33"
+libc = "0.2"
