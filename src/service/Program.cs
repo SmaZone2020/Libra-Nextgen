@@ -35,6 +35,8 @@ builder.Services.AddScoped<Repository<TrafficRecord>>(sp =>
     new Repository<TrafficRecord>(sp.GetRequiredService<MongoDbContext>(), "traffic"));
 builder.Services.AddScoped<Repository<StressTestCampaign>>(sp =>
     new Repository<StressTestCampaign>(sp.GetRequiredService<MongoDbContext>(), "stress_campaigns"));
+builder.Services.AddScoped<Repository<AccessKey>>(sp =>
+    new Repository<AccessKey>(sp.GetRequiredService<MongoDbContext>(), "access_keys"));
 
 // JWT Settings (singleton, holds RSA key pair)
 var jwtSettings = new JwtSettings();
@@ -52,6 +54,7 @@ builder.Services.AddSingleton<AgentTrafficService>();
 builder.Services.AddSingleton<ConnectionManager>();
 builder.Services.AddSingleton<StressTestService>();
 builder.Services.AddScoped<AuditService>();
+builder.Services.AddScoped<AccessKeyService>();
 builder.Services.AddHostedService<HeartbeatMonitor>();
 
 // Auth
