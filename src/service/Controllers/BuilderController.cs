@@ -497,21 +497,9 @@ public class BuilderController : ControllerBase
             Directory.CreateDirectory(finalDir);
             System.IO.File.Copy(exePath, finalPath, true);
 
-            // Copy encrypted core DLL to final output for the delivery API
-            // (retry up to 5 times in case antivirus/EDR holds a transient lock)
+            // Write encrypted core DLL to final output (from memory, avoids file lock)
             var finalCorePath = Path.Combine(finalDir, "core.bin");
-            for (int retry = 0; retry < 5; retry++)
-            {
-                try
-                {
-                    System.IO.File.Copy(coreBinPath, finalCorePath, true);
-                    break;
-                }
-                catch (IOException) when (retry < 4)
-                {
-                    await Task.Delay(1000);
-                }
-            }
+            await System.IO.File.WriteAllBytesAsync(finalCorePath, encryptedCore);
 
             var fileInfo = new FileInfo(finalPath);
             job.Complete(fileInfo.Length);
