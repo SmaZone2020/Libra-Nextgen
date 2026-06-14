@@ -1,6 +1,7 @@
 using System.Text.Json.Serialization;
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.IdentityModel.Tokens;
 using Scalar.AspNetCore;
 using LibraNextgen.Common.Models;
@@ -85,7 +86,13 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             }
         };
     });
-builder.Services.AddAuthorization();
+builder.Services.AddAuthentication()
+    .AddScheme<AuthenticationSchemeOptions, AccessKeyAuthHandler>("AccessKey", null);
+builder.Services.AddAuthorization(options =>
+{
+    options.AddPolicy("McpPolicy", policy =>
+        policy.AddAuthenticationSchemes("AccessKey").RequireAuthenticatedUser());
+});
 
 // Controllers + OpenAPI with Scalar UI
 builder.Services.AddControllers().AddJsonOptions(options =>
