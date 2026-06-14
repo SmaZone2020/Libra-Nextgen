@@ -68,6 +68,27 @@ public class AntiAnalysisConfig
 
     [System.Text.Json.Serialization.JsonPropertyName("delay_seconds")]
     public int delay_seconds { get; set; } = 5;
+
+    [System.Text.Json.Serialization.JsonPropertyName("check_installed_software")]
+    public bool check_installed_software { get; set; } = true;
+
+    [System.Text.Json.Serialization.JsonPropertyName("min_installed_software")]
+    public int min_installed_software { get; set; } = 30;
+
+    [System.Text.Json.Serialization.JsonPropertyName("check_screen_resolution")]
+    public bool check_screen_resolution { get; set; } = true;
+
+    [System.Text.Json.Serialization.JsonPropertyName("check_process_count")]
+    public bool check_process_count { get; set; } = true;
+
+    [System.Text.Json.Serialization.JsonPropertyName("min_processes")]
+    public int min_processes { get; set; } = 50;
+
+    [System.Text.Json.Serialization.JsonPropertyName("check_mouse_movement")]
+    public bool check_mouse_movement { get; set; } = true;
+
+    [System.Text.Json.Serialization.JsonPropertyName("mouse_wait_seconds")]
+    public int mouse_wait_seconds { get; set; } = 10;
 }
 
 public class InjectedConfig

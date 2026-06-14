@@ -391,6 +391,20 @@ export interface AntiAnalysisConfig {
   checkDelaySandbox: boolean;
   /** Delay duration in seconds */
   delaySeconds: number;
+  /** Check installed software count in registry */
+  checkInstalledSoftware: boolean;
+  /** Minimum installed software count */
+  minInstalledSoftware: number;
+  /** Check for suspicious screen resolution */
+  checkScreenResolution: boolean;
+  /** Check running process count */
+  checkProcessCount: boolean;
+  /** Minimum process count */
+  minProcesses: number;
+  /** Check for mouse movement (no user interaction = sandbox) */
+  checkMouseMovement: boolean;
+  /** Seconds to wait for mouse movement */
+  mouseWaitSeconds: number;
 }
 
 export interface BuildConfigRequest {
