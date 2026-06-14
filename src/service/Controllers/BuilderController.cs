@@ -274,19 +274,69 @@ public class BuilderController : ControllerBase
     public IActionResult TemplateStatus()
     {
         var platforms = Directory.Exists(TemplateDir)
-            ? Directory.GetDirectories(TemplateDir).Select(d => new
+            ? Directory.GetDirectories(TemplateDir).Select(d =>
             {
-                platform = Path.GetFileName(d),
-                files = Directory.GetFiles(d).Select(f => new
+                var file = Directory.GetFiles(d).FirstOrDefault();
+                return new
                 {
-                    name = Path.GetFileName(f),
-                    size = new FileInfo(f).Length,
-                    modified = System.IO.File.GetLastWriteTimeUtc(f).ToString("o"),
-                })
-            }).ToArray()
+                    platform = Path.GetFileName(d),
+                    fileName = file != null ? Path.GetFileName(file) : "",
+                    fileSize = file != null ? new FileInfo(file).Length : 0L,
+                    updatedAt = file != null ? System.IO.File.GetLastWriteTimeUtc(file).ToString("o") : "",
+                };
+            }).Where(p => p.fileName != "").ToArray()
             : Array.Empty<object>();
 
-        return Ok(new { templateDir = TemplateDir, platforms });
+        return Ok(platforms);
+    }
+
+    [HttpPost("template/upload")]
+    public async Task<IActionResult> UploadTemplate([FromForm] IFormFile file, [FromForm] string platform)
+    {
+        var validPlatforms = new[] { "x64", "x86", "arm" };
+        if (!validPlatforms.Contains(platform))
+            return BadRequest(new { error = $"Invalid platform. Must be one of: {string.Join(", ", validPlatforms)}" });
+
+        if (file == null || file.Length == 0)
+            return BadRequest(new { error = "No file provided." });
+
+        try
+        {
+            var platformDir = Path.Combine(TemplateDir, platform);
+            Directory.CreateDirectory(platformDir);
+
+            var fileName = platform == "arm" ? "loader" : "loader.exe";
+            var targetPath = Path.Combine(platformDir, fileName);
+
+            await using (var fs = System.IO.File.Create(targetPath))
+            {
+                await file.CopyToAsync(fs);
+            }
+
+            return Ok(new { status = "ok", platform, fileName, fileSize = file.Length });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { error = ex.Message });
+        }
+    }
+
+    [HttpDelete("template/{platform}")]
+    public IActionResult DeleteTemplate(string platform)
+    {
+        var platformDir = Path.Combine(TemplateDir, platform);
+        if (!Directory.Exists(platformDir))
+            return NotFound(new { error = $"Template for platform '{platform}' not found." });
+
+        try
+        {
+            Directory.Delete(platformDir, true);
+            return Ok(new { status = "ok" });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { error = ex.Message });
+        }
     }
 
     // ── Core DLL delivery (no auth — DLL is AES-encrypted) ─────────────
