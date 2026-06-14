@@ -6,7 +6,7 @@ import { ListView } from '@components/list-view';
 import type { Selection } from 'react-aria-components';
 import { startBuild, uploadIcon, getBuildStreamUrl, listBuilds, deleteBuild, getBuildDownloadUrl, getBuildInfo } from '../../api/build';
 import type { BuildConfigRequest, BuildRecord, BuildRecordDetail } from '../../types/models';
-import { CircleInfo, Picture } from '@gravity-ui/icons';
+import { ArrowDownToLine, CircleCheck, CircleInfo, Picture, Shield, ToggleOff, ToggleOn, TrashBin } from '@gravity-ui/icons';
 
 interface ToggleOption {
   id: string;
@@ -554,14 +554,17 @@ export default function BuilderPage() {
 
           <Card className="p-4">
             <div className="flex items-center justify-between mb-3">
-              <h2 className="text-lg font-semibold">{t('builder.antiAnalysis')}</h2>
-              <button
-                type="button"
-                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${config.antiAnalysis.enabled ? 'bg-primary' : 'bg-default-300'}`}
-                onClick={toggleAntiAnalysis}
+              <h2 className="text-lg font-semibold flex items-center gap-2">
+                <Shield className="w-5 h-5" />
+                {t('builder.antiAnalysis')}
+              </h2>
+              <Button
+                variant={config.antiAnalysis.enabled ? 'primary' : 'secondary'}
+                onPress={toggleAntiAnalysis}
               >
-                <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${config.antiAnalysis.enabled ? 'translate-x-6' : 'translate-x-1'}`} />
-              </button>
+                {config.antiAnalysis.enabled ? <ToggleOn /> : <ToggleOff />}
+                {config.antiAnalysis.enabled ? t('common.yes') : t('common.no')}
+              </Button>
             </div>
             {config.antiAnalysis.enabled && (
               <ListView
@@ -657,9 +660,7 @@ export default function BuilderPage() {
                           aria-label={t('builder.download')}
                           onPress={() => handleDownload(record.id)}
                         >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3" />
-                          </svg>
+                          <ArrowDownToLine className="w-4 h-4" />
                         </Button>
                         <Button
                           size="sm"
@@ -668,9 +669,7 @@ export default function BuilderPage() {
                           aria-label={t('builder.deleteBuild')}
                           onPress={() => handleDelete(record.id)}
                         >
-                          <svg className="w-4 h-4 text-danger" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6M1 7h22M8 7V4a1 1 0 011-1h6a1 1 0 011 1v3" />
-                          </svg>
+                          <TrashBin className="w-4 h-4 text-danger" />
                         </Button>
                       </div>
                     </ListView.ItemAction>
@@ -696,9 +695,7 @@ export default function BuilderPage() {
                   <Modal.Body>
                     <div className="flex flex-col items-center py-10 gap-4">
                       <div className="w-16 h-16 rounded-full bg-green-500 flex items-center justify-center">
-                        <svg className="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                        </svg>
+                        <CircleCheck className="w-10 h-10 text-white" />
                       </div>
                       <h2 className="text-2xl font-semibold">{t('builder.buildSuccess')}</h2>
                       <p className="text-default-500 text-lg">{t('builder.buildSuccessDesc', { time: formatElapsed(elapsed) })}</p>
