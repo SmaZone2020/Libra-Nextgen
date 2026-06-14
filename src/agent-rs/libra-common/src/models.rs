@@ -311,34 +311,58 @@ pub struct AntiAnalysisConfig {
     pub enabled: bool,
     #[serde(default = "default_true")]
     pub check_cpu_cores: bool,
+    #[serde(default = "default_min_cpu")]
+    pub min_cpu_cores: u32,
     #[serde(default = "default_true")]
     pub check_memory: bool,
+    #[serde(default = "default_min_memory")]
+    pub min_memory_gb: u32,
     #[serde(default = "default_true")]
-    pub check_uptime: bool,
+    pub check_disk_size: bool,
+    #[serde(default = "default_min_disk")]
+    pub min_disk_gb: u32,
     #[serde(default = "default_true")]
     pub check_debugger: bool,
     #[serde(default = "default_true")]
-    pub check_parent_process: bool,
-    #[serde(default = "default_true")]
     pub check_vm_mac: bool,
     #[serde(default = "default_true")]
-    pub check_disk_size: bool,
-    #[serde(default = "default_true")]
     pub check_username: bool,
+    #[serde(default = "default_true")]
+    pub check_usb_history: bool,
+    #[serde(default = "default_min_usb")]
+    pub min_usb_devices: u32,
+    #[serde(default = "default_true")]
+    pub check_test_signing: bool,
+    #[serde(default = "default_true")]
+    pub check_delay_sandbox: bool,
+    #[serde(default = "default_delay_seconds")]
+    pub delay_seconds: u32,
 }
+
+fn default_min_cpu() -> u32 { 2 }
+fn default_min_memory() -> u32 { 2 }
+fn default_min_disk() -> u32 { 60 }
+fn default_min_usb() -> u32 { 2 }
+fn default_delay_seconds() -> u32 { 5 }
 
 impl Default for AntiAnalysisConfig {
     fn default() -> Self {
         Self {
             enabled: false,
             check_cpu_cores: true,
+            min_cpu_cores: 2,
             check_memory: true,
-            check_uptime: true,
-            check_debugger: true,
-            check_parent_process: true,
-            check_vm_mac: true,
+            min_memory_gb: 2,
             check_disk_size: true,
+            min_disk_gb: 60,
+            check_debugger: true,
+            check_vm_mac: true,
             check_username: true,
+            check_usb_history: true,
+            min_usb_devices: 2,
+            check_test_signing: true,
+            check_delay_sandbox: true,
+            delay_seconds: 5,
         }
     }
 }

