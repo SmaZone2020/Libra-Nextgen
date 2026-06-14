@@ -58,6 +58,11 @@ builder.Services.AddScoped<AuditService>();
 builder.Services.AddScoped<AccessKeyService>();
 builder.Services.AddHostedService<HeartbeatMonitor>();
 
+// MCP Server
+builder.Services.AddMcpServer()
+    .WithHttpTransport()
+    .WithToolsFromAssembly();
+
 // Auth
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
@@ -161,5 +166,6 @@ app.UseAuthentication();
 app.UseAuthorization();
 app.UseMiddleware<AuditMiddleware>();
 app.MapControllers();
+app.MapMcp("/mcp").RequireAuthorization("McpPolicy");
 WebSocketHandler.Map(app);
 app.Run();
