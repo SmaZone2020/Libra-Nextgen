@@ -1,0 +1,16 @@
+[package]
+name = "libra-engine"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+libra-common = { path = "../libra-common" }
+libra-crypto = { path = "../libra-crypto" }
+libra-comm = { path = "../libra-comm" }
+libra-platform = { path = "../libra-platform" }
+libra-modules = { path = "../libra-modules" }
+tokio = { workspace = true }
+serde_json = { workspace = true }
+rand = { workspace = true }
+base64 = { workspace = true }
+libc = { workspace = true }
