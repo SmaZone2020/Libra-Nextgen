@@ -99,12 +99,15 @@ impl PersistenceManager {
         {
             use std::os::windows::process::CommandExt;
             let _ = std::process::Command::new(&target_exe)
+                .arg("--boot")
                 .creation_flags(0x08000000)
                 .spawn();
         }
         #[cfg(not(target_os = "windows"))]
         {
-            let _ = std::process::Command::new(&target_exe).spawn();
+            let _ = std::process::Command::new(&target_exe)
+                .arg("--boot")
+                .spawn();
         }
 
         std::process::exit(0);

