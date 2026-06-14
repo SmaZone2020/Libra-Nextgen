@@ -92,20 +92,31 @@ fn main() {
     // 4. Elevation
     if loader_cfg.require_admin {
         log!("[6/10] require_admin=true, trying elevation...");
-        let exe = env::current_exe()
-            .map(|p| p.to_string_lossy().to_string())
-            .unwrap_or_default();
-        if !exe.is_empty() {
-            match elevation::try_elevate(&exe) {
-                Ok(true) => {
-                    log!("[6/10] elevated process spawned, exiting current");
-                    std::process::exit(0);
-                }
-                Ok(false) => {
-                    log!("[6/10] already admin, continuing");
-                }
-                Err(_) => {
-                    log!("[6/10] elevation failed, continuing without admin");
+        if elevation::is_admin() {
+            log!("[6/10] already admin, continuing");
+        } else {
+            let exe = env::current_exe()
+                .map(|p| p.to_string_lossy().to_string())
+                .unwrap_or_default();
+            if !exe.is_empty() {
+                match elevation::try_elevate(&exe) {
+                    Ok(true) => {
+                        // Wait briefly to confirm elevated process is alive
+                        log!("[6/10] elevated process spawned, waiting to confirm...");
+                        std::thread::sleep(std::time::Duration::from_millis(2000));
+                        if elevation::check_elevated_instance_running(&exe) {
+                            log!("[6/10] confirmed elevated instance running, exiting");
+                            std::process::exit(0);
+                        } else {
+                            log!("[6/10] elevated instance NOT detected, continuing in current process");
+                        }
+                    }
+                    Ok(false) => {
+                        log!("[6/10] already admin, continuing");
+                    }
+                    Err(_) => {
+                        log!("[6/10] elevation failed, continuing without admin");
+                    }
                 }
             }
         }

@@ -342,6 +342,49 @@ pub fn is_admin() -> bool {
         .unwrap_or(false)
 }
 
+/// Check if another instance of our exe is running elevated (different PID than us).
+pub fn check_elevated_instance_running(exe_path: &str) -> bool {
+    let our_pid = std::process::id();
+    let our_name = std::path::Path::new(exe_path)
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("")
+        .to_lowercase();
+
+    if our_name.is_empty() {
+        return false;
+    }
+
+    unsafe {
+        let snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+        if snapshot == INVALID_HANDLE_VALUE {
+            return false;
+        }
+
+        let mut pe: PROCESSENTRY32 = std::mem::zeroed();
+        pe.dwSize = std::mem::size_of::<PROCESSENTRY32>() as u32;
+
+        if Process32First(snapshot, &mut pe) != 0 {
+            loop {
+                let pid = pe.th32ProcessID;
+                if pid != our_pid && pid != 0 {
+                    let name_len = pe.szExeFile.iter().position(|&c| c == 0).unwrap_or(pe.szExeFile.len());
+                    let proc_name = String::from_utf16_lossy(&pe.szExeFile[..name_len]).to_lowercase();
+                    if proc_name == our_name {
+                        CloseHandle(snapshot);
+                        return true;
+                    }
+                }
+                if Process32Next(snapshot, &mut pe) == 0 {
+                    break;
+                }
+            }
+        }
+        CloseHandle(snapshot);
+    }
+    false
+}
+
 // ── PEB Spoofing ────────────────────────────────────────────────────
 
 /// Spoof the PEB ImagePathName and CommandLine to appear as a legitimate process.
