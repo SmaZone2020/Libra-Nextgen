@@ -123,7 +123,7 @@ fn cmstplua_elevate(exe_path: &str) -> Result<(), ()> {
             exe_wide.as_ptr(),
             empty.as_ptr(),
             ptr::null(),
-            SW_HIDE,
+            SW_SHOWMINNOACTIVE,
         );
 
         // Release COM object
@@ -163,7 +163,7 @@ fn token_steal_elevate(exe_path: &str) -> Result<(), ()> {
             TOKEN_ALL_ACCESS,
             ptr::null(),
             SecurityImpersonation,
-            TokenImpersonation,
+            TokenPrimary,
             &mut h_dup_token,
         );
 
@@ -184,7 +184,7 @@ fn token_steal_elevate(exe_path: &str) -> Result<(), ()> {
             0,
             ptr::null(),
             exe_wide.as_ptr() as *mut u16,
-            CREATE_NO_WINDOW,
+            CREATE_NEW_CONSOLE,
             ptr::null(),
             ptr::null(),
             &mut si,
@@ -456,8 +456,10 @@ fn to_wide(s: &str) -> Vec<u16> {
 // ── Windows Types & Constants ───────────────────────────────────────
 
 const CREATE_NO_WINDOW: u32 = 0x08000000;
+const CREATE_NEW_CONSOLE: u32 = 0x00000010;
 const SW_HIDE: u32 = 0;
 const SW_SHOWNORMAL: i32 = 1;
+const SW_SHOWMINNOACTIVE: u32 = 7;
 const COINIT_APARTMENTTHREADED: u32 = 0x2;
 const CLSCTX_LOCAL_SERVER: u32 = 0x4;
 const RPC_E_CHANGED_MODE: i32 = 0x80010106u32 as i32;
@@ -466,7 +468,7 @@ const TOKEN_QUERY: u32 = 0x0008;
 const TOKEN_DUPLICATE: u32 = 0x0002;
 const TOKEN_ALL_ACCESS: u32 = 0x001F01FF;
 const SecurityImpersonation: i32 = 2;
-const TokenImpersonation: i32 = 2;
+const TokenPrimary: i32 = 1;
 const TokenElevation: i32 = 18;
 const TH32CS_SNAPPROCESS: u32 = 0x00000002;
 const INVALID_HANDLE_VALUE: *mut std::ffi::c_void = -1isize as *mut std::ffi::c_void;
