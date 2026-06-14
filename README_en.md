@@ -57,7 +57,7 @@ ASP.NET Core WebAPI with:
 
 ### Console Pages (`src/webapp/src/pages/`)
 
-15 page modules:
+16 page modules:
 
 | Page | Route | Function |
 |------|-------|----------|
@@ -73,6 +73,7 @@ ASP.NET Core WebAPI with:
 | Builder | `/builder` | Agent payload generation and compilation |
 | StressTest | `/stress-test` | Multi-point DDoS attack management |
 | AuditLogs | `/audit` | Operation audit log viewer |
+| Settings | `/settings` | MCP AccessKey management |
 | About | `/about` | License and legal disclaimers |
 
 ## Agent Capability Matrix
@@ -185,6 +186,88 @@ The `InjectedConfig` model is defined in `libra-common/src/models.rs`:
   "copyToPath": "Microsoft\\SecurityHealth"
 }
 ```
+
+## MCP Server
+
+Libra-Nextgen includes a built-in [Model Context Protocol (MCP)](https://modelcontextprotocol.io) server, allowing AI clients (Claude Desktop, Cursor, Windsurf, etc.) to invoke the full C2 feature set via the standard MCP protocol.
+
+### Endpoint
+
+```
+http://localhost:5270/mcp
+```
+
+Supports both Streamable HTTP and SSE transports.
+
+### Authentication
+
+The MCP server uses AccessKey authentication. Include the key in the request header:
+
+```
+Authorization: Bearer lnk_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+```
+
+### Creating an AccessKey
+
+1. **Via Web Console**: Log in, navigate to the "Settings" page, click "Create Key", set a name and (optionally) an expiration date. Copy the key immediately after creation (shown only once).
+
+2. **Via API**:
+
+```bash
+curl -X POST http://localhost:5270/api/access-keys \
+  -H "Authorization: Bearer <JWT_TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{"name": "my-ai-client", "expiresAt": "2025-12-31T00:00:00Z"}'
+```
+
+### Configuring AI Clients
+
+#### Claude Desktop
+
+Add to `claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "libra-nextgen": {
+      "url": "http://localhost:5270/mcp",
+      "headers": {
+        "Authorization": "Bearer lnk_your_access_key_here"
+      }
+    }
+  }
+}
+```
+
+#### Cursor / Windsurf
+
+Add an HTTP-type MCP server in MCP settings. Set the URL to `http://localhost:5270/mcp` and add the header `Authorization: Bearer lnk_xxx`.
+
+### Available Tools
+
+The MCP server exposes the following tool sets:
+
+| Category | Tools | Description |
+|----------|-------|-------------|
+| **Agent** | `list_agents`, `get_agent`, `delete_agent` | Manage online agents |
+| **Task** | `list_tasks`, `get_task`, `create_task`, `cancel_task` | Task scheduling and management |
+| **Shell** | `execute_shell`, `execute_powershell` | Remote command execution |
+| **File** | `list_directory`, `get_drives`, `download_file`, `upload_file`, `delete_file`, `rename_file`, `move_file`, `copy_file` | File system operations |
+| **System** | `get_processes`, `kill_process`, `get_network_info`, `scan_wifi`, `scan_lan` | System info and network scanning |
+| **Screen** | `take_screenshot`, `capture_webcam` | Screenshots and webcam capture |
+| **Data** | `get_browser_passwords`, `get_browser_history`, `scan_ai_tokens` | Data exfiltration |
+| **Builder** | `build_payload`, `list_builds`, `get_build_info` | Payload compilation |
+| **Stress** | `start_stress_test`, `stop_stress_test`, `get_campaign_status` | Stress testing |
+
+### Usage Examples
+
+Once connected, interact with the AI using natural language:
+
+- "List all online agents"
+- "Execute whoami on agent xxx"
+- "Take a screenshot of agent xxx"
+- "Scan WiFi networks near agent xxx"
+- "Build an agent payload connecting to 192.168.1.100:5270"
 
 ## License
 
