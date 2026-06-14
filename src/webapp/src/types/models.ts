@@ -360,6 +360,27 @@ export interface ProxyResponse {
 
 // ── Builder types ──────────────────────────────────────────────────────
 
+export interface AntiAnalysisConfig {
+  /** Master toggle: enable sandbox/VM detection */
+  enabled: boolean;
+  /** Check CPU core count (< 2 = suspicious) */
+  checkCpuCores: boolean;
+  /** Check physical memory (< 2 GB = suspicious) */
+  checkMemory: boolean;
+  /** Check system uptime (< 5 min = suspicious) */
+  checkUptime: boolean;
+  /** Check for debugger (PEB, NtGlobalFlag, hardware breakpoints, debug port) */
+  checkDebugger: boolean;
+  /** Check if parent process is an analysis tool (x64dbg, procmon, vmtoolsd, etc.) */
+  checkParentProcess: boolean;
+  /** Check network adapter MAC prefix for VMware/VirtualBox/Hyper-V */
+  checkVmMac: boolean;
+  /** Check total disk size (< 60 GB = suspicious VM) */
+  checkDiskSize: boolean;
+  /** Check for suspicious usernames (admin, malware, sandbox, etc.) */
+  checkUsername: boolean;
+}
+
 export interface BuildConfigRequest {
   platform: string;
   applicationType: string;
@@ -378,6 +399,7 @@ export interface BuildConfigRequest {
   requireAdmin: boolean;
   copyToAppData: boolean;
   enablePersistence: boolean;
+  antiAnalysis: AntiAnalysisConfig;
 }
 
 export type BuildStatus = 'building' | 'completed' | 'failed';

