@@ -20,6 +20,7 @@ import ProxyBrowserPage from '../pages/ProxyBrowser';
 import BuilderPage from '../pages/Builder';
 import AboutPage from '../pages/About';
 import StressTestPage from '../pages/StressTest';
+import SettingsPage from '../pages/Settings';
 import { getStoredUser, logout, checkSetupStatus } from '../api/auth';
 import { setOnAuthFailed } from '../api/client';
 import { consoleWs } from '../ws/consoleWs';
@@ -53,6 +54,7 @@ const PAGE_META_KEYS: Record<string, [string, string]> = {
   '/stress-test': ['pageMeta.stressTest.label', 'pageMeta.stressTest.subtitle'],
   '/audit': ['pageMeta.audit.label', 'pageMeta.audit.subtitle'],
   '/about': ['pageMeta.about.label', 'pageMeta.about.subtitle'],
+  '/settings': ['pageMeta.settings.label', 'pageMeta.settings.subtitle'],
 };
 
 function PageHeader() {
@@ -303,6 +305,7 @@ function AuthenticatedLayout({
                 <Route path="/proxy" element={<ProxyBrowserPage />} />
                 <Route path="/builder" element={<BuilderPage />} />
                 <Route path="/stress-test" element={<StressTestPage />} />
+                <Route path="/settings" element={<SettingsPage />} />
                 <Route path="/about" element={<AboutPage />} />
               </Routes>
             </motion.div>
