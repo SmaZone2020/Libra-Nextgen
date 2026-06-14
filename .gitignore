@@ -1,5 +1,6 @@
 docs/
 .mimocode/
+.claude/
 CLAUDE.md
 # Logs
 logs

@@ -937,7 +937,6 @@ dependencies = [
  "base64",
  "libc",
  "libra-common",
- "obfstr",
  "rand 0.8.6",
  "reqwest",
  "rsa",
@@ -1050,12 +1049,6 @@ dependencies = [
  "autocfg",
  "libm",
 ]
-
-[[package]]
-name = "obfstr"
-version = "0.4.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d0d354e9a302760d07e025701d40534f17dd1fe4c4db955b4e3bd2907c63bdee"
 
 [[package]]
 name = "once_cell"
@@ -1691,6 +1684,10 @@ dependencies = [
  "base64ct",
  "der",
 ]
+
+[[package]]
+name = "srdi"
+version = "0.1.0"
 
 [[package]]
 name = "stable_deref_trait"

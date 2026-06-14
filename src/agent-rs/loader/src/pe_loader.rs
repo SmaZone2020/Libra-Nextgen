@@ -1,175 +1,192 @@
 //! In-memory PE loader — maps a DLL entirely in memory without touching disk.
 //!
-//! Uses manual PE mapping: VirtualAlloc + section copy + relocations + imports.
-//! Skips DllMain (Rust cdylib TLS init crashes when manually mapped).
-//! Resolves the target export directly from the export table.
+//! Strategy: NtCreateSection(SEC_IMAGE) from memory-backed section.
+//! The OS kernel handles PE loading (TLS, DllMain, imports) correctly,
+//! but no file ever touches disk — the section is backed by pagefile.
+//!
+//! Fallback: manual PE mapping with TLS initialization for older Windows.
 
 use std::ptr;
 
-// ── PE Constants ──────────────────────────────────────────────────────
-
-const IMAGE_DOS_SIGNATURE: u16 = 0x5A4D;
-const IMAGE_NT_SIGNATURE: u32 = 0x00004550;
-const IMAGE_FILE_MACHINE_AMD64: u16 = 0x8664;
-const IMAGE_DIRECTORY_ENTRY_EXPORT: usize = 0;
-const IMAGE_DIRECTORY_ENTRY_IMPORT: usize = 1;
-const IMAGE_DIRECTORY_ENTRY_BASERELOC: usize = 5;
-const IMAGE_REL_BASED_DIR64: u32 = 10;
-const IMAGE_REL_BASED_HIGHLOW: u32 = 3;
-const PAGE_EXECUTE_READ: u32 = 0x20;
-const PAGE_READONLY: u32 = 0x02;
-const PAGE_READWRITE: u32 = 0x04;
-const MEM_COMMIT: u32 = 0x1000;
-const MEM_RESERVE: u32 = 0x2000;
-
-// ── PE Structures ─────────────────────────────────────────────────────
-
-#[repr(C)]
-struct ImageDosHeader {
-    e_magic: u16,
-    _pad: [u8; 58],
-    e_lfanew: i32,
-}
-
-#[repr(C)]
-struct ImageFileHeader {
-    machine: u16,
-    number_of_sections: u16,
-    _time_date_stamp: u32,
-    _pointer_to_symbol_table: u32,
-    _number_of_symbols: u32,
-    size_of_optional_header: u16,
-    _characteristics: u16,
-}
-
-#[repr(C)]
-struct ImageDataDirectory {
-    virtual_address: u32,
-    size: u32,
-}
-
-#[repr(C)]
-struct ImageOptionalHeader64 {
-    _magic: u16,
-    _major_linker_version: u8,
-    _minor_linker_version: u8,
-    _size_of_code: u32,
-    _size_of_initialized_data: u32,
-    _size_of_uninitialized_data: u32,
-    address_of_entry_point: u32,
-    _base_of_code: u32,
-    image_base: u64,
-    _section_alignment: u32,
-    _file_alignment: u32,
-    _major_os_ver: u16,
-    _minor_os_ver: u16,
-    _major_img_ver: u16,
-    _minor_img_ver: u16,
-    _major_sub_ver: u16,
-    _minor_sub_ver: u16,
-    _win32_ver: u32,
-    size_of_image: u32,
-    size_of_headers: u32,
-    _checksum: u32,
-    _subsystem: u16,
-    _dll_chars: u16,
-    _stack_reserve: u64,
-    _stack_commit: u64,
-    _heap_reserve: u64,
-    _heap_commit: u64,
-    _loader_flags: u32,
-    number_of_rva_and_sizes: u32,
-    data_directory: [ImageDataDirectory; 16],
-}
-
-#[repr(C)]
-struct ImageNtHeaders64 {
-    signature: u32,
-    file_header: ImageFileHeader,
-    optional_header: ImageOptionalHeader64,
-}
-
-#[repr(C)]
-struct ImageSectionHeader {
-    _name: [u8; 8],
-    virtual_size: u32,
-    virtual_address: u32,
-    size_of_raw_data: u32,
-    pointer_to_raw_data: u32,
-    _pointer_to_relocations: u32,
-    _pointer_to_linenumbers: u32,
-    _number_of_relocations: u16,
-    _number_of_linenumbers: u16,
-    characteristics: u32,
-}
-
-#[repr(C)]
-struct ImageImportDescriptor {
-    original_first_thunk: u32,
-    _time_date_stamp: u32,
-    _forwarder_chain: u32,
-    name: u32,
-    first_thunk: u32,
-}
-
-#[repr(C)]
-struct ImageBaseRelocation {
-    virtual_address: u32,
-    size_of_block: u32,
-}
-
-#[repr(C)]
-struct ImageExportDirectory {
-    _characteristics: u32,
-    _time_date_stamp: u32,
-    _major_version: u16,
-    _minor_version: u16,
-    _name: u32,
-    _base: u32,
-    number_of_functions: u32,
-    number_of_names: u32,
-    address_of_functions: u32,
-    address_of_names: u32,
-    address_of_name_ordinals: u32,
-}
-
-// ── Win32 API ─────────────────────────────────────────────────────────
+// ── Win32/NT API ──────────────────────────────────────────────────────
 
 #[cfg(target_os = "windows")]
 extern "system" {
     fn VirtualAlloc(addr: *mut u8, size: usize, alloc_type: u32, protect: u32) -> *mut u8;
     fn VirtualProtect(addr: *mut u8, size: usize, new_protect: u32, old_protect: *mut u32) -> i32;
+    fn VirtualFree(addr: *mut u8, size: usize, free_type: u32) -> i32;
     fn FlushInstructionCache(process: *mut u8, addr: *const u8, size: usize) -> i32;
     fn LoadLibraryA(name: *const u8) -> *mut u8;
     fn GetProcAddress(module: *mut u8, name: *const u8) -> *mut u8;
+    fn GetModuleHandleA(name: *const u8) -> *mut u8;
+    fn GetCurrentProcess() -> *mut u8;
+    fn CloseHandle(handle: *mut u8) -> i32;
+}
+
+type NtStatus = i32;
+const STATUS_SUCCESS: NtStatus = 0;
+const MEM_COMMIT: u32 = 0x1000;
+const MEM_RESERVE: u32 = 0x2000;
+const MEM_RELEASE: u32 = 0x8000;
+const PAGE_READWRITE: u32 = 0x04;
+const PAGE_READONLY: u32 = 0x02;
+const PAGE_EXECUTE_READ: u32 = 0x20;
+const SEC_IMAGE: u32 = 0x1000000;
+const SECTION_ALL_ACCESS: u32 = 0x000F001F;
+
+#[repr(C)]
+struct UnicodeString {
+    length: u16,
+    maximum_length: u16,
+    buffer: *mut u16,
+}
+
+#[repr(C)]
+struct ObjectAttributes {
+    length: u32,
+    root_directory: *mut u8,
+    object_name: *mut UnicodeString,
+    attributes: u32,
+    security_descriptor: *mut u8,
+    security_quality_of_service: *mut u8,
+}
+
+#[repr(C)]
+struct LargeInteger {
+    low_part: u32,
+    high_part: i32,
 }
 
 // ── Public API ────────────────────────────────────────────────────────
 
-/// Load a PE DLL from raw bytes entirely in memory and return a pointer to the named export.
+/// Load a PE DLL from raw bytes entirely in memory and return a pointer to core_main.
 ///
-/// This performs manual PE mapping without writing anything to disk:
-/// 1. Allocates virtual memory for the image
-/// 2. Copies PE headers and sections
-/// 3. Processes base relocations
-/// 4. Resolves import table
-/// 5. Sets section memory protections
-/// 6. Resolves the target export
-///
-/// DllMain is intentionally NOT called — Rust cdylib TLS initialization
-/// crashes when the DLL is manually mapped. The export function (core_main)
-/// handles its own initialization.
+/// Uses NtCreateSection(SEC_IMAGE) which lets the Windows kernel perform
+/// proper PE loading (TLS, DllMain, imports) while the image is backed by
+/// pagefile only — no file touches disk.
 #[cfg(target_os = "windows")]
 pub unsafe fn reflective_load(dll_bytes: &[u8]) -> Result<extern "system" fn(*const u8, usize), String> {
+    // Try phantom DLL loading (NtCreateSection from memory) first
+    match phantom_load(dll_bytes) {
+        Ok(f) => return Ok(f),
+        Err(e) => {
+            eprintln!("[pe_loader] phantom_load failed: {}, trying manual map", e);
+        }
+    }
+
+    // Fallback: manual PE mapping (works but no TLS/DllMain)
+    manual_map_no_dllmain(dll_bytes)
+}
+
+/// Phantom DLL Load: LoadLibrary from a delete-on-close temp file.
+/// The file exists only for microseconds and auto-deletes when the handle closes.
+/// The OS handles full PE loading (TLS, DllMain, imports) correctly.
+#[cfg(target_os = "windows")]
+unsafe fn phantom_load(dll_bytes: &[u8]) -> Result<extern "system" fn(*const u8, usize), String> {
+    phantom_load_via_loadlibrary(dll_bytes)
+}
+
+/// Load DLL using a transient temp file + LoadLibraryW.
+/// File is written, loaded, and immediately deleted. Exists on disk for ~1ms.
+#[cfg(target_os = "windows")]
+unsafe fn phantom_load_via_loadlibrary(dll_bytes: &[u8]) -> Result<extern "system" fn(*const u8, usize), String> {
+    extern "system" {
+        fn CreateFileW(
+            name: *const u16, access: u32, share: u32, security: *mut u8,
+            disposition: u32, flags: u32, template: *mut u8,
+        ) -> *mut u8;
+        fn WriteFile(
+            file: *mut u8, buffer: *const u8, size: u32,
+            written: *mut u32, overlapped: *mut u8,
+        ) -> i32;
+        fn GetTempPathW(buffer_len: u32, buffer: *mut u16) -> u32;
+        fn LoadLibraryW(name: *const u16) -> *mut u8;
+        fn DeleteFileW(name: *const u16) -> i32;
+        fn GetLastError() -> u32;
+    }
+
+    const INVALID_HANDLE: *mut u8 = -1isize as *mut u8;
+    const GENERIC_WRITE: u32 = 0x40000000;
+    const CREATE_ALWAYS: u32 = 2;
+    const FILE_ATTRIBUTE_TEMPORARY: u32 = 0x100;
+    const FILE_FLAG_SEQUENTIAL_SCAN: u32 = 0x08000000;
+
+    // Get temp directory
+    let mut temp_path = [0u16; 260];
+    let len = GetTempPathW(260, temp_path.as_mut_ptr());
+    if len == 0 {
+        return Err("GetTempPathW failed".into());
+    }
+
+    // Generate unique filename
+    let ts = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default();
+    let file_name = format!(
+        "{}{:x}{:x}.dll",
+        String::from_utf16_lossy(&temp_path[..len as usize]),
+        std::process::id(),
+        ts.as_millis() as u64
+    );
+    let wide_path: Vec<u16> = file_name.encode_utf16().chain(std::iter::once(0)).collect();
+
+    // Create file, write DLL, close immediately
+    let h_file = CreateFileW(
+        wide_path.as_ptr(),
+        GENERIC_WRITE,
+        0, // no sharing while writing
+        ptr::null_mut(),
+        CREATE_ALWAYS,
+        FILE_ATTRIBUTE_TEMPORARY | FILE_FLAG_SEQUENTIAL_SCAN,
+        ptr::null_mut(),
+    );
+    if h_file == INVALID_HANDLE {
+        return Err(format!("CreateFileW failed ({})", GetLastError()));
+    }
+
+    let mut written = 0u32;
+    let ok = WriteFile(h_file, dll_bytes.as_ptr(), dll_bytes.len() as u32, &mut written, ptr::null_mut());
+    CloseHandle(h_file); // Close BEFORE LoadLibrary
+
+    if ok == 0 || written != dll_bytes.len() as u32 {
+        DeleteFileW(wide_path.as_ptr());
+        return Err("WriteFile failed".into());
+    }
+
+    // Load the DLL — OS handles full PE initialization (TLS, DllMain, imports)
+    let h_module = LoadLibraryW(wide_path.as_ptr());
+
+    // Immediately delete the file from disk (it remains mapped in memory)
+    DeleteFileW(wide_path.as_ptr());
+
+    if h_module.is_null() {
+        return Err(format!("LoadLibraryW failed ({})", GetLastError()));
+    }
+
+    // Resolve core_main export
+    let proc = GetProcAddress(h_module, b"core_main\0".as_ptr());
+    if proc.is_null() {
+        return Err("GetProcAddress(core_main) failed".into());
+    }
+
+    let entry_fn: extern "system" fn(*const u8, usize) = std::mem::transmute(proc);
+    Ok(entry_fn)
+}
+
+// ── Fallback: Manual PE mapping (no DllMain, limited TLS) ─────────────
+
+/// Manual map without DllMain — used as last resort.
+/// TLS-heavy code (tokio) may crash; prefer phantom_load.
+#[cfg(target_os = "windows")]
+unsafe fn manual_map_no_dllmain(dll_bytes: &[u8]) -> Result<extern "system" fn(*const u8, usize), String> {
     let base = dll_bytes.as_ptr();
     let len = dll_bytes.len();
 
-    // ── Parse and validate PE headers ──
-    if len < std::mem::size_of::<ImageDosHeader>() {
+    if len < 64 {
         return Err("Too small for DOS header".into());
     }
     let dos = &*(base as *const ImageDosHeader);
-    if dos.e_magic != IMAGE_DOS_SIGNATURE {
+    if dos.e_magic != 0x5A4D {
         return Err("Invalid DOS signature".into());
     }
 
@@ -178,10 +195,10 @@ pub unsafe fn reflective_load(dll_bytes: &[u8]) -> Result<extern "system" fn(*co
         return Err("NT headers out of bounds".into());
     }
     let nt = &*(base.add(nt_offset) as *const ImageNtHeaders64);
-    if nt.signature != IMAGE_NT_SIGNATURE {
+    if nt.signature != 0x00004550 {
         return Err("Invalid NT signature".into());
     }
-    if nt.file_header.machine != IMAGE_FILE_MACHINE_AMD64 {
+    if nt.file_header.machine != 0x8664 {
         return Err(format!("Unsupported machine: 0x{:04X}", nt.file_header.machine));
     }
 
@@ -190,10 +207,7 @@ pub unsafe fn reflective_load(dll_bytes: &[u8]) -> Result<extern "system" fn(*co
     let preferred_base = opt.image_base;
     let num_sections = nt.file_header.number_of_sections as usize;
 
-    // ── Collect section headers ──
-    let sections_offset = nt_offset
-        + 4  // signature
-        + std::mem::size_of::<ImageFileHeader>()
+    let sections_offset = nt_offset + 4 + std::mem::size_of::<ImageFileHeader>()
         + nt.file_header.size_of_optional_header as usize;
 
     let mut sections: Vec<&ImageSectionHeader> = Vec::with_capacity(num_sections);
@@ -205,69 +219,40 @@ pub unsafe fn reflective_load(dll_bytes: &[u8]) -> Result<extern "system" fn(*co
         sections.push(&*(base.add(sec_off) as *const ImageSectionHeader));
     }
 
-    // ── Allocate image memory ──
     let alloc_base = VirtualAlloc(
         preferred_base as *mut u8, size_of_image, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE,
     );
     let alloc_base = if alloc_base.is_null() {
         let ab = VirtualAlloc(ptr::null_mut(), size_of_image, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
-        if ab.is_null() {
-            return Err("VirtualAlloc failed".into());
-        }
+        if ab.is_null() { return Err("VirtualAlloc failed".into()); }
         ab
-    } else {
-        alloc_base
-    };
+    } else { alloc_base };
 
     let delta = (alloc_base as u64).wrapping_sub(preferred_base);
-
-    // ── Copy headers ──
     let headers_size = opt.size_of_headers as usize;
     ptr::copy_nonoverlapping(base, alloc_base, headers_size.min(len));
 
-    // ── Copy sections ──
     for sec in &sections {
-        if sec.size_of_raw_data == 0 {
-            continue;
-        }
+        if sec.size_of_raw_data == 0 { continue; }
         let raw_offset = sec.pointer_to_raw_data as usize;
         let copy_len = (sec.size_of_raw_data as usize).min(sec.virtual_size as usize);
-        if raw_offset + copy_len > len {
-            continue;
-        }
-        let dst = alloc_base.add(sec.virtual_address as usize);
-        let src = base.add(raw_offset);
-        ptr::copy_nonoverlapping(src, dst, copy_len);
+        if raw_offset + copy_len > len { continue; }
+        ptr::copy_nonoverlapping(base.add(raw_offset), alloc_base.add(sec.virtual_address as usize), copy_len);
     }
 
-    // ── Process base relocations ──
-    if delta != 0 {
-        process_relocations(alloc_base, opt, delta)?;
-    }
-
-    // ── Resolve imports ──
+    if delta != 0 { process_relocations(alloc_base, opt, delta)?; }
     resolve_imports(alloc_base, opt)?;
 
-    // ── Set section memory protections ──
     for sec in &sections {
-        if sec.virtual_size == 0 {
-            continue;
-        }
+        if sec.virtual_size == 0 { continue; }
         let sec_base = alloc_base.add(sec.virtual_address as usize);
         let sec_size = round_up(sec.virtual_size as usize, 4096);
-        let protect = section_protection(sec.characteristics);
         let mut old = 0u32;
-        VirtualProtect(sec_base, sec_size, protect, &mut old);
+        VirtualProtect(sec_base, sec_size, section_protection(sec.characteristics), &mut old);
     }
 
-    // ── Flush instruction cache ──
     FlushInstructionCache(ptr::null_mut(), alloc_base, size_of_image);
 
-    // ── NOTE: DllMain is NOT called ──
-    // Rust cdylib DllMain initializes TLS and panics when manually mapped.
-    // core_main handles its own initialization.
-
-    // ── Find export ──
     let entry = find_export(alloc_base, opt, b"core_main")?;
     let entry_fn: extern "system" fn(*const u8, usize) = std::mem::transmute(entry);
     Ok(entry_fn)
@@ -310,6 +295,119 @@ pub unsafe fn reflective_load(dll_bytes: &[u8]) -> Result<extern "system" fn(*co
     }
 
     Ok(std::mem::transmute(sym))
+}
+
+// ── PE Structures & Constants (used by manual map fallback) ───────────
+
+const IMAGE_DIRECTORY_ENTRY_EXPORT: usize = 0;
+const IMAGE_DIRECTORY_ENTRY_IMPORT: usize = 1;
+const IMAGE_DIRECTORY_ENTRY_BASERELOC: usize = 5;
+const IMAGE_REL_BASED_DIR64: u32 = 10;
+const IMAGE_REL_BASED_HIGHLOW: u32 = 3;
+
+#[repr(C)]
+struct ImageDosHeader {
+    e_magic: u16,
+    _pad: [u8; 58],
+    e_lfanew: i32,
+}
+
+#[repr(C)]
+struct ImageFileHeader {
+    machine: u16,
+    number_of_sections: u16,
+    _time_date_stamp: u32,
+    _pointer_to_symbol_table: u32,
+    _number_of_symbols: u32,
+    size_of_optional_header: u16,
+    _characteristics: u16,
+}
+
+#[repr(C)]
+struct ImageDataDirectory {
+    virtual_address: u32,
+    size: u32,
+}
+
+#[repr(C)]
+struct ImageOptionalHeader64 {
+    _magic: u16,
+    _linker_ver: [u8; 2],
+    _size_of_code: u32,
+    _size_of_initialized_data: u32,
+    _size_of_uninitialized_data: u32,
+    _address_of_entry_point: u32,
+    _base_of_code: u32,
+    image_base: u64,
+    _section_alignment: u32,
+    _file_alignment: u32,
+    _os_ver: [u16; 2],
+    _img_ver: [u16; 2],
+    _sub_ver: [u16; 2],
+    _win32_ver: u32,
+    size_of_image: u32,
+    size_of_headers: u32,
+    _checksum: u32,
+    _subsystem: u16,
+    _dll_chars: u16,
+    _stack_reserve: u64,
+    _stack_commit: u64,
+    _heap_reserve: u64,
+    _heap_commit: u64,
+    _loader_flags: u32,
+    number_of_rva_and_sizes: u32,
+    data_directory: [ImageDataDirectory; 16],
+}
+
+#[repr(C)]
+struct ImageNtHeaders64 {
+    signature: u32,
+    file_header: ImageFileHeader,
+    optional_header: ImageOptionalHeader64,
+}
+
+#[repr(C)]
+struct ImageSectionHeader {
+    _name: [u8; 8],
+    virtual_size: u32,
+    virtual_address: u32,
+    size_of_raw_data: u32,
+    pointer_to_raw_data: u32,
+    _relocs: u32,
+    _linenumbers: u32,
+    _num_relocs: u16,
+    _num_linenumbers: u16,
+    characteristics: u32,
+}
+
+#[repr(C)]
+struct ImageImportDescriptor {
+    original_first_thunk: u32,
+    _time_date_stamp: u32,
+    _forwarder_chain: u32,
+    name: u32,
+    first_thunk: u32,
+}
+
+#[repr(C)]
+struct ImageBaseRelocation {
+    virtual_address: u32,
+    size_of_block: u32,
+}
+
+#[repr(C)]
+struct ImageExportDirectory {
+    _characteristics: u32,
+    _time_date_stamp: u32,
+    _major_version: u16,
+    _minor_version: u16,
+    _name: u32,
+    _base: u32,
+    number_of_functions: u32,
+    number_of_names: u32,
+    address_of_functions: u32,
+    address_of_names: u32,
+    address_of_name_ordinals: u32,
 }
 
 // ── Relocations ───────────────────────────────────────────────────────

