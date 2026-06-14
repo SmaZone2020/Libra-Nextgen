@@ -5,7 +5,10 @@ members = [
     "libra-comm",
     "libra-platform",
     "libra-modules",
+    "libra-engine",
     "agent",
+    "loader",
+    "core",
 ]
 resolver = "2"
 

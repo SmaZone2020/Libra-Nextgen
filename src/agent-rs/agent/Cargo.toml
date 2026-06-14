@@ -11,10 +11,8 @@ name = "agent"
 path = "src/main.rs"
 
 [dependencies]
+libra-engine = { path = "../libra-engine" }
 libra-common = { path = "../libra-common" }
-libra-crypto = { path = "../libra-crypto" }
-libra-comm = { path = "../libra-comm" }
-libra-platform = { path = "../libra-platform" }
 libra-modules = { path = "../libra-modules" }
 tokio = { workspace = true }
 serde_json = { workspace = true }

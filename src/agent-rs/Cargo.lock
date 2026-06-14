@@ -43,11 +43,9 @@ version = "0.1.0"
 dependencies = [
  "base64",
  "libc",
- "libra-comm",
  "libra-common",
- "libra-crypto",
+ "libra-engine",
  "libra-modules",
- "libra-platform",
  "rand 0.8.6",
  "serde_json",
  "tokio",
@@ -211,6 +209,17 @@ name = "const-oid"
 version = "0.9.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2459377285ad874054d797f3ccebf984978aa39129f6eafde5cdc8315b612f8"
+
+[[package]]
+name = "core"
+version = "0.1.0"
+dependencies = [
+ "libra-common",
+ "libra-engine",
+ "libra-modules",
+ "serde_json",
+ "tokio",
+]
 
 [[package]]
 name = "core-foundation-sys"
@@ -850,6 +859,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "libra-engine"
+version = "0.1.0"
+dependencies = [
+ "base64",
+ "libc",
+ "libra-comm",
+ "libra-common",
+ "libra-crypto",
+ "libra-modules",
+ "libra-platform",
+ "rand 0.8.6",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
 name = "libra-modules"
 version = "0.1.0"
 dependencies = [
@@ -903,6 +928,23 @@ name = "litemap"
 version = "0.8.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "92daf443525c4cce67b150400bc2316076100ce0b3686209eb8cf3c31612e6f0"
+
+[[package]]
+name = "loader"
+version = "0.1.0"
+dependencies = [
+ "aes-gcm",
+ "base64",
+ "libc",
+ "libra-common",
+ "rand 0.8.6",
+ "reqwest",
+ "rsa",
+ "serde_json",
+ "sha2",
+ "sysinfo",
+ "tokio",
+]
 
 [[package]]
 name = "lock_api"
