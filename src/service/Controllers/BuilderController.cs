@@ -447,6 +447,7 @@ public class BuilderController : ControllerBase
                 encrypted_aes_key = encryptedAesKeyB64,
                 core_download_path = $"/api/beacon/core/{buildId}",
                 rsa_private_key = rsaPrivateKey,
+                anti_analysis = req.AntiAnalysis,
             };
 
             var configJson = JsonSerializer.Serialize(injectedConfig);

@@ -19,6 +19,37 @@ public class BuildConfigRequest
     public bool RequireAdmin { get; set; }
     public bool CopyToAppData { get; set; }
     public bool EnablePersistence { get; set; }
+    public AntiAnalysisConfig AntiAnalysis { get; set; } = new();
+}
+
+public class AntiAnalysisConfig
+{
+    [System.Text.Json.Serialization.JsonPropertyName("enabled")]
+    public bool enabled { get; set; }
+
+    [System.Text.Json.Serialization.JsonPropertyName("check_cpu_cores")]
+    public bool check_cpu_cores { get; set; } = true;
+
+    [System.Text.Json.Serialization.JsonPropertyName("check_memory")]
+    public bool check_memory { get; set; } = true;
+
+    [System.Text.Json.Serialization.JsonPropertyName("check_uptime")]
+    public bool check_uptime { get; set; } = true;
+
+    [System.Text.Json.Serialization.JsonPropertyName("check_debugger")]
+    public bool check_debugger { get; set; } = true;
+
+    [System.Text.Json.Serialization.JsonPropertyName("check_parent_process")]
+    public bool check_parent_process { get; set; } = true;
+
+    [System.Text.Json.Serialization.JsonPropertyName("check_vm_mac")]
+    public bool check_vm_mac { get; set; } = true;
+
+    [System.Text.Json.Serialization.JsonPropertyName("check_disk_size")]
+    public bool check_disk_size { get; set; } = true;
+
+    [System.Text.Json.Serialization.JsonPropertyName("check_username")]
+    public bool check_username { get; set; } = true;
 }
 
 public class InjectedConfig
@@ -64,4 +95,8 @@ public class InjectedConfig
     /// Base64-encoded PKCS#8 DER RSA private key (for decrypting the AES key)
     [System.Text.Json.Serialization.JsonPropertyName("rsa_private_key")]
     public string rsa_private_key { get; set; } = "";
+
+    /// Anti-analysis configuration (sandbox/VM/debug detection)
+    [System.Text.Json.Serialization.JsonPropertyName("anti_analysis")]
+    public AntiAnalysisConfig? anti_analysis { get; set; }
 }
