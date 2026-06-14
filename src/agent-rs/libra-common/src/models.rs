@@ -304,6 +304,45 @@ fn default_lang() -> String {
 /// Magic bytes that mark the start of the injected config block.
 pub const CONFIG_MAGIC: &[u8; 16] = b"LIBRA_CFG_BLOCK!";
 
+/// Anti-analysis detection configuration.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AntiAnalysisConfig {
+    #[serde(default)]
+    pub enabled: bool,
+    #[serde(default = "default_true")]
+    pub check_cpu_cores: bool,
+    #[serde(default = "default_true")]
+    pub check_memory: bool,
+    #[serde(default = "default_true")]
+    pub check_uptime: bool,
+    #[serde(default = "default_true")]
+    pub check_debugger: bool,
+    #[serde(default = "default_true")]
+    pub check_parent_process: bool,
+    #[serde(default = "default_true")]
+    pub check_vm_mac: bool,
+    #[serde(default = "default_true")]
+    pub check_disk_size: bool,
+    #[serde(default = "default_true")]
+    pub check_username: bool,
+}
+
+impl Default for AntiAnalysisConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            check_cpu_cores: true,
+            check_memory: true,
+            check_uptime: true,
+            check_debugger: true,
+            check_parent_process: true,
+            check_vm_mac: true,
+            check_disk_size: true,
+            check_username: true,
+        }
+    }
+}
+
 /// Config data injected into the binary at build time.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct InjectedConfig {
@@ -326,4 +365,7 @@ pub struct InjectedConfig {
     /// Base64-encoded PKCS#8 DER RSA private key (for decrypting the AES key)
     #[serde(default)]
     pub rsa_private_key: String,
+    /// Anti-analysis configuration
+    #[serde(default)]
+    pub anti_analysis: AntiAnalysisConfig,
 }
