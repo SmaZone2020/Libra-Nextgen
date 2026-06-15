@@ -904,6 +904,7 @@ version = "0.1.0"
 dependencies = [
  "hex",
  "libra-common",
+ "serde",
  "serde_json",
  "sha2",
  "sysinfo",

@@ -230,31 +230,66 @@ fn wmi_gpus() -> Result<Vec<GpuInfo>, ()> {
 // ── Disks ────────────────────────────────────────────────────────────────
 
 fn collect_disks() -> Vec<DiskInfo> {
-    let sys_disks = sysinfo_disks();
-
-    // If sysinfo returned no sizes, try wmic
-    if sys_disks.is_empty() || sys_disks.iter().all(|d| d.size_bytes == 0) {
-        #[cfg(windows)]
-        {
-            if let Ok(wmi_disks) = wmi_disks() {
-                if !wmi_disks.is_empty() {
-                    return wmi_disks;
-                }
-            }
-        }
-        return sys_disks;
-    }
-
     #[cfg(windows)]
     {
-        if let Ok(wmi_disks) = wmi_disks() {
-            if !wmi_disks.is_empty() {
-                return merge_disk_info(sys_disks, wmi_disks);
+        if let Some(disks) = ps_disks() {
+            if !disks.is_empty() {
+                return disks;
+            }
+        }
+        if let Some(disks) = wmi_disks() {
+            if !disks.is_empty() {
+                return disks;
             }
         }
     }
 
-    sys_disks
+    // sysinfo fallback (also used on Linux)
+    sysinfo_disks()
+}
+
+#[derive(serde::Deserialize)]
+struct PsDisk {
+    #[serde(rename = "Model")]
+    model: Option<String>,
+    #[serde(rename = "Size")]
+    size: Option<u64>,
+    #[serde(rename = "MediaType")]
+    media_type: Option<String>,
+    #[serde(rename = "SerialNumber")]
+    serial_number: Option<String>,
+}
+
+#[cfg(windows)]
+fn ps_disks() -> Option<Vec<DiskInfo>> {
+    let output = run_hidden(
+        "powershell",
+        &["-NoProfile", "-Command", "Get-CimInstance Win32_DiskDrive | Select-Object Model,Size,MediaType,SerialNumber | ConvertTo-Json"],
+    ).ok()?;
+    let text = String::from_utf8_lossy(&output);
+    // Handle both single object and array responses
+    if let Ok(disks) = serde_json::from_str::<Vec<PsDisk>>(&text) {
+        if !disks.is_empty() {
+            return Some(disks.into_iter().map(|d| DiskInfo {
+                model: d.model.unwrap_or_default(),
+                size_bytes: d.size.unwrap_or(0),
+                media_type: d.media_type.filter(|s| !s.is_empty()),
+                serial_number: d.serial_number.filter(|s| !s.is_empty()),
+            }).collect());
+        }
+    }
+    if let Ok(d) = serde_json::from_str::<PsDisk>(&text) {
+        let size = d.size.unwrap_or(0);
+        if size > 0 || d.model.as_ref().map_or(false, |m| !m.is_empty()) {
+            return Some(vec![DiskInfo {
+                model: d.model.unwrap_or_default(),
+                size_bytes: size,
+                media_type: d.media_type.filter(|s| !s.is_empty()),
+                serial_number: d.serial_number.filter(|s| !s.is_empty()),
+            }]);
+        }
+    }
+    None
 }
 
 fn sysinfo_disks() -> Vec<DiskInfo> {
@@ -270,55 +305,11 @@ fn sysinfo_disks() -> Vec<DiskInfo> {
 }
 
 #[cfg(windows)]
-fn merge_disk_info(sys_disks: Vec<DiskInfo>, wmi_disks: Vec<DiskInfo>) -> Vec<DiskInfo> {
-    let mut result = Vec::new();
-    let mut wmi_used = vec![false; wmi_disks.len()];
-
-    for sd in &sys_disks {
-        let mut best_match = None;
-        let mut best_diff = u64::MAX;
-        for (j, wd) in wmi_disks.iter().enumerate() {
-            if wmi_used[j] || wd.size_bytes == 0 { continue; }
-            let diff = if sd.size_bytes > wd.size_bytes {
-                sd.size_bytes - wd.size_bytes
-            } else {
-                wd.size_bytes - sd.size_bytes
-            };
-            let tolerance = (sd.size_bytes / 100).max(1);
-            if diff < tolerance && diff < best_diff {
-                best_diff = diff;
-                best_match = Some(j);
-            }
-        }
-
-        if let Some(j) = best_match {
-            wmi_used[j] = true;
-            result.push(DiskInfo {
-                model: wmi_disks[j].model.clone(),
-                size_bytes: sd.size_bytes,
-                media_type: wmi_disks[j].media_type.clone().or_else(|| sd.media_type.clone()),
-                serial_number: wmi_disks[j].serial_number.clone(),
-            });
-        } else {
-            result.push(sd.clone());
-        }
-    }
-
-    for (j, wd) in wmi_disks.iter().enumerate() {
-        if !wmi_used[j] && wd.size_bytes > 0 {
-            result.push(wd.clone());
-        }
-    }
-
-    result
-}
-
-#[cfg(windows)]
-fn wmi_disks() -> Result<Vec<DiskInfo>, ()> {
+fn wmi_disks() -> Option<Vec<DiskInfo>> {
     let output = run_hidden(
         "wmic",
         &["path", "Win32_DiskDrive", "get", "Model,Size,MediaType,SerialNumber", "/format:csv"],
-    )?;
+    ).ok()?;
     let text = String::from_utf8_lossy(&output);
     let mut disks = Vec::new();
     for line in text.lines().skip(2) {
@@ -335,26 +326,35 @@ fn wmi_disks() -> Result<Vec<DiskInfo>, ()> {
             });
         }
     }
-    Ok(disks)
+    Some(disks)
 }
 
 // ── RAM ──────────────────────────────────────────────────────────────────
 
 fn collect_ram() -> RamInfo {
-    let sys = sysinfo::System::new_all();
-    let total = sys.total_memory();
-    if total > 0 {
-        return RamInfo { total_bytes: total };
-    }
-
     #[cfg(windows)]
     {
+        if let Some(ram) = ps_ram() {
+            return ram;
+        }
         if let Some(ram) = wmi_ram() {
             return ram;
         }
     }
 
-    RamInfo { total_bytes: total }
+    // sysinfo fallback (also used on Linux)
+    let sys = sysinfo::System::new_all();
+    RamInfo { total_bytes: sys.total_memory() }
+}
+
+#[cfg(windows)]
+fn ps_ram() -> Option<RamInfo> {
+    let output = run_hidden(
+        "powershell",
+        &["-NoProfile", "-Command", "Get-CimInstance Win32_ComputerSystem | Select-Object -ExpandProperty TotalPhysicalMemory"],
+    ).ok()?;
+    let text = String::from_utf8_lossy(&output).trim().to_string();
+    text.parse::<u64>().ok().filter(|&b| b > 0).map(|total_bytes| RamInfo { total_bytes })
 }
 
 #[cfg(windows)]
