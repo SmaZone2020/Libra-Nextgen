@@ -398,6 +398,8 @@ export interface AntiAnalysisConfig {
   enabled: boolean;
   /** Check if Windows Test Signing mode is enabled */
   checkTestSigning: boolean;
+  /** Check for known AV processes (Kaspersky, etc.) */
+  checkAvProcesses: boolean;
 }
 
 export interface BuildConfigRequest {

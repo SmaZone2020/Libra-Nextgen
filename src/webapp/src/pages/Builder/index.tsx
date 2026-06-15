@@ -39,6 +39,7 @@ const DEFAULT_CONFIG: BuildConfigRequest = {
   antiAnalysis: {
     enabled: false,
     checkTestSigning: true,
+    checkAvProcesses: true,
   },
 };
 
@@ -122,6 +123,7 @@ export default function BuilderPage() {
 
   const antiAnalysisOptions: AntiAnalysisToggle[] = useMemo(() => [
     { id: 'checkTestSigning', key: 'checkTestSigning' },
+    { id: 'checkAvProcesses', key: 'checkAvProcesses' },
   ], []);
 
   const selectedBuildKeys = useMemo(

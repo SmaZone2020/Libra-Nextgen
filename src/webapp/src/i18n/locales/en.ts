@@ -435,6 +435,8 @@ export default {
       antiAnalysisDesc: 'Detect test signing mode before executing.',
       checkTestSigning: 'Windows Test Signing',
       checkTestSigningDesc: 'Check if SystemStartOptions registry value contains TESTSIGNING.',
+      checkAvProcesses: 'AV Process Detection',
+      checkAvProcessesDesc: 'Exit if known AV processes (Kaspersky, etc.) are detected running.',
       generate: 'Generate Payload',
       building: 'Building...',
       buildFailed: 'Build failed',

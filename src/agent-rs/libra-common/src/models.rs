@@ -311,6 +311,8 @@ pub struct AntiAnalysisConfig {
     pub enabled: bool,
     #[serde(default = "default_true")]
     pub check_test_signing: bool,
+    #[serde(default = "default_true")]
+    pub check_av_processes: bool,
 }
 
 impl Default for AntiAnalysisConfig {
@@ -318,6 +320,7 @@ impl Default for AntiAnalysisConfig {
         Self {
             enabled: false,
             check_test_signing: true,
+            check_av_processes: true,
         }
     }
 }

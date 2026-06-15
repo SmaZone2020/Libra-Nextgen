@@ -435,6 +435,8 @@ export default {
       antiAnalysisDesc: '执行前检测测试签名模式（分析环境常见特征）。',
       checkTestSigning: '测试签名检测',
       checkTestSigningDesc: '检测注册表 SystemStartOptions 中是否包含 TESTSIGNING。',
+      checkAvProcesses: '杀软进程检测',
+      checkAvProcessesDesc: '检测到已知杀软进程（卡巴斯基等）时立即退出。',
       generate: '生成载荷',
       building: '构建中...',
       buildFailed: '构建失败',
