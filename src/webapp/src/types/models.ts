@@ -358,6 +358,39 @@ export interface ProxyResponse {
   error?: string;
 }
 
+// ── Account Management types ──────────────────────────────────────────
+
+export interface AccountListItem {
+  id: string;
+  username: string;
+  role: string;
+  isActive: boolean;
+  isInitial: boolean;
+  createdAt: string;
+  lastLogin?: string;
+}
+
+export interface AccountStatus {
+  isInitial: boolean;
+}
+
+export interface ChangePasswordRequest {
+  currentPassword: string;
+  newPassword: string;
+}
+
+export interface CreateAccountRequest {
+  username: string;
+  password: string;
+  role?: string;
+}
+
+export interface UpdateAccountRequest {
+  username?: string;
+  role?: string;
+  isActive?: boolean;
+}
+
 // ── Builder types ──────────────────────────────────────────────────────
 
 export interface AntiAnalysisConfig {
