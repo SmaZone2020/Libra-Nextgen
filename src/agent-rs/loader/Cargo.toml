@@ -3,6 +3,9 @@ name = "loader"
 version = "0.1.0"
 edition = "2021"
 
+[features]
+desktop = []
+
 [[bin]]
 name = "loader"
 path = "src/main.rs"

@@ -495,7 +495,7 @@ public class BuilderController : ControllerBase
             job.Log("=== Stage 3: Preparing Loader ===");
 
             var loaderExeName = isWindows ? "loader.exe" : "loader";
-            var templatePlatformDir = Path.Combine(TemplateDir, req.Platform);
+            var templatePlatformDir = Path.Combine(TemplateDir, $"{req.Platform}-{req.ApplicationType.ToLower()}");
             var templatePath = Path.Combine(templatePlatformDir, loaderExeName);
             var exePath = Path.Combine(tempDir, loaderExeName);
 
@@ -509,7 +509,7 @@ public class BuilderController : ControllerBase
             {
                 // ── First time: compile loader and save as template ──
                 job.Log("No template found, compiling loader from source...");
-                var loaderBuildArgs = $"build --release {targetArg} -p loader --target-dir \"{targetDir}\"";
+                var loaderBuildArgs = $"build --release {targetArg} {featuresArg} -p loader --target-dir \"{targetDir}\"";
                 job.Log($"cargo {loaderBuildArgs}");
 
                 var loaderBuildResult = await RunProcessAsync("cargo", loaderBuildArgs, job, RustAgentDir, envVars);
