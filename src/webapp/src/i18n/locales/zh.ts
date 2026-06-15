@@ -433,7 +433,7 @@ export default {
       enablePersistenceDesc: '创建任务计划程序实现开机自启动。',
       antiAnalysis: '环境检测',
       antiAnalysisDesc: '执行前检测测试签名模式（分析环境常见特征）。',
-      checkTestSigning: 'Windows 测试签名模式',
+      checkTestSigning: '测试签名检测',
       checkTestSigningDesc: '检测注册表 SystemStartOptions 中是否包含 TESTSIGNING。',
       generate: '生成载荷',
       building: '构建中...',

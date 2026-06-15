@@ -1,12 +1,12 @@
 import { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Button, Card, Input, Label, Modal, Popover, Slider, Spinner, Switch, Tabs, TextField } from '@heroui/react';
+import { Button, Card, Input, Label, Modal, Popover, Slider, Spinner, Tabs, TextField } from '@heroui/react';
 import { NumberField } from '@heroui/react/number-field';
 import { ListView } from '@components/list-view';
 import type { Selection } from 'react-aria-components';
 import { startBuild, uploadIcon, getBuildStreamUrl, listBuilds, deleteBuild, getBuildDownloadUrl, getBuildInfo, listTemplates, uploadTemplate, deleteTemplate } from '../../api/build';
 import type { BuildConfigRequest, BuildRecord, BuildRecordDetail, TemplateInfo } from '../../types/models';
-import { ArrowDownToLine, CircleCheck, CircleInfo, Picture, Shield, TrashBin } from '@gravity-ui/icons';
+import { ArrowDownToLine, CircleCheck, CircleInfo, Picture, TrashBin } from '@gravity-ui/icons';
 
 interface ToggleOption {
   id: string;
@@ -159,15 +159,8 @@ export default function BuilderPage() {
     for (const opt of antiAnalysisOptions) {
       (updated as any)[opt.key] = s.has(opt.id);
     }
+    updated.enabled = s.size > 0;
     setConfig((c) => ({ ...c, antiAnalysis: updated }));
-  };
-
-  const toggleAntiAnalysis = () => {
-    setConfig((c) => ({ ...c, antiAnalysis: { ...c.antiAnalysis, enabled: !c.antiAnalysis.enabled } }));
-  };
-
-  const setAntiAnalysis = <K extends keyof BuildConfigRequest['antiAnalysis']>(key: K, value: BuildConfigRequest['antiAnalysis'][K]) => {
-    setConfig((c) => ({ ...c, antiAnalysis: { ...c.antiAnalysis, [key]: value } }));
   };
 
   const handleIconUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -492,142 +485,126 @@ export default function BuilderPage() {
           </div>
         </Card>
 
-        {/* Build options + Persistence */}
-        <div className="grid grid-cols-2 gap-4">
-          <Card className="p-4">
-            <h2 className="text-lg font-semibold mb-3">{t('builder.buildOptions')}</h2>
-            <ListView
-              aria-label={t('builder.buildOptions')}
-              items={buildOptions}
-              selectedKeys={selectedBuildKeys}
-              selectionMode="multiple"
-              variant="primary"
-              onSelectionChange={handleBuildSelectionChange}
-            >
-              {(opt) => (
-                <ListView.Item id={opt.id} textValue={t(`builder.${opt.id}`)}>
-                  <ListView.ItemContent>
-                    <div className="flex items-center justify-between w-full">
-                      <ListView.Title>{t(`builder.${opt.id}`)}</ListView.Title>
-                      <Popover >
-                        <Button isIconOnly variant="ghost" className=" h-8 w-8 min-w-0">
-                          <CircleInfo className="h-6 w-6" />
-                        </Button>
-                        <Popover.Content className="max-w-64">
-                          <Popover.Dialog>
-                            <Popover.Heading className="text-sm">{t(`builder.${opt.id}`)}</Popover.Heading>
-                            <p className="mt-1 text-xs text-default-500">{t(`builder.${opt.id}Desc`)}</p>
-                          </Popover.Dialog>
-                        </Popover.Content>
-                      </Popover>
-                    </div>
-                  </ListView.ItemContent>
-                </ListView.Item>
-              )}
-            </ListView>
-            {config.injectJunkData && (
-              <div className="mt-3 pl-4">
-                <Slider
-                  className="w-full max-w-xs"
-                  value={config.junkDataMb}
-                  minValue={1}
-                  maxValue={200}
-                  step={1}
-                  onChange={(v) => set('junkDataMb', (Array.isArray(v) ? v[0] : v) ?? 10)}
-                >
-                  <Label>{t('builder.junkDataMb')}</Label>
-                  <Slider.Output />
-                  <Slider.Track>
-                    <Slider.Fill />
-                    <Slider.Thumb />
-                  </Slider.Track>
-                </Slider>
-              </div>
-            )}
-          </Card>
-
-          <Card className="p-4">
-            <h2 className="text-lg font-semibold mb-3">{t('builder.persistence')}</h2>
-            <ListView
-              aria-label={t('builder.persistence')}
-              items={persistenceOptions}
-              selectedKeys={selectedPersistenceKeys}
-              selectionMode="multiple"
-              variant="primary"
-              onSelectionChange={handlePersistenceSelectionChange}
-            >
-              {(opt) => (
-                <ListView.Item id={opt.id} textValue={t(`builder.${opt.id}`)}>
-                  <ListView.ItemContent>
-                    <div className="flex items-center justify-between w-full">
-                      <ListView.Title>{t(`builder.${opt.id}`)}</ListView.Title>
-                      <Popover>
-                        <Button isIconOnly variant="ghost" className=" h-8 w-8 min-w-0">
-                          <CircleInfo className="h-6 w-6" />
-                        </Button>
-                        <Popover.Content className="max-w-64">
-                          <Popover.Dialog>
-                            <Popover.Heading className="text-sm">{t(`builder.${opt.id}`)}</Popover.Heading>
-                            <p className="mt-1 text-xs text-default-500">{t(`builder.${opt.id}Desc`)}</p>
-                          </Popover.Dialog>
-                        </Popover.Content>
-                      </Popover>
-                    </div>
-                  </ListView.ItemContent>
-                </ListView.Item>
-              )}
-            </ListView>
-          </Card>
-        </div>
-
-          <Card className="p-4">
-            <div className="flex items-center justify-between mb-3">
-              <h2 className="text-lg font-semibold flex items-center gap-2">
-                <Shield className="w-5 h-5" />
-                {t('builder.antiAnalysis')}
-              </h2>
-              <Switch isSelected={config.antiAnalysis.enabled} onChange={toggleAntiAnalysis}>
-                <Switch.Control>
-                  <Switch.Thumb />
-                </Switch.Control>
-              </Switch>
-            </div>
-            {config.antiAnalysis.enabled && (
-              <div className="flex gap-4">
-                <div className="flex-1 min-w-0">
-                  <ListView
-                    aria-label={t('builder.antiAnalysis')}
-                    items={antiAnalysisOptions}
-                    selectedKeys={selectedAntiAnalysisKeys}
-                    selectionMode="multiple"
-                    variant="primary"
-                    onSelectionChange={handleAntiAnalysisSelectionChange}
+        {/* Build Options + Persistence + Anti-Analysis */}
+        <Card className="p-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div>
+              <h2 className="text-lg font-semibold mb-3">{t('builder.buildOptions')}</h2>
+              <ListView
+                aria-label={t('builder.buildOptions')}
+                items={buildOptions}
+                selectedKeys={selectedBuildKeys}
+                selectionMode="multiple"
+                variant="primary"
+                onSelectionChange={handleBuildSelectionChange}
+              >
+                {(opt) => (
+                  <ListView.Item id={opt.id} textValue={t(`builder.${opt.id}`)}>
+                    <ListView.ItemContent>
+                      <div className="flex items-center justify-between w-full">
+                        <ListView.Title>{t(`builder.${opt.id}`)}</ListView.Title>
+                        <Popover>
+                          <Button isIconOnly variant="ghost" className="h-8 w-8 min-w-0">
+                            <CircleInfo className="h-6 w-6" />
+                          </Button>
+                          <Popover.Content className="max-w-64">
+                            <Popover.Dialog>
+                              <Popover.Heading className="text-sm">{t(`builder.${opt.id}`)}</Popover.Heading>
+                              <p className="mt-1 text-xs text-default-500">{t(`builder.${opt.id}Desc`)}</p>
+                            </Popover.Dialog>
+                          </Popover.Content>
+                        </Popover>
+                      </div>
+                    </ListView.ItemContent>
+                  </ListView.Item>
+                )}
+              </ListView>
+              {config.injectJunkData && (
+                <div className="mt-3 pl-4">
+                  <Slider
+                    className="w-full max-w-xs"
+                    value={config.junkDataMb}
+                    minValue={1}
+                    maxValue={200}
+                    step={1}
+                    onChange={(v) => set('junkDataMb', (Array.isArray(v) ? v[0] : v) ?? 10)}
                   >
-                    {(opt) => (
-                      <ListView.Item id={opt.id} textValue={t(`builder.${opt.id}`)}>
-                        <ListView.ItemContent>
-                          <div className="flex items-center justify-between w-full">
-                            <ListView.Title>{t(`builder.${opt.id}`)}</ListView.Title>
-                            <Popover>
-                              <Button isIconOnly variant="ghost" className="h-8 w-8 min-w-0">
-                                <CircleInfo className="h-6 w-6" />
-                              </Button>
-                              <Popover.Content className="max-w-64">
-                                <Popover.Dialog>
-                                  <Popover.Heading className="text-sm">{t(`builder.${opt.id}`)}</Popover.Heading>
-                                  <p className="mt-1 text-xs text-default-500">{t(`builder.${opt.id}Desc`)}</p>
-                                </Popover.Dialog>
-                              </Popover.Content>
-                            </Popover>
-                          </div>
-                        </ListView.ItemContent>
-                      </ListView.Item>
-                    )}
-                  </ListView>
+                    <Label>{t('builder.junkDataMb')}</Label>
+                    <Slider.Output />
+                    <Slider.Track>
+                      <Slider.Fill />
+                      <Slider.Thumb />
+                    </Slider.Track>
+                  </Slider>
                 </div>
-              </div>
-            )}
-          </Card>
+              )}
+            </div>
+            <div>
+              <h2 className="text-lg font-semibold mb-3">{t('builder.persistence')}</h2>
+              <ListView
+                aria-label={t('builder.persistence')}
+                items={persistenceOptions}
+                selectedKeys={selectedPersistenceKeys}
+                selectionMode="multiple"
+                variant="primary"
+                onSelectionChange={handlePersistenceSelectionChange}
+              >
+                {(opt) => (
+                  <ListView.Item id={opt.id} textValue={t(`builder.${opt.id}`)}>
+                    <ListView.ItemContent>
+                      <div className="flex items-center justify-between w-full">
+                        <ListView.Title>{t(`builder.${opt.id}`)}</ListView.Title>
+                        <Popover>
+                          <Button isIconOnly variant="ghost" className="h-8 w-8 min-w-0">
+                            <CircleInfo className="h-6 w-6" />
+                          </Button>
+                          <Popover.Content className="max-w-64">
+                            <Popover.Dialog>
+                              <Popover.Heading className="text-sm">{t(`builder.${opt.id}`)}</Popover.Heading>
+                              <p className="mt-1 text-xs text-default-500">{t(`builder.${opt.id}Desc`)}</p>
+                            </Popover.Dialog>
+                          </Popover.Content>
+                        </Popover>
+                      </div>
+                    </ListView.ItemContent>
+                  </ListView.Item>
+                )}
+              </ListView>
+            </div>
+            <div>
+              <h2 className="text-lg font-semibold mb-3">{t('builder.antiAnalysis')}</h2>
+              <ListView
+                aria-label={t('builder.antiAnalysis')}
+                items={antiAnalysisOptions}
+                selectedKeys={selectedAntiAnalysisKeys}
+                selectionMode="multiple"
+                variant="primary"
+                onSelectionChange={handleAntiAnalysisSelectionChange}
+              >
+                {(opt) => (
+                  <ListView.Item id={opt.id} textValue={t(`builder.${opt.id}`)}>
+                    <ListView.ItemContent>
+                      <div className="flex items-center justify-between w-full">
+                        <ListView.Title>{t(`builder.${opt.id}`)}</ListView.Title>
+                        <Popover>
+                          <Button isIconOnly variant="ghost" className="h-8 w-8 min-w-0">
+                            <CircleInfo className="h-6 w-6" />
+                          </Button>
+                          <Popover.Content className="max-w-64">
+                            <Popover.Dialog>
+                              <Popover.Heading className="text-sm">{t(`builder.${opt.id}`)}</Popover.Heading>
+                              <p className="mt-1 text-xs text-default-500">{t(`builder.${opt.id}Desc`)}</p>
+                            </Popover.Dialog>
+                          </Popover.Content>
+                        </Popover>
+                      </div>
+                    </ListView.ItemContent>
+                  </ListView.Item>
+                )}
+              </ListView>
+            </div>
+          </div>
+        </Card>
 
       </div>
 
