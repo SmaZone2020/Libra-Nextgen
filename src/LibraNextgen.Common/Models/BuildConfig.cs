@@ -27,68 +27,8 @@ public class AntiAnalysisConfig
     [System.Text.Json.Serialization.JsonPropertyName("enabled")]
     public bool enabled { get; set; }
 
-    [System.Text.Json.Serialization.JsonPropertyName("check_cpu_cores")]
-    public bool check_cpu_cores { get; set; } = true;
-
-    [System.Text.Json.Serialization.JsonPropertyName("min_cpu_cores")]
-    public int min_cpu_cores { get; set; } = 2;
-
-    [System.Text.Json.Serialization.JsonPropertyName("check_memory")]
-    public bool check_memory { get; set; } = true;
-
-    [System.Text.Json.Serialization.JsonPropertyName("min_memory_gb")]
-    public int min_memory_gb { get; set; } = 2;
-
-    [System.Text.Json.Serialization.JsonPropertyName("check_disk_size")]
-    public bool check_disk_size { get; set; } = true;
-
-    [System.Text.Json.Serialization.JsonPropertyName("min_disk_gb")]
-    public int min_disk_gb { get; set; } = 60;
-
-    [System.Text.Json.Serialization.JsonPropertyName("check_debugger")]
-    public bool check_debugger { get; set; } = true;
-
-    [System.Text.Json.Serialization.JsonPropertyName("check_vm_mac")]
-    public bool check_vm_mac { get; set; } = true;
-
-    [System.Text.Json.Serialization.JsonPropertyName("check_username")]
-    public bool check_username { get; set; } = true;
-
-    [System.Text.Json.Serialization.JsonPropertyName("check_usb_history")]
-    public bool check_usb_history { get; set; } = true;
-
-    [System.Text.Json.Serialization.JsonPropertyName("min_usb_devices")]
-    public int min_usb_devices { get; set; } = 2;
-
     [System.Text.Json.Serialization.JsonPropertyName("check_test_signing")]
     public bool check_test_signing { get; set; } = true;
-
-    [System.Text.Json.Serialization.JsonPropertyName("check_delay_sandbox")]
-    public bool check_delay_sandbox { get; set; } = true;
-
-    [System.Text.Json.Serialization.JsonPropertyName("delay_seconds")]
-    public int delay_seconds { get; set; } = 5;
-
-    [System.Text.Json.Serialization.JsonPropertyName("check_installed_software")]
-    public bool check_installed_software { get; set; } = true;
-
-    [System.Text.Json.Serialization.JsonPropertyName("min_installed_software")]
-    public int min_installed_software { get; set; } = 30;
-
-    [System.Text.Json.Serialization.JsonPropertyName("check_screen_resolution")]
-    public bool check_screen_resolution { get; set; } = true;
-
-    [System.Text.Json.Serialization.JsonPropertyName("check_process_count")]
-    public bool check_process_count { get; set; } = true;
-
-    [System.Text.Json.Serialization.JsonPropertyName("min_processes")]
-    public int min_processes { get; set; } = 50;
-
-    [System.Text.Json.Serialization.JsonPropertyName("check_mouse_movement")]
-    public bool check_mouse_movement { get; set; } = true;
-
-    [System.Text.Json.Serialization.JsonPropertyName("mouse_wait_seconds")]
-    public int mouse_wait_seconds { get; set; } = 10;
 }
 
 public class InjectedConfig

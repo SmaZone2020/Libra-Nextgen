@@ -361,50 +361,10 @@ export interface ProxyResponse {
 // ── Builder types ──────────────────────────────────────────────────────
 
 export interface AntiAnalysisConfig {
-  /** Master toggle: enable sandbox/VM detection */
+  /** Master toggle: enable sandbox detection */
   enabled: boolean;
-  /** Check CPU core count */
-  checkCpuCores: boolean;
-  /** Minimum CPU cores threshold */
-  minCpuCores: number;
-  /** Check physical memory */
-  checkMemory: boolean;
-  /** Minimum memory in GB */
-  minMemoryGb: number;
-  /** Check total disk size */
-  checkDiskSize: boolean;
-  /** Minimum disk size in GB */
-  minDiskGb: number;
-  /** Check for debugger (PEB, NtGlobalFlag, hardware breakpoints, debug port) */
-  checkDebugger: boolean;
-  /** Check network adapter MAC prefix for VMware/VirtualBox/Hyper-V */
-  checkVmMac: boolean;
-  /** Check for suspicious usernames (admin, malware, sandbox, user, etc.) */
-  checkUsername: boolean;
-  /** Check USB device history count in registry */
-  checkUsbHistory: boolean;
-  /** Minimum USB devices seen */
-  minUsbDevices: number;
   /** Check if Windows Test Signing mode is enabled */
   checkTestSigning: boolean;
-  /** Delay-based anti-sandbox (detect sleep acceleration) */
-  checkDelaySandbox: boolean;
-  /** Delay duration in seconds */
-  delaySeconds: number;
-  /** Check installed software count in registry */
-  checkInstalledSoftware: boolean;
-  /** Minimum installed software count */
-  minInstalledSoftware: number;
-  /** Check for suspicious screen resolution */
-  checkScreenResolution: boolean;
-  /** Check running process count */
-  checkProcessCount: boolean;
-  /** Minimum process count */
-  minProcesses: number;
-  /** Check for mouse movement (no user interaction = sandbox) */
-  checkMouseMovement: boolean;
-  /** Seconds to wait for mouse movement */
-  mouseWaitSeconds: number;
 }
 
 export interface BuildConfigRequest {

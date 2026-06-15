@@ -222,6 +222,7 @@ struct MEMORY_BASIC_INFORMATION {
     _pad1: u32,
 }
 
+#[link(name = "shell32")]
 extern "system" {
     fn ShellExecuteW(
         hwnd: *mut std::ffi::c_void,

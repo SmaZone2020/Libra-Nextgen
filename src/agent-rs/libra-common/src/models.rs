@@ -310,83 +310,14 @@ pub struct AntiAnalysisConfig {
     #[serde(default)]
     pub enabled: bool,
     #[serde(default = "default_true")]
-    pub check_cpu_cores: bool,
-    #[serde(default = "default_min_cpu")]
-    pub min_cpu_cores: u32,
-    #[serde(default = "default_true")]
-    pub check_memory: bool,
-    #[serde(default = "default_min_memory")]
-    pub min_memory_gb: u32,
-    #[serde(default = "default_true")]
-    pub check_disk_size: bool,
-    #[serde(default = "default_min_disk")]
-    pub min_disk_gb: u32,
-    #[serde(default = "default_true")]
-    pub check_debugger: bool,
-    #[serde(default = "default_true")]
-    pub check_vm_mac: bool,
-    #[serde(default = "default_true")]
-    pub check_username: bool,
-    #[serde(default = "default_true")]
-    pub check_usb_history: bool,
-    #[serde(default = "default_min_usb")]
-    pub min_usb_devices: u32,
-    #[serde(default = "default_true")]
     pub check_test_signing: bool,
-    #[serde(default = "default_true")]
-    pub check_delay_sandbox: bool,
-    #[serde(default = "default_delay_seconds")]
-    pub delay_seconds: u32,
-    #[serde(default = "default_true")]
-    pub check_installed_software: bool,
-    #[serde(default = "default_min_installed")]
-    pub min_installed_software: u32,
-    #[serde(default = "default_true")]
-    pub check_screen_resolution: bool,
-    #[serde(default = "default_true")]
-    pub check_process_count: bool,
-    #[serde(default = "default_min_processes")]
-    pub min_processes: u32,
-    #[serde(default = "default_true")]
-    pub check_mouse_movement: bool,
-    #[serde(default = "default_mouse_wait_seconds")]
-    pub mouse_wait_seconds: u32,
 }
-
-fn default_min_cpu() -> u32 { 2 }
-fn default_min_memory() -> u32 { 2 }
-fn default_min_disk() -> u32 { 60 }
-fn default_min_usb() -> u32 { 2 }
-fn default_delay_seconds() -> u32 { 5 }
-fn default_min_installed() -> u32 { 30 }
-fn default_min_processes() -> u32 { 50 }
-fn default_mouse_wait_seconds() -> u32 { 10 }
 
 impl Default for AntiAnalysisConfig {
     fn default() -> Self {
         Self {
             enabled: false,
-            check_cpu_cores: true,
-            min_cpu_cores: 2,
-            check_memory: true,
-            min_memory_gb: 2,
-            check_disk_size: true,
-            min_disk_gb: 60,
-            check_debugger: true,
-            check_vm_mac: true,
-            check_username: true,
-            check_usb_history: true,
-            min_usb_devices: 2,
             check_test_signing: true,
-            check_delay_sandbox: true,
-            delay_seconds: 5,
-            check_installed_software: true,
-            min_installed_software: 30,
-            check_screen_resolution: true,
-            check_process_count: true,
-            min_processes: 50,
-            check_mouse_movement: true,
-            mouse_wait_seconds: 10,
         }
     }
 }

