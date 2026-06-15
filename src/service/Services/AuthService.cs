@@ -63,6 +63,7 @@ public class AuthService
             PasswordHash = HashPassword(password),
             Role = UserRole.Admin,
             IsActive = true,
+            IsInitial = true,
             CreatedAt = DateTime.UtcNow
         };
         await _users.InsertAsync(user);

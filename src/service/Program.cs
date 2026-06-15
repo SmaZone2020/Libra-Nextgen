@@ -43,6 +43,7 @@ builder.Services.AddScoped<Repository<AccessKey>>(sp =>
 var jwtSettings = new JwtSettings();
 builder.Services.AddSingleton(jwtSettings);
 builder.Services.AddScoped<AuthService>();
+builder.Services.AddScoped<AccountService>();
 builder.Services.AddScoped<ProfileService>();
 builder.Services.AddScoped<AgentService>();
 builder.Services.AddScoped<TaskService>();
