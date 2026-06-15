@@ -1,0 +1,309 @@
+import { useState, useEffect, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
+import { Button, Card, Input, Label, Modal, Spinner, TextField } from '@heroui/react';
+import { getAccountStatus, listAccounts, createAccount, updateAccount, deleteAccount, changePassword } from '../../api/account';
+import type { AccountListItem } from '../../types/models';
+import { useDialog } from '../../hooks/useDialog';
+
+export default function AccountTab() {
+  const { t } = useTranslation();
+  const { confirm, DialogComponent } = useDialog();
+  const [isInitial, setIsInitial] = useState(false);
+  const [accounts, setAccounts] = useState<AccountListItem[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  // Create / edit modal
+  const [modalOpen, setModalOpen] = useState(false);
+  const [editingAccount, setEditingAccount] = useState<AccountListItem | null>(null);
+  const [formName, setFormName] = useState('');
+  const [formPassword, setFormPassword] = useState('');
+  const [formRole, setFormRole] = useState('Operator');
+  const [saving, setSaving] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
+
+  // Change password modal
+  const [pwModalOpen, setPwModalOpen] = useState(false);
+  const [currentPw, setCurrentPw] = useState('');
+  const [newPw, setNewPw] = useState('');
+  const [pwSaving, setPwSaving] = useState(false);
+  const [pwError, setPwError] = useState<string | null>(null);
+
+  const loadData = useCallback(async () => {
+    try {
+      const [status, list] = await Promise.all([
+        getAccountStatus(),
+        isInitial ? listAccounts() : Promise.resolve([]),
+      ]);
+      setIsInitial(status.isInitial);
+      setAccounts(Array.isArray(list) ? list : []);
+    } catch { /* ignore */ }
+    finally { setLoading(false); }
+  }, []);
+
+  useEffect(() => { loadData(); }, [loadData]);
+
+  const openCreateModal = () => {
+    setEditingAccount(null);
+    setFormName('');
+    setFormPassword('');
+    setFormRole('Operator');
+    setFormError(null);
+    setModalOpen(true);
+  };
+
+  const openEditModal = (acc: AccountListItem) => {
+    setEditingAccount(acc);
+    setFormName(acc.username);
+    setFormPassword('');
+    setFormRole(acc.role);
+    setFormError(null);
+    setModalOpen(true);
+  };
+
+  const handleSave = async () => {
+    if (!formName.trim()) { setFormError(t('settings.account.nameRequired')); return; }
+    if (!editingAccount && !formPassword) { setFormError(t('settings.account.passwordRequired')); return; }
+    if (!editingAccount && formPassword.length < 6) { setFormError(t('settings.account.passwordMinLength')); return; }
+    setFormError(null);
+    setSaving(true);
+    try {
+      if (editingAccount) {
+        await updateAccount(editingAccount.id, {
+          username: formName.trim(),
+          role: formRole,
+        });
+      } else {
+        await createAccount({
+          username: formName.trim(),
+          password: formPassword,
+          role: formRole,
+        });
+      }
+      setModalOpen(false);
+      await loadAccounts();
+    } catch (err: unknown) {
+      setFormError(err instanceof Error ? err.message : String(err));
+    } finally { setSaving(false); }
+  };
+
+  const handleDelete = async (acc: AccountListItem) => {
+    const result = await confirm(t('settings.account.deleteConfirm', { name: acc.username }));
+    if (!result.confirmed) return;
+    try {
+      await deleteAccount(acc.id);
+      await loadAccounts();
+    } catch (err: unknown) {
+      // Show error? For now silently fail
+    }
+  };
+
+  const handleChangePassword = async () => {
+    if (!currentPw) { setPwError(t('settings.account.currentPasswordRequired')); return; }
+    if (newPw.length < 6) { setPwError(t('settings.account.passwordMinLength')); return; }
+    setPwError(null);
+    setPwSaving(true);
+    try {
+      await changePassword({ currentPassword: currentPw, newPassword: newPw });
+      setPwModalOpen(false);
+      setCurrentPw('');
+      setNewPw('');
+    } catch (err: unknown) {
+      setPwError(err instanceof Error ? err.message : String(err));
+    } finally { setPwSaving(false); }
+  };
+
+  async function loadAccounts() {
+    try {
+      const list = await listAccounts();
+      setAccounts(Array.isArray(list) ? list : []);
+    } catch { /* ignore */ }
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Spinner size="lg" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Change Password Card — shown to all users */}
+      <Card className="p-6">
+        <h2 className="text-lg font-semibold mb-3">{t('settings.account.changePassword')}</h2>
+        <div className="flex items-center gap-3">
+          <Button variant="secondary" size="sm" onPress={() => setPwModalOpen(true)}>
+            {t('settings.account.changePassword')}
+          </Button>
+        </div>
+      </Card>
+
+      {/* Account Management Card — initial account only */}
+      {isInitial && (
+        <Card className="p-6">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-semibold">{t('settings.account.accounts')}</h2>
+            <Button variant="primary" size="sm" onPress={openCreateModal}>
+              {t('settings.account.createAccount')}
+            </Button>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-default-200">
+                  <th className="text-left py-2 px-3">{t('settings.account.username')}</th>
+                  <th className="text-left py-2 px-3">{t('settings.account.role')}</th>
+                  <th className="text-left py-2 px-3">{t('settings.account.status')}</th>
+                  <th className="text-left py-2 px-3">{t('settings.account.createdAt')}</th>
+                  <th className="text-left py-2 px-3">{t('settings.account.lastLogin')}</th>
+                  <th className="text-left py-2 px-3">{t('settings.actions')}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {accounts.map((a) => (
+                  <tr key={a.id} className="border-b border-default-100">
+                    <td className="py-2 px-3">
+                      <div className="flex items-center gap-2">
+                        {a.username}
+                        {a.isInitial && (
+                          <span className="text-xs px-1.5 py-0.5 rounded bg-primary-100 text-primary-700">
+                            {t('settings.account.initialBadge')}
+                          </span>
+                        )}
+                      </div>
+                    </td>
+                    <td className="py-2 px-3">{a.role}</td>
+                    <td className="py-2 px-3">
+                      <span className={a.isActive ? 'text-success' : 'text-danger'}>
+                        {a.isActive ? t('settings.account.active') : t('settings.account.inactive')}
+                      </span>
+                    </td>
+                    <td className="py-2 px-3">{new Date(a.createdAt).toLocaleDateString()}</td>
+                    <td className="py-2 px-3">
+                      {a.lastLogin ? new Date(a.lastLogin).toLocaleDateString() : '-'}
+                    </td>
+                    <td className="py-2 px-3">
+                      {!a.isInitial && (
+                        <div className="flex gap-1">
+                          <Button size="sm" variant="ghost" onPress={() => openEditModal(a)}>
+                            {t('settings.edit')}
+                          </Button>
+                          <Button size="sm" variant="danger" onPress={() => handleDelete(a)}>
+                            {t('settings.delete')}
+                          </Button>
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+                {accounts.length === 0 && (
+                  <tr>
+                    <td colSpan={6} className="py-8 text-center text-default-400">
+                      {t('settings.noKeys')}
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
+
+      {/* Create/Edit Modal */}
+      <Modal.Backdrop isOpen={modalOpen} onOpenChange={(open) => { if (!open) setModalOpen(false); }}>
+        <Modal.Container size="sm">
+          <Modal.Dialog>
+            <Modal.CloseTrigger />
+            <Modal.Header>
+              <Modal.Heading>
+                {editingAccount ? t('settings.account.editAccount') : t('settings.account.createAccount')}
+              </Modal.Heading>
+            </Modal.Header>
+            <Modal.Body>
+              <div className="space-y-4">
+                {formError && (
+                  <div className="p-2 bg-danger-50 text-danger-700 rounded text-xs">{formError}</div>
+                )}
+                <TextField value={formName} onChange={setFormName}>
+                  <Label>{t('settings.account.username')}</Label>
+                  <Input autoFocus />
+                </TextField>
+                {!editingAccount && (
+                  <TextField value={formPassword} onChange={setFormPassword}>
+                    <Label>{t('settings.account.password')}</Label>
+                    <Input type="password" />
+                  </TextField>
+                )}
+                <div className="space-y-2">
+                  <Label>{t('settings.account.role')}</Label>
+                  <div className="flex gap-2">
+                    <Button
+                      variant={formRole === 'Operator' ? 'primary' : 'ghost'}
+                      size="sm"
+                      onPress={() => setFormRole('Operator')}
+                    >
+                      {t('settings.account.roleOperator')}
+                    </Button>
+                    <Button
+                      variant={formRole === 'Admin' ? 'primary' : 'ghost'}
+                      size="sm"
+                      onPress={() => setFormRole('Admin')}
+                    >
+                      {t('settings.account.roleAdmin')}
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </Modal.Body>
+            <Modal.Footer>
+              <Button variant="ghost" onPress={() => setModalOpen(false)}>
+                {t('common.cancel')}
+              </Button>
+              <Button variant="primary" isPending={saving} onPress={handleSave}>
+                {t('settings.create')}
+              </Button>
+            </Modal.Footer>
+          </Modal.Dialog>
+        </Modal.Container>
+      </Modal.Backdrop>
+
+      {/* Change Password Modal */}
+      <Modal.Backdrop isOpen={pwModalOpen} onOpenChange={(open) => { if (!open) { setPwModalOpen(false); setPwError(null); } }}>
+        <Modal.Container size="sm">
+          <Modal.Dialog>
+            <Modal.CloseTrigger />
+            <Modal.Header>
+              <Modal.Heading>{t('settings.account.changePassword')}</Modal.Heading>
+            </Modal.Header>
+            <Modal.Body>
+              <div className="space-y-4">
+                {pwError && (
+                  <div className="p-2 bg-danger-50 text-danger-700 rounded text-xs">{pwError}</div>
+                )}
+                <TextField value={currentPw} onChange={setCurrentPw}>
+                  <Label>{t('settings.account.currentPassword')}</Label>
+                  <Input type="password" autoFocus />
+                </TextField>
+                <TextField value={newPw} onChange={setNewPw}>
+                  <Label>{t('settings.account.newPassword')}</Label>
+                  <Input type="password" />
+                </TextField>
+              </div>
+            </Modal.Body>
+            <Modal.Footer>
+              <Button variant="ghost" onPress={() => { setPwModalOpen(false); setPwError(null); }}>
+                {t('common.cancel')}
+              </Button>
+              <Button variant="primary" isPending={pwSaving} onPress={handleChangePassword}>
+                {t('settings.account.changePassword')}
+              </Button>
+            </Modal.Footer>
+          </Modal.Dialog>
+        </Modal.Container>
+      </Modal.Backdrop>
+
+      {DialogComponent}
+    </div>
+  );
+}
