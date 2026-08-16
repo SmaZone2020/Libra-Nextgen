@@ -8,6 +8,7 @@ import { getStoredUser } from '../../api/auth';
 import AccountTab from './AccountTab';
 import PreferencesTab from './PreferencesTab';
 import RiskPolicyTab from './RiskPolicyTab';
+import McpTab from './McpTab';
 
 function AccessKeysTab() {
   const { t } = useTranslation();
@@ -201,6 +202,7 @@ export default function SettingsPage() {
           <Tabs.List aria-label={t('settings.tabsLabel')} className="mx-auto w-lg">
             <Tabs.Tab id="preferences">{t('settings.preferencesTab')}<Tabs.Indicator /></Tabs.Tab>
             <Tabs.Tab id="accessKeys">{t('settings.accessKeysTab')}<Tabs.Indicator /></Tabs.Tab>
+            {isAdmin && <Tabs.Tab id="mcp">{t('mcp.title')}<Tabs.Indicator /></Tabs.Tab>}
             {isAdmin && <Tabs.Tab id="riskPolicy">{t('riskPolicy.title')}<Tabs.Indicator /></Tabs.Tab>}
             {isAdmin && <Tabs.Tab id="account">{t('settings.accountTab')}<Tabs.Indicator /></Tabs.Tab>}
           </Tabs.List>
@@ -208,6 +210,7 @@ export default function SettingsPage() {
 
         <Tabs.Panel id="preferences"><PreferencesTab /></Tabs.Panel>
         <Tabs.Panel id="accessKeys"><AccessKeysTab /></Tabs.Panel>
+        {isAdmin && <Tabs.Panel id="mcp"><McpTab /></Tabs.Panel>}
         {isAdmin && <Tabs.Panel id="riskPolicy"><RiskPolicyTab /></Tabs.Panel>}
         {isAdmin && <Tabs.Panel id="account"><AccountTab /></Tabs.Panel>}
       </Tabs>

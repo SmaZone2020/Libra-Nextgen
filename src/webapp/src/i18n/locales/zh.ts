@@ -642,5 +642,16 @@ export default {
       accept: '我同意',
       decline: '退出',
     },
+    mcp: {
+      title: 'MCP',
+      desc: '管理 MCP 服务器的接入信息与启停。',
+      enabled: '已启用',
+      disabled: '已禁用',
+      endpoint: '端点',
+      transport: '传输方式',
+      auth: '鉴权方式',
+      tools: '可用工具',
+      noTools: '暂无工具',
+    },
   },
 };

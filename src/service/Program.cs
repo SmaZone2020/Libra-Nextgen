@@ -59,6 +59,7 @@ builder.Services.AddSingleton<ConnectionManager>();
 builder.Services.AddSingleton<SessionKeyStore>();
 builder.Services.AddSingleton<RiskPolicyService>();
 builder.Services.AddSingleton<PermissionService>();
+builder.Services.AddSingleton<McpService>();
 builder.Services.AddScoped<AuditService>();
 builder.Services.AddScoped<AccessKeyService>();
 builder.Services.AddHostedService<HeartbeatMonitor>();
@@ -172,6 +173,7 @@ app.UseAuthorization();
 app.UseMiddleware<PermissionMiddleware>();
 app.UseMiddleware<AuditMiddleware>();
 app.MapControllers();
+app.UseMiddleware<McpToggleMiddleware>();
 app.MapMcp("/mcp").RequireAuthorization("McpPolicy");
 WebSocketHandler.Map(app);
 
@@ -184,6 +186,8 @@ try
         indexBuilder.EnsureIndexesAsync().GetAwaiter().GetResult();
         var riskPolicy = scope.ServiceProvider.GetRequiredService<RiskPolicyService>();
         riskPolicy.LoadAsync().GetAwaiter().GetResult();
+        var mcp = scope.ServiceProvider.GetRequiredService<McpService>();
+        mcp.LoadAsync().GetAwaiter().GetResult();
     }
 }
 catch (Exception ex)

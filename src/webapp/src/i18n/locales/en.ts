@@ -642,5 +642,16 @@ export default {
       accept: 'I Agree',
       decline: 'Decline',
     },
+    mcp: {
+      title: 'MCP Server',
+      desc: 'Manage the MCP server endpoint and enable/disable it.',
+      enabled: 'Enabled',
+      disabled: 'Disabled',
+      endpoint: 'Endpoint',
+      transport: 'Transport',
+      auth: 'Authentication',
+      tools: 'Available Tools',
+      noTools: 'No tools registered',
+    },
   },
 };
