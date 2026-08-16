@@ -39,6 +39,17 @@ public class RiskClassifierTests
         Assert.Null(RiskClassifier.ClassifyAction("POST", "/api/beacon/heartbeat"));
     }
 
+    [Theory]
+    [InlineData("/api/account")]
+    [InlineData("/api/access-keys")]
+    [InlineData("/api/builder/build")]
+    [InlineData("/api/auth/login")]
+    [InlineData("/api/mcp/toggle")]
+    public void ClassifyAction_NonAgentOperations_ReturnNull(string path)
+    {
+        Assert.Null(RiskClassifier.ClassifyAction("POST", path));
+    }
+
     [Fact]
     public void DefaultMappings_MatchExamples()
     {

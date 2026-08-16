@@ -61,26 +61,15 @@ public static class RiskClassifier
         if (path.StartsWith("/api/proxy"))
             return RiskActions.Proxy;
 
-        if (path.StartsWith("/api/account"))
-            return RiskActions.AccountManage;
-
-        if (path.StartsWith("/api/access-keys"))
-            return RiskActions.AccessKeyManage;
-
-        if (path.StartsWith("/api/builder"))
-            return RiskActions.BuilderBuild;
-
         if (path.StartsWith("/api/agents"))
         {
             if (path.EndsWith("/kill-all")) return RiskActions.AgentKillAll;
             if (method == "DELETE") return RiskActions.AgentDelete;
         }
 
-        // Agent beacon + auth are not operator actions; skip risk scoring.
-        if (path.StartsWith("/api/beacon") || path.StartsWith("/api/auth"))
-            return null;
-
-        return RiskActions.TaskCreate;
+        // Only agent-targeting operations are audited / risk-scored. Account,
+        // access-key, builder, auth and beacon traffic are not agent operations.
+        return null;
     }
 
     private static string? ClassifyTask(string? body)
