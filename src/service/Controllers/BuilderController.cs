@@ -765,59 +765,48 @@ public class BuilderController : ControllerBase
 
     private async Task EmbedIconAndMetadata(BuildConfigRequest req, string exePath, BuildJob job)
     {
-        job.Log("Embedding icon/metadata via rcedit...");
+        job.Log("Embedding icon/metadata (managed PE writer)...");
 
-        // Resolve icon file
-        string? iconPath = null;
+        // Resolve icon bytes
+        byte[]? iconBytes = null;
         if (!string.IsNullOrEmpty(req.IconUrl))
         {
             try
             {
                 if (System.IO.File.Exists(req.IconUrl))
                 {
-                    iconPath = req.IconUrl;
+                    iconBytes = await System.IO.File.ReadAllBytesAsync(req.IconUrl);
                 }
                 else if (req.IconUrl.StartsWith("http"))
                 {
                     using var http = new HttpClient();
-                    var iconBytes = await http.GetByteArrayAsync(req.IconUrl);
-                    iconPath = Path.Combine(Path.GetTempPath(), $"libra-icon-{Guid.NewGuid():N}.ico");
-                    await System.IO.File.WriteAllBytesAsync(iconPath, iconBytes);
+                    iconBytes = await http.GetByteArrayAsync(req.IconUrl);
                 }
             }
-            catch { job.Log("[WARN] Icon download failed, skipping icon."); }
+            catch { job.Log("[WARN] Icon load failed, skipping icon."); }
         }
 
-        var args = new List<string>();
-        if (iconPath != null) args.Add($"--set-icon \"{iconPath}\"");
-        if (!string.IsNullOrEmpty(req.FileVersion))
+        var metadata = new LibraNextgen.Common.Pe.PeMetadata
         {
-            args.Add($"--set-file-version \"{req.FileVersion}\"");
-            args.Add($"--set-product-version \"{req.FileVersion}\"");
-        }
-        if (!string.IsNullOrEmpty(req.CompanyName))
-            args.Add($"--set-version-string CompanyName \"{req.CompanyName}\"");
-        if (!string.IsNullOrEmpty(req.FileDescription))
-            args.Add($"--set-version-string FileDescription \"{req.FileDescription}\"");
-        if (!string.IsNullOrEmpty(req.ProductName))
-            args.Add($"--set-version-string ProductName \"{req.ProductName}\"");
-        if (!string.IsNullOrEmpty(req.Copyright))
-            args.Add($"--set-version-string LegalCopyright \"{req.Copyright}\"");
+            CompanyName = req.CompanyName,
+            FileDescription = req.FileDescription,
+            ProductName = req.ProductName,
+            FileVersion = req.FileVersion,
+            ProductVersion = req.FileVersion,
+            Copyright = req.Copyright,
+            Icon = iconBytes,
+        };
 
-        if (args.Count == 0) return;
-
-        var rceditArgs = $"\"{exePath}\" {string.Join(" ", args)}";
         try
         {
-            var result = await RunProcessAsync("rcedit", rceditArgs, job);
-            if (result.ExitCode == 0)
-                job.Log("Icon/metadata embedded successfully.");
-            else
-                job.Log($"[WARN] rcedit failed (exit {result.ExitCode}), continuing without icon/metadata.");
+            var exeBytes = await System.IO.File.ReadAllBytesAsync(exePath);
+            var patched = LibraNextgen.Common.Pe.PeResourceWriter.Embed(exeBytes, metadata);
+            await System.IO.File.WriteAllBytesAsync(exePath, patched);
+            job.Log("Icon/metadata embedded successfully.");
         }
         catch (Exception ex)
         {
-            job.Log($"[WARN] rcedit not available: {ex.Message}. Install rcedit to enable icon/metadata embedding.");
+            job.Log($"[WARN] metadata embedding failed: {ex.Message}. Continuing without icon/metadata.");
         }
     }
 }
