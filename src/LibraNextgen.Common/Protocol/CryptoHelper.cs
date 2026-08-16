@@ -72,22 +72,25 @@ public static class CryptoHelper
     public static (string publicKey, string privateKey) GenerateRsaKeyPair()
     {
         using var rsa = RSA.Create(2048);
-        var pub = Convert.ToBase64String(rsa.ExportRSAPublicKey());
-        var priv = Convert.ToBase64String(rsa.ExportRSAPrivateKey());
+        // SPKI (SubjectPublicKeyInfo) + PKCS#8 — matches the Rust agent's
+        // `to_public_key_der()` / `to_pkcs8_der()` exports.
+        var pub = Convert.ToBase64String(rsa.ExportSubjectPublicKeyInfo());
+        var priv = Convert.ToBase64String(rsa.ExportPkcs8PrivateKey());
         return (pub, priv);
     }
 
     public static byte[] RsaEncrypt(byte[] data, string publicKeyBase64)
     {
         using var rsa = RSA.Create();
-        rsa.ImportRSAPublicKey(Convert.FromBase64String(publicKeyBase64), out _);
+        // The Rust agent exports its public key as SPKI DER, not PKCS#1.
+        rsa.ImportSubjectPublicKeyInfo(Convert.FromBase64String(publicKeyBase64), out _);
         return rsa.Encrypt(data, RSAEncryptionPadding.OaepSHA256);
     }
 
     public static byte[] RsaDecrypt(byte[] data, string privateKeyBase64)
     {
         using var rsa = RSA.Create();
-        rsa.ImportRSAPrivateKey(Convert.FromBase64String(privateKeyBase64), out _);
+        rsa.ImportPkcs8PrivateKey(Convert.FromBase64String(privateKeyBase64), out _);
         return rsa.Decrypt(data, RSAEncryptionPadding.OaepSHA256);
     }
 }
