@@ -380,6 +380,7 @@ export interface QQClientKeyItem {
 export interface QQClientKeyResult {
   total: number;
   items: QQClientKeyItem[];
+  uins?: string[];
   error?: string;
 }
 

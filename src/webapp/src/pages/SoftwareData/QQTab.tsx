@@ -20,6 +20,7 @@ export function QQTab({ agentId }: QQTabProps) {
   const [accounts, setAccounts] = useState<QQAccount[]>([]);
   const [portraits, setPortraits] = useState<Record<string, QQPortrait | null>>({});
   const [clientkeys, setClientkeys] = useState<QQClientKeyItem[]>([]);
+  const [currentUins, setCurrentUins] = useState<string[]>([]);
   const [showRaw, setShowRaw] = useState(false);
   const [loading, setLoading] = useState(true);
   const [fetchingKey, setFetchingKey] = useState(false);
@@ -49,12 +50,13 @@ export function QQTab({ agentId }: QQTabProps) {
     try {
       const res = await getQQClientKey(agentId);
       setClientkeys(res.items ?? []);
+      setCurrentUins(res.uins ?? []);
       setShowRaw(false);
     } catch { /* ignore */ }
     finally { setFetchingKey(false); }
   }, [agentId]);
 
-  const onlineUins = new Set(clientkeys.map(c => c.uin).filter(Boolean));
+  const onlineUins = new Set(currentUins.filter(Boolean));
 
   if (loading) {
     return (

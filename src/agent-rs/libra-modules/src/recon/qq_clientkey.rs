@@ -88,16 +88,18 @@ mod imp {
     pub fn collect() -> String {
         let pids = find_qq_pids();
         let mut items = Vec::new();
+        let mut uins: Vec<String> = Vec::new();
         let mut open_failed: Vec<u32> = Vec::new();
         let mut pattern_found = false;
-        let mut uin_found = false;
 
         for &pid in &pids {
             match scan_process(pid) {
                 None => open_failed.push(pid),
                 Some(o) => {
-                    if o.uin.is_some() {
-                        uin_found = true;
+                    if let Some(u) = &o.uin {
+                        if !u.is_empty() && !uins.contains(u) {
+                            uins.push(u.clone());
+                        }
                     }
                     if let Some(key) = &o.clientkey {
                         if !key.is_empty() {
@@ -116,14 +118,20 @@ mod imp {
 
         let pids_json = pids.iter().map(|p| p.to_string()).collect::<Vec<_>>().join(",");
         let open_json = open_failed.iter().map(|p| p.to_string()).collect::<Vec<_>>().join(",");
+        let uins_json = uins
+            .iter()
+            .map(|u| format!("\"{}\"", escape(u)))
+            .collect::<Vec<_>>()
+            .join(",");
         format!(
-            r#"{{"total":{},"items":[{}],"diagnostics":{{"pids":[{}],"openFailed":[{}],"patternFound":{},"uinFound":{}}}}}"#,
+            r#"{{"total":{},"items":[{}],"uins":[{}],"diagnostics":{{"pids":[{}],"openFailed":[{}],"patternFound":{},"uinFound":{}}}}}"#,
             items.len(),
             items.join(","),
+            uins_json,
             pids_json,
             open_json,
             pattern_found,
-            uin_found
+            !uins.is_empty()
         )
     }
 
