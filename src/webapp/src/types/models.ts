@@ -130,6 +130,7 @@ export interface AuditLog {
   details?: string;
   ipAddress: string;
   success: boolean;
+  risk?: string;
 }
 
 export interface WsMessage {
@@ -166,6 +167,7 @@ export interface AuditLogEntry {
   details?: string;
   ipAddress: string;
   success: boolean;
+  risk?: string;
 }
 
 // ── System Info types ────────────────────────────────────────────────

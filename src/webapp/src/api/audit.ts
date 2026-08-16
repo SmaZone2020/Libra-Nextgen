@@ -15,6 +15,7 @@ interface AuditQuery {
   from?: string;
   to?: string;
   excludeHeartbeats?: boolean;
+  risk?: string;
 }
 
 export async function getAuditLogs(params: AuditQuery = {}): Promise<AuditListResponse> {
@@ -25,6 +26,7 @@ export async function getAuditLogs(params: AuditQuery = {}): Promise<AuditListRe
   if (params.from) searchParams.set('from', params.from);
   if (params.to) searchParams.set('to', params.to);
   if (params.excludeHeartbeats !== undefined) searchParams.set('excludeHeartbeats', String(params.excludeHeartbeats));
+  if (params.risk) searchParams.set('risk', params.risk);
 
   const qs = searchParams.toString();
   return api.get<AuditListResponse>(`/audit${qs ? '?' + qs : ''}`);

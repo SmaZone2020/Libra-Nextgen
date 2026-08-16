@@ -4,8 +4,10 @@ import { Button, Card, Input, Label, Modal, Spinner, Tabs, TextField } from '@he
 import { listAccessKeys, createAccessKey, deleteAccessKey } from '../../api/accessKeys';
 import type { AccessKeyItem, AccessKeyCreateResponse } from '../../api/accessKeys';
 import { useDialog } from '../../hooks/useDialog';
+import { getStoredUser } from '../../api/auth';
 import AccountTab from './AccountTab';
 import PreferencesTab from './PreferencesTab';
+import RiskPolicyTab from './RiskPolicyTab';
 
 function AccessKeysTab() {
   const { t } = useTranslation();
@@ -190,6 +192,7 @@ function AccessKeysTab() {
 export default function SettingsPage() {
   const { t } = useTranslation();
   const [tab, setTab] = useState<string>('preferences');
+  const isAdmin = getStoredUser()?.role === 'Admin';
 
   return (
     <div className="space-y-3">
@@ -198,13 +201,15 @@ export default function SettingsPage() {
           <Tabs.List aria-label={t('settings.tabsLabel')} className="mx-auto w-lg">
             <Tabs.Tab id="preferences">{t('settings.preferencesTab')}<Tabs.Indicator /></Tabs.Tab>
             <Tabs.Tab id="accessKeys">{t('settings.accessKeysTab')}<Tabs.Indicator /></Tabs.Tab>
-            <Tabs.Tab id="account">{t('settings.accountTab')}<Tabs.Indicator /></Tabs.Tab>
+            {isAdmin && <Tabs.Tab id="riskPolicy">{t('riskPolicy.title')}<Tabs.Indicator /></Tabs.Tab>}
+            {isAdmin && <Tabs.Tab id="account">{t('settings.accountTab')}<Tabs.Indicator /></Tabs.Tab>}
           </Tabs.List>
         </Tabs.ListContainer>
 
         <Tabs.Panel id="preferences"><PreferencesTab /></Tabs.Panel>
         <Tabs.Panel id="accessKeys"><AccessKeysTab /></Tabs.Panel>
-        <Tabs.Panel id="account"><AccountTab /></Tabs.Panel>
+        {isAdmin && <Tabs.Panel id="riskPolicy"><RiskPolicyTab /></Tabs.Panel>}
+        {isAdmin && <Tabs.Panel id="account"><AccountTab /></Tabs.Panel>}
       </Tabs>
     </div>
   );

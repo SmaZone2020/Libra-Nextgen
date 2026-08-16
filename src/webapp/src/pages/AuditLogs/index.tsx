@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Chip, Tabs } from '@heroui/react';
 import { getAuditLogs } from '../../api/audit';
 import { Widget } from '../../components/widget';
 import { DataGrid } from '../../components/data-grid';
@@ -14,6 +15,7 @@ export default function AuditLogsPage() {
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
+  const [riskFilter, setRiskFilter] = useState('');
   const [loading, setLoading] = useState(false);
   const pageSize = 80;
 
@@ -29,6 +31,17 @@ export default function AuditLogsPage() {
     {
       id: 'action', header: t('audit.action'), accessorKey: 'action',
       cell: (item) => <span className="font-mono text-sm">{item.action}</span>,
+    },
+    {
+      id: 'risk', header: t('audit.risk'), accessorKey: 'risk',
+      cell: (item) => {
+        const level = item.risk ?? 'Normal';
+        const color = level === 'Safe' ? 'success'
+          : level === 'Dangerous' ? 'warning'
+          : level === 'Malicious' ? 'danger'
+          : 'accent';
+        return <Chip size="sm" variant="soft" color={color}>{t(`riskLevel.${level}`)}</Chip>;
+      },
     },
     {
       id: 'targetAgentId', header: t('audit.target'), accessorKey: 'targetAgentId',
@@ -48,10 +61,16 @@ export default function AuditLogsPage() {
     },
   ];
 
-  const fetchLogs = useCallback(async (p: number, q: string) => {
+  const fetchLogs = useCallback(async (p: number, q: string, r: string) => {
     setLoading(true);
     try {
-      const res = await getAuditLogs({ page: p, pageSize, query: q || undefined, excludeHeartbeats: true });
+      const res = await getAuditLogs({
+        page: p,
+        pageSize,
+        query: q || undefined,
+        excludeHeartbeats: true,
+        risk: r || undefined,
+      });
       setLogs(res.logs);
       setTotal(res.total);
     } catch { /* ignore */ }
@@ -59,12 +78,12 @@ export default function AuditLogsPage() {
   }, []);
 
   useEffect(() => {
-    fetchLogs(page, search);
-  }, [page, search, fetchLogs]);
+    fetchLogs(page, search, riskFilter);
+  }, [page, search, riskFilter, fetchLogs]);
 
   const handleSearch = () => {
     setPage(1);
-    fetchLogs(1, search);
+    fetchLogs(1, search, riskFilter);
   };
 
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
@@ -82,6 +101,20 @@ export default function AuditLogsPage() {
             onSearch={handleSearch}
             loading={loading}
           />
+
+          <Tabs
+            aria-label={t('audit.risk')}
+            selectedKey={riskFilter}
+            onSelectionChange={(key) => { setRiskFilter(String(key)); setPage(1); }}
+          >
+            <Tabs.List>
+              <Tabs.Tab id="">{t('audit.riskAll')}<Tabs.Indicator /></Tabs.Tab>
+              <Tabs.Tab id="Safe"><span className="text-green-600">{t('riskLevel.Safe')}</span><Tabs.Indicator /></Tabs.Tab>
+              <Tabs.Tab id="Normal"><span className="text-blue-600">{t('riskLevel.Normal')}</span><Tabs.Indicator /></Tabs.Tab>
+              <Tabs.Tab id="Dangerous"><span className="text-orange-600">{t('riskLevel.Dangerous')}</span><Tabs.Indicator /></Tabs.Tab>
+              <Tabs.Tab id="Malicious"><span className="text-red-600">{t('riskLevel.Malicious')}</span><Tabs.Indicator /></Tabs.Tab>
+            </Tabs.List>
+          </Tabs>
 
           <DataGrid
             aria-label={t('audit.title')}
