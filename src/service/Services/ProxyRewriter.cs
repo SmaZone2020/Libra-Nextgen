@@ -17,16 +17,68 @@ public static partial class ProxyRewriter
         html = BaseTagRegex().Replace(html, string.Empty);
         html = MetaRefreshRegex().Replace(html, string.Empty);
 
-        // Inject <base> so relative (and JS-generated relative) URLs resolve through the proxy.
+        // Inject <base> so relative (and JS-generated relative) URLs resolve through the proxy,
+        // plus a tiny interceptor that rewrites root-relative/absolute URLs produced by JS at runtime.
         var baseTag = $"<base href=\"{proxyBase}\">";
+        var headInjection = baseTag + BuildInterceptorScript(agentId, token, finalUrl);
         if (HeadRegex().IsMatch(html))
-            html = HeadRegex().Replace(html, m => m.Value + baseTag, 1);
+            html = HeadRegex().Replace(html, m => m.Value + headInjection, 1);
         else
-            html = baseTag + html;
+            html = headInjection + html;
 
         html = RewriteAttrs(html, baseUri, agentId, token);
         html = RewriteCssUrls(html, baseUri, agentId, token);
         return html;
+    }
+
+    /// <summary>
+    /// Injects a small script that rewrites root-relative ("/x") and absolute ("http(s)://", "//")
+    /// URLs generated at runtime (fetch/XHR/src/href) back through the proxy. Relative URLs are
+    /// left untouched so the injected &lt;base&gt; resolves them.
+    /// </summary>
+    private static string BuildInterceptorScript(string agentId, string token, string finalUrl)
+    {
+        var uri = new Uri(finalUrl);
+        var scheme = uri.Scheme;
+        var host = uri.IsDefaultPort ? uri.Host : $"{uri.Host}:{uri.Port}";
+        var prefix = $"/api/proxy/{agentId}/{token}/p/";
+
+        var js = @"(function(){
+  var P=__P__,S=__S__,H=__H__;
+  function rw(u){
+    if(typeof u!=='string'||!u)return u;
+    if(/^(data|blob|javascript|mailto|tel|about):/i.test(u))return u;
+    var a;
+    try{
+      if(/^https?:\/\//i.test(u)){a=new URL(u);}
+      else if(/^\/\//.test(u)){a=new URL(S+'://'+H+u.slice(1));}
+      else if(u.charAt(0)==='/'){a=new URL(S+'://'+H+u);}
+      else{return u;}
+    }catch(e){return u;}
+    var h=a.port?a.hostname+':'+a.port:a.hostname;
+    return P+a.protocol.slice(0,-1)+'/'+h+a.pathname+a.search;
+  }
+  function patch(proto,prop){
+    try{
+      var d=Object.getOwnPropertyDescriptor(proto,prop);
+      if(d&&d.set){
+        var s=d.set;
+        Object.defineProperty(proto,prop,{set:function(v){s.call(this,rw(v));},get:d.get,configurable:true});
+      }
+    }catch(e){}
+  }
+  ['HTMLImageElement','HTMLScriptElement','HTMLLinkElement','HTMLIFrameElement','HTMLSourceElement','HTMLMediaElement','HTMLEmbedElement','HTMLInputElement','HTMLTrackElement'].forEach(function(n){
+    var c=window[n];if(c){patch(c.prototype,'src');patch(c.prototype,'href');}
+  });
+  try{var f=window.fetch;window.fetch=function(u,o){if(typeof u==='string')u=rw(u);return f.call(this,u,o);};}catch(e){}
+  try{var xo=XMLHttpRequest.prototype.open;XMLHttpRequest.prototype.open=function(m,u){return xo.call(this,m,rw(u));};}catch(e){}
+  try{var WS=window.WebSocket;window.WebSocket=function(u,p){return new WS(rw(u),p);};}catch(e){}
+})();";
+
+        return "<script>" + js
+            .Replace("__P__", System.Text.Json.JsonSerializer.Serialize(prefix))
+            .Replace("__S__", System.Text.Json.JsonSerializer.Serialize(scheme))
+            .Replace("__H__", System.Text.Json.JsonSerializer.Serialize(host)) + "</script>";
     }
 
     public static string RewriteCss(string css, string finalUrl, string agentId, string token)
