@@ -26,11 +26,6 @@ public class BuilderController : ControllerBase
     {
         ["x64"] = new("x86_64-pc-windows-msvc", "windows"),
         ["x86"] = new("i686-pc-windows-msvc", "windows"),
-        ["arm"] = new("aarch64-unknown-linux-gnu", "linux"),
-        ["linux-x64"] = new("x86_64-unknown-linux-gnu", "linux"),
-        ["linux-arm64"] = new("aarch64-unknown-linux-gnu", "linux"),
-        ["macos-x64"] = new("x86_64-apple-darwin", "macos"),
-        ["macos-arm64"] = new("aarch64-apple-darwin", "macos"),
     };
 
     private static readonly string ModulesDir = Path.Combine(OutputBase, "modules");
@@ -309,7 +304,7 @@ public class BuilderController : ControllerBase
     [HttpPost("template/upload")]
     public async Task<IActionResult> UploadTemplate([FromForm] IFormFile file, [FromForm] string platform)
     {
-        var validPlatforms = new[] { "x64", "x86", "arm" };
+        var validPlatforms = new[] { "x64", "x86" };
         if (!validPlatforms.Contains(platform))
             return BadRequest(new { error = $"Invalid platform. Must be one of: {string.Join(", ", validPlatforms)}" });
 

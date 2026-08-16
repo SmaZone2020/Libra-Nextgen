@@ -52,11 +52,6 @@ const STATUS_LABEL: Record<string, string> = {
 const PLATFORM_LABEL: Record<string, string> = {
   x64: 'Win x64',
   x86: 'Win x86',
-  arm: 'ARM (Linux)',
-  'linux-x64': 'Linux x64',
-  'linux-arm64': 'Linux ARM64',
-  'macos-x64': 'macOS x64',
-  'macos-arm64': 'macOS ARM64',
 };
 
 const APP_TYPE_LABEL: Record<string, string> = {
@@ -466,7 +461,7 @@ export default function BuilderPage() {
 
         {/* Platform + Application Type */}
         <Card className="p-4">
-          <div className="flex flex-col gap-6">
+          <div className="grid grid-cols-2 gap-6">
             <div>
               <h2 className="text-lg font-semibold mb-3">{t('builder.platform')}</h2>
               <Tabs
@@ -476,11 +471,6 @@ export default function BuilderPage() {
                 <Tabs.List>
                   <Tabs.Tab id="x64">Win x64<Tabs.Indicator /></Tabs.Tab>
                   <Tabs.Tab id="x86">Win x86<Tabs.Indicator /></Tabs.Tab>
-                  <Tabs.Tab id="arm">ARM<Tabs.Indicator /></Tabs.Tab>
-                  <Tabs.Tab id="linux-x64">Linux x64<Tabs.Indicator /></Tabs.Tab>
-                  <Tabs.Tab id="linux-arm64">Linux ARM64<Tabs.Indicator /></Tabs.Tab>
-                  <Tabs.Tab id="macos-x64">macOS x64<Tabs.Indicator /></Tabs.Tab>
-                  <Tabs.Tab id="macos-arm64">macOS ARM64<Tabs.Indicator /></Tabs.Tab>
                 </Tabs.List>
               </Tabs>
             </div>
