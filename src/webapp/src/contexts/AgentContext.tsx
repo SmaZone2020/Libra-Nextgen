@@ -13,6 +13,12 @@ interface AgentContextValue {
   disconnect: () => void;
 }
 
+const NOTICE_SOUND_KEY = 'notice_sound';
+
+function isNoticeSoundEnabled(): boolean {
+  return localStorage.getItem(NOTICE_SOUND_KEY) !== 'false';
+}
+
 const AgentContext = createContext<AgentContextValue>({
   agents: [],
   agentId: '',
@@ -73,7 +79,7 @@ export function AgentProvider({ children }: { children: React.ReactNode }) {
         onlineIdsRef.current.delete(data.agentId);
 
         if (wasOnline) {
-          getNotice().play().catch(() => {});
+          if (isNoticeSoundEnabled()) getNotice().play().catch(() => {});
           toast.danger(t('agents.toastOffline'), {
             description: t('agents.toastOfflineDesc', { id: shortId }),
           });
@@ -87,7 +93,7 @@ export function AgentProvider({ children }: { children: React.ReactNode }) {
             : prev
         );
         if (isNew) {
-          getNotice().play().catch(() => {});
+          if (isNoticeSoundEnabled()) getNotice().play().catch(() => {});
           toast.success(t('agents.toastOnline'), {
             description: t('agents.toastOnlineDesc', { id: shortId }),
           });

@@ -1,9 +1,8 @@
 import type { ComponentType, ReactNode, SVGProps } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { Bars, Globe, Xmark } from '@gravity-ui/icons';
-import { Button, Dropdown, Label, Tooltip } from '@heroui/react';
+import { Bars, Xmark } from '@gravity-ui/icons';
+import { Button, Tooltip } from '@heroui/react';
 import { useTranslation } from 'react-i18next';
-import { switchLang } from '../../i18n';
 import { useLocation, useNavigate } from 'react-router-dom';
 
 interface NavItem {
@@ -31,7 +30,7 @@ export function Sidebar({
   mobileOpen,
   onMobileClose,
 }: SidebarProps) {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   const location = useLocation();
   const navigate = useNavigate();
   return (
@@ -175,38 +174,6 @@ export function Sidebar({
                 </motion.div>
               );
             })}
-
-            <motion.div layout className="flex justify-center px-1">
-              <Dropdown>
-                <Button
-                  isIconOnly={collapsed}
-                  size="lg"
-                  variant="ghost"
-                  className={`flex-1 justify-start px-3 mr-1 transition-all duration-300 hover:rounded-[15px]`}
-                >
-                  <Globe className="w-4 h-4 shrink-0" />
-                  {!collapsed && (
-                    <span className="text-sm font-medium ml-2">
-                      {i18n.language === 'zh' ? '中文' : 'English'}
-                    </span>
-                  )}
-                </Button>
-                <Dropdown.Popover>
-                  <Dropdown.Menu
-                    selectedKeys={[i18n.language]}
-                    selectionMode="single"
-                    onAction={(key) => switchLang(key as 'en' | 'zh')}
-                  >
-                    <Dropdown.Item id="en" textValue="English">
-                      <Label>English</Label>
-                    </Dropdown.Item>
-                    <Dropdown.Item id="zh" textValue="中文">
-                      <Label>中文</Label>
-                    </Dropdown.Item>
-                  </Dropdown.Menu>
-                </Dropdown.Popover>
-              </Dropdown>
-            </motion.div>
           </motion.div>
         </div>
       </aside>
@@ -286,32 +253,6 @@ export function Sidebar({
                 </div>
               );
             })}
-            <Dropdown>
-              <Button
-                variant="ghost"
-                aria-label={t('nav.toggleSidebar')}
-                className="flex-1 justify-start w-full"
-              >
-                <Globe className="w-4 h-4 shrink-0" />
-                <span className="text-sm font-medium ml-2">
-                  {i18n.language === 'zh' ? '中文' : 'English'}
-                </span>
-              </Button>
-              <Dropdown.Popover>
-                <Dropdown.Menu
-                  selectedKeys={[i18n.language]}
-                  selectionMode="single"
-                  onAction={(key) => switchLang(key as 'en' | 'zh')}
-                >
-                  <Dropdown.Item id="en" textValue="English">
-                    <Label>English</Label>
-                  </Dropdown.Item>
-                  <Dropdown.Item id="zh" textValue="中文">
-                    <Label>中文</Label>
-                  </Dropdown.Item>
-                </Dropdown.Menu>
-              </Dropdown.Popover>
-            </Dropdown>
           </div>
         </div>
       </aside>

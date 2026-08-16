@@ -5,6 +5,7 @@ import { listAccessKeys, createAccessKey, deleteAccessKey } from '../../api/acce
 import type { AccessKeyItem, AccessKeyCreateResponse } from '../../api/accessKeys';
 import { useDialog } from '../../hooks/useDialog';
 import AccountTab from './AccountTab';
+import PreferencesTab from './PreferencesTab';
 
 function AccessKeysTab() {
   const { t } = useTranslation();
@@ -188,18 +189,20 @@ function AccessKeysTab() {
 
 export default function SettingsPage() {
   const { t } = useTranslation();
-  const [tab, setTab] = useState<string>('accessKeys');
+  const [tab, setTab] = useState<string>('preferences');
 
   return (
     <div className="space-y-3">
       <Tabs selectedKey={tab} onSelectionChange={(key) => setTab(String(key))}>
         <Tabs.ListContainer className="flex justify-center">
           <Tabs.List aria-label={t('settings.tabsLabel')} className="mx-auto w-lg">
+            <Tabs.Tab id="preferences">{t('settings.preferencesTab')}<Tabs.Indicator /></Tabs.Tab>
             <Tabs.Tab id="accessKeys">{t('settings.accessKeysTab')}<Tabs.Indicator /></Tabs.Tab>
             <Tabs.Tab id="account">{t('settings.accountTab')}<Tabs.Indicator /></Tabs.Tab>
           </Tabs.List>
         </Tabs.ListContainer>
 
+        <Tabs.Panel id="preferences"><PreferencesTab /></Tabs.Panel>
         <Tabs.Panel id="accessKeys"><AccessKeysTab /></Tabs.Panel>
         <Tabs.Panel id="account"><AccountTab /></Tabs.Panel>
       </Tabs>

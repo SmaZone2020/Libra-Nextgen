@@ -2,6 +2,8 @@
 @import "@heroui/styles";
 @import "@css/components/index.css";
 
+@custom-variant dark (&:where(.dark, .dark *));
+
 @source "../components/**/*.{ts,tsx}";
 @source "../**/*.{ts,tsx}";
 
