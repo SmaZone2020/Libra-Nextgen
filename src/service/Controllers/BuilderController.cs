@@ -19,6 +19,7 @@ public class BuilderController : ControllerBase
     private static readonly string OutputBase = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "build-output"));
     private static readonly string HistoryFile = Path.Combine(OutputBase, "builds.json");
     private static readonly string TemplateDir = Path.Combine(OutputBase, "loader-template");
+    private static readonly string CoreTemplateDir = Path.Combine(OutputBase, "core-template");
 
     private static readonly string RustAgentDir = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "agent-rs"));
 
@@ -271,7 +272,9 @@ public class BuilderController : ControllerBase
         {
             if (Directory.Exists(TemplateDir))
                 Directory.Delete(TemplateDir, true);
-            return Ok(new { status = "ok", message = "Loader template cleared. Next build will recompile." });
+            if (Directory.Exists(CoreTemplateDir))
+                Directory.Delete(CoreTemplateDir, true);
+            return Ok(new { status = "ok", message = "Loader/core templates cleared. Next build will recompile." });
         }
         catch (Exception ex)
         {
@@ -408,58 +411,72 @@ public class BuilderController : ControllerBase
 
             var isWindows = (targetTriple != null && targetTriple.Contains("windows")) || targetTriple == null;
 
-            // ══════════════════════════════════════════════════════════════
-            // Stage 1: Build Core DLL
-            // ══════════════════════════════════════════════════════════════
-            job.Log("=== Stage 1: Building Core DLL ===");
-            var coreBuildArgs = $"build --release {targetArg} -p core --target-dir \"{targetDir}\"";
-            job.Log($"cargo {coreBuildArgs}");
-
-            var coreBuildResult = await RunProcessAsync("cargo", coreBuildArgs, job, RustAgentDir, envVars);
-            if (coreBuildResult.ExitCode != 0)
-            {
-                job.Fail($"Core build failed (exit code {coreBuildResult.ExitCode})");
-                UpdateHistory(job);
-                return;
-            }
-
-            // Find core output
             var releaseDir = targetTriple != null
                 ? Path.Combine(targetDir, targetTriple, "release")
                 : Path.Combine(targetDir, "release");
-
             var coreDllName = isWindows ? "core.dll" : "libcore.so";
-            var coreDllPath = Path.Combine(releaseDir, coreDllName);
-            if (!System.IO.File.Exists(coreDllPath))
-            {
-                var found = Directory.GetFiles(releaseDir, "*core*")
-                    .FirstOrDefault(f => f.EndsWith(".dll") || f.EndsWith(".so") || f.EndsWith(".dylib"));
-                if (found != null) coreDllPath = found;
-            }
-
-            if (!System.IO.File.Exists(coreDllPath))
-            {
-                job.Fail($"Core DLL not found at {releaseDir}");
-                UpdateHistory(job);
-                return;
-            }
-
-            var coreDllBytes = await System.IO.File.ReadAllBytesAsync(coreDllPath);
-            job.Log($"Core DLL found: {coreDllPath} ({coreDllBytes.Length / 1024} KB)");
 
             // ══════════════════════════════════════════════════════════════
-            // Stage 1.5: Validate Core DLL via sRDI tool
+            // Stage 1: Core DLL — reuse cached template, compile only once.
             // ══════════════════════════════════════════════════════════════
-            job.Log("=== Stage 1.5: Validating Core DLL for reflective loading ===");
-            var srdiArgs = $"run --release -p srdi --target-dir \"{targetDir}\" -- \"{coreDllPath}\" core_main";
-            var srdiResult = await RunProcessAsync("cargo", srdiArgs, job, RustAgentDir, envVars);
-            if (srdiResult.ExitCode != 0)
+            var coreTemplatePath = Path.Combine(CoreTemplateDir, $"{req.Platform}-{req.ApplicationType.ToLower()}", coreDllName);
+            byte[] coreDllBytes;
+
+            if (System.IO.File.Exists(coreTemplatePath))
             {
-                job.Fail($"Core DLL validation failed — 'core_main' export not found or DLL is invalid");
-                UpdateHistory(job);
-                return;
+                job.Log($"Using cached core template: {coreTemplatePath}");
+                coreDllBytes = await System.IO.File.ReadAllBytesAsync(coreTemplatePath);
             }
-            job.Log("Core DLL validated: PE structure OK, 'core_main' export present");
+            else
+            {
+                job.Log("=== Stage 1: Building Core DLL (first time, will cache) ===");
+                var coreBuildArgs = $"build --release {targetArg} -p core --target-dir \"{targetDir}\"";
+                job.Log($"cargo {coreBuildArgs}");
+
+                var coreBuildResult = await RunProcessAsync("cargo", coreBuildArgs, job, RustAgentDir, envVars);
+                if (coreBuildResult.ExitCode != 0)
+                {
+                    job.Fail($"Core build failed (exit code {coreBuildResult.ExitCode})");
+                    UpdateHistory(job);
+                    return;
+                }
+
+                var coreDllPath = Path.Combine(releaseDir, coreDllName);
+                if (!System.IO.File.Exists(coreDllPath))
+                {
+                    var found = Directory.GetFiles(releaseDir, "*core*")
+                        .FirstOrDefault(f => f.EndsWith(".dll") || f.EndsWith(".so") || f.EndsWith(".dylib"));
+                    if (found != null) coreDllPath = found;
+                }
+
+                if (!System.IO.File.Exists(coreDllPath))
+                {
+                    job.Fail($"Core DLL not found at {releaseDir}");
+                    UpdateHistory(job);
+                    return;
+                }
+
+                // Stage 1.5: Validate Core DLL for reflective loading.
+                job.Log("=== Stage 1.5: Validating Core DLL for reflective loading ===");
+                var srdiArgs = $"run --release -p srdi --target-dir \"{targetDir}\" -- \"{coreDllPath}\" core_main";
+                var srdiResult = await RunProcessAsync("cargo", srdiArgs, job, RustAgentDir, envVars);
+                if (srdiResult.ExitCode != 0)
+                {
+                    job.Fail("Core DLL validation failed — 'core_main' export not found or DLL is invalid");
+                    UpdateHistory(job);
+                    return;
+                }
+                job.Log("Core DLL validated: PE structure OK, 'core_main' export present");
+
+                var coreTemplateDir = Path.GetDirectoryName(coreTemplatePath)!;
+                Directory.CreateDirectory(coreTemplateDir);
+                System.IO.File.Copy(coreDllPath, coreTemplatePath, true);
+                job.Log($"Core DLL cached to {coreTemplatePath}");
+
+                coreDllBytes = await System.IO.File.ReadAllBytesAsync(coreDllPath);
+            }
+
+            job.Log($"Core DLL ready ({coreDllBytes.Length / 1024} KB)");
 
             // ══════════════════════════════════════════════════════════════
             // Stage 2: Encrypt Core DLL
