@@ -12,13 +12,24 @@ export function AgreementModal({ onAccept, onDecline }: AgreementModalProps) {
 
   return (
     <Modal.Backdrop isOpen isDismissable={false} onOpenChange={(open) => { if (!open) onDecline(); }}>
-      <Modal.Container size="md">
+      <Modal.Container size="lg">
         <Modal.Dialog>
           <Modal.Header>
             <Modal.Heading>{t('agreement.title')}</Modal.Heading>
           </Modal.Header>
           <Modal.Body>
-            <p className="text-sm text-default-600 leading-relaxed">{t('agreement.body')}</p>
+            <div className="space-y-4 text-sm leading-relaxed max-h-[60vh] overflow-y-auto pr-1">
+              <div className="p-3 rounded-lg bg-danger-50 text-danger-700 font-semibold border border-danger-200">
+                {t('agreement.warning')}
+              </div>
+
+              <Section title={t('agreement.authorizedTitle')}>{t('agreement.authorized')}</Section>
+              <Section title={t('agreement.prohibitedTitle')}>{t('agreement.prohibited')}</Section>
+              <Section title={t('agreement.legalTitle')}>{t('agreement.legal')}</Section>
+              <Section title={t('agreement.liabilityTitle')}>{t('agreement.liability')}</Section>
+
+              <p className="text-default-800 font-medium">{t('agreement.confirm')}</p>
+            </div>
           </Modal.Body>
           <Modal.Footer>
             <Button variant="ghost" onPress={onDecline}>{t('agreement.decline')}</Button>
@@ -27,5 +38,14 @@ export function AgreementModal({ onAccept, onDecline }: AgreementModalProps) {
         </Modal.Dialog>
       </Modal.Container>
     </Modal.Backdrop>
+  );
+}
+
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div className="space-y-1">
+      <h3 className="font-semibold text-default-800">{title}</h3>
+      <p className="text-default-600">{children}</p>
+    </div>
   );
 }
