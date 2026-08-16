@@ -35,10 +35,11 @@ public class AccountService
         await _users.UpdateAsync(userId, update);
     }
 
-    public async Task<bool> HasAcceptedAgreementAsync(string userId)
+    /// <summary>The agreement timestamp, or null if the user has not accepted yet.</summary>
+    public async Task<DateTime?> GetAgreedAtAsync(string userId)
     {
         var user = await _users.GetByIdAsync(userId);
-        return user?.AgreedAt != null;
+        return user?.AgreedAt;
     }
 
     public async Task<List<AccountListItem>> ListAsync()

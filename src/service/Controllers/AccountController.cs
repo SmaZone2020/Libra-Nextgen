@@ -30,7 +30,7 @@ public class AccountController : ControllerBase
     {
         var role = User.IsInRole("Admin") ? UserRole.Admin : UserRole.Operator;
         var permissions = await _accountService.GetEffectivePermissionsAsync(UserId, role);
-        var agreedAt = await _accountService.HasAcceptedAgreementAsync(UserId);
+        var agreedAt = await _accountService.GetAgreedAtAsync(UserId);
         return Ok(new
         {
             username = User.Identity?.Name ?? "",
