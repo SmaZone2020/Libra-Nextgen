@@ -22,14 +22,16 @@ public class AccessKeysController : ControllerBase
     {
         var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "";
         var userName = User.FindFirst(ClaimTypes.Name)?.Value ?? "";
+        var role = User.IsInRole("Admin") ? "Admin" : "Operator";
 
-        var key = await _service.CreateAsync(request.Name, request.ExpiresAt, userId, userName);
+        var (key, rawKey) = await _service.CreateAsync(request.Name, request.ExpiresAt, userId, userName, role);
 
         return Ok(new
         {
             id = key.Id,
             name = key.Name,
-            key = key.Key,
+            key = rawKey,
+            role = key.Role,
             createdAt = key.CreatedAt,
             expiresAt = key.ExpiresAt,
         });
@@ -47,7 +49,8 @@ public class AccessKeysController : ControllerBase
         {
             id = k.Id,
             name = k.Name,
-            keyPreview = k.Key.Length > 12 ? k.Key[..12] + "..." : k.Key,
+            keyPreview = k.KeyHash.Length > 12 ? k.KeyHash[..12] + "..." : k.KeyHash,
+            role = k.Role,
             createdByUserName = k.CreatedByUserName,
             createdAt = k.CreatedAt,
             expiresAt = k.ExpiresAt,

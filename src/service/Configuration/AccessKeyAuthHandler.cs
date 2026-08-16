@@ -38,7 +38,7 @@ public class AccessKeyAuthHandler : AuthenticationHandler<AuthenticationSchemeOp
         {
             new Claim(ClaimTypes.NameIdentifier, key.CreatedByUserId),
             new Claim(ClaimTypes.Name, key.CreatedByUserName),
-            new Claim(ClaimTypes.Role, "Admin"),
+            new Claim(ClaimTypes.Role, key.Role),
         };
 
         var identity = new ClaimsIdentity(claims, Scheme.Name);

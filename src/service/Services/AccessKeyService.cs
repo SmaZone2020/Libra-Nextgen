@@ -14,7 +14,12 @@ public class AccessKeyService
         _repo = repo;
     }
 
-    public async Task<AccessKey> CreateAsync(string name, DateTime? expiresAt, string userId, string userName)
+    /// <summary>SHA-256 hash a raw access key. The raw key is never persisted.</summary>
+    public static string HashKey(string rawKey) =>
+        Convert.ToBase64String(SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(rawKey)));
+
+    public async Task<(AccessKey Key, string RawKey)> CreateAsync(
+        string name, DateTime? expiresAt, string userId, string userName, string role)
     {
         var keyBytes = RandomNumberGenerator.GetBytes(32);
         var rawKey = "lnk_" + Convert.ToBase64String(keyBytes)
@@ -23,14 +28,15 @@ public class AccessKeyService
         var entity = new AccessKey
         {
             Name = name,
-            Key = rawKey,
+            KeyHash = HashKey(rawKey),
+            Role = role,
             CreatedByUserId = userId,
             CreatedByUserName = userName,
             ExpiresAt = expiresAt,
         };
 
         await _repo.InsertAsync(entity);
-        return entity;
+        return (entity, rawKey);
     }
 
     public async Task<List<AccessKey>> ListAsync(string? userId, bool isAdmin)
@@ -53,7 +59,8 @@ public class AccessKeyService
 
     public async Task<AccessKey?> ValidateAsync(string rawKey)
     {
-        var key = await _repo.FirstOrDefaultAsync(k => k.Key == rawKey && k.IsActive);
+        var hash = HashKey(rawKey);
+        var key = await _repo.FirstOrDefaultAsync(k => k.KeyHash == hash && k.IsActive);
         if (key == null) return null;
 
         if (key.ExpiresAt.HasValue && key.ExpiresAt.Value < DateTime.UtcNow)
