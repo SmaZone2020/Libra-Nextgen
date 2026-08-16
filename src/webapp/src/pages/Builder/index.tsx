@@ -50,8 +50,8 @@ const STATUS_LABEL: Record<string, string> = {
 };
 
 const PLATFORM_LABEL: Record<string, string> = {
-  x64: 'x64 (Windows)',
-  x86: 'x86 (Windows)',
+  x64: 'Win x64',
+  x86: 'Win x86',
   arm: 'ARM (Linux)',
   'linux-x64': 'Linux x64',
   'linux-arm64': 'Linux ARM64',
@@ -459,7 +459,7 @@ export default function BuilderPage() {
 
         {/* Platform + Application Type */}
         <Card className="p-4">
-          <div className="grid grid-cols-2 gap-6">
+          <div className="flex flex-col gap-6">
             <div>
               <h2 className="text-lg font-semibold mb-3">{t('builder.platform')}</h2>
               <Tabs
@@ -467,8 +467,8 @@ export default function BuilderPage() {
                 onSelectionChange={(key) => set('platform', String(key))}
               >
                 <Tabs.List>
-                  <Tabs.Tab id="x64">x64<Tabs.Indicator /></Tabs.Tab>
-                  <Tabs.Tab id="x86">x86<Tabs.Indicator /></Tabs.Tab>
+                  <Tabs.Tab id="x64">Win x64<Tabs.Indicator /></Tabs.Tab>
+                  <Tabs.Tab id="x86">Win x86<Tabs.Indicator /></Tabs.Tab>
                   <Tabs.Tab id="arm">ARM<Tabs.Indicator /></Tabs.Tab>
                   <Tabs.Tab id="linux-x64">Linux x64<Tabs.Indicator /></Tabs.Tab>
                   <Tabs.Tab id="linux-arm64">Linux ARM64<Tabs.Indicator /></Tabs.Tab>
