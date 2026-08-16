@@ -15,6 +15,8 @@ public class MongoDbContext
         var clientSettings = MongoClientSettings.FromConnectionString(s.ConnectionString);
         clientSettings.ConnectTimeout = TimeSpan.FromSeconds(s.ConnectTimeoutSeconds);
         clientSettings.MaxConnectionPoolSize = s.MaxConnectionPoolSize;
+        if (s.UseTls)
+            clientSettings.UseTls = true;
 
         Client = new MongoClient(clientSettings);
         Database = Client.GetDatabase(s.DatabaseName);
