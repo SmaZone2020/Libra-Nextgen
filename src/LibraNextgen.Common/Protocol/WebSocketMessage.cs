@@ -66,12 +66,6 @@ public static class WsMessageType
     public const string MicUnbind = "mic.unbind";
     public const string MicData = "mic.data";
     public const string MicError = "mic.error";
-
-    // Stress test / DDoS
-    public const string StressStart = "stress.start";
-    public const string StressStop = "stress.stop";
-    public const string StressStatus = "stress.status";
-    public const string StressUpdate = "stress.update";
 }
 
 [JsonSerializable(typeof(WebSocketMessage))]

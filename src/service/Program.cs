@@ -38,8 +38,6 @@ builder.Services.AddScoped<Repository<MalleableProfileConfig>>(sp =>
     new Repository<MalleableProfileConfig>(sp.GetRequiredService<MongoDbContext>(), "profiles"));
 builder.Services.AddScoped<Repository<TrafficRecord>>(sp =>
     new Repository<TrafficRecord>(sp.GetRequiredService<MongoDbContext>(), "traffic"));
-builder.Services.AddScoped<Repository<StressTestCampaign>>(sp =>
-    new Repository<StressTestCampaign>(sp.GetRequiredService<MongoDbContext>(), "stress_campaigns"));
 builder.Services.AddScoped<Repository<AccessKey>>(sp =>
     new Repository<AccessKey>(sp.GetRequiredService<MongoDbContext>(), "access_keys"));
 
@@ -60,7 +58,7 @@ builder.Services.AddSingleton<AgentTrafficService>();
 builder.Services.AddSingleton<ConnectionManager>();
 builder.Services.AddSingleton<SessionKeyStore>();
 builder.Services.AddSingleton<RiskPolicyService>();
-builder.Services.AddSingleton<StressTestService>();
+builder.Services.AddSingleton<PermissionService>();
 builder.Services.AddScoped<AuditService>();
 builder.Services.AddScoped<AccessKeyService>();
 builder.Services.AddHostedService<HeartbeatMonitor>();
@@ -171,6 +169,7 @@ app.UseCors("CorsSignalR");
 app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
+app.UseMiddleware<PermissionMiddleware>();
 app.UseMiddleware<AuditMiddleware>();
 app.MapControllers();
 app.MapMcp("/mcp").RequireAuthorization("McpPolicy");

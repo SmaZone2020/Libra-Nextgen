@@ -40,23 +40,5 @@ public enum CommandType
     Proxy,
     FileList,
     FileDrives,
-    // Stress test / DDoS attack types
-    StressHttpFlood,
-    StressSynFlood,
-    StressUdpFlood,
-    StressIcmpFlood,
-    StressReflection,
-    StressSlowloris,
-    StressTcpConnFlood,
-    StressMalformed,
-    StressStop,
     KillAndClean
-}
-
-public enum CampaignStatus
-{
-    Running,
-    Stopped,
-    Completed,
-    Failed
 }

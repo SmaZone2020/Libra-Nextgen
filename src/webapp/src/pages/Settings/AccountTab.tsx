@@ -1,9 +1,32 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Button, Card, Input, Label, Modal, Spinner, TextField } from '@heroui/react';
+import { Button, Card, Input, Label, Modal, Spinner, Switch, TextField } from '@heroui/react';
 import { getAccountStatus, listAccounts, createAccount, updateAccount, deleteAccount, changePassword } from '../../api/account';
-import type { AccountListItem } from '../../types/models';
+import type { AccountListItem, UserPermissions } from '../../types/models';
 import { useDialog } from '../../hooks/useDialog';
+
+const PAGE_OPTIONS: { key: string; labelKey: string }[] = [
+  { key: 'dashboard', labelKey: 'nav.dashboard' },
+  { key: 'agents', labelKey: 'nav.agents' },
+  { key: 'shell', labelKey: 'nav.shell' },
+  { key: 'files', labelKey: 'nav.explorer' },
+  { key: 'screen', labelKey: 'nav.screen' },
+  { key: 'media', labelKey: 'nav.media' },
+  { key: 'system', labelKey: 'nav.system' },
+  { key: 'othersoft', labelKey: 'nav.softwareData' },
+  { key: 'proxy', labelKey: 'nav.proxyBrowser' },
+  { key: 'builder', labelKey: 'nav.builder' },
+  { key: 'audit', labelKey: 'nav.auditLogs' },
+];
+
+const ACTION_OPTIONS = [
+  'shell.command', 'file.list', 'file.read', 'file.write', 'file.delete',
+  'file.mkdir', 'file.rename', 'file.move', 'file.copy', 'file.compress', 'file.decompress',
+  'screen.monitor', 'media.camera', 'media.mic',
+  'system.info', 'system.processes', 'system.process.kill', 'system.network',
+  'othersoft.qq', 'othersoft.wechat', 'othersoft.browser', 'othersoft.ai', 'credentials',
+  'proxy.fetch',
+];
 
 export default function AccountTab() {
   const { t } = useTranslation();
@@ -18,6 +41,9 @@ export default function AccountTab() {
   const [formName, setFormName] = useState('');
   const [formPassword, setFormPassword] = useState('');
   const [formRole, setFormRole] = useState('Operator');
+  const [formFullAccess, setFormFullAccess] = useState(true);
+  const [formPages, setFormPages] = useState<string[]>([]);
+  const [formActions, setFormActions] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
@@ -32,7 +58,7 @@ export default function AccountTab() {
     try {
       const [status, list] = await Promise.all([
         getAccountStatus(),
-        isInitial ? listAccounts() : Promise.resolve([]),
+        listAccounts(),
       ]);
       setIsInitial(status.isInitial);
       setAccounts(Array.isArray(list) ? list : []);
@@ -47,6 +73,9 @@ export default function AccountTab() {
     setFormName('');
     setFormPassword('');
     setFormRole('Operator');
+    setFormFullAccess(true);
+    setFormPages([]);
+    setFormActions([]);
     setFormError(null);
     setModalOpen(true);
   };
@@ -56,9 +85,18 @@ export default function AccountTab() {
     setFormName(acc.username);
     setFormPassword('');
     setFormRole(acc.role);
+    setFormFullAccess(acc.permissions?.fullAccess ?? true);
+    setFormPages(acc.permissions?.allowedPages ?? []);
+    setFormActions(acc.permissions?.allowedActions ?? []);
     setFormError(null);
     setModalOpen(true);
   };
+
+  const buildPermissions = (): UserPermissions => ({
+    fullAccess: formFullAccess,
+    allowedPages: formPages,
+    allowedActions: formActions,
+  });
 
   const handleSave = async () => {
     if (!formName.trim()) { setFormError(t('settings.account.nameRequired')); return; }
@@ -71,12 +109,14 @@ export default function AccountTab() {
         await updateAccount(editingAccount.id, {
           username: formName.trim(),
           role: formRole,
+          permissions: buildPermissions(),
         });
       } else {
         await createAccount({
           username: formName.trim(),
           password: formPassword,
           role: formRole,
+          permissions: buildPermissions(),
         });
       }
       setModalOpen(false);
@@ -139,15 +179,14 @@ export default function AccountTab() {
         </div>
       </Card>
 
-      {/* Account Management Card — initial account only */}
-      {isInitial && (
-        <Card className="p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold">{t('settings.account.accounts')}</h2>
-            <Button variant="primary" size="sm" onPress={openCreateModal}>
-              {t('settings.account.createAccount')}
-            </Button>
-          </div>
+      {/* Account Management Card — Admin only */}
+      <Card className="p-6">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-semibold">{t('settings.account.accounts')}</h2>
+          <Button variant="primary" size="sm" onPress={openCreateModal}>
+            {t('settings.account.createAccount')}
+          </Button>
+        </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
@@ -208,7 +247,6 @@ export default function AccountTab() {
             </table>
           </div>
         </Card>
-      )}
 
       {/* Create/Edit Modal */}
       <Modal.Backdrop isOpen={modalOpen} onOpenChange={(open) => { if (!open) setModalOpen(false); }}>
@@ -253,6 +291,50 @@ export default function AccountTab() {
                       {t('settings.account.roleAdmin')}
                     </Button>
                   </div>
+                </div>
+
+                <div className="space-y-3 border-t border-default-200 pt-3">
+                  <Switch isSelected={formFullAccess} onChange={setFormFullAccess}>
+                    <Switch.Control><Switch.Thumb /></Switch.Control>
+                    <Switch.Content>
+                      <Label className="text-sm">{t('settings.account.fullAccess')}</Label>
+                    </Switch.Content>
+                  </Switch>
+
+                  {!formFullAccess && (
+                    <div className="space-y-4">
+                      <div>
+                        <Label className="text-xs text-default-500">{t('settings.account.allowedPages')}</Label>
+                        <div className="grid grid-cols-2 gap-1 mt-1">
+                          {PAGE_OPTIONS.map((p) => (
+                            <label key={p.key} className="flex items-center gap-2 text-sm cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={formPages.includes(p.key)}
+                                onChange={(e) => setFormPages((prev) => e.target.checked ? [...prev, p.key] : prev.filter((x) => x !== p.key))}
+                              />
+                              {t(p.labelKey)}
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                      <div>
+                        <Label className="text-xs text-default-500">{t('settings.account.allowedActions')}</Label>
+                        <div className="grid grid-cols-2 gap-1 mt-1">
+                          {ACTION_OPTIONS.map((a) => (
+                            <label key={a} className="flex items-center gap-2 text-sm cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={formActions.includes(a)}
+                                onChange={(e) => setFormActions((prev) => e.target.checked ? [...prev, a] : prev.filter((x) => x !== a))}
+                              />
+                              {t(`riskPolicy.labels.${a}`)}
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             </Modal.Body>

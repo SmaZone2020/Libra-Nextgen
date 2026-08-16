@@ -36,7 +36,6 @@ public static class RiskActions
     public const string Ai = "othersoft.ai";
     public const string Credentials = "credentials";
     public const string Proxy = "proxy.fetch";
-    public const string Stress = "stress.start";
     public const string AccountManage = "account.manage";
     public const string AccessKeyManage = "accesskey.manage";
     public const string BuilderBuild = "builder.build";
@@ -77,7 +76,6 @@ public static class RiskActions
         [SystemProcessKill] = RiskLevel.Dangerous,
         [Browser] = RiskLevel.Dangerous,
         [BrowserSearch] = RiskLevel.Dangerous,
-        [Stress] = RiskLevel.Dangerous,
         [AccountManage] = RiskLevel.Dangerous,
         [AccessKeyManage] = RiskLevel.Dangerous,
         [BuilderBuild] = RiskLevel.Dangerous,

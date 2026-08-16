@@ -79,7 +79,7 @@ export default function ScreenMonitorPage() {
       <div className="flex items-center gap-3 shrink-0">
         {screens.length > 0 && (
           <Dropdown>
-            <Button className="text-black" variant="secondary">
+            <Button variant="secondary">
               {screens.find((s) => String(s.index) === [...selectedScreen][0])?.caption || t('screenMonitor.screen')}
             </Button>
             <Dropdown.Popover className="min-w-[200px]">
@@ -106,7 +106,7 @@ export default function ScreenMonitorPage() {
         )}
 
         <Dropdown>
-          <Button aria-label={t('screenMonitor.frameRate')} className="text-black" variant="secondary">
+          <Button aria-label={t('screenMonitor.frameRate')} variant="secondary">
             {FPS_OPTIONS.find((o) => o.id === [...selectedFps][0])?.label || t('screenMonitor.frameRate')}
           </Button>
           <Dropdown.Popover className="min-w-[160px]">
@@ -132,7 +132,7 @@ export default function ScreenMonitorPage() {
         </Dropdown>
 
         <Dropdown>
-          <Button aria-label={t('screenMonitor.quality')} className="text-black" variant="secondary">
+          <Button aria-label={t('screenMonitor.quality')} variant="secondary">
             {QUALITY_OPTIONS.find((o) => o.id === [...selectedQuality][0])?.label || t('screenMonitor.quality')}
           </Button>
           <Dropdown.Popover className="min-w-[160px]">
@@ -180,7 +180,7 @@ export default function ScreenMonitorPage() {
         )}
       </div>
 
-      <div className="flex-1 min-h-0 rounded-lg overflow-hidden border border-neutral-200 bg-neutral-900 flex items-center justify-center">
+      <div className="flex-1 min-h-0 rounded-lg overflow-hidden border border-neutral-700 bg-neutral-900 flex items-center justify-center">
         {streaming ? (
           <ScreenCanvas ref={canvasRef} className="w-full h-full" />
         ) : (

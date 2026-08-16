@@ -44,25 +44,7 @@ pub enum CommandType {
     Proxy,
     FileList,
     FileDrives,
-    StressHttpFlood,
-    StressSynFlood,
-    StressUdpFlood,
-    StressIcmpFlood,
-    StressReflection,
-    StressSlowloris,
-    StressTcpConnFlood,
-    StressMalformed,
-    StressStop,
     KillAndClean,
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub enum CampaignStatus {
-    Running,
-    Stopped,
-    Completed,
-    Failed,
 }
 
 // ── Task ───────────────────────────────────────────────────────────────
@@ -194,54 +176,6 @@ pub struct DisplayInfo {
     pub name: String,
     pub width: u32,
     pub height: u32,
-}
-
-// ── Stress Config ──────────────────────────────────────────────────────
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct StressConfig {
-    #[serde(default)]
-    pub campaign_id: String,
-    #[serde(default)]
-    pub target_host: String,
-    pub target_port: u16,
-    #[serde(default)]
-    pub methods: Vec<String>,
-    pub duration_seconds: u64,
-    #[serde(default = "default_threads")]
-    pub threads_per_agent: u32,
-    #[serde(default = "default_packet_size")]
-    pub packet_size: usize,
-    #[serde(default = "default_max_conns")]
-    pub max_connections: usize,
-    #[serde(default = "default_http_path")]
-    pub http_path: String,
-}
-
-fn default_threads() -> u32 {
-    100
-}
-fn default_packet_size() -> usize {
-    1024
-}
-fn default_max_conns() -> usize {
-    500
-}
-fn default_http_path() -> String {
-    "/".into()
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct StressAgentStatus {
-    pub campaign_id: String,
-    pub agent_id: String,
-    pub status: CampaignStatus,
-    pub requests_sent: u64,
-    pub bytes_sent: u64,
-    pub errors: u64,
-    pub timestamp: u64,
 }
 
 // ── Build Config ───────────────────────────────────────────────────────

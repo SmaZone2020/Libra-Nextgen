@@ -36,7 +36,7 @@ const MODULES: { titleKey: string; keys: string[] }[] = [
   },
   {
     titleKey: 'riskPolicy.modules.network',
-    keys: ['proxy.fetch', 'stress.start'],
+    keys: ['proxy.fetch'],
   },
   {
     titleKey: 'riskPolicy.modules.admin',

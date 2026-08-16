@@ -326,26 +326,6 @@ public static class WebSocketHandler
                     {
                         ScreenStreamManager.TryPushFrame($"mic:{agentId}", json);
                     }
-                    else if (message.Type == "stress.status")
-                    {
-                        // Route stress test status to console + update service
-                        try
-                        {
-                            var stressSvc = context.RequestServices.GetRequiredService<StressTestService>();
-                            var status = message.Data?.Deserialize<StressAgentStatus>();
-                            if (status != null)
-                            {
-                                stressSvc.UpdateAgentStatus(status.CampaignId, status);
-                            }
-                        }
-                        catch { }
-                        await wsManager.BroadcastToConsoleAsync(new WebSocketMessage
-                        {
-                            Type = WsMessageType.StressUpdate,
-                            Channel = agentId,
-                            Data = message.Data
-                        });
-                    }
                     else
                     {
                         await wsManager.BroadcastShellOutputAsync(agentId, message);

@@ -171,7 +171,6 @@ export default function MediaMonitorPage() {
 
           <Dropdown>
             <Button
-              className="text-black"
               variant="secondary"
               isDisabled={micStreaming || noMic}
             >
@@ -239,7 +238,6 @@ export default function MediaMonitorPage() {
 
           <Dropdown>
             <Button
-              className="text-black"
               variant="secondary"
               isDisabled={cameraStreaming || noCamera}
             >
@@ -271,7 +269,6 @@ export default function MediaMonitorPage() {
 
           <Dropdown>
             <Button
-              className="text-black"
               variant="secondary"
               isDisabled={cameraStreaming}
             >
@@ -319,7 +316,7 @@ export default function MediaMonitorPage() {
           )}
           {cameraError && <span className="text-xs text-red-500">{cameraError}</span>}
         </div>
-        <div className="flex-1 min-h-0 rounded-lg overflow-hidden border border-neutral-200 bg-neutral-900 flex items-center justify-center">
+        <div className="flex-1 min-h-0 rounded-lg overflow-hidden border border-neutral-700 bg-neutral-900 flex items-center justify-center">
           {cameraStreaming ? (
             <canvas ref={cameraCanvasRef} className="max-w-full max-h-full object-contain" />
           ) : noCamera ? (

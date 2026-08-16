@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button, Card, Input } from '@heroui/react';
-import { ArrowLeft, ArrowRight, ArrowRotateLeft, ArrowRightToSquare, FolderPlus } from '@gravity-ui/icons';
+import { ArrowLeft, ArrowRight, ArrowRotateLeft, ArrowRightToSquare, FolderPlus, Plus } from '@gravity-ui/icons';
 import { useAgent } from '../../contexts/AgentContext';
 import { fetchPage, API_BASE } from '../../api/proxy';
 import { getToken } from '../../api/client';
@@ -300,36 +300,34 @@ export default function ProxyBrowserPage() {
       </div>
 
       {/* Tab bar */}
-      <div className="flex items-center gap-0.5 mb-2 overflow-x-auto scrollbar-thin">
+      <div className="flex items-center gap-0.5 mb-3 overflow-x-auto scrollbar-thin">
         {tabs.map(tab => (
-          <div
+          <Button
             key={tab.id}
-            role="tab"
-            tabIndex={0}
             aria-selected={tab.id === activeTabId}
-            className={`group flex items-center gap-1 px-3 py-1.5 rounded-[20px] text-sm cursor-pointer border transition-colors shrink-0 select-none ${
-              tab.id === activeTabId
-                ? 'bg-white border-neutral-200 text-neutral-900 font-medium'
-                : 'bg-neutral-100 border-transparent text-neutral-500 hover:bg-neutral-200 hover:text-neutral-700'
-            }`}
             onClick={() => setActiveTabId(tab.id)}
             onKeyDown={(e) => handleTabKeyDown(e, tab.id)}
+            className="m-0 p-0"
           >
-            {tab.loading && (
-              <span className="inline-block w-3 h-3 border-2 border-current border-r-transparent rounded-full animate-spin" />
-            )}
-            <span className="truncate max-w-[140px]">
-              {tab.pageTitle || t('proxyBrowser.noTitle')}
-            </span>
-            <button
-              className="ml-0.5 w-4 h-4 flex items-center justify-center rounded text-neutral-400 hover:text-neutral-700 hover:bg-neutral-300 opacity-0 group-hover:opacity-100 transition-opacity"
-              onClick={(e) => { e.stopPropagation(); closeTab(tab.id); }}
-              aria-label={t('proxyBrowser.closeTab')}
-              tabIndex={-1}
-            >
-              ×
-            </button>
-          </div>
+            <div className="group flex items-center gap-1 cursor-pointer shrink-0 select-none px-3 py-1">
+              {tab.loading && (
+                <span className="inline-block w-3 h-3 border-2 border-current border-r-transparent rounded-full animate-spin" />
+              )}
+              <span className="truncate max-w-[140px]">
+                {tab.pageTitle || t('proxyBrowser.noTitle')}
+              </span>
+              <Button
+                className="ml-auto w-4 h-4 flex items-center justify-center rounded text-neutral-400 hover:text-neutral-700 hover:bg-neutral-300 transition-opacity"
+                onClick={(e) => { e.stopPropagation(); closeTab(tab.id); }}
+                aria-label={t('proxyBrowser.closeTab')}
+                isIconOnly
+                size="sm"
+                variant="ghost"
+              >
+                ×
+              </Button>
+            </div>
+          </Button>
         ))}
         <Button
           isIconOnly
@@ -339,7 +337,7 @@ export default function ProxyBrowserPage() {
           onPress={addTab}
           aria-label={t('proxyBrowser.newTab')}
         >
-          <FolderPlus className="w-4 h-4" />
+          <Plus className="w-4 h-4" />
         </Button>
       </div>
 

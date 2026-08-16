@@ -656,11 +656,9 @@ export default function BuilderPage() {
                         </span>
                       </span>
                     </ListView.Title>
-                    <ListView.Description>
-                      <div className="text-xs space-y-0.5">
-                        <div>{formatDate(record.createdAt)}</div>
-                        {record.fileSize > 0 && <div>{formatSize(record.fileSize)}</div>}
-                      </div>
+                    <ListView.Description className="text-xs">
+                      {formatDate(record.createdAt)}
+                      {record.fileSize > 0 ? ` · ${formatSize(record.fileSize)}` : ''}
                     </ListView.Description>
                   </ListView.ItemContent>
                   {record.status === 'completed' && (

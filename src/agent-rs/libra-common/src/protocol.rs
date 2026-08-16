@@ -133,10 +133,4 @@ pub mod ws_type {
 
     // Proxy
     pub const PROXY_FETCH: &str = "proxy.fetch";
-
-    // Stress test
-    pub const STRESS_START: &str = "stress.start";
-    pub const STRESS_STOP: &str = "stress.stop";
-    pub const STRESS_STATUS: &str = "stress.status";
-    pub const STRESS_UPDATE: &str = "stress.update";
 }

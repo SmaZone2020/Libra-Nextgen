@@ -16,9 +16,6 @@ public static class RiskClassifier
         if (path.StartsWith("/api/tasks") && method == "POST")
             return ClassifyTask(body);
 
-        if (path.StartsWith("/api/stress-test"))
-            return RiskActions.Stress;
-
         if (path.StartsWith("/api/system"))
         {
             if (path.EndsWith("/processes/kill")) return RiskActions.SystemProcessKill;

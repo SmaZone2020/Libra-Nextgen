@@ -19,14 +19,14 @@ import SoftwareDataPage from '../pages/SoftwareData';
 import ProxyBrowserPage from '../pages/ProxyBrowser';
 import BuilderPage from '../pages/Builder';
 import AboutPage from '../pages/About';
-import StressTestPage from '../pages/StressTest';
 import SettingsPage from '../pages/Settings';
 import { getStoredUser, logout, checkSetupStatus } from '../api/auth';
+import { getAccountMe } from '../api/account';
 import { setOnAuthFailed } from '../api/client';
 import { consoleWs } from '../ws/consoleWs';
 import { NetworkOverlay } from '../components/NetworkOverlay';
 import { AgentProvider, useAgent } from '../contexts/AgentContext';
-import type { AgentListItem } from '../types/models';
+import type { AgentListItem, UserPermissions } from '../types/models';
 import { sidebarItems, sidebarBottomItems } from '../config/site';
 import '../i18n';
 
@@ -38,7 +38,7 @@ const pageTransition = {
 const SIDEBAR_W = { collapsed: 72, expanded: 256 };
 
 
-const AGENT_ROUTES = new Set(['/agents', '/shell', '/files', '/system', '/screen', '/media', '/othersoft', '/proxy', '/stress-test']);
+const AGENT_ROUTES = new Set(['/agents', '/shell', '/files', '/system', '/screen', '/media', '/othersoft', '/proxy']);
 
 const PAGE_META_KEYS: Record<string, [string, string]> = {
   '/': ['pageMeta.dashboard.label', 'pageMeta.dashboard.subtitle'],
@@ -51,7 +51,6 @@ const PAGE_META_KEYS: Record<string, [string, string]> = {
   '/othersoft': ['pageMeta.othersoft.label', 'pageMeta.othersoft.subtitle'],
   '/proxy': ['pageMeta.proxyBrowser.label', 'pageMeta.proxyBrowser.subtitle'],
   '/builder': ['pageMeta.builder.label', 'pageMeta.builder.subtitle'],
-  '/stress-test': ['pageMeta.stressTest.label', 'pageMeta.stressTest.subtitle'],
   '/audit': ['pageMeta.audit.label', 'pageMeta.audit.subtitle'],
   '/about': ['pageMeta.about.label', 'pageMeta.about.subtitle'],
   '/settings': ['pageMeta.settings.label', 'pageMeta.settings.subtitle'],
@@ -212,7 +211,23 @@ function AuthenticatedLayout({
   const { t } = useTranslation();
   const location = useLocation();
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+  const [permissions, setPermissions] = useState<UserPermissions | null>(null);
   const sidebarWidth = collapsed ? SIDEBAR_W.collapsed : SIDEBAR_W.expanded;
+
+  useEffect(() => {
+    getAccountMe()
+      .then((me) => setPermissions(me.permissions))
+      .catch(() => setPermissions(null));
+  }, []);
+
+  const canSee = (to: string) => {
+    if (!permissions || permissions.fullAccess) return true;
+    const key = to === '/' ? 'dashboard' : to.replace('/', '');
+    return permissions.allowedPages.includes(key);
+  };
+
+  const visibleItems = sidebarItems.filter((i) => canSee(i.to));
+  const visibleBottom = sidebarBottomItems.filter((i) => canSee(i.to));
 
   return (
     <div className="min-h-screen bg-neutral-50 dark:bg-neutral-950">
@@ -220,8 +235,8 @@ function AuthenticatedLayout({
       <Sidebar
         brand="Libra Next"
         collapsed={collapsed}
-        items={sidebarItems}
-        bottomItems={sidebarBottomItems}
+        items={visibleItems}
+        bottomItems={visibleBottom}
         onToggle={onToggle}
         mobileOpen={mobileSidebarOpen}
         onMobileClose={() => setMobileSidebarOpen(false)}
@@ -309,7 +324,6 @@ function AuthenticatedLayout({
                 <Route path="/othersoft" element={<SoftwareDataPage />} />
                 <Route path="/proxy" element={<ProxyBrowserPage />} />
                 <Route path="/builder" element={<BuilderPage />} />
-                <Route path="/stress-test" element={<StressTestPage />} />
                 <Route path="/settings" element={<SettingsPage />} />
                 <Route path="/about" element={<AboutPage />} />
               </Routes>

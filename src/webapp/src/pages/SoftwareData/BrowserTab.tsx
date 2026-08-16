@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Button, Skeleton, Tabs, Chip, Accordion } from '@heroui/react';
+import { Button, Skeleton, Tabs, Chip, Accordion, Input, TextField } from '@heroui/react';
 import { Eye, EyeSlash, ArrowRotateLeft, ChevronDown, Globe, Magnifier, ArrowDownToLine } from '@gravity-ui/icons';
 import { getBrowser, searchBrowser } from '../../api/othersoft';
 import type { BrowserPassword, BrowserHistory, BrowserDataType } from '../../types/models';
@@ -268,14 +268,12 @@ export function BrowserTab({ agentId }: BrowserTabProps) {
 
       {/* Search bar */}
       <div className="flex gap-2 items-center">
-        <input
-          type="text"
-          value={searchKeyword}
-          onChange={(e) => setSearchKeyword(e.target.value)}
-          onKeyDown={(e) => { if (e.key === 'Enter') handleSearch(); }}
-          placeholder={t('othersoft.browser.searchPlaceholder')}
-          className="flex-1 h-8 px-3 text-sm rounded-lg border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 outline-none focus:border-blue-500"
-        />
+        <TextField value={searchKeyword} onChange={setSearchKeyword} className="flex-1">
+          <Input
+            placeholder={t('othersoft.browser.searchPlaceholder')}
+            onKeyDown={(e) => { if (e.key === 'Enter') handleSearch(); }}
+          />
+        </TextField>
         <Button size="sm" variant="primary" isDisabled={searchLoading || !searchKeyword.trim()} onPress={handleSearch}>
           {searchLoading ? (
             <span className="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
