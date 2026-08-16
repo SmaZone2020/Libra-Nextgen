@@ -9,10 +9,12 @@ namespace LibraNextgen.Service.Controllers;
 public class AuthController : ControllerBase
 {
     private readonly AuthService _authService;
+    private readonly IConfiguration _configuration;
 
-    public AuthController(AuthService authService)
+    public AuthController(AuthService authService, IConfiguration configuration)
     {
         _authService = authService;
+        _configuration = configuration;
     }
 
     /// <summary>
@@ -47,6 +49,15 @@ public class AuthController : ControllerBase
     [HttpPost("setup")]
     public async Task<IActionResult> Setup([FromBody] SetupRequest request)
     {
+        // Optional one-time setup token to prevent anyone from claiming admin.
+        var setupToken = _configuration["Setup:Token"];
+        if (!string.IsNullOrEmpty(setupToken))
+        {
+            var provided = Request.Headers["X-Setup-Token"].FirstOrDefault();
+            if (!string.Equals(provided, setupToken, StringComparison.Ordinal))
+                return Unauthorized(new { error = "invalid setup token" });
+        }
+
         if (string.IsNullOrWhiteSpace(request.Username) || request.Username.Length < 2)
             return BadRequest(new { error = "Username must be at least 2 characters." });
 
@@ -78,4 +89,22 @@ public class AuthController : ControllerBase
         var role = User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value ?? "Operator";
         return Ok(new { username, role, valid = true });
     }
+
+    /// <summary>
+    /// Exchange a refresh token for a new JWT + rotated refresh token.
+    /// </summary>
+    [HttpPost("refresh")]
+    public async Task<IActionResult> Refresh([FromBody] RefreshRequest request)
+    {
+        var response = await _authService.RefreshAsync(request.RefreshToken);
+        if (response == null)
+            return Unauthorized(new { error = "Invalid refresh token" });
+
+        return Ok(response);
+    }
+}
+
+public class RefreshRequest
+{
+    public string RefreshToken { get; set; } = string.Empty;
 }

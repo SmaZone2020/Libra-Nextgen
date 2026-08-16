@@ -10,6 +10,9 @@ public class User
     public bool IsInitial { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime? LastLogin { get; set; }
+    /// <summary>SHA-256 hash of the current refresh token (raw token never stored).</summary>
+    public string? RefreshTokenHash { get; set; }
+    public DateTime? RefreshTokenExpiresAt { get; set; }
 }
 
 public class LoginRequest

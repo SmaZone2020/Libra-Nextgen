@@ -118,6 +118,22 @@ public class AgentCommsController : ControllerBase
             return Unauthorized(new { error = "decrypt failed" });
         }
 
+        // Replay protection: reject heartbeats whose timestamp is too far from now.
+        try
+        {
+            using var hb = JsonDocument.Parse(heartbeatJson);
+            if (hb.RootElement.TryGetProperty("ts", out var ts) && ts.TryGetInt64(out var ms))
+            {
+                var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+                if (Math.Abs(now - ms) > 120_000)
+                    return Unauthorized(new { error = "stale heartbeat" });
+            }
+        }
+        catch (JsonException)
+        {
+            return BadRequest(new { error = "invalid payload" });
+        }
+
         var (valid, task, hostname) = await _commsService.HandleHeartbeatAsync(agentId);
         if (!valid)
             return NotFound(new { error = "agent not found" });

@@ -1,4 +1,5 @@
 using System.Security.Cryptography;
+using System.Text;
 using LibraNextgen.Common.Models;
 using LibraNextgen.Common.Protocol;
 using LibraNextgen.Service.Configuration;
@@ -34,13 +35,54 @@ public class AuthService
 
         var refreshToken = GenerateRefreshToken();
 
-        var update = Builders<User>.Update.Set(u => u.LastLogin, DateTime.UtcNow);
+        var update = Builders<User>.Update
+            .Set(u => u.LastLogin, DateTime.UtcNow)
+            .Set(u => u.RefreshTokenHash, HashRefreshToken(refreshToken))
+            .Set(u => u.RefreshTokenExpiresAt, DateTime.UtcNow.AddDays(_jwtSettings.RefreshTokenExpirationDays));
         await _users.UpdateAsync(user.Id, update);
 
         return new LoginResponse
         {
             Token = token,
             RefreshToken = refreshToken,
+            ExpiresAt = expires,
+            Username = user.Username,
+            Role = user.Role
+        };
+    }
+
+    /// <summary>
+    /// Exchange a refresh token for a new JWT + rotated refresh token.
+    /// </summary>
+    public async Task<LoginResponse?> RefreshAsync(string refreshToken)
+    {
+        if (string.IsNullOrWhiteSpace(refreshToken))
+            return null;
+
+        var hash = HashRefreshToken(refreshToken);
+        var user = await _users.FirstOrDefaultAsync(u => u.RefreshTokenHash == hash && u.IsActive);
+        if (user == null)
+            return null;
+
+        if (user.RefreshTokenExpiresAt is null || user.RefreshTokenExpiresAt < DateTime.UtcNow)
+            return null;
+
+        var (token, expires) = JwtHelper.GenerateToken(
+            user.Id, user.Username, user.Role.ToString(),
+            _jwtSettings.Rsa, _jwtSettings.Issuer, _jwtSettings.Audience,
+            _jwtSettings.TokenExpirationMinutes);
+
+        var newRefreshToken = GenerateRefreshToken();
+        var update = Builders<User>.Update
+            .Set(u => u.RefreshTokenHash, HashRefreshToken(newRefreshToken))
+            .Set(u => u.RefreshTokenExpiresAt, DateTime.UtcNow.AddDays(_jwtSettings.RefreshTokenExpirationDays))
+            .Set(u => u.LastLogin, DateTime.UtcNow);
+        await _users.UpdateAsync(user.Id, update);
+
+        return new LoginResponse
+        {
+            Token = token,
+            RefreshToken = newRefreshToken,
             ExpiresAt = expires,
             Username = user.Username,
             Role = user.Role
@@ -54,11 +96,9 @@ public class AuthService
 
     public async Task<LoginResponse> SetupAsync(string username, string password, string ipAddress)
     {
-        if (await _users.ExistsAsync(_ => true))
-            throw new InvalidOperationException("Setup has already been completed.");
-
         var user = new User
         {
+            Id = "initial-admin", // fixed id makes concurrent setup atomic (unique _id)
             Username = username,
             PasswordHash = HashPassword(password),
             Role = UserRole.Admin,
@@ -66,7 +106,15 @@ public class AuthService
             IsInitial = true,
             CreatedAt = DateTime.UtcNow
         };
-        await _users.InsertAsync(user);
+
+        try
+        {
+            await _users.InsertAsync(user);
+        }
+        catch (MongoWriteException)
+        {
+            throw new InvalidOperationException("Setup has already been completed.");
+        }
 
         var (token, expires) = JwtHelper.GenerateToken(
             user.Id, user.Username, user.Role.ToString(),
@@ -74,6 +122,11 @@ public class AuthService
             _jwtSettings.TokenExpirationMinutes);
 
         var refreshToken = GenerateRefreshToken();
+
+        var update = Builders<User>.Update
+            .Set(u => u.RefreshTokenHash, HashRefreshToken(refreshToken))
+            .Set(u => u.RefreshTokenExpiresAt, DateTime.UtcNow.AddDays(_jwtSettings.RefreshTokenExpirationDays));
+        await _users.UpdateAsync(user.Id, update);
 
         return new LoginResponse
         {
@@ -110,5 +163,10 @@ public class AuthService
     private static string GenerateRefreshToken()
     {
         return Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
+    }
+
+    private static string HashRefreshToken(string token)
+    {
+        return Convert.ToBase64String(SHA256.HashData(Encoding.UTF8.GetBytes(token)));
     }
 }

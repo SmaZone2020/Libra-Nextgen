@@ -117,10 +117,17 @@ impl HttpCommunicator {
         session_key: Option<&[u8; AES_KEY_SIZE]>,
     ) -> Result<Option<AgentTask>, String> {
         let body = match session_key {
-            Some(key) => format!(
-                r#"{{"payload":"{}"}}"#,
-                libra_crypto::encrypt_payload("{}", key)
-            ),
+            Some(key) => {
+                let ts = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_millis() as i64;
+                let inner = format!(r#"{{"ts":{}}}"#, ts);
+                format!(
+                    r#"{{"payload":"{}"}}"#,
+                    libra_crypto::encrypt_payload(&inner, key)
+                )
+            }
             None => "{}".to_string(),
         };
 
