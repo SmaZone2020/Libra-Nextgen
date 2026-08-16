@@ -74,12 +74,12 @@ export function NetworkOverlay() {
 
   return (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm" role="alert">
-      <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-sm w-full mx-4 text-center">
+      <div className="bg-white dark:bg-neutral-900 rounded-2xl shadow-2xl p-8 max-w-sm w-full mx-4 text-center">
         <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-red-100 flex items-center justify-center">
           <span className="text-3xl">{'⚠'}</span>
         </div>
 
-        <h2 className="text-xl font-semibold text-neutral-900 mb-2">Connection Lost</h2>
+        <h2 className="text-xl font-semibold text-neutral-900 dark:text-neutral-100 mb-2">Connection Lost</h2>
         <p className="text-sm text-neutral-500 mb-6">
           Unable to reach the server. The connection has been interrupted.
         </p>

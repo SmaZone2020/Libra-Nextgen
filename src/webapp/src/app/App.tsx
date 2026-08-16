@@ -70,10 +70,10 @@ function PageHeader() {
       initial={{ opacity: 0, x: 16 }}
       transition={{ duration: 0.25, ease: 'easeOut' }}
     >
-      <h1 className="mt-0.5 text-xl font-semibold tracking-normal text-neutral-950">
+      <h1 className="mt-0.5 text-xl font-semibold tracking-normal text-neutral-950 dark:text-neutral-50">
         {t(keys[0])}
       </h1>
-      <p className="mt-0.5 text-sm text-neutral-600">{t(keys[1])}</p>
+      <p className="mt-0.5 text-sm text-neutral-600 dark:text-neutral-400">{t(keys[1])}</p>
     </motion.div>
   );
 }
@@ -92,7 +92,7 @@ function AgentSelector() {
           variant="tertiary"
           className="flex-1 sm:w-[220px] sm:flex-none justify-start"
         >
-          {selectedAgent ? selectedAgent.hostname : t('common.selectAgent')}
+          {selectedAgent ? `${selectedAgent.hostname} (${selectedAgent.ipAddress})` : t('common.selectAgent')}
         </Button>
         <Dropdown.Popover>
           <Dropdown.Menu
@@ -101,7 +101,7 @@ function AgentSelector() {
           >
             {(item: AgentListItem) => (
               <Dropdown.Item key={item.id} textValue={item.hostname}>
-                {item.hostname}
+                {item.hostname}({item.ipAddress})
               </Dropdown.Item>
             )}
           </Dropdown.Menu>
@@ -110,7 +110,6 @@ function AgentSelector() {
 
       {selectedAgent && (
         <>
-          <Chip variant="soft">{selectedAgent.ipAddress}</Chip>
           <Button size="sm" variant="tertiary" onPress={disconnect}>
             {t('common.disconnect')}
           </Button>
@@ -216,7 +215,7 @@ function AuthenticatedLayout({
   const sidebarWidth = collapsed ? SIDEBAR_W.collapsed : SIDEBAR_W.expanded;
 
   return (
-    <div className="min-h-screen bg-neutral-50">
+    <div className="min-h-screen bg-neutral-50 dark:bg-neutral-950">
       <NetworkOverlay />
       <Sidebar
         brand="Libra Next"
@@ -232,7 +231,7 @@ function AuthenticatedLayout({
         className="sm:pl-[var(--sidebar-w)] transition-all duration-300"
         style={{ '--sidebar-w': `${sidebarWidth}px` } as React.CSSProperties}
       >
-        <header className="border-b border-neutral-200 bg-white px-4 py-3 sm:px-6 lg:px-8">
+        <header className="border-b border-neutral-200 bg-white dark:bg-neutral-900 dark:border-neutral-800 px-4 py-3 sm:px-6 lg:px-8">
           {/* Mobile: hamburger + title row */}
           <div className="flex items-center gap-3 sm:hidden">
             <Button
@@ -273,12 +272,18 @@ function AuthenticatedLayout({
             <PageHeader />
             <div className="flex items-center gap-3">
               <AgentSelector />
-              <Chip size="sm" variant="soft">
-                {user.username} ({user.role})
-              </Chip>
-              <Button size="sm" variant="ghost" onPress={onLogout}>
-                {t('common.logout')}
-              </Button>
+              <Dropdown>
+                <Button variant="ghost">
+                  <span className="text-sm font-medium">{user.username} ({user.role})</span>
+                </Button>
+                <Dropdown.Popover>
+                  <Dropdown.Menu onAction={(key) => { if (key === 'logout') onLogout(); }}>
+                    <Dropdown.Item key="logout" textValue={t('common.logout')} className="text-danger">
+                      {t('common.logout')}
+                    </Dropdown.Item>
+                  </Dropdown.Menu>
+                </Dropdown.Popover>
+              </Dropdown>
             </div>
           </div>
         </header>

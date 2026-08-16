@@ -33,6 +33,11 @@
     sans-serif;
 }
 
+.dark {
+  color: #e5e7eb;
+  background: #0a0a0a;
+}
+
 body {
   min-width: 320px;
   margin: 0;

@@ -53,7 +53,7 @@ export default function SetupPage({ onSetup }: SetupPageProps) {
             <Card.Title className="mx-auto text-[28px] libre">Libra-Nextgen</Card.Title>
           </Card.Header>
           <Card.Content className="flex flex-col gap-4">
-            <p className="text-sm text-neutral-600 text-center">
+            <p className="text-sm text-neutral-600 dark:text-neutral-400 text-center">
               {t('setup.description')}
             </p>
             {error && (

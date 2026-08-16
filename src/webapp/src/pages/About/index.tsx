@@ -3,8 +3,8 @@ import { useTranslation } from 'react-i18next';
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section className="space-y-3">
-      <h2 className="text-lg font-semibold text-neutral-900">{title}</h2>
-      <div className="prose prose-neutral max-w-none text-sm text-neutral-700 space-y-3">
+      <h2 className="text-lg font-semibold text-neutral-900 dark:text-neutral-100">{title}</h2>
+      <div className="prose prose-neutral max-w-none text-sm text-neutral-700 dark:text-neutral-300 space-y-3">
         {children}
       </div>
     </section>
@@ -36,7 +36,7 @@ export default function AboutPage() {
       {/* Authorized Use */}
       <Section title={t('about.authorizedTitle')}>
         <p>{t('about.authorizedP1')}</p>
-        <ul className="list-disc pl-6 space-y-1 text-neutral-600">
+        <ul className="list-disc pl-6 space-y-1 text-neutral-600 dark:text-neutral-400">
           <li>{t('about.authorizedLi1')}</li>
           <li>{t('about.authorizedLi2')}</li>
           <li>{t('about.authorizedLi3')}</li>
@@ -49,7 +49,7 @@ export default function AboutPage() {
       {/* Prohibited Use */}
       <Section title={t('about.prohibitedTitle')}>
         <p>{t('about.prohibitedP1')}</p>
-        <ul className="list-disc pl-6 space-y-1 text-neutral-600">
+        <ul className="list-disc pl-6 space-y-1 text-neutral-600 dark:text-neutral-400">
           <li>{t('about.prohibitedLi1')}</li>
           <li>{t('about.prohibitedLi2')}</li>
           <li>{t('about.prohibitedLi3')}</li>
@@ -64,7 +64,7 @@ export default function AboutPage() {
         <p>{t('about.applicableLawP1')}</p>
 
         <h3 className="text-base font-medium text-neutral-800 !mt-5">{t('about.lawCnTitle')}</h3>
-        <ul className="list-disc pl-6 space-y-1 text-neutral-600">
+        <ul className="list-disc pl-6 space-y-1 text-neutral-600 dark:text-neutral-400">
           <li>{t('about.lawCnLi1')}</li>
           <li>{t('about.lawCnLi2')}</li>
           <li>{t('about.lawCnLi3')}</li>
@@ -72,7 +72,7 @@ export default function AboutPage() {
         </ul>
 
         <h3 className="text-base font-medium text-neutral-800 !mt-5">{t('about.lawIntlTitle')}</h3>
-        <ul className="list-disc pl-6 space-y-1 text-neutral-600">
+        <ul className="list-disc pl-6 space-y-1 text-neutral-600 dark:text-neutral-400">
           <li>{t('about.lawIntlLi1')}</li>
           <li>{t('about.lawIntlLi2')}</li>
           <li>{t('about.lawIntlLi3')}</li>
@@ -91,7 +91,7 @@ export default function AboutPage() {
       {/* Export Control */}
       <Section title={t('about.exportTitle')}>
         <p>{t('about.exportP1')}</p>
-        <ul className="list-disc pl-6 space-y-1 text-neutral-600">
+        <ul className="list-disc pl-6 space-y-1 text-neutral-600 dark:text-neutral-400">
           <li>{t('about.exportLi1')}</li>
           <li>{t('about.exportLi2')}</li>
           <li>{t('about.exportLi3')}</li>

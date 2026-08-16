@@ -38,7 +38,7 @@ export function Sidebar({
       {/* Desktop sidebar */}
       <aside
         className={`fixed top-0 left-0 bottom-0 z-40 hidden sm:block
-        transition-all duration-300 ease-in-out bg-white border-r border-neutral-200
+        transition-all duration-300 ease-in-out bg-white border-r border-neutral-200 dark:bg-neutral-900 dark:border-neutral-800
         ${collapsed ? 'w-18' : 'w-64'}`}
       >
         <div className="flex flex-col h-full p-4">
@@ -56,7 +56,7 @@ export function Sidebar({
                   transition={{ duration: 0.25, ease: 'easeInOut' }}
                   className="overflow-hidden"
                 >
-                  <span className="text-2xl font-bold whitespace-nowrap block text-neutral-900 mx-auto libre">
+                  <span className="text-2xl font-bold whitespace-nowrap block text-neutral-900 dark:text-neutral-100 mx-auto libre">
                     {brand}
                   </span>
                 </motion.div>
@@ -129,7 +129,7 @@ export function Sidebar({
 
           <motion.div
             layout
-            className="pt-4 border-t border-neutral-200 w-full space-y-2"
+            className="pt-4 border-t border-neutral-200 dark:border-neutral-800 w-full space-y-2"
           >
 
             {bottomItems?.map((item) => {
@@ -187,12 +187,12 @@ export function Sidebar({
       )}
       <aside
         className={`fixed top-0 left-0 bottom-0 z-50 sm:hidden
-          transition-transform duration-300 ease-in-out bg-white border-r border-neutral-200
+          transition-transform duration-300 ease-in-out bg-white border-r border-neutral-200 dark:bg-neutral-900 dark:border-neutral-800
           w-64 ${mobileOpen ? 'translate-x-0' : '-translate-x-full'}`}
       >
         <div className="flex flex-col h-full p-4">
           <div className="flex items-center justify-between mb-6">
-            <span className="text-2xl font-bold text-neutral-900 libre">{brand}</span>
+            <span className="text-2xl font-bold text-neutral-900 dark:text-neutral-100 libre">{brand}</span>
             <Tooltip delay={0}>
               <Button
                 isIconOnly
@@ -232,7 +232,7 @@ export function Sidebar({
             })}
           </nav>
 
-          <div className="pt-4 border-t border-neutral-200 space-y-2">
+          <div className="pt-4 border-t border-neutral-200 dark:border-neutral-800 space-y-2">
             {bottomItems?.map((item) => {
               const label = t(item.label);
               const isActive = location.pathname === item.to;

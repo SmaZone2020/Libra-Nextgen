@@ -13,7 +13,7 @@ interface PaginationProps {
 export function Pagination({ page, totalPages, total, pageSize, loading, onPageChange }: PaginationProps) {
   const { t } = useTranslation();
   return (
-    <div className="flex items-center justify-between mt-4 pt-4 border-t border-neutral-200">
+    <div className="flex items-center justify-between mt-4 pt-4 border-t border-neutral-200 dark:border-neutral-800">
       <span className="text-sm text-default-500">
         {total > 0
           ? t('audit.showing', { start: (page - 1) * pageSize + 1, end: Math.min(page * pageSize, total), total })

@@ -113,7 +113,7 @@ export function StatusPanel({ campaign, agentStatuses, chartHistory }: Props) {
 
 function StatBox({ label, value }: { label: string; value: string }) {
   return (
-    <div className="bg-neutral-50 border border-neutral-100 rounded-lg px-3 py-2">
+    <div className="bg-neutral-50 border border-neutral-100 dark:bg-neutral-900 dark:border-neutral-800 rounded-lg px-3 py-2">
       <div className="text-xs text-neutral-500">{label}</div>
       <div className="text-sm font-semibold text-neutral-800 mt-0.5">{value}</div>
     </div>
