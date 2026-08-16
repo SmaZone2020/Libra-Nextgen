@@ -69,8 +69,6 @@ public static class WsMessageType
 }
 
 [JsonSerializable(typeof(WebSocketMessage))]
-[JsonSerializable(typeof(StressConfig))]
-[JsonSerializable(typeof(StressAgentStatus))]
 public partial class WsJsonContext : JsonSerializerContext
 {
 }

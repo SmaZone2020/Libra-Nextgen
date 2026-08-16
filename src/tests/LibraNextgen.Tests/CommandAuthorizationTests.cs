@@ -7,9 +7,6 @@ namespace LibraNextgen.Tests;
 public class CommandAuthorizationTests
 {
     [Theory]
-    [InlineData(CommandType.StressHttpFlood)]
-    [InlineData(CommandType.StressSynFlood)]
-    [InlineData(CommandType.StressStop)]
     [InlineData(CommandType.LocalAccounts)]
     [InlineData(CommandType.Kill)]
     [InlineData(CommandType.Screenshot)]
