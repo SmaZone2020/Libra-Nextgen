@@ -141,8 +141,8 @@ pub unsafe extern "system" fn core_main(config_ptr: *const u8, config_len: usize
         let cfg = libra_engine::config::ConfigManager::load(&args, Some(injected.clone()));
         log!(LOG_FILE, "[core] ConfigManager::load OK, server={}", cfg.server_url);
 
-        log!(LOG_FILE, "[core] creating tokio runtime (current_thread)...");
-        let rt = match tokio::runtime::Builder::new_current_thread()
+        log!(LOG_FILE, "[core] creating tokio runtime (multi_thread)...");
+        let rt = match tokio::runtime::Builder::new_multi_thread()
             .enable_all()
             .build()
         {
