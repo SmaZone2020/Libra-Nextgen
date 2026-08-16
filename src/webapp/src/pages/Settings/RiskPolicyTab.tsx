@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Button, Card, Dropdown, Spinner } from '@heroui/react';
+import { Accordion, Button, Card, Dropdown, Spinner } from '@heroui/react';
+import { ChevronDown } from '@gravity-ui/icons';
 import { getRiskPolicy, saveRiskPolicy, type RiskLevel, type RiskMappings } from '../../api/riskPolicy';
 
 const RISK_LEVELS: RiskLevel[] = ['Safe', 'Normal', 'Dangerous', 'Malicious'];
@@ -103,49 +104,60 @@ export default function RiskPolicyTab() {
         </div>
       </div>
 
-      <div className="space-y-6">
+      <Accordion className="w-full">
         {MODULES.map((mod) => (
-          <div key={mod.titleKey}>
-            <h3 className="font-semibold text-default-700 mb-2">{t(mod.titleKey)}</h3>
-            <div className="rounded border border-default-200 divide-y divide-default-100">
-              {mod.keys.map((key) => {
-                const level = mappings[key] ?? 'Normal';
-                const recommended = defaults[key] ?? 'Normal';
-                return (
-                  <div key={key} className="flex items-center justify-between gap-4 px-3 py-2">
-                    <span className="text-sm">{t(`riskPolicy.labels.${key}`)}</span>
-                    <Dropdown>
-                      <Button size="sm" variant="ghost" className={LEVEL_COLORS[level]}>
-                        {t(`riskLevel.${level}`)}
-                      </Button>
-                      <Dropdown.Popover>
-                        <Dropdown.Menu
-                          selectedKeys={[level]}
-                          selectionMode="single"
-                          onAction={(k) => {
-                            const v = String(k);
-                            if (v === '__recommended__') setLevel(key, recommended);
-                            else setLevel(key, v as RiskLevel);
-                          }}
-                        >
-                          <Dropdown.Item key="__recommended__" textValue={t('riskPolicy.recommended')}>
-                            {t('riskPolicy.recommended')} ({t(`riskLevel.${recommended}`)})
-                          </Dropdown.Item>
-                          {RISK_LEVELS.map((l) => (
-                            <Dropdown.Item key={l} textValue={t(`riskLevel.${l}`)}>
-                              {t(`riskLevel.${l}`)}
-                            </Dropdown.Item>
-                          ))}
-                        </Dropdown.Menu>
-                      </Dropdown.Popover>
-                    </Dropdown>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
+          <Accordion.Item key={mod.titleKey}>
+            <Accordion.Heading>
+              <Accordion.Trigger>
+                <span className="font-semibold">{t(mod.titleKey)}</span>
+                <Accordion.Indicator>
+                  <ChevronDown />
+                </Accordion.Indicator>
+              </Accordion.Trigger>
+            </Accordion.Heading>
+            <Accordion.Panel>
+              <Accordion.Body>
+                <div className="divide-y divide-default-100">
+                  {mod.keys.map((key) => {
+                    const level = mappings[key] ?? 'Normal';
+                    const recommended = defaults[key] ?? 'Normal';
+                    return (
+                      <div key={key} className="flex items-center justify-between gap-4 px-3 py-2">
+                        <span className="text-sm">{t(`riskPolicy.labels.${key}`)}</span>
+                        <Dropdown>
+                          <Button size="sm" variant="ghost" className={LEVEL_COLORS[level]}>
+                            {t(`riskLevel.${level}`)}
+                          </Button>
+                          <Dropdown.Popover>
+                            <Dropdown.Menu
+                              selectedKeys={[level]}
+                              selectionMode="single"
+                              onAction={(k) => {
+                                const v = String(k);
+                                if (v === '__recommended__') setLevel(key, recommended);
+                                else setLevel(key, v as RiskLevel);
+                              }}
+                            >
+                              <Dropdown.Item key="__recommended__" textValue={t('riskPolicy.recommended')}>
+                                {t('riskPolicy.recommended')} ({t(`riskLevel.${recommended}`)})
+                              </Dropdown.Item>
+                              {RISK_LEVELS.map((l) => (
+                                <Dropdown.Item key={l} textValue={t(`riskLevel.${l}`)}>
+                                  {t(`riskLevel.${l}`)}
+                                </Dropdown.Item>
+                              ))}
+                            </Dropdown.Menu>
+                          </Dropdown.Popover>
+                        </Dropdown>
+                      </div>
+                    );
+                  })}
+                </div>
+              </Accordion.Body>
+            </Accordion.Panel>
+          </Accordion.Item>
         ))}
-      </div>
+      </Accordion>
     </Card>
   );
 }
