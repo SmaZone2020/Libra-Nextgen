@@ -100,7 +100,7 @@ function AgentSelector() {
             items={agents}
           >
             {(item: AgentListItem) => (
-              <Dropdown.Item key={item.id} textValue={item.hostname}>
+              <Dropdown.Item key={item.id} id={item.id} textValue={item.hostname}>
                 {item.hostname}({item.ipAddress})
               </Dropdown.Item>
             )}
@@ -301,10 +301,10 @@ function AuthenticatedLayout({
               </Button>
               <Dropdown.Popover>
                 <Dropdown.Menu onAction={(key) => { if (key === 'logout') onLogout(); }}>
-                  <Dropdown.Item key="user" textValue={user.username} className="opacity-70">
+                  <Dropdown.Item key="user" id="user" textValue={user.username} className="opacity-70">
                     {user.username} ({user.role})
                   </Dropdown.Item>
-                  <Dropdown.Item key="logout" textValue={t('common.logout')} className="text-danger">
+                  <Dropdown.Item key="logout" id="logout" textValue={t('common.logout')} className="text-danger">
                     {t('common.logout')}
                   </Dropdown.Item>
                 </Dropdown.Menu>
@@ -328,7 +328,7 @@ function AuthenticatedLayout({
                 </Button>
                 <Dropdown.Popover>
                   <Dropdown.Menu onAction={(key) => { if (key === 'logout') onLogout(); }}>
-                    <Dropdown.Item key="logout" textValue={t('common.logout')} className="text-danger">
+                    <Dropdown.Item key="logout" id="logout" textValue={t('common.logout')} className="text-danger">
                       {t('common.logout')}
                     </Dropdown.Item>
                   </Dropdown.Menu>

@@ -62,7 +62,7 @@ export function PathBar({ path, drives, historyLength, onGoBack, onGoUp, onDrive
             aria-label={t('fileManager.selectDrive')}
           >
             {(item: { id: string; label: string }) => (
-              <Dropdown.Item key={item.id} textValue={item.label}>
+              <Dropdown.Item key={item.id} id={item.id} textValue={item.label}>
                 {item.label}
               </Dropdown.Item>
             )}

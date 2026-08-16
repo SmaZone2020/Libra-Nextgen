@@ -32,7 +32,7 @@ export function AgentSelector({ agents, selectedId, connected, lockMode, onSelec
             items={agents}
           >
             {(item: AgentListItem) => (
-              <Dropdown.Item key={item.id} textValue={item.hostname}>
+              <Dropdown.Item key={item.id} id={item.id} textValue={item.hostname}>
                 {item.hostname}
               </Dropdown.Item>
             )}
