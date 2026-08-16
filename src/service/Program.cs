@@ -62,6 +62,7 @@ builder.Services.AddSingleton<PermissionService>();
 builder.Services.AddSingleton<McpService>();
 builder.Services.AddScoped<AuditService>();
 builder.Services.AddScoped<AccessKeyService>();
+builder.Services.AddSingleton<BuilderBuildService>();
 builder.Services.AddHostedService<HeartbeatMonitor>();
 
 // MCP Server
