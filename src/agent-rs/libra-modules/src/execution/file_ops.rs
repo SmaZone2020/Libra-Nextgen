@@ -57,6 +57,56 @@ impl FileOps {
         )
     }
 
+    /// List the entries of a ZIP archive without extracting it.
+    pub fn list_archive(path: &str) -> String {
+        let data = match std::fs::read(path) {
+            Ok(d) => d,
+            Err(e) => return format!(r#"{{"error":"{}"}}"#, escape(&e.to_string())),
+        };
+
+        let mut entries: Vec<String> = Vec::new();
+        let mut pos = 0usize;
+        while pos + 30 <= data.len() {
+            let sig = u32::from_le_bytes([data[pos], data[pos + 1], data[pos + 2], data[pos + 3]]);
+            if sig == 0x02014b50 || sig == 0x06054b50 {
+                break; // Central directory or EOCD
+            }
+            if sig != 0x04034b50 {
+                pos += 1;
+                continue;
+            }
+
+            let name_len = u16::from_le_bytes([data[pos + 26], data[pos + 27]]) as usize;
+            let extra_len = u16::from_le_bytes([data[pos + 28], data[pos + 29]]) as usize;
+            let comp_size =
+                u32::from_le_bytes([data[pos + 18], data[pos + 19], data[pos + 20], data[pos + 21]]) as usize;
+            let uncomp_size =
+                u32::from_le_bytes([data[pos + 22], data[pos + 23], data[pos + 24], data[pos + 25]]) as usize;
+
+            let header_end = pos + 30 + name_len + extra_len;
+            if header_end > data.len() {
+                break;
+            }
+
+            let name = String::from_utf8_lossy(&data[pos + 30..pos + 30 + name_len]).to_string();
+            let is_dir = name.ends_with('/');
+            entries.push(format!(
+                r#"{{"name":"{}","type":"{}","size":{},"modified":""}}"#,
+                escape(name.trim_end_matches('/')),
+                if is_dir { "dir" } else { "file" },
+                uncomp_size,
+            ));
+
+            pos = header_end + comp_size;
+        }
+
+        format!(
+            r#"{{"path":"{}","entries":[{}]}}"#,
+            escape(path),
+            entries.join(",")
+        )
+    }
+
     pub fn write_file(path: &str, base64_content: &str) -> String {
         let bytes = match base64::engine::general_purpose::STANDARD.decode(base64_content) {
             Ok(b) => b,

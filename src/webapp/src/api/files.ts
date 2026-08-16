@@ -30,6 +30,21 @@ export function listFiles(agentId: string, path: string): Promise<FileListResult
   return api.post<FileListResult>(`/files/${agentId}/list`, { path });
 }
 
+export interface ReadFileResult {
+  path: string;
+  size: number;
+  content: string;
+  error?: string;
+}
+
+export function readFile(agentId: string, path: string): Promise<ReadFileResult> {
+  return api.post<ReadFileResult>(`/files/${agentId}/read`, { path });
+}
+
+export function listArchive(agentId: string, path: string): Promise<FileListResult> {
+  return api.post<FileListResult>(`/files/${agentId}/archive/list`, { path });
+}
+
 export function getDrives(agentId: string): Promise<DrivesResult> {
   return api.post<DrivesResult>(`/files/${agentId}/drives`);
 }

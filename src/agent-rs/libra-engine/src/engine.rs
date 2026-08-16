@@ -391,6 +391,11 @@ impl AgentEngine {
                 let r = blocking_string(move || libra_modules::execution::FileOps::create_shortcut(&path)).await;
                 ws_send(tx, &agent_id, "file.shortcut.result", &r, rid).await;
             }
+            ws_type::FILE_ARCHIVE_LIST => {
+                let path = data_str(&data, "path", "");
+                let r = blocking_string(move || libra_modules::execution::FileOps::list_archive(&path)).await;
+                ws_send(tx, &agent_id, "file.archive_list.result", &r, rid).await;
+            }
 
             // ── System info ──────────────────────────────────────
             ws_type::SYSTEM_PROCESSES => {

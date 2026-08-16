@@ -1,11 +1,23 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { listFiles, getDrives, deleteFile, renameFile, moveFile, copyFile, compressFile, decompressFile, createShortcut, downloadFile } from '../../api/files';
+import { listFiles, getDrives, deleteFile, renameFile, moveFile, copyFile, compressFile, decompressFile, createShortcut, downloadFile, readFile, listArchive } from '../../api/files';
 import type { FileEntry } from '../../api/files';
+import { Modal, Spinner } from '@heroui/react';
 import { PathBar } from './PathBar';
-import { FileList } from './FileList';
+import { FileList, isArchive } from './FileList';
 import { useAgent } from '../../contexts/AgentContext';
 import { useDialog } from '../../hooks/useDialog';
+
+function decodeContent(base64: string): string {
+  try {
+    const binary = atob(base64);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    return new TextDecoder('utf-8').decode(bytes);
+  } catch {
+    return '[binary file — cannot preview]';
+  }
+}
 
 export default function FileManagerPage() {
   const { t } = useTranslation();
@@ -17,6 +29,10 @@ export default function FileManagerPage() {
   const [history, setHistory] = useState<string[]>([]);
   const [drives, setDrives] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [inArchive, setInArchive] = useState(false);
+
+  const [fileViewer, setFileViewer] = useState<{ name: string; content: string } | null>(null);
+  const [fileViewLoading, setFileViewLoading] = useState(false);
 
   const contextRef = useRef<FileEntry | null>(null);
   const abortRef = useRef<AbortController | null>(null);
@@ -42,6 +58,7 @@ export default function FileManagerPage() {
       setHistory([]);
       setDrives([]);
       setPath('');
+      setInArchive(false);
       return;
     }
 
@@ -56,7 +73,7 @@ export default function FileManagerPage() {
     getDrives(agentId).then((drivesResult) => {
       const driveList = drivesResult.drives ?? (Array.isArray(drivesResult) ? drivesResult : []);
       setDrives(driveList);
-      const firstDrive = driveList.length > 0 ? driveList[0] : 'C:\\';
+      const firstDrive = driveList[0] ?? 'C:\\';
       return listFiles(agentId, firstDrive).then((fileResult) => {
         setPath(fileResult.path);
         setEntries(fileResult.entries);
@@ -77,31 +94,84 @@ export default function FileManagerPage() {
 
   const navigateTo = useCallback((dirPath: string) => {
     setHistory(prev => [...prev, path]);
+    setInArchive(false);
     sendFileList(dirPath);
+  }, [path, sendFileList]);
+
+  const openFile = useCallback(async (filePath: string, name: string) => {
+    if (!agentId) return;
+    setFileViewLoading(true);
+    setFileViewer({ name, content: '' });
+    try {
+      const result = await readFile(agentId, filePath);
+      if (result.error) {
+        await alert(result.error);
+        setFileViewer(null);
+      } else {
+        setFileViewer({ name, content: decodeContent(result.content) });
+      }
+    } catch (e) {
+      await alert(e instanceof Error ? e.message : t('fileManager.openFailed'));
+      setFileViewer(null);
+    } finally {
+      setFileViewLoading(false);
+    }
+  }, [agentId, alert]);
+
+  const enterArchive = useCallback(async (archivePath: string) => {
+    if (!agentId) return;
+    setHistory(prev => [...prev, path]);
+    setLoading(true);
+    setError(null);
+    try {
+      const result = await listArchive(agentId, archivePath);
+      setInArchive(true);
+      setPath(result.path);
+      setEntries(result.entries);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : t('fileManager.listFailed'));
+    } finally {
+      setLoading(false);
+    }
+  }, [agentId, path]);
+
+  const exitArchive = useCallback(() => {
+    const parentDir = path.replace(/\\+$/, '').split('\\').slice(0, -1).join('\\') || 'C:\\';
+    setInArchive(false);
+    sendFileList(parentDir);
   }, [path, sendFileList]);
 
   const handleRowAction = useCallback((key: string | number) => {
     const entry = entries.find(e => e.name === String(key));
-    if (entry?.type === 'dir') {
-      const newPath = path.replace(/\\+$/, '') + '\\' + entry.name;
-      navigateTo(newPath);
+    if (!entry) return;
+    const fullPath = path.replace(/\\+$/, '') + '\\' + entry.name;
+    if (entry.type === 'dir') {
+      if (inArchive) return;
+      navigateTo(fullPath);
+    } else if (isArchive(entry.name)) {
+      enterArchive(fullPath);
+    } else {
+      openFile(fullPath, entry.name);
     }
-  }, [entries, path, navigateTo]);
+  }, [entries, path, navigateTo, inArchive, enterArchive, openFile]);
 
   const goBack = useCallback(() => {
     if (history.length === 0) return;
     const prev = history[history.length - 1]!;
     setHistory(h => h.slice(0, -1));
+    setInArchive(false);
     sendFileList(prev);
   }, [history, sendFileList]);
 
   const goUp = useCallback(() => {
+    if (inArchive) { exitArchive(); return; }
     const parent = path.split('\\').slice(0, -1).join('\\') || path[0] + ':\\';
     navigateTo(parent);
-  }, [path, navigateTo]);
+  }, [path, navigateTo, inArchive, exitArchive]);
 
   const handleDriveChange = useCallback((drive: string) => {
     setHistory(prev => [...prev, path]);
+    setInArchive(false);
     sendFileList(drive);
   }, [path, sendFileList]);
 
@@ -117,6 +187,18 @@ export default function FileManagerPage() {
     const entry = contextRef.current;
     if (!entry) return '';
     return path.replace(/\\+$/, '') + '\\' + entry.name;
+  };
+
+  const handleOpen = async () => {
+    const entry = contextRef.current;
+    if (!entry) return;
+    await openFile(getContextPath(), entry.name);
+  };
+
+  const handleViewArchive = async () => {
+    const entry = contextRef.current;
+    if (!entry) return;
+    await enterArchive(getContextPath());
   };
 
   const handleRename = async () => {
@@ -237,6 +319,8 @@ export default function FileManagerPage() {
         onRowAction={handleRowAction}
         onContextMenu={handleContextMenu}
         contextEntry={contextEntry}
+        onOpen={handleOpen}
+        onViewArchive={handleViewArchive}
         onRename={handleRename}
         onMove={handleMove}
         onCopy={handleCopy}
@@ -246,6 +330,27 @@ export default function FileManagerPage() {
         onShortcut={handleShortcut}
         onDownload={handleDownload}
       />
+
+      {/* File content viewer */}
+      <Modal.Backdrop isOpen={!!fileViewer} onOpenChange={(open) => { if (!open) setFileViewer(null); }}>
+        <Modal.Container size="lg">
+          <Modal.Dialog>
+            <Modal.CloseTrigger />
+            <Modal.Header>
+              <Modal.Heading className="break-all">{fileViewer?.name}</Modal.Heading>
+            </Modal.Header>
+            <Modal.Body>
+              {fileViewLoading ? (
+                <div className="flex justify-center py-8"><Spinner size="lg" /></div>
+              ) : (
+                <pre className="text-xs font-mono whitespace-pre-wrap break-all max-h-[60vh] overflow-auto bg-default-100 rounded p-3">
+                  {fileViewer?.content}
+                </pre>
+              )}
+            </Modal.Body>
+          </Modal.Dialog>
+        </Modal.Container>
+      </Modal.Backdrop>
 
       {DialogComponent}
     </div>

@@ -111,6 +111,7 @@ pub mod ws_type {
     pub const FILE_COMPRESS: &str = "file.compress";
     pub const FILE_DECOMPRESS: &str = "file.decompress";
     pub const FILE_SHORTCUT: &str = "file.shortcut";
+    pub const FILE_ARCHIVE_LIST: &str = "file.archive_list";
 
     // System info
     pub const SYSTEM_PROCESSES: &str = "system.processes";

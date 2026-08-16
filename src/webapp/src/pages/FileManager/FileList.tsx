@@ -4,7 +4,7 @@ import { ContextMenu } from '@components/context-menu';
 import { fileIcon, formatSize } from './fileIcons';
 import {
   Pencil, ArrowRightFromSquare, Copy, Archive, FileZipper,
-  Link, ArrowDownToLine, TrashBin, Scissors,
+  Link, ArrowDownToLine, TrashBin, Scissors, Eye, FolderOpen,
 } from '@gravity-ui/icons';
 import type { DataGridColumn } from '../../components/data-grid';
 import type { FileEntry } from '../../api/files';
@@ -14,7 +14,7 @@ const ARCHIVE_EXTENSIONS = new Set([
   'jar', 'war', 'apk', 'ipa', 'egg', 'whl',
 ]);
 
-function isArchive(name: string): boolean {
+export function isArchive(name: string): boolean {
   const ext = name.split('.').pop()?.toLowerCase() ?? '';
   return ARCHIVE_EXTENSIONS.has(ext);
 }
@@ -25,6 +25,8 @@ interface FileListProps {
   error: string | null;
   onRowAction: (key: string | number) => void;
   onContextMenu: (e: React.MouseEvent) => void;
+  onOpen: () => void;
+  onViewArchive: () => void;
   onRename: () => void;
   onMove: () => void;
   onCopy: () => void;
@@ -38,6 +40,7 @@ interface FileListProps {
 
 export function FileList({
   entries, loading, error, onRowAction, onContextMenu,
+  onOpen, onViewArchive,
   onRename, onMove, onCopy, onDelete, onCompress, onDecompress, onShortcut, onDownload,
   contextEntry,
 }: FileListProps) {
@@ -106,6 +109,19 @@ export function FileList({
       </ContextMenu.Trigger>
       <ContextMenu.Popover>
         <ContextMenu.Menu>
+          {isFile && !isArchive(contextEntry.name) && (
+            <>
+              <ContextMenu.Item id="open" textValue={t('fileManager.open')} onAction={onOpen}>
+                <Eye className="w-4 h-4" /> {t('fileManager.open')}
+              </ContextMenu.Item>
+              <ContextMenu.Separator />
+            </>
+          )}
+          {isFile && isArchive(contextEntry.name) && (
+            <ContextMenu.Item id="viewArchive" textValue={t('fileManager.viewArchive')} onAction={onViewArchive}>
+              <FolderOpen className="w-4 h-4" /> {t('fileManager.viewArchive')}
+            </ContextMenu.Item>
+          )}
           <ContextMenu.Item id="rename" textValue={t('fileManager.rename')} onAction={onRename}>
             <Pencil className="w-4 h-4" /> {t('fileManager.rename')}
           </ContextMenu.Item>

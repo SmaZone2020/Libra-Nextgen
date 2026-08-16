@@ -100,6 +100,12 @@ public class FilesController : ControllerBase
         return await RelayAndWaitAsync(agentId, "file.shortcut", new { path = req.Path }, ct);
     }
 
+    [HttpPost("{agentId}/archive/list")]
+    public async Task<IActionResult> ListArchive(string agentId, [FromBody] ReadRequest req, CancellationToken ct)
+    {
+        return await RelayAndWaitAsync(agentId, "file.archive_list", new { path = req.Path }, ct);
+    }
+
     [HttpPost("{agentId}/download")]
     public async Task<IActionResult> Download(string agentId, [FromBody] ReadRequest req, CancellationToken ct)
     {
