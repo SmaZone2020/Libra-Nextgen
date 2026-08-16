@@ -12,6 +12,8 @@ namespace LibraNextgen.Service.Hubs;
 /// </summary>
 public static class WebSocketHandler
 {
+    private const int MaxMessageSize = 4 * 1024 * 1024; // 4 MB cap to prevent memory exhaustion
+
     public static void Map(IEndpointRouteBuilder app)
     {
         app.Map("/ws/console", HandleConsoleWs).RequireAuthorization();
@@ -84,6 +86,12 @@ public static class WebSocketHandler
                 if (result.MessageType == WebSocketMessageType.Close) break;
                 ms.Write(buffer, 0, result.Count);
             } while (!result.EndOfMessage);
+
+            if (ms.Length > MaxMessageSize)
+            {
+                await ws.CloseAsync(WebSocketCloseStatus.MessageTooBig, "message too big", CancellationToken.None);
+                break;
+            }
 
             if (result.MessageType == WebSocketMessageType.Close)
             {
@@ -244,6 +252,12 @@ public static class WebSocketHandler
                     if (result.MessageType == WebSocketMessageType.Close) break;
                     ms.Write(buffer, 0, result.Count);
                 } while (!result.EndOfMessage);
+
+                if (ms.Length > MaxMessageSize)
+                {
+                    await ws.CloseAsync(WebSocketCloseStatus.MessageTooBig, "message too big", CancellationToken.None);
+                    break;
+                }
 
                 if (result.MessageType == WebSocketMessageType.Close)
                 {

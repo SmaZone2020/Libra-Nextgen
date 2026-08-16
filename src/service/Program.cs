@@ -123,16 +123,16 @@ builder.Services.AddOpenApi("v1", options =>
 
 // WebSocket middleware is enabled via app.UseWebSockets()
 
-// CORS
+// CORS — allow only configured origins (JWT is header-based, no credentials needed).
+var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? [];
 builder.Services.AddCors(options =>
 {
-    options.AddDefaultPolicy(policy =>
-    {
-        policy.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod();
-    });
     options.AddPolicy("CorsSignalR", policy =>
     {
-        policy.SetIsOriginAllowed(_ => true).AllowAnyHeader().AllowAnyMethod().AllowCredentials();
+        if (allowedOrigins.Length > 0)
+            policy.WithOrigins(allowedOrigins).AllowAnyHeader().AllowAnyMethod();
+        else
+            policy.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod();
     });
 });
 

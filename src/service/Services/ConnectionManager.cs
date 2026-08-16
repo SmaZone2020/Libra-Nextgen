@@ -94,7 +94,7 @@ public class ConnectionManager
                 var json = message.ToJson();
                 var bytes = Encoding.UTF8.GetBytes(json);
                 _traffic.Accumulate(agentId, "unknown", 0, bytes.Length);
-                await info.Socket.SendAsync(new ArraySegment<byte>(bytes), WebSocketMessageType.Text, true, ct);
+                await SendLockedAsync(info, new ArraySegment<byte>(bytes), WebSocketMessageType.Text, ct);
                 return;
             }
         }
@@ -111,7 +111,7 @@ public class ConnectionManager
             if (info.Type == "console" && info.Socket.State == WebSocketState.Open)
             {
                 var segment = new ArraySegment<byte>(bytes);
-                tasks.Add(info.Socket.SendAsync(segment, WebSocketMessageType.Text, true, ct));
+                tasks.Add(SendIgnoringErrorsAsync(info, segment, WebSocketMessageType.Text, ct));
             }
         }
         await Task.WhenAll(tasks);
@@ -124,7 +124,7 @@ public class ConnectionManager
 
         var json = message.ToJson();
         var bytes = Encoding.UTF8.GetBytes(json);
-        await info.Socket.SendAsync(new ArraySegment<byte>(bytes), WebSocketMessageType.Text, true, ct);
+        await SendLockedAsync(info, new ArraySegment<byte>(bytes), WebSocketMessageType.Text, ct);
     }
 
     public async Task RelayToAgentShellAsync(string agentId, string connectionId, WebSocketMessage message, CancellationToken ct = default)
@@ -140,7 +140,7 @@ public class ConnectionManager
                 Channel = agentId,
                 Data = JsonSerializer.SerializeToElement(new { text = "\r\n[Shell is locked by another operator. Read-only mode.]\r\n" })
             };
-            await SendToConnectionAsync(connectionId, notify, ct);
+            await SendLockedAsync(operatorInfo, new ArraySegment<byte>(Encoding.UTF8.GetBytes(notify.ToJson())), WebSocketMessageType.Text, ct);
             return;
         }
 
@@ -152,7 +152,7 @@ public class ConnectionManager
                 var json = message.ToJson();
                 var bytes = Encoding.UTF8.GetBytes(json);
                 _traffic.Accumulate(agentId, "unknown", 0, bytes.Length);
-                await info.Socket.SendAsync(new ArraySegment<byte>(bytes), WebSocketMessageType.Text, true, ct);
+                await SendLockedAsync(info, new ArraySegment<byte>(bytes), WebSocketMessageType.Text, ct);
                 return;
             }
         }
@@ -168,7 +168,7 @@ public class ConnectionManager
         {
             if (info.Type == "console" && info.AgentId == agentId && info.Socket.State == WebSocketState.Open)
             {
-                tasks.Add(info.Socket.SendAsync(new ArraySegment<byte>(bytes), WebSocketMessageType.Text, true, ct));
+                tasks.Add(SendIgnoringErrorsAsync(info, new ArraySegment<byte>(bytes), WebSocketMessageType.Text, ct));
             }
         }
         if (tasks.Count > 0)
@@ -208,5 +208,37 @@ public class ConnectionManager
         public string Role { get; set; } = string.Empty;
         public string Type { get; set; } = "console"; // "console" or "agent"
         public string? AgentId { get; set; }
+        public SemaphoreSlim SendLock { get; } = new(1, 1);
+    }
+
+    /// <summary>
+    /// Serializes sends per socket — WebSocket.SendAsync is not reentrant and
+    /// concurrent calls throw.
+    /// </summary>
+    private static async Task SendLockedAsync(
+        ConnectionInfo info, ArraySegment<byte> segment, WebSocketMessageType type, CancellationToken ct)
+    {
+        await info.SendLock.WaitAsync(ct).ConfigureAwait(false);
+        try
+        {
+            await info.Socket.SendAsync(segment, type, true, ct).ConfigureAwait(false);
+        }
+        finally
+        {
+            info.SendLock.Release();
+        }
+    }
+
+    private static async Task SendIgnoringErrorsAsync(
+        ConnectionInfo info, ArraySegment<byte> segment, WebSocketMessageType type, CancellationToken ct)
+    {
+        try
+        {
+            await SendLockedAsync(info, segment, type, ct).ConfigureAwait(false);
+        }
+        catch
+        {
+            // Best-effort: a single failed connection must not fail the broadcast.
+        }
     }
 }
