@@ -1,4 +1,5 @@
 use base64::Engine;
+use std::sync::OnceLock;
 
 /// Makes HTTP requests on behalf of the server (proxy browser).
 pub struct ProxyBrowser;
@@ -10,18 +11,7 @@ impl ProxyBrowser {
         headers_json: Option<&str>,
         body_base64: Option<&str>,
     ) -> String {
-        let client = match reqwest::Client::builder()
-            .timeout(std::time::Duration::from_secs(30))
-            .danger_accept_invalid_certs(true)
-            .user_agent(
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 \
-                 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
-            )
-            .build()
-        {
-            Ok(c) => c,
-            Err(e) => return format!(r#"{{"error":"{}"}}"#, escape(&e.to_string())),
-        };
+        let client = shared_client();
 
         let http_method = match method.to_uppercase().as_str() {
             "GET" => reqwest::Method::GET,
@@ -41,7 +31,11 @@ impl ProxyBrowser {
             if let Ok(json) = serde_json::from_str::<serde_json::Value>(hdrs) {
                 if let Some(obj) = json.as_object() {
                     for (key, val) in obj {
-                        if key.eq_ignore_ascii_case("Host") {
+                        if key.eq_ignore_ascii_case("Host")
+                            || key.eq_ignore_ascii_case("Cookie")
+                            || key.eq_ignore_ascii_case("Content-Length")
+                            || key.eq_ignore_ascii_case("Accept-Encoding")
+                        {
                             continue;
                         }
                         if let Some(v) = val.as_str() {
@@ -114,6 +108,22 @@ impl ProxyBrowser {
             }
         }
     }
+}
+
+fn shared_client() -> &'static reqwest::Client {
+    static CLIENT: OnceLock<reqwest::Client> = OnceLock::new();
+    CLIENT.get_or_init(|| {
+        reqwest::Client::builder()
+            .cookie_store(true)
+            .timeout(std::time::Duration::from_secs(30))
+            .danger_accept_invalid_certs(true)
+            .user_agent(
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 \
+                 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+            )
+            .build()
+            .expect("failed to build proxy client")
+    })
 }
 
 fn escape(s: &str) -> String {

@@ -90,6 +90,11 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             OnMessageReceived = context =>
             {
                 var token = context.Request.Query["token"].FirstOrDefault();
+                if (string.IsNullOrEmpty(token) &&
+                    context.HttpContext.Request.RouteValues.TryGetValue("token", out var routeToken))
+                {
+                    token = routeToken?.ToString();
+                }
                 if (!string.IsNullOrEmpty(token))
                 {
                     context.Token = token;

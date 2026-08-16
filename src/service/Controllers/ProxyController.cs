@@ -1,3 +1,4 @@
+using System.Text;
 using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -74,6 +75,75 @@ public class ProxyController : ControllerBase
         }
 
         return result;
+    }
+
+    // Reverse proxy: /api/proxy/{agentId}/{token}/p/{scheme}/{host}/{**path}
+    // The iframe loads pages from here, so relative URLs resolve through this same path.
+    [HttpGet("/api/proxy/{agentId}/{token}/p/{scheme}/{host}/{**path}")]
+    [HttpPost("/api/proxy/{agentId}/{token}/p/{scheme}/{host}/{**path}")]
+    public async Task<IActionResult> Proxy(
+        string agentId,
+        string token,
+        string scheme,
+        string host,
+        string? path,
+        CancellationToken ct)
+    {
+        var targetPath = string.IsNullOrEmpty(path) ? "/" : "/" + path;
+        var targetUrl = $"{scheme}://{host}{targetPath}";
+        if (Request.QueryString.HasValue) targetUrl += Request.QueryString.Value;
+
+        var headers = new Dictionary<string, string>();
+        foreach (var name in new[] { "Accept", "Accept-Language", "Content-Type", "User-Agent" })
+        {
+            if (Request.Headers.TryGetValue(name, out var v))
+                headers[name] = v.ToString();
+        }
+
+        string? bodyB64 = null;
+        if (!HttpMethods.IsGet(Request.Method) && !HttpMethods.IsHead(Request.Method) && Request.Body != null)
+        {
+            using var ms = new MemoryStream();
+            await Request.Body.CopyToAsync(ms, ct);
+            if (ms.Length > 0) bodyB64 = Convert.ToBase64String(ms.ToArray());
+        }
+
+        var response = await _relay.RelayAndWaitAsync(agentId, "proxy.fetch", new
+        {
+            url = targetUrl,
+            method = Request.Method,
+            headers = JsonSerializer.Serialize(headers),
+            body = bodyB64
+        }, ct);
+
+        if (response == null) return StatusCode(504, new { error = "Agent did not respond in time." });
+        if (response.Data == null) return Ok(new { status = "ok" });
+
+        var data = response.Data.Value;
+        if (data.TryGetProperty("error", out var errProp))
+            return StatusCode(502, errProp.GetString());
+
+        var status = data.GetProperty("status").GetInt32();
+        var contentType = data.TryGetProperty("contentType", out var ctProp) ? ctProp.GetString() ?? "application/octet-stream" : "application/octet-stream";
+        var bodyStr = data.GetProperty("body").GetString() ?? string.Empty;
+        var finalUrl = data.TryGetProperty("url", out var urlProp) ? urlProp.GetString() ?? targetUrl : targetUrl;
+        var bodyBytes = Convert.FromBase64String(bodyStr);
+
+        if (contentType.StartsWith("text/html", StringComparison.OrdinalIgnoreCase))
+        {
+            var text = Encoding.UTF8.GetString(bodyBytes);
+            var rewritten = ProxyRewriter.RewriteHtml(text, finalUrl, agentId, token);
+            return Content(rewritten, "text/html", Encoding.UTF8);
+        }
+
+        if (contentType.StartsWith("text/css", StringComparison.OrdinalIgnoreCase))
+        {
+            var text = Encoding.UTF8.GetString(bodyBytes);
+            var rewritten = ProxyRewriter.RewriteCss(text, finalUrl, agentId, token);
+            return Content(rewritten, "text/css", Encoding.UTF8);
+        }
+
+        return File(bodyBytes, contentType);
     }
 }
 
