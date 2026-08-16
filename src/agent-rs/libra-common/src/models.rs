@@ -125,8 +125,13 @@ impl AgentTask {
 }
 
 // ── Hardware Info ──────────────────────────────────────────────────────
+//
+// These serialize to camelCase so the C# server model (PascalCase, bound
+// case-insensitively) receives RAM/Disk/CPU fields correctly. Without this,
+// snake_case fields like `total_bytes` failed to bind and showed up empty.
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct HardwareInfo {
     #[serde(default)]
     pub hwid: Option<String>,
@@ -145,6 +150,7 @@ pub struct HardwareInfo {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct CpuInfo {
     #[serde(default)]
     pub name: String,
@@ -154,6 +160,7 @@ pub struct CpuInfo {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct GpuInfo {
     #[serde(default)]
     pub name: String,
@@ -163,6 +170,7 @@ pub struct GpuInfo {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct DiskInfo {
     #[serde(default)]
     pub model: String,
@@ -174,11 +182,13 @@ pub struct DiskInfo {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct RamInfo {
     pub total_bytes: u64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct DisplayInfo {
     #[serde(default)]
     pub name: String,
@@ -363,4 +373,40 @@ pub struct InjectedConfig {
 
 fn default_core_key_path() -> String {
     "/api/beacon/core-key".into()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn hardware_serializes_camel_case() {
+        let hw = HardwareInfo {
+            hwid: Some("abc".into()),
+            cpu: Some(CpuInfo {
+                name: "Intel".into(),
+                physical_cores: 8,
+                logical_cores: 16,
+                max_clock_mhz: 4000,
+            }),
+            gpus: vec![],
+            disks: vec![DiskInfo {
+                model: "SSD".into(),
+                size_bytes: 512_000_000_000,
+                media_type: None,
+                serial_number: None,
+            }],
+            ram: Some(RamInfo { total_bytes: 16_000_000_000 }),
+            displays: vec![],
+            motherboard_vendor: None,
+            bios_version: None,
+        };
+
+        let json = serde_json::to_string(&hw).unwrap();
+
+        assert!(json.contains("\"totalBytes\""), "ram should serialize camelCase: {json}");
+        assert!(json.contains("\"sizeBytes\""), "disk should serialize camelCase: {json}");
+        assert!(json.contains("\"physicalCores\""), "cpu should serialize camelCase: {json}");
+        assert!(!json.contains("\"total_bytes\""));
+    }
 }
