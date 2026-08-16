@@ -574,6 +574,8 @@ export default {
         deleteConfirm: 'Are you sure you want to delete account "{name}"? This cannot be undone.',
         roleAdmin: 'Admin',
         roleOperator: 'Operator',
+        restricted: 'Restricted',
+        noAccounts: 'No accounts yet',
       },
     },
     riskLevel: {

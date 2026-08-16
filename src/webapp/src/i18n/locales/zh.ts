@@ -574,6 +574,8 @@ export default {
         deleteConfirm: '确定要删除账户 "{name}" 吗？此操作不可撤销。',
         roleAdmin: '管理员',
         roleOperator: '操作员',
+        restricted: '受限',
+        noAccounts: '暂无账户',
       },
     },
     riskLevel: {

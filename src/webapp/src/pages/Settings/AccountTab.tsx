@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Button, Card, Input, Label, Modal, Spinner, Switch, TextField } from '@heroui/react';
+import { Button, Card, Chip, Input, Label, Modal, Spinner, Switch, TextField } from '@heroui/react';
 import { getAccountStatus, listAccounts, createAccount, updateAccount, deleteAccount, changePassword } from '../../api/account';
 import type { AccountListItem, UserPermissions } from '../../types/models';
 import { useDialog } from '../../hooks/useDialog';
@@ -187,66 +187,61 @@ export default function AccountTab() {
             {t('settings.account.createAccount')}
           </Button>
         </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-default-200">
-                  <th className="text-left py-2 px-3">{t('settings.account.username')}</th>
-                  <th className="text-left py-2 px-3">{t('settings.account.role')}</th>
-                  <th className="text-left py-2 px-3">{t('settings.account.status')}</th>
-                  <th className="text-left py-2 px-3">{t('settings.account.createdAt')}</th>
-                  <th className="text-left py-2 px-3">{t('settings.account.lastLogin')}</th>
-                  <th className="text-left py-2 px-3">{t('settings.actions')}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {accounts.map((a) => (
-                  <tr key={a.id} className="border-b border-default-100">
-                    <td className="py-2 px-3">
+        <div className="space-y-3">
+          {accounts.map((a) => {
+            const isRestricted = !(a.permissions?.fullAccess ?? true);
+            return (
+              <Card key={a.id} className="p-4">
+                <div className="flex items-center justify-between gap-4">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-10 h-10 shrink-0 rounded-full bg-primary-100 text-primary-700 flex items-center justify-center font-semibold">
+                      {a.username.slice(0, 1).toUpperCase()}
+                    </div>
+                    <div className="min-w-0">
                       <div className="flex items-center gap-2">
-                        {a.username}
+                        <span className="font-medium truncate">{a.username}</span>
                         {a.isInitial && (
-                          <span className="text-xs px-1.5 py-0.5 rounded bg-primary-100 text-primary-700">
-                            {t('settings.account.initialBadge')}
-                          </span>
+                          <Chip size="sm" variant="soft" color="accent">{t('settings.account.initialBadge')}</Chip>
                         )}
                       </div>
-                    </td>
-                    <td className="py-2 px-3">{a.role}</td>
-                    <td className="py-2 px-3">
-                      <span className={a.isActive ? 'text-success' : 'text-danger'}>
-                        {a.isActive ? t('settings.account.active') : t('settings.account.inactive')}
-                      </span>
-                    </td>
-                    <td className="py-2 px-3">{new Date(a.createdAt).toLocaleDateString()}</td>
-                    <td className="py-2 px-3">
-                      {a.lastLogin ? new Date(a.lastLogin).toLocaleDateString() : '-'}
-                    </td>
-                    <td className="py-2 px-3">
-                      {!a.isInitial && (
-                        <div className="flex gap-1">
-                          <Button size="sm" variant="ghost" onPress={() => openEditModal(a)}>
-                            {t('settings.edit')}
-                          </Button>
-                          <Button size="sm" variant="danger" onPress={() => handleDelete(a)}>
-                            {t('settings.delete')}
-                          </Button>
-                        </div>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-                {accounts.length === 0 && (
-                  <tr>
-                    <td colSpan={6} className="py-8 text-center text-default-400">
-                      {t('settings.noKeys')}
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </Card>
+                      <div className="text-xs text-default-500 mt-0.5 truncate">
+                        {t('settings.account.createdAt')} {new Date(a.createdAt).toLocaleDateString()}
+                        {a.lastLogin ? ` · ${t('settings.account.lastLogin')} ${new Date(a.lastLogin).toLocaleDateString()}` : ''}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <Chip size="sm" variant="soft" color={a.role === 'Admin' ? 'accent' : 'default'}>
+                      {a.role === 'Admin' ? t('settings.account.roleAdmin') : t('settings.account.roleOperator')}
+                    </Chip>
+                    <Chip size="sm" variant="soft" color={a.isActive ? 'success' : 'danger'}>
+                      {a.isActive ? t('settings.account.active') : t('settings.account.inactive')}
+                    </Chip>
+                    {isRestricted && (
+                      <Chip size="sm" variant="soft" color="warning">
+                        {t('settings.account.restricted')}
+                      </Chip>
+                    )}
+                    {!a.isInitial && (
+                      <div className="flex gap-1 ml-1">
+                        <Button size="sm" variant="ghost" onPress={() => openEditModal(a)}>
+                          {t('settings.edit')}
+                        </Button>
+                        <Button size="sm" variant="danger" onPress={() => handleDelete(a)}>
+                          {t('settings.delete')}
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </Card>
+            );
+          })}
+          {accounts.length === 0 && (
+            <div className="py-10 text-center text-default-400 text-sm">{t('settings.account.noAccounts')}</div>
+          )}
+        </div>
+      </Card>
 
       {/* Create/Edit Modal */}
       <Modal.Backdrop isOpen={modalOpen} onOpenChange={(open) => { if (!open) setModalOpen(false); }}>
