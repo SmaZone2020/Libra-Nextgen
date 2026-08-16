@@ -26,6 +26,7 @@ const VENDOR_META: Record<string, { icon: string; label: string }> = {
   HermesAgent: { icon: '/icon/hermes.png', label: 'Hermes Agent' },
   CCSwitch: { icon: '/icon/openai.svg', label: 'CC Switch' },
   DeepSeekHarness: { icon: '/icon/deepseek.svg', label: 'DeepSeek Harness' },
+  MimoCode: { icon: '/icon/xiaomimimo.svg', label: 'MimoCode' },
 };
 
 function maskKey(key: string): string {

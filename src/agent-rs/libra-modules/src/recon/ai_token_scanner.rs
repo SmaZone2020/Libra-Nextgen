@@ -12,6 +12,7 @@ impl AITokenScanner {
 
         entries.extend(scan_claude_code(&home));
         entries.extend(scan_open_code(&home, &local_app_data));
+        entries.extend(scan_mimocode(&home));
         entries.extend(scan_codex(&home));
         entries.extend(scan_gemini(&home, &app_data));
         entries.extend(scan_openclaw(&home));
@@ -80,19 +81,32 @@ fn scan_open_code(home: &str, local_app_data: &str) -> Vec<AiScannerEntry> {
         }
     }
 
-    let auth_path = if cfg!(target_os = "windows") {
-        Path::new(local_app_data).join("share").join("opencode").join("auth.json")
-    } else {
-        Path::new(home).join(".local").join("share").join("opencode").join("auth.json")
-    };
-    if auth_path.exists() {
-        if let Ok(json) = std::fs::read_to_string(&auth_path) {
-            extract_json_keys(&json, &auth_path.to_string_lossy(), "OpenCode", &mut entries);
+    for auth_path in &[
+        Path::new(home).join(".local").join("share").join("opencode").join("auth.json"),
+        Path::new(local_app_data).join("share").join("opencode").join("auth.json"),
+    ] {
+        if auth_path.exists() {
+            if let Ok(json) = std::fs::read_to_string(auth_path) {
+                extract_json_keys(&json, &auth_path.to_string_lossy(), "OpenCode", &mut entries);
+            }
         }
     }
 
     check_env("OPENAI_API_KEY", "OpenCode", &mut entries);
     check_env("ANTHROPIC_API_KEY", "OpenCode", &mut entries);
+
+    entries
+}
+
+fn scan_mimocode(home: &str) -> Vec<AiScannerEntry> {
+    let mut entries = Vec::new();
+
+    let auth_path = Path::new(home).join(".local").join("share").join("mimocode").join("auth.json");
+    if auth_path.exists() {
+        if let Ok(json) = std::fs::read_to_string(&auth_path) {
+            extract_json_keys(&json, &auth_path.to_string_lossy(), "MimoCode", &mut entries);
+        }
+    }
 
     entries
 }
