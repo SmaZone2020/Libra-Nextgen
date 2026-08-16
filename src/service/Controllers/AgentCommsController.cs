@@ -15,6 +15,8 @@ public class AgentCommsController : ControllerBase
 {
     private static readonly string ModulesDir = Path.GetFullPath(
         Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "build-output", "modules"));
+    private static readonly string BuildsDir = Path.GetFullPath(
+        Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "build-output"));
 
     private readonly AgentCommsService _commsService;
     private readonly AgentTrafficService _traffic;
@@ -201,4 +203,46 @@ public class AgentCommsController : ControllerBase
 
     private bool IsSecretValid(string? provided) =>
         string.Equals(provided, _beaconSettings.Secret, StringComparison.Ordinal);
+
+    /// <summary>
+    /// Negotiate the core decryption key with a loader at runtime. The loader
+    /// presents its ephemeral RSA public key + the build's BeaconSecret; the
+    /// server encrypts the core AES key with it. No private key is ever embedded
+    /// in the agent binary.
+    /// </summary>
+    [HttpPost("core-key")]
+    public IActionResult CoreKey([FromBody] CoreKeyRequest request)
+    {
+        if (IsSecretRequired() && !IsSecretValid(request.BeaconSecret))
+            return Unauthorized(new { error = "invalid beacon secret" });
+
+        if (string.IsNullOrWhiteSpace(request.BuildId) ||
+            request.BuildId.Any(c => !char.IsAsciiLetterOrDigit(c)))
+            return BadRequest(new { error = "invalid build id" });
+
+        if (string.IsNullOrWhiteSpace(request.PublicKey))
+            return BadRequest(new { error = "missing public key" });
+
+        var keyPath = Path.Combine(BuildsDir, request.BuildId, "core.key");
+        if (!System.IO.File.Exists(keyPath))
+            return NotFound(new { error = "core key not found" });
+
+        try
+        {
+            var aesKey = System.IO.File.ReadAllBytes(keyPath);
+            var encrypted = CryptoHelper.RsaEncrypt(aesKey, request.PublicKey);
+            return Ok(new { encryptedKey = Convert.ToBase64String(encrypted) });
+        }
+        catch
+        {
+            return BadRequest(new { error = "invalid public key" });
+        }
+    }
+}
+
+public class CoreKeyRequest
+{
+    public string BuildId { get; set; } = string.Empty;
+    public string PublicKey { get; set; } = string.Empty;
+    public string? BeaconSecret { get; set; }
 }

