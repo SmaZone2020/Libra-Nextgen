@@ -348,6 +348,26 @@ export interface AITokenResult {
   error?: string;
 }
 
+// ── SSH Key Scanner types ─────────────────────────────────────────────
+
+export type SshKeyCategory = 'private-key' | 'public-key' | 'authorized-keys' | 'known-hosts' | 'config' | 'other';
+
+export interface SshKeyItem {
+  name: string;
+  path: string;
+  category: SshKeyCategory;
+  encrypted: boolean;
+  size: number;
+  content: string;
+}
+
+export interface SSHResult {
+  sshDir: string;
+  total: number;
+  items: SshKeyItem[];
+  error?: string;
+}
+
 // ── Proxy Browser types ──────────────────────────────────────────────
 
 export interface ProxyResponse {

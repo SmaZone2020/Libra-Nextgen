@@ -6,6 +6,7 @@ import { WeChatTab } from './WeChatTab';
 import { QQTab } from './QQTab';
 import { BrowserTab } from './BrowserTab';
 import { AITab } from './AITab';
+import { SSHTab } from './SSHTab';
 
 export default function SoftwareDataPage() {
   const { t } = useTranslation();
@@ -29,6 +30,7 @@ export default function SoftwareDataPage() {
             <Tabs.Tab id="qq">{t('othersoft.qq')}<Tabs.Indicator /></Tabs.Tab>
             <Tabs.Tab id="browser">{t('othersoft.browser.title')}<Tabs.Indicator /></Tabs.Tab>
             <Tabs.Tab id="ai">{t('othersoft.ai.title')}<Tabs.Indicator /></Tabs.Tab>
+            <Tabs.Tab id="ssh">{t('othersoft.ssh.title')}<Tabs.Indicator /></Tabs.Tab>
           </Tabs.List>
         </Tabs.ListContainer>
 
@@ -36,6 +38,7 @@ export default function SoftwareDataPage() {
         <Tabs.Panel id="qq"><QQTab agentId={agentId} /></Tabs.Panel>
         <Tabs.Panel id="browser"><BrowserTab agentId={agentId} /></Tabs.Panel>
         <Tabs.Panel id="ai"><AITab agentId={agentId} /></Tabs.Panel>
+        <Tabs.Panel id="ssh"><SSHTab agentId={agentId} /></Tabs.Panel>
       </Tabs>
     </div>
   );

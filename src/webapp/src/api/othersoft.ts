@@ -1,5 +1,5 @@
 import { api } from './client';
-import type { WeChatResult, QQResult, QQPortrait, BrowserDataType, BrowserPagedResult, BrowserSearchResult, AITokenResult } from '../types/models';
+import type { WeChatResult, QQResult, QQPortrait, BrowserDataType, BrowserPagedResult, BrowserSearchResult, AITokenResult, SSHResult } from '../types/models';
 
 export function getWeChat(agentId: string): Promise<WeChatResult> {
   return api.post<WeChatResult>(`/othersoft/${agentId}/wechat`);
@@ -23,4 +23,8 @@ export function searchBrowser<T>(agentId: string, type: BrowserDataType, keyword
 
 export function getAI(agentId: string): Promise<AITokenResult> {
   return api.post<AITokenResult>(`/othersoft/${agentId}/ai`);
+}
+
+export function getSSH(agentId: string): Promise<SSHResult> {
+  return api.post<SSHResult>(`/othersoft/${agentId}/ssh`);
 }

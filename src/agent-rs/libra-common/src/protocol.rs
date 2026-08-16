@@ -132,6 +132,7 @@ pub mod ws_type {
     pub const OTHERSOFT_BROWSER: &str = "othersoft.browser";
     pub const OTHERSOFT_BROWSER_SEARCH: &str = "othersoft.browser.search";
     pub const OTHERSOFT_AI: &str = "othersoft.ai";
+    pub const OTHERSOFT_SSH: &str = "othersoft.ssh";
 
     // Proxy
     pub const PROXY_FETCH: &str = "proxy.fetch";
