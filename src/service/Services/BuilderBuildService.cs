@@ -106,7 +106,7 @@ public partial class BuilderBuildService
             foreach (var step in buildSteps)
             {
                 await step();
-                if (job.IsCompleted) return; // stage failed — history already updated
+                if (job.IsCompleted) break; // success or failure — finalize history below
             }
 
             UpdateHistory(job);
