@@ -21,10 +21,11 @@ import BuilderPage from '../pages/Builder';
 import AboutPage from '../pages/About';
 import SettingsPage from '../pages/Settings';
 import { getStoredUser, logout, checkSetupStatus } from '../api/auth';
-import { getAccountMe } from '../api/account';
+import { getAccountMe, acceptAgreement } from '../api/account';
 import { setOnAuthFailed } from '../api/client';
 import { consoleWs } from '../ws/consoleWs';
 import { NetworkOverlay } from '../components/NetworkOverlay';
+import { AgreementModal } from '../components/AgreementModal';
 import { AgentProvider, useAgent } from '../contexts/AgentContext';
 import type { AgentListItem, UserPermissions } from '../types/models';
 import { sidebarItems, sidebarBottomItems } from '../config/site';
@@ -212,13 +213,29 @@ function AuthenticatedLayout({
   const location = useLocation();
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [permissions, setPermissions] = useState<UserPermissions | null>(null);
+  const [agreedAt, setAgreedAt] = useState<string | null | undefined>(undefined);
   const sidebarWidth = collapsed ? SIDEBAR_W.collapsed : SIDEBAR_W.expanded;
 
   useEffect(() => {
     getAccountMe()
-      .then((me) => setPermissions(me.permissions))
-      .catch(() => setPermissions(null));
+      .then((me) => {
+        setPermissions(me.permissions);
+        setAgreedAt(me.agreedAt ?? null);
+      })
+      .catch(() => {
+        setPermissions(null);
+        setAgreedAt(null);
+      });
   }, []);
+
+  const handleAcceptAgreement = async () => {
+    try {
+      await acceptAgreement();
+    } catch {
+      /* ignore */
+    }
+    setAgreedAt(new Date().toISOString());
+  };
 
   const canSee = (to: string) => {
     if (!permissions || permissions.fullAccess) return true;
@@ -331,6 +348,10 @@ function AuthenticatedLayout({
           </AnimatePresence>
         </div>
       </main>
+
+      {agreedAt === null && (
+        <AgreementModal onAccept={handleAcceptAgreement} onDecline={onLogout} />
+      )}
     </div>
   );
 }

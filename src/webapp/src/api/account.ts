@@ -5,6 +5,10 @@ export async function getAccountMe(): Promise<AccountMe> {
   return api.get<AccountMe>('/account/me');
 }
 
+export async function acceptAgreement(): Promise<void> {
+  return api.post<void>('/account/accept-agreement');
+}
+
 export async function getAccountStatus(): Promise<AccountStatus> {
   return api.get<AccountStatus>('/account/status');
 }

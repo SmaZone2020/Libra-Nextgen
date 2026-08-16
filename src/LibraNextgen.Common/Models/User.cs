@@ -15,6 +15,8 @@ public class User
     public DateTime? RefreshTokenExpiresAt { get; set; }
     /// <summary>Per-user access permissions (enforced for non-Admin users).</summary>
     public UserPermissions Permissions { get; set; } = new();
+    /// <summary>When the user accepted the authorized-use agreement (null = not yet).</summary>
+    public DateTime? AgreedAt { get; set; }
 }
 
 public class LoginRequest

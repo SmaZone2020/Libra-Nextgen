@@ -28,6 +28,19 @@ public class AccountService
         return user?.Permissions ?? new UserPermissions { FullAccess = false };
     }
 
+    /// <summary>Record that the current user accepted the authorized-use agreement.</summary>
+    public async Task AcceptAgreementAsync(string userId)
+    {
+        var update = Builders<User>.Update.Set(u => u.AgreedAt, DateTime.UtcNow);
+        await _users.UpdateAsync(userId, update);
+    }
+
+    public async Task<bool> HasAcceptedAgreementAsync(string userId)
+    {
+        var user = await _users.GetByIdAsync(userId);
+        return user?.AgreedAt != null;
+    }
+
     public async Task<List<AccountListItem>> ListAsync()
     {
         var users = await _users.FindAsync(_ => true);

@@ -30,12 +30,22 @@ public class AccountController : ControllerBase
     {
         var role = User.IsInRole("Admin") ? UserRole.Admin : UserRole.Operator;
         var permissions = await _accountService.GetEffectivePermissionsAsync(UserId, role);
+        var agreedAt = await _accountService.HasAcceptedAgreementAsync(UserId);
         return Ok(new
         {
             username = User.Identity?.Name ?? "",
             role = role.ToString(),
             permissions,
+            agreedAt,
         });
+    }
+
+    /// <summary>Record acceptance of the authorized-use agreement.</summary>
+    [HttpPost("accept-agreement")]
+    public async Task<IActionResult> AcceptAgreement()
+    {
+        await _accountService.AcceptAgreementAsync(UserId);
+        return Ok(new { status = "ok" });
     }
 
     /// <summary>Check if current user is the initial account.</summary>

@@ -636,5 +636,11 @@ export default {
         'auth.login': 'Login',
       },
     },
+    agreement: {
+      title: 'Authorized Use Agreement',
+      body: 'Libra-Nextgen is intended solely for authorized security testing, red-team operations and education on systems you own or have explicit written authorization to test. By continuing, you confirm that you will only use this software within authorized/test environments and in compliance with all applicable laws. Unauthorized access to computer systems or networks is illegal.',
+      accept: 'I Agree',
+      decline: 'Decline',
+    },
   },
 };

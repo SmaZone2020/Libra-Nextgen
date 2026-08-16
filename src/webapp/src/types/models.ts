@@ -406,6 +406,7 @@ export interface AccountMe {
   username: string;
   role: string;
   permissions: UserPermissions;
+  agreedAt?: string;
 }
 
 // ── Builder types ──────────────────────────────────────────────────────
