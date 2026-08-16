@@ -125,7 +125,7 @@ export default function RiskPolicyTab() {
                       <div key={key} className="flex items-center justify-between gap-4 px-3 py-2">
                         <span className="text-sm">{t(`riskPolicy.labels.${key}`)}</span>
                         <Dropdown>
-                          <Button size="sm" variant="ghost" className={LEVEL_COLORS[level]}>
+                          <Button variant="outline" className={LEVEL_COLORS[level]}>
                             {t(`riskLevel.${level}`)}
                           </Button>
                           <Dropdown.Popover>
@@ -138,11 +138,11 @@ export default function RiskPolicyTab() {
                                 else setLevel(key, v as RiskLevel);
                               }}
                             >
-                              <Dropdown.Item key="__recommended__" textValue={t('riskPolicy.recommended')}>
+                              <Dropdown.Item key="__recommended__" id="__recommended__" textValue={t('riskPolicy.recommended')}>
                                 {t('riskPolicy.recommended')} ({t(`riskLevel.${recommended}`)})
                               </Dropdown.Item>
                               {RISK_LEVELS.map((l) => (
-                                <Dropdown.Item key={l} textValue={t(`riskLevel.${l}`)}>
+                                <Dropdown.Item key={l} id={l} textValue={t(`riskLevel.${l}`)}>
                                   {t(`riskLevel.${l}`)}
                                 </Dropdown.Item>
                               ))}
