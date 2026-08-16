@@ -31,9 +31,9 @@ export default function PreferencesTab() {
 
   return (
     <div className="space-y-6">
-      <Card className="p-6 space-y-8">
-        <div>
-          <h3 className="font-semibold mb-3">{t('settings.language')}</h3>
+      <Card className="p-6 space-y-6">
+        <div className="flex items-center justify-between gap-4">
+          <h3 className="font-semibold">{t('settings.language')}</h3>
           <Tabs selectedKey={lang} onSelectionChange={(key) => handleLang(String(key))}>
             <Tabs.List>
               <Tabs.Tab id="zh">中文<Tabs.Indicator /></Tabs.Tab>
@@ -42,8 +42,8 @@ export default function PreferencesTab() {
           </Tabs>
         </div>
 
-        <div>
-          <h3 className="font-semibold mb-3">{t('settings.theme')}</h3>
+        <div className="flex items-center justify-between gap-4">
+          <h3 className="font-semibold">{t('settings.theme')}</h3>
           <Tabs selectedKey={theme} onSelectionChange={(key) => handleTheme(String(key))}>
             <Tabs.List>
               <Tabs.Tab id="light">{t('settings.themeLight')}<Tabs.Indicator /></Tabs.Tab>
