@@ -19,6 +19,9 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.Configure<MongoSettings>(builder.Configuration.GetSection(MongoSettings.SectionName));
 builder.Services.AddSingleton<MongoDbContext>();
 
+// Beacon authentication (shared secret injected at build time)
+builder.Services.Configure<BeaconSettings>(builder.Configuration.GetSection(BeaconSettings.SectionName));
+
 builder.Services.AddHttpClient();
 
 // Typed repositories per collection

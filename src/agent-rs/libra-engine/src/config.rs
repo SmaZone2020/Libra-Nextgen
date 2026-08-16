@@ -9,6 +9,7 @@ pub struct ConfigManager {
     pub web_socket_path: String,
     pub heartbeat_interval_ms: u64,
     pub jitter_percent: f64,
+    pub beacon_secret: String,
 }
 
 impl ConfigManager {
@@ -21,12 +22,16 @@ impl ConfigManager {
             web_socket_path: "/ws/agent".into(),
             heartbeat_interval_ms: 3000,
             jitter_percent: 0.2,
+            beacon_secret: String::new(),
         };
 
         // Apply injected config first (embedded at build time)
         if let Some(ic) = injected {
             if !ic.server_url.is_empty() {
                 cfg.server_url = ic.server_url;
+            }
+            if !ic.beacon_secret.is_empty() {
+                cfg.beacon_secret = ic.beacon_secret;
             }
         }
 

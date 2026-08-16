@@ -72,6 +72,7 @@ impl AgentEngine {
         let (agent_id, session_key) = http.register(
             hostname, user_name, os_version, arch,
             self.crypto.rsa_public_key().unwrap_or(""),
+            &self.config.beacon_secret,
             &hw_json,
         ).await?;
 

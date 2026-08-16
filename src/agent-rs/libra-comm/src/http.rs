@@ -65,6 +65,7 @@ impl HttpCommunicator {
         os_version: &str,
         arch: &str,
         public_key: &str,
+        beacon_secret: &str,
         hardware_json: &str,
     ) -> Result<(String, Option<Vec<u8>>), String> {
         let pid = std::process::id();
@@ -75,13 +76,14 @@ impl HttpCommunicator {
         };
 
         let json = format!(
-            r#"{{"hostname":"{}","userName":"{}","osVersion":"{}","arch":"{}","processName":"agent","pid":{},"isElevated":false,"publicKey":"{}","hardware":{}}}"#,
+            r#"{{"hostname":"{}","userName":"{}","osVersion":"{}","arch":"{}","processName":"agent","pid":{},"isElevated":false,"publicKey":"{}","beaconSecret":"{}","hardware":{}}}"#,
             escape(hostname),
             escape(user_name),
             escape(os_version),
             escape(arch),
             pid,
             escape(public_key),
+            escape(beacon_secret),
             hw
         );
 

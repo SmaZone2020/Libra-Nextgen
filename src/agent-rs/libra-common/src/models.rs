@@ -356,6 +356,8 @@ pub struct InjectedConfig {
     pub core_download_path: String,
     #[serde(default, alias = "rsa_private_key")]
     pub rsa_private_key: String,
+    #[serde(default, alias = "beacon_secret")]
+    pub beacon_secret: String,
     #[serde(default, alias = "anti_analysis")]
     pub anti_analysis: AntiAnalysisConfig,
 }

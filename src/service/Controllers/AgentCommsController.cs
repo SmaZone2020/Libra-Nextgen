@@ -1,8 +1,10 @@
 using System.Text;
 using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Options;
 using LibraNextgen.Common.Models;
 using LibraNextgen.Common.Protocol;
+using LibraNextgen.Service.Configuration;
 using LibraNextgen.Service.Services;
 
 namespace LibraNextgen.Service.Controllers;
@@ -14,12 +16,18 @@ public class AgentCommsController : ControllerBase
     private readonly AgentCommsService _commsService;
     private readonly AgentTrafficService _traffic;
     private readonly ConnectionManager _wsManager;
+    private readonly BeaconSettings _beaconSettings;
 
-    public AgentCommsController(AgentCommsService commsService, AgentTrafficService traffic, ConnectionManager wsManager)
+    public AgentCommsController(
+        AgentCommsService commsService,
+        AgentTrafficService traffic,
+        ConnectionManager wsManager,
+        IOptions<BeaconSettings> beaconSettings)
     {
         _commsService = commsService;
         _traffic = traffic;
         _wsManager = wsManager;
+        _beaconSettings = beaconSettings.Value;
     }
 
     [HttpPost("register")]
@@ -27,6 +35,9 @@ public class AgentCommsController : ControllerBase
     {
         if (string.IsNullOrWhiteSpace(request.Hostname))
             return BadRequest(new { error = "hostname required" });
+
+        if (IsSecretRequired() && !IsSecretValid(request.BeaconSecret))
+            return Unauthorized(new { error = "invalid beacon secret" });
 
         var bytesReceived = Request.ContentLength ?? 0;
 
@@ -155,4 +166,9 @@ public class AgentCommsController : ControllerBase
 
         return Ok(new { status = "received" });
     }
+
+    private bool IsSecretRequired() => !string.IsNullOrWhiteSpace(_beaconSettings.Secret);
+
+    private bool IsSecretValid(string? provided) =>
+        string.Equals(provided, _beaconSettings.Secret, StringComparison.Ordinal);
 }

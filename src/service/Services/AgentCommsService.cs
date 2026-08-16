@@ -179,6 +179,7 @@ public class RegisterRequest
     public int Pid { get; set; }
     public bool IsElevated { get; set; }
     public string? PublicKey { get; set; }
+    public string? BeaconSecret { get; set; }
     public HardwareInfo? Hardware { get; set; }
 }
 

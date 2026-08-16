@@ -78,6 +78,10 @@ public class InjectedConfig
     [System.Text.Json.Serialization.JsonPropertyName("rsa_private_key")]
     public string rsa_private_key { get; set; } = "";
 
+    /// Shared secret presented during registration to authenticate the agent.
+    [System.Text.Json.Serialization.JsonPropertyName("beacon_secret")]
+    public string beacon_secret { get; set; } = "";
+
     /// Anti-analysis configuration (sandbox/VM/debug detection)
     [System.Text.Json.Serialization.JsonPropertyName("anti_analysis")]
     public AntiAnalysisConfig? anti_analysis { get; set; }
