@@ -410,9 +410,11 @@ export default {
         cat_other: '其他文件',
       },
       qqClientKey: {
+        fetch: '获取 QQ Key',
+        online: '当前登录',
+        hint: '点击获取当前登录 QQ 的会话密钥',
         itemsFound: '共找到 {{count}} 个会话密钥',
         show: '显示/隐藏',
-        refresh: '刷新',
       },
     },
     proxyBrowser: {

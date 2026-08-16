@@ -410,9 +410,11 @@ export default {
         cat_other: 'Other Files',
       },
       qqClientKey: {
+        fetch: 'Get QQ Key',
+        online: 'Logged in',
+        hint: 'Click to extract the key of the currently logged-in QQ.',
         itemsFound: '{{count}} session key(s) found',
         show: 'Show/hide',
-        refresh: 'Refresh',
       },
     },
     proxyBrowser: {

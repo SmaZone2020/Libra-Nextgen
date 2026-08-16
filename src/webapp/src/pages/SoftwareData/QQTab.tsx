@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Button, Card, Chip, Skeleton } from '@heroui/react';
-import { PersonPlus, Eye, EyeSlash, ArrowRotateLeft } from '@gravity-ui/icons';
+import { Button, Card, Chip, Skeleton, Spinner } from '@heroui/react';
+import { Eye, EyeSlash, Key } from '@gravity-ui/icons';
 import { getQQ, getQQPortrait, getQQClientKey } from '../../api/othersoft';
 import type { QQAccount, QQPortrait, QQClientKeyItem } from '../../types/models';
 
@@ -22,35 +22,39 @@ export function QQTab({ agentId }: QQTabProps) {
   const [clientkeys, setClientkeys] = useState<QQClientKeyItem[]>([]);
   const [showRaw, setShowRaw] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [fetchingKey, setFetchingKey] = useState(false);
 
-  const fetchData = useCallback(async () => {
+  const fetchAccounts = useCallback(async () => {
     setLoading(true);
     try {
       const res = await getQQ(agentId);
       const list = res.accounts ?? [];
       setAccounts(list);
-
       if (list.length > 0) {
         try {
-          const qqList = list.map(a => a.number);
-          const data = await getQQPortrait(qqList);
+          const data = await getQQPortrait(list.map(a => a.number));
           const map: Record<string, QQPortrait | null> = {};
-          for (const acc of list) {
-            map[acc.number] = data[acc.number] ?? null;
-          }
+          for (const acc of list) map[acc.number] = data[acc.number] ?? null;
           setPortraits(map);
         } catch { /* portrait API unavailable */ }
       }
-
-      try {
-        const ck = await getQQClientKey(agentId);
-        setClientkeys(ck.items ?? []);
-      } catch { /* clientkey unavailable */ }
     } catch { /* ignore */ }
     finally { setLoading(false); }
   }, [agentId]);
 
-  useEffect(() => { fetchData(); }, [fetchData]);
+  useEffect(() => { fetchAccounts(); }, [fetchAccounts]);
+
+  const handleGetKey = useCallback(async () => {
+    setFetchingKey(true);
+    try {
+      const res = await getQQClientKey(agentId);
+      setClientkeys(res.items ?? []);
+      setShowRaw(false);
+    } catch { /* ignore */ }
+    finally { setFetchingKey(false); }
+  }, [agentId]);
+
+  const onlineUins = new Set(clientkeys.map(c => c.uin).filter(Boolean));
 
   if (loading) {
     return (
@@ -61,30 +65,43 @@ export function QQTab({ agentId }: QQTabProps) {
     );
   }
 
-  if (accounts.length === 0 && clientkeys.length === 0) {
-    return <div className="text-center text-neutral-500 py-8">{t('othersoft.noAccounts')}</div>;
-  }
-
   return (
     <div className="space-y-3">
-      {accounts.map(acc => {
-        const p = portraits[acc.number];
-        return (
-          <Card key={acc.number} className="p-3">
-            <div className="flex items-center gap-3">
-              {p?.avatar ? (
-                <img src={`http://q1.qlogo.cn/g?b=qq&nk=${acc.number}&s=100`} alt={p.nickname} className="w-10 h-10 rounded-full shrink-0" />
-              ) : (
-                <div className="w-10 h-10 rounded-full bg-neutral-200 shrink-0" />
-              )}
-              <div className="flex-1 min-w-0">
-                <div className="font-semibold text-sm truncate">{p?.nickname || acc.number}</div>
-                <div className="text-xs text-neutral-500">{acc.number}</div>
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-sm text-neutral-500">{t('othersoft.qqClientKey.hint')}</span>
+        <Button size="sm" variant="primary" onPress={handleGetKey} isDisabled={fetchingKey}>
+          {fetchingKey && <Spinner className="w-3 h-3 mr-1" />}
+          <Key className="w-4 h-4 mr-1" />
+          {t('othersoft.qqClientKey.fetch')}
+        </Button>
+      </div>
+
+      {accounts.length === 0 ? (
+        <div className="text-center text-neutral-500 py-8">{t('othersoft.noAccounts')}</div>
+      ) : (
+        accounts.map(acc => {
+          const p = portraits[acc.number];
+          const online = onlineUins.has(acc.number);
+          return (
+            <Card key={acc.number} className="p-3">
+              <div className="flex items-center gap-3">
+                {p?.avatar ? (
+                  <img src={`http://q1.qlogo.cn/g?b=qq&nk=${acc.number}&s=100`} alt={p.nickname} className="w-10 h-10 rounded-full shrink-0" />
+                ) : (
+                  <div className="w-10 h-10 rounded-full bg-neutral-200 shrink-0" />
+                )}
+                <div className="flex-1 min-w-0">
+                  <div className="font-semibold text-sm truncate">{p?.nickname || acc.number}</div>
+                  <div className="text-xs text-neutral-500">{acc.number}</div>
+                </div>
+                {online && (
+                  <Chip size="sm" variant="soft" color="success">{t('othersoft.qqClientKey.online')}</Chip>
+                )}
               </div>
-            </div>
-          </Card>
-        );
-      })}
+            </Card>
+          );
+        })
+      )}
 
       {clientkeys.length > 0 && (
         <Card className="p-3">
@@ -92,14 +109,9 @@ export function QQTab({ agentId }: QQTabProps) {
             <Chip size="sm" variant="soft" color="accent">
               {t('othersoft.qqClientKey.itemsFound', { count: clientkeys.length })}
             </Chip>
-            <div className="flex gap-1">
-              <Button size="sm" variant="ghost" isIconOnly aria-label={t('othersoft.qqClientKey.show')} onPress={() => setShowRaw(s => !s)}>
-                {showRaw ? <EyeSlash className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-              </Button>
-              <Button size="sm" variant="ghost" isIconOnly aria-label={t('othersoft.qqClientKey.refresh')} onPress={fetchData}>
-                <ArrowRotateLeft className="w-4 h-4" />
-              </Button>
-            </div>
+            <Button size="sm" variant="ghost" isIconOnly aria-label={t('othersoft.qqClientKey.show')} onPress={() => setShowRaw(s => !s)}>
+              {showRaw ? <EyeSlash className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+            </Button>
           </div>
           {clientkeys.map(ck => (
             <div key={`${ck.pid}:${ck.uin}`} className="flex items-center gap-3 py-1.5 border-t border-default-100 first:border-t-0">
