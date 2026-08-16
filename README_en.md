@@ -2,25 +2,25 @@
 
 A modern C2 (Command & Control) framework for enterprise red-team operations.
 
-## Architecture
+## Architecture Overview
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │                    Libra-Console (React 19)                     │
-│       Operator Console · Multi-User Collaboration · Live        │
+│                Operator Console · Collaboration · Live          │
 │                   http://localhost:5173                         │
 └──────────────────────────┬──────────────────────────────────────┘
                            │ WebSocket / REST
 ┌──────────────────────────▼──────────────────────────────────────┐
 │               Libra-Server (ASP.NET Core 10)                    │
-│   Listener · Task Scheduler · MongoDB Persistence · JWT Auth    │
+│          Traffic Intake · Task Scheduling · MongoDB · JWT       │
 │                   http://localhost:5270                         │
 └──────────────────────────┬──────────────────────────────────────┘
                            │ HTTP(S) / WebSocket (AES-256-GCM)
 ┌──────────────────────────▼──────────────────────────────────────┐
 │                    Libra-Agent (Rust)                           │
 │   Cross-Platform Payload · Modular Recon · In-Memory Execution  │
-│         Anti-Sandbox · Persistence · Stealth OpSec             │
+│                  Anti-Sandbox · Persistence                     │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -38,7 +38,7 @@ A Rust workspace of 6 crates:
 
 | Crate | Purpose |
 |-------|---------|
-| `agent` | Standalone binary: config parsing, persistence, anti-analysis, main engine |
+| `agent` | Standalone binary: config parsing, persistence management, anti-sandbox checks, main engine |
 | `libra-common` | Shared models (`InjectedConfig`, `AgentTask`), protocol constants |
 | `libra-crypto` | RSA-2048 + AES-256-GCM key negotiation and encryption |
 | `libra-comm` | Dual-mode comms: HTTP polling + WebSocket long-lived connection |
@@ -48,7 +48,7 @@ A Rust workspace of 6 crates:
 ### Server Project (`src/service/`)
 
 ASP.NET Core WebAPI with:
-- `Controllers/` — 17 REST controllers (Agents, Tasks, Builder, Files, System, Media, Screen, StressTest, Proxy, Audit, etc.)
+- `Controllers/` — 17 REST controllers (Agents, Tasks, Builder, Files, System, Media, Screen, Proxy, Audit, etc.)
 - `Services/` — 12 business services (AgentService, TaskService, AuthService, HeartbeatMonitor, etc.)
 - `Hubs/` — WebSocket connection management (native WebSocket, not SignalR)
 - `Middleware/` — Audit logging middleware
@@ -57,29 +57,27 @@ ASP.NET Core WebAPI with:
 
 ### Console Pages (`src/webapp/src/pages/`)
 
-16 page modules:
+15 page modules:
 
 | Page | Route | Function |
 |------|-------|----------|
 | Dashboard | `/` | Stats cards, traffic charts, agent geo-distribution map |
-| Agents | `/agents` | Agent list, detail panel (hardware accordion), credential dump |
+| Agents | `/agents` | Agent list, detail panel (hardware accordion), credential export |
 | Shell | `/shell` | Interactive remote terminal via xterm.js |
 | ScreenMonitor | `/screen` | Screen diff streaming (64×64 block diff + keyframe) |
 | MediaMonitor | `/media` | Camera / microphone live streaming |
-| FileManager | `/files` | Remote file browser, upload, download, compression |
-| System | `/system` | Processes, windows, environment variables, network, WiFi scan, LAN scan |
+| FileManager | `/files` | Remote file browser (paged lazy loading), open/execute, archive browser, upload, download, compress |
+| System | `/system` | Process list, window enumeration, environment variables, network info, WiFi scan, LAN scan |
 | SoftwareData | `/othersoft` | WeChat/QQ data, browser credentials (Chrome/Edge v10+v20), AI token scanner |
-| ProxyBrowser | `/proxy` | Browse web pages through compromised proxy |
+| ProxyBrowser | `/proxy` | Browse web pages through the compromised proxy |
 | Builder | `/builder` | Agent payload generation and compilation |
-| StressTest | `/stress-test` | Multi-point DDoS attack management |
 | AuditLogs | `/audit` | Operation audit log viewer |
 | Settings | `/settings` | MCP AccessKey management |
-| About | `/about` | License and legal disclaimers |
 
 ## Agent Capability Matrix
 
 ### Reconnaissance
-- **System Fingerprint**: OS version, architecture, CPU, GPU, RAM, disk serial numbers, motherboard/BIOS
+- **System Fingerprint**: OS version, architecture, CPU, GPU, RAM, disk serial numbers, motherboard/BIOS version
 - **Network Intelligence**: Public IP, GeoIP (city/ISP/ASN/coordinates), proxy settings, DNS suffix
 - **WiFi Scanning**: Win32 Wlan API (primary) + `netsh wlan show networks mode=bssid` regex fallback. Outputs SSID, BSSID, authentication, encryption, signal strength, band (2.4GHz / 5GHz / 6GHz)
 - **LAN Scanning**: ARP table query + ICMP ping sweep
@@ -94,16 +92,12 @@ ASP.NET Core WebAPI with:
 
 ### Execution
 - **Shell**: CMD / PowerShell (Windows), Bash / Zsh (Linux)
-- **File Operations**: Chunked upload/download, move, copy, delete, timestomping
-- **Screen Capture**: Multi-monitor, 64×64 block diff streaming + JPEG keyframes via DXGI Desktop Duplication API
+- **File Operations**: Chunked upload/download for large files, move, copy, delete, timestomping; paged lazy loading for directories (200 items/page infinite scroll), in-browser archive browsing (ZIP store mode with zero extraction), file open/execute
+- **Screen Capture**: Multi-monitor support, 64×64 block diff streaming + JPEG keyframes via DXGI Desktop Duplication API
 - **Camera**: WinRT `MediaCapture` + DirectShow low-level access
 - **Microphone**: WinRT `MediaCapture` + WaveIn API
-- **Credential Dump**: In-memory credential extraction
+- **Credential Export**: In-memory credential dump
 - **Proxy Browser**: Browse arbitrary URLs through the compromised host
-
-### Stress Testing
-- HTTP Flood · SYN Flood · UDP Flood · ICMP Flood
-- Slowloris · Reflection Attack · Malformed Packets
 
 ### Anti-Analysis
 - CPU core count · RAM size · Disk capacity baseline checks
@@ -257,7 +251,6 @@ The MCP server exposes the following tool sets:
 | **Screen** | `take_screenshot`, `capture_webcam` | Screenshots and webcam capture |
 | **Data** | `get_browser_passwords`, `get_browser_history`, `scan_ai_tokens` | Data exfiltration |
 | **Builder** | `build_payload`, `list_builds`, `get_build_info` | Payload compilation |
-| **Stress** | `start_stress_test`, `stop_stress_test`, `get_campaign_status` | Stress testing |
 
 ### Usage Examples
 
