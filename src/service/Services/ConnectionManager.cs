@@ -15,11 +15,26 @@ public class ConnectionManager
     private readonly ConcurrentDictionary<string, TaskCompletionSource<WebSocketMessage>> _pendingRequests = new();
     private readonly ISessionLock _sessionLock;
     private readonly AgentTrafficService _traffic;
+    private readonly SessionKeyStore _sessionKeys;
 
-    public ConnectionManager(ISessionLock sessionLock, AgentTrafficService traffic)
+    public ConnectionManager(ISessionLock sessionLock, AgentTrafficService traffic, SessionKeyStore sessionKeys)
     {
         _sessionLock = sessionLock;
         _traffic = traffic;
+        _sessionKeys = sessionKeys;
+    }
+
+    /// <summary>
+    /// Encrypt a message destined for an agent using its session key, wrapping
+    /// it in <c>{ "e": "..." }</c>. Falls back to plaintext if no key is set.
+    /// </summary>
+    private string WrapAgentMessage(string agentId, string json)
+    {
+        if (_sessionKeys.TryGet(agentId, out var key) && key is not null)
+        {
+            return JsonSerializer.Serialize(new { e = CryptoHelper.EncryptPayload(json, key) });
+        }
+        return json;
     }
 
     public string AddConnection(string connectionId, WebSocket socket, string userId, string role, string type)
@@ -91,7 +106,7 @@ public class ConnectionManager
         {
             if (info.Type == "agent" && info.AgentId == agentId && info.Socket.State == WebSocketState.Open)
             {
-                var json = message.ToJson();
+                var json = WrapAgentMessage(agentId, message.ToJson());
                 var bytes = Encoding.UTF8.GetBytes(json);
                 _traffic.Accumulate(agentId, "unknown", 0, bytes.Length);
                 await SendLockedAsync(info, new ArraySegment<byte>(bytes), WebSocketMessageType.Text, ct);
@@ -149,7 +164,7 @@ public class ConnectionManager
         {
             if (info.Type == "agent" && info.AgentId == agentId && info.Socket.State == WebSocketState.Open)
             {
-                var json = message.ToJson();
+                var json = WrapAgentMessage(agentId, message.ToJson());
                 var bytes = Encoding.UTF8.GetBytes(json);
                 _traffic.Accumulate(agentId, "unknown", 0, bytes.Length);
                 await SendLockedAsync(info, new ArraySegment<byte>(bytes), WebSocketMessageType.Text, ct);

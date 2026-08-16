@@ -92,6 +92,9 @@ impl AgentEngine {
         self.http = Some(http);
 
         let mut ws = WsCommunicator::new(&self.config.ws_url(), &self.agent_id);
+        if let Some(key) = self.crypto.session_key() {
+            ws.set_session_key(key);
+        }
         for i in 0..3 {
             match ws.connect().await {
                 Ok(()) => break,

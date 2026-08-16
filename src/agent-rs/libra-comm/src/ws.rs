@@ -4,6 +4,10 @@
 //! The WebSocket is split into independent send and receive halves so that
 //! spawned tasks (screen capture loop, etc.) can send frames without being
 //! blocked by the main receive loop holding the read lock.
+//!
+//! When a session key is set (after registration), every message is wrapped in
+//! an AES-256-GCM envelope `{ "e": "<base64>" }` so the realtime channel is
+//! encrypted end-to-end with the same key as the HTTP beacon.
 
 use futures_util::{SinkExt, StreamExt};
 use futures_util::stream::{SplitSink, SplitStream};
@@ -16,14 +20,30 @@ use tokio_tungstenite::tungstenite::Message;
 type WsStream = WebSocketStream<MaybeTlsStream<TcpStream>>;
 type WsWrite = SplitSink<WsStream, Message>;
 
+/// Shared key holder used by the sender and receiver halves.
+type KeyHandle = std::sync::Arc<std::sync::RwLock<Option<[u8; 32]>>>;
+
 /// Cloneable send-half handle so spawned tasks can send without contending
-/// with the receive lock on WsCommunicator.
-pub type WsSender = std::sync::Arc<tokio::sync::Mutex<Option<WsWrite>>>;
+/// with the receive lock on WsCommunicator. Carries the session key so all
+/// senders encrypt consistently.
+#[derive(Clone)]
+pub struct WsSender {
+    write: std::sync::Arc<tokio::sync::Mutex<Option<WsWrite>>>,
+    key: KeyHandle,
+}
+
+impl WsSender {
+    fn wrap(&self, json: String) -> String {
+        let key = self.key.read().unwrap().clone();
+        wrap_outgoing(json, &key)
+    }
+}
 
 /// WebSocket communicator for real-time agent operations.
 pub struct WsCommunicator {
-    write_half: WsSender,                // shared among spawned tasks
-    read_half: Option<SplitStream<WsStream>>, // owned by the receive loop
+    write_half: WsSender,
+    read_half: Option<SplitStream<WsStream>>,
+    key: KeyHandle,
     url: String,
 }
 
@@ -51,15 +71,27 @@ impl WsCommunicator {
             format!("ws://127.0.0.1:5270/ws/agent?agentId={}", agent_id)
         };
 
+        let key: KeyHandle = std::sync::Arc::new(std::sync::RwLock::new(None));
+        let write_half = WsSender {
+            write: std::sync::Arc::new(tokio::sync::Mutex::new(None)),
+            key: key.clone(),
+        };
+
         Self {
-            write_half: std::sync::Arc::new(tokio::sync::Mutex::new(None)),
+            write_half,
             read_half: None,
+            key,
             url: ws_uri,
         }
     }
 
     pub fn is_connected(&self) -> bool {
         self.read_half.is_some()
+    }
+
+    /// Enable AES-GCM encryption on this channel.
+    pub fn set_session_key(&self, key: [u8; 32]) {
+        *self.key.write().unwrap() = Some(key);
     }
 
     /// Returns a cloneable sender handle for spawned tasks.
@@ -71,7 +103,7 @@ impl WsCommunicator {
     pub async fn connect(&mut self) -> Result<(), String> {
         let (ws, _) = connect_async(&self.url).await.map_err(|e| e.to_string())?;
         let (write, read) = ws.split();
-        *self.write_half.lock().await = Some(write);
+        *self.write_half.write.lock().await = Some(write);
         self.read_half = Some(read);
         Ok(())
     }
@@ -88,11 +120,15 @@ impl WsCommunicator {
 
             match msg {
                 Message::Text(text) => {
-                    return WebSocketMessage::from_json(&text);
+                    let key = self.key.read().unwrap().clone();
+                    let json = unwrap_incoming(&text, &key);
+                    return WebSocketMessage::from_json(&json);
                 }
                 Message::Binary(data) => {
                     if let Ok(text) = String::from_utf8(data) {
-                        return WebSocketMessage::from_json(&text);
+                        let key = self.key.read().unwrap().clone();
+                        let json = unwrap_incoming(&text, &key);
+                        return WebSocketMessage::from_json(&json);
                     }
                 }
                 Message::Close(_) => return None,
@@ -105,9 +141,9 @@ impl WsCommunicator {
 
     /// Send a WebSocket message via the write half.
     async fn send_half(&self, msg: &WebSocketMessage) -> Result<(), String> {
-        let mut write = self.write_half.lock().await;
+        let mut write = self.write_half.write.lock().await;
         let w = write.as_mut().ok_or("WebSocket not connected")?;
-        let json = msg.to_json();
+        let json = self.write_half.wrap(msg.to_json());
         w.send(Message::Text(json)).await.map_err(|e| e.to_string())
     }
 
@@ -139,16 +175,15 @@ impl WsCommunicator {
 
     /// Close the WebSocket connection gracefully.
     pub async fn close(&mut self) {
-        // Drop both halves — the Arc<Mutex<>> ensures all senders see it.
         self.read_half.take();
-        *self.write_half.lock().await = None;
+        *self.write_half.write.lock().await = None;
     }
 }
 
 /// Send a pre-built WebSocketMessage using only the sender handle.
 pub async fn send_msg_via(sender: &WsSender, msg: &WebSocketMessage) {
-    let json = msg.to_json();
-    let mut write = sender.lock().await;
+    let json = sender.wrap(msg.to_json());
+    let mut write = sender.write.lock().await;
     if let Some(w) = write.as_mut() {
         let _ = w.send(Message::Text(json)).await;
     }
@@ -177,9 +212,53 @@ pub async fn ws_send_via(
         request_id: rid.map(|s| s.to_string()),
     };
 
-    let json = msg.to_json();
-    let mut write = sender.lock().await;
-    if let Some(w) = write.as_mut() {
-        let _ = w.send(Message::Text(json)).await;
+    send_msg_via(sender, &msg).await;
+}
+
+// ── Envelope helpers ────────────────────────────────────────────────────
+
+fn wrap_outgoing(json: String, key: &Option<[u8; 32]>) -> String {
+    match key {
+        Some(k) => format!(r#"{{"e":"{}"}}"#, libra_crypto::encrypt_payload(&json, k)),
+        None => json,
+    }
+}
+
+fn unwrap_incoming(json: &str, key: &Option<[u8; 32]>) -> String {
+    if let Some(k) = key {
+        if let Ok(v) = serde_json::from_str::<Value>(json) {
+            if let Some(e) = v.get("e").and_then(|x| x.as_str()) {
+                if let Ok(plain) = libra_crypto::decrypt_payload(e, k) {
+                    return plain;
+                }
+            }
+        }
+    }
+    json.to_string()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn wrap_without_key_is_identity() {
+        assert_eq!(wrap_outgoing("{}".into(), &None), "{}");
+    }
+
+    #[test]
+    fn wrap_then_unwrap_roundtrips() {
+        let key = libra_crypto::generate_aes_key();
+        let original = r#"{"type":"shell.output","data":{"text":"hi"}}"#;
+        let wrapped = wrap_outgoing(original.into(), &Some(key));
+        assert!(wrapped.contains("\"e\""));
+        let unwrapped = unwrap_incoming(&wrapped, &Some(key));
+        assert_eq!(unwrapped, original);
+    }
+
+    #[test]
+    fn unwrap_plaintext_with_key_is_identity() {
+        let key = libra_crypto::generate_aes_key();
+        assert_eq!(unwrap_incoming("{}", &Some(key)), "{}");
     }
 }

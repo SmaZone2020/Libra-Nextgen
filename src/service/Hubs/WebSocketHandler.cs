@@ -41,6 +41,23 @@ public static class WebSocketHandler
         catch { /* best-effort */ }
     }
 
+    private static string UnwrapAgentMessage(string agentId, string json, SessionKeyStore sessionKeys)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(json);
+            if (doc.RootElement.ValueKind == JsonValueKind.Object &&
+                doc.RootElement.TryGetProperty("e", out var e) &&
+                e.ValueKind == JsonValueKind.String)
+            {
+                if (sessionKeys.TryGet(agentId, out var key) && key is not null)
+                    return CryptoHelper.DecryptPayload(e.GetString()!, key);
+            }
+        }
+        catch { /* fall through to plaintext */ }
+        return json;
+    }
+
     private static async Task HandleConsoleWs(HttpContext context)
     {
         if (!context.WebSockets.IsWebSocketRequest)
@@ -235,6 +252,7 @@ public static class WebSocketHandler
         var ws = await context.WebSockets.AcceptWebSocketAsync();
         var wsManager = context.RequestServices.GetRequiredService<ConnectionManager>();
         var traffic = context.RequestServices.GetRequiredService<AgentTrafficService>();
+        var sessionKeys = context.RequestServices.GetRequiredService<SessionKeyStore>();
         var connId = Guid.NewGuid().ToString("N");
         wsManager.AddConnection(connId, ws, agentId, "agent", "agent");
         wsManager.BindToAgent(connId, agentId);
@@ -270,6 +288,7 @@ public static class WebSocketHandler
                     traffic.Accumulate(agentId, "unknown", ms.Length, 0);
 
                     var json = Encoding.UTF8.GetString(ms.GetBuffer(), 0, (int)ms.Length);
+                    json = UnwrapAgentMessage(agentId, json, sessionKeys);
                     var message = WebSocketMessage.FromJson(json);
                     if (message == null) continue;
 
