@@ -599,7 +599,7 @@ export default {
         files: 'File Management',
         software: 'Software Data',
         command: 'Command & Credentials',
-        network: 'Network & Stress',
+        network: 'Network',
         admin: 'Account & Admin',
       },
       labels: {

