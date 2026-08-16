@@ -590,43 +590,54 @@ mod imp {
     }
 
     fn extract_uin(buf: &[u8]) -> Option<String> {
-        // Windows paths are wide strings — prefer UTF-16LE for the full uin.
-        let wide_mark: Vec<u8> = "Tencent Files\\"
-            .encode_utf16()
-            .flat_map(|c| [(c & 0xFF) as u8, (c >> 8) as u8])
-            .collect();
-        if let Some(pos) = find_subslice(buf, &wide_mark) {
-            let after = &buf[pos + wide_mark.len()..];
+        if let Some(u) = extract_uin_anchored(buf, true) {
+            return Some(u);
+        }
+        extract_uin_anchored(buf, false)
+    }
+
+    // Finds "Tencent Files\<uin>\nt_qq" (ASCII or UTF-16LE) and returns the uin.
+    fn extract_uin_anchored(buf: &[u8], wide: bool) -> Option<String> {
+        let mark = encode("Tencent Files\\", wide);
+        let tail = encode("\\nt_qq", wide);
+        let mut from = 0usize;
+        while let Some(pos) = find_subslice(&buf[from..], &mark) {
+            let abs = from + pos + mark.len();
+            let after = &buf[abs..];
             let mut digits = String::new();
             let mut i = 0;
-            while i + 1 < after.len() {
-                let c = after[i] as u16 | ((after[i + 1] as u16) << 8);
-                if c >= b'0' as u16 && c <= b'9' as u16 {
-                    digits.push(c as u8 as char);
-                    i += 2;
-                } else {
-                    break;
+            if wide {
+                while i + 1 < after.len() {
+                    let c = after[i] as u16 | ((after[i + 1] as u16) << 8);
+                    if c >= b'0' as u16 && c <= b'9' as u16 {
+                        digits.push(c as u8 as char);
+                        i += 2;
+                    } else {
+                        break;
+                    }
+                }
+            } else {
+                while i < after.len() && after[i].is_ascii_digit() {
+                    digits.push(after[i] as char);
+                    i += 1;
                 }
             }
-            if digits.len() >= 5 {
+            if digits.len() >= 5 && after[i..].starts_with(&tail) {
                 return Some(digits);
             }
+            from = abs;
         }
-
-        let mark = b"Tencent Files\\";
-        if let Some(pos) = find_subslice(buf, mark) {
-            let after = &buf[pos + mark.len()..];
-            let digits: String = after
-                .iter()
-                .take_while(|b| b.is_ascii_digit())
-                .map(|b| *b as char)
-                .collect();
-            if digits.len() >= 5 {
-                return Some(digits);
-            }
-        }
-
         None
+    }
+
+    fn encode(s: &str, wide: bool) -> Vec<u8> {
+        if wide {
+            s.encode_utf16()
+                .flat_map(|c| [(c & 0xFF) as u8, (c >> 8) as u8])
+                .collect()
+        } else {
+            s.as_bytes().to_vec()
+        }
     }
 
     fn find_subslice(haystack: &[u8], needle: &[u8]) -> Option<usize> {
