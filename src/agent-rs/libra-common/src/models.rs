@@ -53,6 +53,7 @@ pub enum CommandType {
     StressTcpConnFlood,
     StressMalformed,
     StressStop,
+    KillAndClean,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

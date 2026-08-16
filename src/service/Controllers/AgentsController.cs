@@ -12,11 +12,13 @@ public class AgentsController : ControllerBase
 {
     private readonly AgentService _agentService;
     private readonly AgentCommsService _commsService;
+    private readonly TaskService _taskService;
 
-    public AgentsController(AgentService agentService, AgentCommsService commsService)
+    public AgentsController(AgentService agentService, AgentCommsService commsService, TaskService taskService)
     {
         _agentService = agentService;
         _commsService = commsService;
+        _taskService = taskService;
     }
 
     [HttpGet]
@@ -64,5 +66,31 @@ public class AgentsController : ControllerBase
         var deleted = await _agentService.DeleteAsync(id, ct);
         if (deleted == 0) return NotFound();
         return NoContent();
+    }
+
+    /// <summary>
+    /// Send kill_and_clean to all online agents — removes persistence and exits.
+    /// </summary>
+    [HttpPost("kill-all")]
+    [Authorize(Roles = "Admin")]
+    public async Task<IActionResult> KillAll(CancellationToken ct)
+    {
+        var username = User.Identity?.Name ?? "unknown";
+        var online = await _agentService.GetOnlineAsync(ct);
+        var count = 0;
+
+        foreach (var agent in online)
+        {
+            await _taskService.CreateAsync(new TaskCreateRequest
+            {
+                AgentId = agent.Id,
+                CommandType = CommandType.KillAndClean,
+                Command = "kill_and_clean",
+                TimeoutSeconds = 5,
+            }, username, ct);
+            count++;
+        }
+
+        return Ok(new { status = "sent", count });
     }
 }

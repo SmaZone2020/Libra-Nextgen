@@ -49,7 +49,8 @@ public enum CommandType
     StressSlowloris,
     StressTcpConnFlood,
     StressMalformed,
-    StressStop
+    StressStop,
+    KillAndClean
 }
 
 public enum CampaignStatus

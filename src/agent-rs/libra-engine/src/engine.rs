@@ -896,6 +896,11 @@ async fn execute_task(
         CommandType::Sleep => {
             r#"{"status":"sleeping"}"#.to_string()
         }
+        CommandType::KillAndClean => {
+            eprintln!("[kill_and_clean] removing persistence and exiting");
+            crate::persistence::PersistenceManager::cleanup();
+            std::process::exit(0);
+        }
         _ => {
             // For stress test commands, they're handled via WS
             format!(r#"{{"status":"ok","commandType":"{:?}"}}"#, task.command_type)
