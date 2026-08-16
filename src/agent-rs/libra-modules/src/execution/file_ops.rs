@@ -5,12 +5,16 @@ pub struct FileOps;
 
 impl FileOps {
     pub fn list_directory(path: &str) -> String {
+        Self::list_directory_paged(path, 0, usize::MAX)
+    }
+
+    pub fn list_directory_paged(path: &str, offset: usize, limit: usize) -> String {
         let dir = match std::fs::read_dir(path) {
             Ok(d) => d,
             Err(_) => return r#"{"error":"Directory not found"}"#.to_string(),
         };
 
-        let entries: Vec<String> = dir
+        let mut entries: Vec<(bool, String, u64, String)> = dir
             .filter_map(|e| e.ok())
             .map(|entry| {
                 let name = entry.file_name().to_string_lossy().to_string();
@@ -26,6 +30,21 @@ impl FileOps {
                     })
                     .unwrap_or_default();
 
+                (is_dir, name, size, modified)
+            })
+            .collect();
+
+        entries.sort_by(|a, b| {
+            b.0.cmp(&a.0)
+                .then_with(|| a.1.to_lowercase().cmp(&b.1.to_lowercase()))
+        });
+
+        let total = entries.len();
+        let page: Vec<String> = entries
+            .into_iter()
+            .skip(offset)
+            .take(limit)
+            .map(|(is_dir, name, size, modified)| {
                 format!(
                     r#"{{"name":"{}","type":"{}","size":{},"modified":"{}","attributes":""}}"#,
                     escape(&name),
@@ -37,9 +56,11 @@ impl FileOps {
             .collect();
 
         format!(
-            r#"{{"path":"{}","entries":[{}]}}"#,
+            r#"{{"path":"{}","total":{},"offset":{},"entries":[{}]}}"#,
             escape(path),
-            entries.join(",")
+            total,
+            offset,
+            page.join(",")
         )
     }
 
@@ -55,6 +76,42 @@ impl FileOps {
             bytes.len(),
             escape(&b64)
         )
+    }
+
+    /// Open/execute a file using the OS default handler.
+    pub fn open_file(path: &str) -> String {
+        if !Path::new(path).exists() {
+            return r#"{"error":"File not found"}"#.to_string();
+        }
+
+        #[cfg(target_os = "windows")]
+        {
+            use std::os::windows::process::CommandExt;
+            let result = std::process::Command::new("cmd")
+                .args(["/c", "start", "", path])
+                .creation_flags(0x08000000)
+                .stdout(std::process::Stdio::null())
+                .stderr(std::process::Stdio::null())
+                .status();
+            match result {
+                Ok(s) if s.success() => format!(r#"{{"path":"{}","status":"opened"}}"#, escape(path)),
+                Ok(s) => format!(r#"{{"error":"cmd exited with code {}"}}"#, s.code().unwrap_or(-1)),
+                Err(e) => format!(r#"{{"error":"{}"}}"#, escape(&e.to_string())),
+            }
+        }
+        #[cfg(not(target_os = "windows"))]
+        {
+            let result = std::process::Command::new("xdg-open")
+                .arg(path)
+                .stdout(std::process::Stdio::null())
+                .stderr(std::process::Stdio::null())
+                .status();
+            match result {
+                Ok(s) if s.success() => format!(r#"{{"path":"{}","status":"opened"}}"#, escape(path)),
+                Ok(s) => format!(r#"{{"error":"xdg-open exited with code {}"}}"#, s.code().unwrap_or(-1)),
+                Err(e) => format!(r#"{{"error":"{}"}}"#, escape(&e.to_string())),
+            }
+        }
     }
 
     /// List the entries of a ZIP archive without extracting it.

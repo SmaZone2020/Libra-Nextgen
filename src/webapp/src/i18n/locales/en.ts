@@ -228,6 +228,7 @@ export default {
       createShortcut: 'Create Shortcut',
       download: 'Download',
       open: 'Open',
+      openConfirm: 'Open/execute "{{name}}" on the target machine?',
       viewArchive: 'View Archive',
       openFailed: 'Failed to open file',
       delete: 'Delete',

@@ -102,6 +102,7 @@ pub mod ws_type {
     pub const FILE_DRIVES: &str = "file.drives";
     pub const FILE_LIST: &str = "file.list";
     pub const FILE_READ: &str = "file.read";
+    pub const FILE_OPEN: &str = "file.open";
     pub const FILE_WRITE: &str = "file.write";
     pub const FILE_DELETE: &str = "file.delete";
     pub const FILE_MKDIR: &str = "file.mkdir";

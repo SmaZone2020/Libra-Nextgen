@@ -228,6 +228,7 @@ export default {
       createShortcut: '创建快捷方式',
       download: '下载',
       open: '打开',
+      openConfirm: '确定要在目标机器上打开/执行 "{{name}}" 吗？',
       viewArchive: '查看压缩包',
       openFailed: '打开文件失败',
       delete: '删除',

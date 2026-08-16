@@ -31,7 +31,7 @@ public class FilesController : ControllerBase
     [HttpPost("{agentId}/list")]
     public async Task<IActionResult> ListDirectory(string agentId, [FromBody] ListRequest req, CancellationToken ct)
     {
-        return await RelayAndWaitAsync(agentId, "file.list", new { path = req.Path }, ct);
+        return await RelayAndWaitAsync(agentId, "file.list", new { path = req.Path, offset = req.Offset, limit = req.Limit }, ct);
     }
 
     [HttpPost("{agentId}/drives")]
@@ -44,6 +44,12 @@ public class FilesController : ControllerBase
     public async Task<IActionResult> ReadFile(string agentId, [FromBody] ReadRequest req, CancellationToken ct)
     {
         return await RelayAndWaitAsync(agentId, "file.read", new { path = req.Path }, ct);
+    }
+
+    [HttpPost("{agentId}/open")]
+    public async Task<IActionResult> OpenFile(string agentId, [FromBody] ReadRequest req, CancellationToken ct)
+    {
+        return await RelayAndWaitAsync(agentId, "file.open", new { path = req.Path }, ct);
     }
 
     [HttpPost("{agentId}/write")]
@@ -129,7 +135,7 @@ public class FilesController : ControllerBase
 
 // ── Request DTOs ─────────────────────────────────────────────────────────────
 
-public record ListRequest(string Path);
+public record ListRequest(string Path, int Offset = 0, int Limit = 200);
 public record ReadRequest(string Path);
 public record WriteRequest(string Path, string Content);
 public record DeleteRequest(string Path);

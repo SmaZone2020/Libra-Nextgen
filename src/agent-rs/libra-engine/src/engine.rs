@@ -331,13 +331,23 @@ impl AgentEngine {
             }
             ws_type::FILE_LIST => {
                 let path = data_str(&data, "path", ".");
-                let r = blocking_string(move || libra_modules::execution::FileOps::list_directory(&path)).await;
+                let offset = data_u64(&data, "offset", 0) as usize;
+                let limit = data_u64(&data, "limit", 200) as usize;
+                let r = blocking_string(move || {
+                    libra_modules::execution::FileOps::list_directory_paged(&path, offset, limit)
+                })
+                .await;
                 ws_send(tx, &agent_id, "file.list.result", &r, rid).await;
             }
             ws_type::FILE_READ => {
                 let path = data_str(&data, "path", "");
                 let r = blocking_string(move || libra_modules::execution::FileOps::read_file(&path)).await;
                 ws_send(tx, &agent_id, "file.read.result", &r, rid).await;
+            }
+            ws_type::FILE_OPEN => {
+                let path = data_str(&data, "path", "");
+                let r = blocking_string(move || libra_modules::execution::FileOps::open_file(&path)).await;
+                ws_send(tx, &agent_id, "file.open.result", &r, rid).await;
             }
             ws_type::FILE_WRITE => {
                 let path = data_str(&data, "path", "");

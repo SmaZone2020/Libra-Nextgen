@@ -1,4 +1,5 @@
 import { useTranslation } from 'react-i18next';
+import { Spinner } from '@heroui/react';
 import { DataGrid } from '../../components/data-grid';
 import { ContextMenu } from '@components/context-menu';
 import { fileIcon, formatSize } from './fileIcons';
@@ -23,6 +24,9 @@ interface FileListProps {
   entries: FileEntry[];
   loading: boolean;
   error: string | null;
+  hasMore?: boolean;
+  isLoadingMore?: boolean;
+  onLoadMore?: () => void;
   onRowAction: (key: string | number) => void;
   onContextMenu: (e: React.MouseEvent) => void;
   onOpen: () => void;
@@ -40,6 +44,7 @@ interface FileListProps {
 
 export function FileList({
   entries, loading, error, onRowAction, onContextMenu,
+  hasMore, isLoadingMore, onLoadMore,
   onOpen, onViewArchive,
   onRename, onMove, onCopy, onDelete, onCompress, onDecompress, onShortcut, onDownload,
   contextEntry,
@@ -98,6 +103,13 @@ export function FileList({
             data={entries}
             getRowId={(e) => e.name}
             onRowAction={onRowAction}
+            onLoadMore={hasMore ? onLoadMore : undefined}
+            isLoadingMore={isLoadingMore}
+            loadMoreContent={
+              <div className="flex items-center justify-center gap-2 py-2 text-default-500 text-sm">
+                <Spinner size="sm" /> {t('common.loading')}
+              </div>
+            }
             scrollContainerClassName="max-h-[calc(100vh-260px)]"
             renderEmptyState={() => (
               <div className="flex justify-center py-8 text-default-500 text-sm">

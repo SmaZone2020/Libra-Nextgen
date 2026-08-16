@@ -5,6 +5,8 @@ const API_BASE = `${API_ORIGIN}/api`;
 export interface FileListResult {
   path: string;
   entries: FileEntry[];
+  total?: number;
+  offset?: number;
 }
 
 export interface FileEntry {
@@ -26,8 +28,8 @@ export interface FileOpResult {
   error?: string;
 }
 
-export function listFiles(agentId: string, path: string): Promise<FileListResult> {
-  return api.post<FileListResult>(`/files/${agentId}/list`, { path });
+export function listFiles(agentId: string, path: string, offset = 0, limit = 200): Promise<FileListResult> {
+  return api.post<FileListResult>(`/files/${agentId}/list`, { path, offset, limit });
 }
 
 export interface ReadFileResult {
@@ -39,6 +41,10 @@ export interface ReadFileResult {
 
 export function readFile(agentId: string, path: string): Promise<ReadFileResult> {
   return api.post<ReadFileResult>(`/files/${agentId}/read`, { path });
+}
+
+export function openFile(agentId: string, path: string): Promise<FileOpResult> {
+  return api.post<FileOpResult>(`/files/${agentId}/open`, { path });
 }
 
 export function listArchive(agentId: string, path: string): Promise<FileListResult> {

@@ -1,23 +1,11 @@
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { listFiles, getDrives, deleteFile, renameFile, moveFile, copyFile, compressFile, decompressFile, createShortcut, downloadFile, readFile, listArchive } from '../../api/files';
+import { listFiles, getDrives, deleteFile, renameFile, moveFile, copyFile, compressFile, decompressFile, createShortcut, downloadFile, openFile, listArchive } from '../../api/files';
 import type { FileEntry } from '../../api/files';
-import { Modal, Spinner } from '@heroui/react';
 import { PathBar } from './PathBar';
 import { FileList, isArchive } from './FileList';
 import { useAgent } from '../../contexts/AgentContext';
 import { useDialog } from '../../hooks/useDialog';
-
-function decodeContent(base64: string): string {
-  try {
-    const binary = atob(base64);
-    const bytes = new Uint8Array(binary.length);
-    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-    return new TextDecoder('utf-8').decode(bytes);
-  } catch {
-    return '[binary file — cannot preview]';
-  }
-}
 
 export default function FileManagerPage() {
   const { t } = useTranslation();
@@ -25,18 +13,19 @@ export default function FileManagerPage() {
   const { alert, confirm, prompt, DialogComponent } = useDialog();
   const [path, setPath] = useState('C:\\');
   const [entries, setEntries] = useState<FileEntry[]>([]);
+  const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [history, setHistory] = useState<string[]>([]);
   const [drives, setDrives] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [inArchive, setInArchive] = useState(false);
 
-  const [fileViewer, setFileViewer] = useState<{ name: string; content: string } | null>(null);
-  const [fileViewLoading, setFileViewLoading] = useState(false);
-
   const contextRef = useRef<FileEntry | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const [contextEntry, setContextEntry] = useState<FileEntry | null>(null);
+
+  const PAGE_SIZE = 200;
 
   const sendFileList = useCallback(async (dirPath: string, id?: string) => {
     const targetId = id || agentId;
@@ -44,13 +33,29 @@ export default function FileManagerPage() {
     setLoading(true);
     setError(null);
     try {
-      const result = await listFiles(targetId, dirPath);
+      const result = await listFiles(targetId, dirPath, 0, PAGE_SIZE);
       setPath(result.path);
       setEntries(result.entries);
+      setTotal(result.total ?? result.entries.length);
     } catch (e) {
       setError(e instanceof Error ? e.message : t('fileManager.listFailed'));
     } finally { setLoading(false); }
   }, [agentId]);
+
+  const loadMore = useCallback(async () => {
+    if (!agentId || loading || loadingMore) return;
+    if (entries.length >= total) return;
+    setLoadingMore(true);
+    try {
+      const result = await listFiles(agentId, path, entries.length, PAGE_SIZE);
+      setEntries(prev => [...prev, ...result.entries]);
+      setTotal(result.total ?? (entries.length + result.entries.length));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : t('fileManager.listFailed'));
+    } finally { setLoadingMore(false); }
+  }, [agentId, path, entries, total, loading, loadingMore]);
+
+  const hasMore = entries.length < total;
 
   useEffect(() => {
     if (!agentId) {
@@ -65,6 +70,7 @@ export default function FileManagerPage() {
     abortRef.current?.abort();
     abortRef.current = new AbortController();
     setEntries([]);
+    setTotal(0);
     setPath('');
     setHistory([]);
     setLoading(true);
@@ -74,23 +80,15 @@ export default function FileManagerPage() {
       const driveList = drivesResult.drives ?? (Array.isArray(drivesResult) ? drivesResult : []);
       setDrives(driveList);
       const firstDrive = driveList[0] ?? 'C:\\';
-      return listFiles(agentId, firstDrive).then((fileResult) => {
+      return listFiles(agentId, firstDrive, 0, PAGE_SIZE).then((fileResult) => {
         setPath(fileResult.path);
         setEntries(fileResult.entries);
+        setTotal(fileResult.total ?? fileResult.entries.length);
       });
     }).catch((e) => {
       setError(e instanceof Error ? e.message : t('fileManager.connectFailed'));
     }).finally(() => { setLoading(false); });
   }, [agentId]);
-
-  const sortedEntries = useMemo(() => {
-    const sorted = [...entries];
-    sorted.sort((a, b) => {
-      if (a.type !== b.type) return a.type === 'dir' ? -1 : 1;
-      return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
-    });
-    return sorted;
-  }, [entries]);
 
   const navigateTo = useCallback((dirPath: string) => {
     setHistory(prev => [...prev, path]);
@@ -98,25 +96,17 @@ export default function FileManagerPage() {
     sendFileList(dirPath);
   }, [path, sendFileList]);
 
-  const openFile = useCallback(async (filePath: string, name: string) => {
+  const executeFile = useCallback(async (filePath: string, name: string) => {
     if (!agentId) return;
-    setFileViewLoading(true);
-    setFileViewer({ name, content: '' });
+    const { confirmed } = await confirm(t('fileManager.openConfirm', { name }));
+    if (!confirmed) return;
     try {
-      const result = await readFile(agentId, filePath);
-      if (result.error) {
-        await alert(result.error);
-        setFileViewer(null);
-      } else {
-        setFileViewer({ name, content: decodeContent(result.content) });
-      }
+      const result = await openFile(agentId, filePath);
+      if (result.error) await alert(result.error);
     } catch (e) {
       await alert(e instanceof Error ? e.message : t('fileManager.openFailed'));
-      setFileViewer(null);
-    } finally {
-      setFileViewLoading(false);
     }
-  }, [agentId, alert]);
+  }, [agentId, confirm, alert]);
 
   const enterArchive = useCallback(async (archivePath: string) => {
     if (!agentId) return;
@@ -128,6 +118,7 @@ export default function FileManagerPage() {
       setInArchive(true);
       setPath(result.path);
       setEntries(result.entries);
+      setTotal(result.total ?? result.entries.length);
     } catch (e) {
       setError(e instanceof Error ? e.message : t('fileManager.listFailed'));
     } finally {
@@ -151,9 +142,9 @@ export default function FileManagerPage() {
     } else if (isArchive(entry.name)) {
       enterArchive(fullPath);
     } else {
-      openFile(fullPath, entry.name);
+      executeFile(fullPath, entry.name);
     }
-  }, [entries, path, navigateTo, inArchive, enterArchive, openFile]);
+  }, [entries, path, navigateTo, inArchive, enterArchive, executeFile]);
 
   const goBack = useCallback(() => {
     if (history.length === 0) return;
@@ -192,7 +183,7 @@ export default function FileManagerPage() {
   const handleOpen = async () => {
     const entry = contextRef.current;
     if (!entry) return;
-    await openFile(getContextPath(), entry.name);
+    await executeFile(getContextPath(), entry.name);
   };
 
   const handleViewArchive = async () => {
@@ -313,9 +304,12 @@ export default function FileManagerPage() {
       />
 
       <FileList
-        entries={sortedEntries}
+        entries={entries}
         loading={loading}
         error={error}
+        hasMore={hasMore}
+        isLoadingMore={loadingMore}
+        onLoadMore={loadMore}
         onRowAction={handleRowAction}
         onContextMenu={handleContextMenu}
         contextEntry={contextEntry}
@@ -330,27 +324,6 @@ export default function FileManagerPage() {
         onShortcut={handleShortcut}
         onDownload={handleDownload}
       />
-
-      {/* File content viewer */}
-      <Modal.Backdrop isOpen={!!fileViewer} onOpenChange={(open) => { if (!open) setFileViewer(null); }}>
-        <Modal.Container size="lg">
-          <Modal.Dialog>
-            <Modal.CloseTrigger />
-            <Modal.Header>
-              <Modal.Heading className="break-all">{fileViewer?.name}</Modal.Heading>
-            </Modal.Header>
-            <Modal.Body>
-              {fileViewLoading ? (
-                <div className="flex justify-center py-8"><Spinner size="lg" /></div>
-              ) : (
-                <pre className="text-xs font-mono whitespace-pre-wrap break-all max-h-[60vh] overflow-auto bg-default-100 rounded p-3">
-                  {fileViewer?.content}
-                </pre>
-              )}
-            </Modal.Body>
-          </Modal.Dialog>
-        </Modal.Container>
-      </Modal.Backdrop>
 
       {DialogComponent}
     </div>
