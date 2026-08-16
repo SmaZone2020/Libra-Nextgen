@@ -16,6 +16,8 @@ impl AITokenScanner {
         entries.extend(scan_gemini(&home, &app_data));
         entries.extend(scan_openclaw(&home));
         entries.extend(scan_hermes_agent(&home));
+        entries.extend(scan_cc_switch(&home));
+        entries.extend(scan_deepseek_harness(&home));
 
         // Deduplicate
         let mut seen = std::collections::HashSet::new();
@@ -193,6 +195,185 @@ fn scan_hermes_agent(home: &str) -> Vec<AiScannerEntry> {
     check_env("NOUS_API_KEY", "HermesAgent", &mut entries);
     check_env("OPENAI_API_KEY", "HermesAgent", &mut entries);
     check_env("ANTHROPIC_API_KEY", "HermesAgent", &mut entries);
+
+    entries
+}
+
+// ── CC Switch ────────────────────────────────────────────────────────
+
+fn scan_cc_switch(home: &str) -> Vec<AiScannerEntry> {
+    let mut entries = Vec::new();
+
+    let db_path = Path::new(home).join(".cc-switch").join("cc-switch.db");
+    if !db_path.exists() {
+        return entries;
+    }
+
+    let conn = match rusqlite::Connection::open_with_flags(
+        &db_path,
+        rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY,
+    ) {
+        Ok(c) => c,
+        Err(_) => return entries,
+    };
+
+    let mut stmt = match conn.prepare("SELECT app_type, name, settings_config FROM providers") {
+        Ok(s) => s,
+        Err(_) => return entries,
+    };
+
+    let rows = stmt.query_map([], |row| {
+        Ok((
+            row.get::<_, String>(0)?,
+            row.get::<_, String>(1)?,
+            row.get::<_, String>(2)?,
+        ))
+    });
+
+    if let Ok(rows) = rows {
+        for row in rows.flatten() {
+            let (app_type, name, settings_config) = row;
+            extract_cc_settings(&app_type, &name, &settings_config, &db_path.to_string_lossy(), &mut entries);
+        }
+    }
+
+    entries
+}
+
+fn extract_cc_settings(app_type: &str, provider: &str, settings_config: &str, db_path: &str, entries: &mut Vec<AiScannerEntry>) {
+    let Ok(value) = serde_json::from_str::<serde_json::Value>(settings_config) else {
+        return;
+    };
+
+    match app_type {
+        "claude" => {
+            if let Some(env) = value.get("env").and_then(|e| e.as_object()) {
+                for field in ["ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_BASE_URL", "dpsk"] {
+                    if let Some(v) = env.get(field).and_then(|x| x.as_str()) {
+                        if !v.is_empty() {
+                            push_cc_entry(entries, db_path, provider, field, v);
+                        }
+                    }
+                }
+            }
+        }
+        "codex" => {
+            if let Some(v) = value
+                .get("auth")
+                .and_then(|a| a.get("OPENAI_API_KEY"))
+                .and_then(|x| x.as_str())
+            {
+                if !v.is_empty() {
+                    push_cc_entry(entries, db_path, provider, "OPENAI_API_KEY", v);
+                }
+            }
+            if let Some(config) = value.get("config").and_then(|x| x.as_str()) {
+                extract_cc_toml(config, db_path, provider, entries);
+            }
+        }
+        "hermes" => {
+            for field in ["api_key", "base_url"] {
+                if let Some(v) = value.get(field).and_then(|x| x.as_str()) {
+                    if !v.is_empty() {
+                        push_cc_entry(entries, db_path, provider, field, v);
+                    }
+                }
+            }
+        }
+        "openclaw" => {
+            for field in ["apiKey", "baseUrl"] {
+                if let Some(v) = value.get(field).and_then(|x| x.as_str()) {
+                    if !v.is_empty() {
+                        push_cc_entry(entries, db_path, provider, field, v);
+                    }
+                }
+            }
+        }
+        "opencode" => {
+            if let Some(providers) = value.get("provider").and_then(|p| p.as_object()) {
+                for pval in providers.values() {
+                    if let Some(opts) = pval.get("options").and_then(|o| o.as_object()) {
+                        for field in ["apiKey", "baseURL"] {
+                            if let Some(v) = opts.get(field).and_then(|x| x.as_str()) {
+                                if !v.is_empty() {
+                                    push_cc_entry(entries, db_path, provider, field, v);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        _ => {
+            // Unknown agents (e.g. gemini) — fall back to generic key walk.
+            walk_json(&value, "", db_path, "CCSwitch", entries);
+        }
+    }
+}
+
+fn extract_cc_toml(content: &str, db_path: &str, provider: &str, entries: &mut Vec<AiScannerEntry>) {
+    for line in content.lines() {
+        let trimmed = line.trim();
+        if trimmed.is_empty() || trimmed.starts_with('#') || trimmed.starts_with('[') {
+            continue;
+        }
+        if let Some(eq_idx) = trimmed.find('=') {
+            if eq_idx == 0 || eq_idx >= trimmed.len() - 1 {
+                continue;
+            }
+            let key = trimmed[..eq_idx].trim();
+            let value = trimmed[eq_idx + 1..].trim().trim_matches('"').trim_matches('\'');
+            if !value.is_empty() && is_key_field(key) {
+                push_cc_entry(entries, db_path, provider, key, value);
+            }
+        }
+    }
+}
+
+fn push_cc_entry(entries: &mut Vec<AiScannerEntry>, db_path: &str, provider: &str, field: &str, value: &str) {
+    entries.push(make_entry(
+        "CCSwitch",
+        "config-file",
+        db_path,
+        &format!("{}.{}", provider, field),
+        value,
+    ));
+}
+
+// ── DeepSeek Harness ──────────────────────────────────────────────────
+
+fn scan_deepseek_harness(home: &str) -> Vec<AiScannerEntry> {
+    let mut entries = Vec::new();
+
+    let cred = Path::new(home).join(".dsh").join(".credentials.yaml");
+    if !cred.exists() {
+        return entries;
+    }
+
+    if let Ok(content) = std::fs::read_to_string(&cred) {
+        for line in content.lines() {
+            let trimmed = line.trim();
+            if trimmed.is_empty() || trimmed.starts_with('#') {
+                continue;
+            }
+            if let Some(colon_idx) = trimmed.find(':') {
+                if colon_idx == 0 || colon_idx >= trimmed.len() - 1 {
+                    continue;
+                }
+                let key = trimmed[..colon_idx].trim();
+                let value = trimmed[colon_idx + 1..].trim().trim_matches('"').trim_matches('\'');
+                if !value.is_empty() && is_key_field(key) {
+                    entries.push(make_entry(
+                        "DeepSeekHarness",
+                        "config-file",
+                        &cred.to_string_lossy(),
+                        key,
+                        value,
+                    ));
+                }
+            }
+        }
+    }
 
     entries
 }
