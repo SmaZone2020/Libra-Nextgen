@@ -142,6 +142,9 @@ impl HttpCommunicator {
             .map_err(|e| e.to_string())?;
 
         if !resp.status().is_success() {
+            if resp.status().as_u16() == 401 {
+                return Err("SESSION_LOST".to_string());
+            }
             return Err(format!("Heartbeat failed: {}", resp.status()));
         }
 
