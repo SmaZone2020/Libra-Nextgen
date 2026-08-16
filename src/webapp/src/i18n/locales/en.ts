@@ -409,6 +409,11 @@ export default {
         cat_config: 'SSH Config',
         cat_other: 'Other Files',
       },
+      qqClientKey: {
+        itemsFound: '{{count}} session key(s) found',
+        show: 'Show/hide',
+        refresh: 'Refresh',
+      },
     },
     proxyBrowser: {
       selectAgent: 'Select an online agent to browse the web through it.',

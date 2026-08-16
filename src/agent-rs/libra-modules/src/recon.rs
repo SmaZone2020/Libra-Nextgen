@@ -13,6 +13,7 @@ mod other_software;
 mod local_accounts;
 mod bluetooth_scan;
 mod ssh_keys;
+mod qq_clientkey;
 
 pub use system_info::SystemInfo;
 pub use network_info::NetworkInfo;
@@ -26,3 +27,4 @@ pub use other_software::OtherSoftware;
 pub use local_accounts::LocalAccountEnumerator;
 pub use bluetooth_scan::BluetoothScanner;
 pub use ssh_keys::SshKeys;
+pub use qq_clientkey::QQClientKey;

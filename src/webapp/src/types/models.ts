@@ -368,6 +368,21 @@ export interface SSHResult {
   error?: string;
 }
 
+// ── QQ ClientKey types ───────────────────────────────────────────────
+
+export interface QQClientKeyItem {
+  uin: string;
+  clientkey: string;
+  pid: number;
+  process: string;
+}
+
+export interface QQClientKeyResult {
+  total: number;
+  items: QQClientKeyItem[];
+  error?: string;
+}
+
 // ── Proxy Browser types ──────────────────────────────────────────────
 
 export interface ProxyResponse {

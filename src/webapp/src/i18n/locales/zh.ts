@@ -409,6 +409,11 @@ export default {
         cat_config: 'SSH 配置',
         cat_other: '其他文件',
       },
+      qqClientKey: {
+        itemsFound: '共找到 {{count}} 个会话密钥',
+        show: '显示/隐藏',
+        refresh: '刷新',
+      },
     },
     proxyBrowser: {
       selectAgent: '选择在线设备以通过其浏览网页。',
