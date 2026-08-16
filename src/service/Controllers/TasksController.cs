@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using LibraNextgen.Common.Authorization;
 using LibraNextgen.Common.Models;
 using LibraNextgen.Service.Services;
 using TaskStatus = LibraNextgen.Common.Models.TaskStatus;
@@ -59,6 +60,9 @@ public class TasksController : ControllerBase
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] TaskCreateRequest request, CancellationToken ct)
     {
+        if (CommandAuthorization.RequiresAdmin(request.CommandType) && !User.IsInRole("Admin"))
+            return Forbid();
+
         var username = User.Identity?.Name ?? "unknown";
         var task = await _taskService.CreateAsync(request, username, ct);
         return CreatedAtAction(nameof(GetById), new { id = task.Id }, task);

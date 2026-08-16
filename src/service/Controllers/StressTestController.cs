@@ -9,7 +9,7 @@ namespace LibraNextgen.Service.Controllers;
 
 [ApiController]
 [Route("api/stress-test")]
-[Authorize]
+[Authorize(Roles = "Admin")]
 public class StressTestController : ControllerBase
 {
     private readonly ConnectionManager _wsManager;
