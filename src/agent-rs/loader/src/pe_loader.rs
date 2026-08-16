@@ -297,6 +297,38 @@ pub unsafe fn reflective_load(dll_bytes: &[u8]) -> Result<extern "system" fn(*co
     Ok(std::mem::transmute(sym))
 }
 
+// ── macOS: temp file + dlopen (no memfd on macOS) ──────────────────────
+
+#[cfg(target_os = "macos")]
+pub unsafe fn reflective_load(dll_bytes: &[u8]) -> Result<extern "system" fn(*const u8, usize), String> {
+    use std::ffi::CStr;
+
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_nanos();
+    let tmp = std::env::temp_dir().join(format!("libra_core_{}_{}.dylib", std::process::id(), nanos));
+
+    std::fs::write(&tmp, dll_bytes).map_err(|e| e.to_string())?;
+    let path_c = std::ffi::CString::new(tmp.to_str().unwrap_or_default()).map_err(|e| e.to_string())?;
+
+    let handle = libc::dlopen(path_c.as_ptr(), libc::RTLD_NOW);
+    let _ = std::fs::remove_file(&tmp);
+
+    if handle.is_null() {
+        let err = libc::dlerror();
+        let msg = if err.is_null() { "unknown".to_string() } else { CStr::from_ptr(err).to_string_lossy().to_string() };
+        return Err(format!("dlopen failed: {}", msg));
+    }
+
+    let sym = libc::dlsym(handle, b"core_main\0".as_ptr() as *const libc::c_char);
+    if sym.is_null() {
+        return Err("core_main not found".into());
+    }
+
+    Ok(std::mem::transmute(sym))
+}
+
 // ── PE Structures & Constants (used by manual map fallback) ───────────
 
 const IMAGE_DIRECTORY_ENTRY_EXPORT: usize = 0;

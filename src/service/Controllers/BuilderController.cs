@@ -19,16 +19,21 @@ public class BuilderController : ControllerBase
     private static readonly string OutputBase = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "build-output"));
     private static readonly string HistoryFile = Path.Combine(OutputBase, "builds.json");
     private static readonly string TemplateDir = Path.Combine(OutputBase, "loader-template");
-    private static readonly string CoreTemplateDir = Path.Combine(OutputBase, "core-template");
 
     private static readonly string RustAgentDir = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "agent-rs"));
 
-    private static readonly Dictionary<string, string> RustTargetTriple = new()
+    private static readonly Dictionary<string, PlatformTarget> PlatformTargets = new()
     {
-        ["x64"] = "x86_64-pc-windows-msvc",
-        ["x86"] = "i686-pc-windows-msvc",
-        ["arm"] = "aarch64-unknown-linux-gnu",
+        ["x64"] = new("x86_64-pc-windows-msvc", "windows"),
+        ["x86"] = new("i686-pc-windows-msvc", "windows"),
+        ["arm"] = new("aarch64-unknown-linux-gnu", "linux"),
+        ["linux-x64"] = new("x86_64-unknown-linux-gnu", "linux"),
+        ["linux-arm64"] = new("aarch64-unknown-linux-gnu", "linux"),
+        ["macos-x64"] = new("x86_64-apple-darwin", "macos"),
+        ["macos-arm64"] = new("aarch64-apple-darwin", "macos"),
     };
+
+    private static readonly string ModulesDir = Path.Combine(OutputBase, "modules");
 
     private static readonly string IconUploadDir = Path.Combine(Path.GetTempPath(), "libra-build-icons");
     private static readonly object _buildLock = new();
@@ -106,16 +111,17 @@ public class BuilderController : ControllerBase
     [HttpPost("build")]
     public IActionResult Build([FromBody] BuildConfigRequest req)
     {
-        if (!RustTargetTriple.ContainsKey(req.Platform))
+        if (!PlatformTargets.ContainsKey(req.Platform))
             return BadRequest(new { error = $"Unsupported platform: {req.Platform}" });
 
         var buildId = Guid.NewGuid().ToString("N")[..8];
+        var ext = PlatformTargets[req.Platform].Os == "windows" ? ".exe" : "";
         var record = new BuildRecord
         {
             Id = buildId,
             Platform = req.Platform,
             Config = req,
-            FileName = $"agent-{req.Platform}-{buildId}.exe",
+            FileName = $"agent-{req.Platform}-{buildId}{ext}",
             Status = "building",
             CreatedAt = DateTime.UtcNow.ToString("o"),
         };
@@ -272,9 +278,7 @@ public class BuilderController : ControllerBase
         {
             if (Directory.Exists(TemplateDir))
                 Directory.Delete(TemplateDir, true);
-            if (Directory.Exists(CoreTemplateDir))
-                Directory.Delete(CoreTemplateDir, true);
-            return Ok(new { status = "ok", message = "Loader/core templates cleared. Next build will recompile." });
+            return Ok(new { status = "ok", message = "Loader template cleared. Next build will recompile." });
         }
         catch (Exception ex)
         {
@@ -391,12 +395,11 @@ public class BuilderController : ControllerBase
             }
             job.Log($"Rust toolchain: {cargoCheck.Stdout.Trim()}");
 
-            // Determine target triple
-            string? targetTriple = null;
-            if (RustTargetTriple.TryGetValue(req.Platform, out var triple))
-                targetTriple = triple;
-
-            var targetArg = targetTriple != null ? $"--target {targetTriple}" : "";
+            // Determine target triple + OS
+            var target = PlatformTargets[req.Platform]; // Build() already validated the key
+            var targetTriple = target.Triple;
+            var targetOs = target.Os;
+            var targetArg = $"--target {targetTriple}";
 
             // Desktop mode: add --features desktop
             var featuresArg = req.ApplicationType == "Desktop" ? "--features desktop" : "";
@@ -409,54 +412,47 @@ public class BuilderController : ControllerBase
                 job.Log("Strip symbols enabled (RUSTFLAGS=-C strip=symbols)");
             }
 
-            var isWindows = (targetTriple != null && targetTriple.Contains("windows")) || targetTriple == null;
+            var isWindows = targetOs == "windows";
+            var isMacos = targetOs == "macos";
 
-            var releaseDir = targetTriple != null
-                ? Path.Combine(targetDir, targetTriple, "release")
-                : Path.Combine(targetDir, "release");
-            var coreDllName = isWindows ? "core.dll" : "libcore.so";
+            var releaseDir = Path.Combine(targetDir, targetTriple, "release");
+            var coreDllName = isWindows ? "core.dll" : isMacos ? "libcore.dylib" : "libcore.so";
+            var loaderExeName = isWindows ? "loader.exe" : "loader";
+            var moduleExt = isWindows ? "dll" : isMacos ? "dylib" : "so";
 
             // ══════════════════════════════════════════════════════════════
-            // Stage 1: Core DLL — reuse cached template, compile only once.
+            // Stage 1: Build Core DLL from source
             // ══════════════════════════════════════════════════════════════
-            var coreTemplatePath = Path.Combine(CoreTemplateDir, $"{req.Platform}-{req.ApplicationType.ToLower()}", coreDllName);
-            byte[] coreDllBytes;
+            job.Log($"=== Stage 1: Building Core DLL ({targetTriple}) ===");
+            var coreBuildArgs = $"build --release {targetArg} -p core --target-dir \"{targetDir}\"";
+            job.Log($"cargo {coreBuildArgs}");
 
-            if (System.IO.File.Exists(coreTemplatePath))
+            var coreBuildResult = await RunProcessAsync("cargo", coreBuildArgs, job, RustAgentDir, envVars);
+            if (coreBuildResult.ExitCode != 0)
             {
-                job.Log($"Using cached core template: {coreTemplatePath}");
-                coreDllBytes = await System.IO.File.ReadAllBytesAsync(coreTemplatePath);
+                job.Fail($"Core build failed (exit code {coreBuildResult.ExitCode})");
+                UpdateHistory(job);
+                return;
             }
-            else
+
+            var coreDllPath = Path.Combine(releaseDir, coreDllName);
+            if (!System.IO.File.Exists(coreDllPath))
             {
-                job.Log("=== Stage 1: Building Core DLL (first time, will cache) ===");
-                var coreBuildArgs = $"build --release {targetArg} -p core --target-dir \"{targetDir}\"";
-                job.Log($"cargo {coreBuildArgs}");
+                var found = Directory.GetFiles(releaseDir, "*core*")
+                    .FirstOrDefault(f => f.EndsWith(".dll") || f.EndsWith(".so") || f.EndsWith(".dylib"));
+                if (found != null) coreDllPath = found;
+            }
 
-                var coreBuildResult = await RunProcessAsync("cargo", coreBuildArgs, job, RustAgentDir, envVars);
-                if (coreBuildResult.ExitCode != 0)
-                {
-                    job.Fail($"Core build failed (exit code {coreBuildResult.ExitCode})");
-                    UpdateHistory(job);
-                    return;
-                }
+            if (!System.IO.File.Exists(coreDllPath))
+            {
+                job.Fail($"Core DLL not found at {releaseDir}");
+                UpdateHistory(job);
+                return;
+            }
 
-                var coreDllPath = Path.Combine(releaseDir, coreDllName);
-                if (!System.IO.File.Exists(coreDllPath))
-                {
-                    var found = Directory.GetFiles(releaseDir, "*core*")
-                        .FirstOrDefault(f => f.EndsWith(".dll") || f.EndsWith(".so") || f.EndsWith(".dylib"));
-                    if (found != null) coreDllPath = found;
-                }
-
-                if (!System.IO.File.Exists(coreDllPath))
-                {
-                    job.Fail($"Core DLL not found at {releaseDir}");
-                    UpdateHistory(job);
-                    return;
-                }
-
-                // Stage 1.5: Validate Core DLL for reflective loading.
+            // Stage 1.5: Validate core for reflective loading (PE/Windows only).
+            if (isWindows)
+            {
                 job.Log("=== Stage 1.5: Validating Core DLL for reflective loading ===");
                 var srdiArgs = $"run --release -p srdi --target-dir \"{targetDir}\" -- \"{coreDllPath}\" core_main";
                 var srdiResult = await RunProcessAsync("cargo", srdiArgs, job, RustAgentDir, envVars);
@@ -467,16 +463,42 @@ public class BuilderController : ControllerBase
                     return;
                 }
                 job.Log("Core DLL validated: PE structure OK, 'core_main' export present");
-
-                var coreTemplateDir = Path.GetDirectoryName(coreTemplatePath)!;
-                Directory.CreateDirectory(coreTemplateDir);
-                System.IO.File.Copy(coreDllPath, coreTemplatePath, true);
-                job.Log($"Core DLL cached to {coreTemplatePath}");
-
-                coreDllBytes = await System.IO.File.ReadAllBytesAsync(coreDllPath);
             }
 
+            var coreDllBytes = await System.IO.File.ReadAllBytesAsync(coreDllPath);
             job.Log($"Core DLL ready ({coreDllBytes.Length / 1024} KB)");
+
+            // ══════════════════════════════════════════════════════════════
+            // Stage 1.6: Build cloud modules (shell) for this platform
+            // ══════════════════════════════════════════════════════════════
+            job.Log($"=== Stage 1.6: Building shell module ({targetTriple}) ===");
+            var moduleBuildArgs = $"build --release {targetArg} -p shell-module --target-dir \"{targetDir}\"";
+            var moduleBuildResult = await RunProcessAsync("cargo", moduleBuildArgs, job, RustAgentDir, envVars);
+            if (moduleBuildResult.ExitCode == 0)
+            {
+                var moduleDllName = isWindows ? "shell_module.dll" : isMacos ? "libshell_module.dylib" : "libshell_module.so";
+                var modulePath = Path.Combine(releaseDir, moduleDllName);
+                if (!System.IO.File.Exists(modulePath))
+                {
+                    var found = Directory.GetFiles(releaseDir, "*shell*")
+                        .FirstOrDefault(f => f.EndsWith(".dll") || f.EndsWith(".so") || f.EndsWith(".dylib"));
+                    if (found != null) modulePath = found;
+                }
+                if (System.IO.File.Exists(modulePath))
+                {
+                    Directory.CreateDirectory(ModulesDir);
+                    System.IO.File.Copy(modulePath, Path.Combine(ModulesDir, $"shell.{moduleExt}"), true);
+                    job.Log($"Shell module deployed to build-output/modules/shell.{moduleExt}");
+                }
+                else
+                {
+                    job.Log("[WARN] shell module binary not found after build");
+                }
+            }
+            else
+            {
+                job.Log($"[WARN] shell module build failed (exit {moduleBuildResult.ExitCode}) — cloud shell unavailable");
+            }
 
             // ══════════════════════════════════════════════════════════════
             // Stage 2: Encrypt Core DLL
@@ -520,7 +542,6 @@ public class BuilderController : ControllerBase
             // ══════════════════════════════════════════════════════════════
             job.Log("=== Stage 3: Preparing Loader ===");
 
-            var loaderExeName = isWindows ? "loader.exe" : "loader";
             var templatePlatformDir = Path.Combine(TemplateDir, $"{req.Platform}-{req.ApplicationType.ToLower()}");
             var templatePath = Path.Combine(templatePlatformDir, loaderExeName);
             var exePath = Path.Combine(tempDir, loaderExeName);
@@ -828,6 +849,8 @@ public class BuildRecord
 }
 
 internal record struct ProcessResult(int ExitCode, string Stdout, string Stderr);
+
+public readonly record struct PlatformTarget(string Triple, string Os);
 
 public class BuildJob
 {

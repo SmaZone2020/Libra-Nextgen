@@ -38,7 +38,11 @@ pub fn load_module(bytes: &[u8], export: &str) -> Result<LoadedModule, String> {
     {
         return unsafe { linux::load(bytes, export) };
     }
-    #[cfg(not(any(target_os = "windows", target_os = "linux")))]
+    #[cfg(target_os = "macos")]
+    {
+        return unsafe { macos::load(bytes, export) };
+    }
+    #[cfg(not(any(target_os = "windows", target_os = "linux", target_os = "macos")))]
     {
         let _ = bytes;
         let _ = export;
@@ -171,6 +175,41 @@ mod linux {
             } else {
                 CStr::from_ptr(err).to_string_lossy().to_string()
             };
+            return Err(format!("dlopen failed: {}", msg));
+        }
+
+        let export_c = format!("{}\0", export);
+        let sym = libc::dlsym(handle, export_c.as_ptr() as *const libc::c_char);
+        if sym.is_null() {
+            return Err(format!("export '{}' not found", export));
+        }
+
+        let main: ModuleMainFn = std::mem::transmute(sym);
+        Ok(LoadedModule { main })
+    }
+}
+
+#[cfg(target_os = "macos")]
+mod macos {
+    use super::{LoadedModule, ModuleMainFn};
+    use std::ffi::CStr;
+
+    pub unsafe fn load(bytes: &[u8], export: &str) -> Result<LoadedModule, String> {
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_nanos();
+        let tmp = std::env::temp_dir().join(format!("libra_mod_{}_{}.dylib", std::process::id(), nanos));
+
+        std::fs::write(&tmp, bytes).map_err(|e| e.to_string())?;
+        let path_c = std::ffi::CString::new(tmp.to_str().unwrap_or_default()).map_err(|e| e.to_string())?;
+
+        let handle = libc::dlopen(path_c.as_ptr(), libc::RTLD_NOW);
+        let _ = std::fs::remove_file(&tmp);
+
+        if handle.is_null() {
+            let err = libc::dlerror();
+            let msg = if err.is_null() { "unknown".to_string() } else { CStr::from_ptr(err).to_string_lossy().to_string() };
             return Err(format!("dlopen failed: {}", msg));
         }
 
