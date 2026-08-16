@@ -6,10 +6,12 @@ members = [
     "libra-platform",
     "libra-modules",
     "libra-engine",
+    "libra-load",
     "agent",
     "loader",
     "core",
     "srdi",
+    "modules/shell",
 ]
 resolver = "2"
 

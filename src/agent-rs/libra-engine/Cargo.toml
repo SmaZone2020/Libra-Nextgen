@@ -9,6 +9,7 @@ libra-crypto = { path = "../libra-crypto" }
 libra-comm = { path = "../libra-comm" }
 libra-platform = { path = "../libra-platform" }
 libra-modules = { path = "../libra-modules" }
+libra-load = { path = "../libra-load" }
 tokio = { workspace = true }
 serde_json = { workspace = true }
 rand = { workspace = true }

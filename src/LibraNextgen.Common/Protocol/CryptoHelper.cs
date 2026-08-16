@@ -62,6 +62,33 @@ public static class CryptoHelper
         return Encoding.UTF8.GetString(plaintext);
     }
 
+    public static string EncryptBytes(byte[] plaintext, byte[] key)
+    {
+        var (encrypted, nonce, tag) = AesGcmEncrypt(plaintext, key);
+
+        var combined = new byte[nonce.Length + tag.Length + encrypted.Length];
+        Buffer.BlockCopy(nonce, 0, combined, 0, nonce.Length);
+        Buffer.BlockCopy(tag, 0, combined, nonce.Length, tag.Length);
+        Buffer.BlockCopy(encrypted, 0, combined, nonce.Length + tag.Length, encrypted.Length);
+
+        return Convert.ToBase64String(combined);
+    }
+
+    public static byte[] DecryptBytes(string encryptedBase64, byte[] key)
+    {
+        var combined = Convert.FromBase64String(encryptedBase64);
+
+        var nonce = new byte[AesNonceSize];
+        var tag = new byte[AesTagSize];
+        var ciphertext = new byte[combined.Length - AesNonceSize - AesTagSize];
+
+        Buffer.BlockCopy(combined, 0, nonce, 0, AesNonceSize);
+        Buffer.BlockCopy(combined, AesNonceSize, tag, 0, AesTagSize);
+        Buffer.BlockCopy(combined, AesNonceSize + AesTagSize, ciphertext, 0, ciphertext.Length);
+
+        return AesGcmDecrypt(ciphertext, key, nonce, tag);
+    }
+
     public static byte[] GenerateAesKey()
     {
         var key = new byte[AesKeySize / 8];

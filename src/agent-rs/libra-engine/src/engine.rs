@@ -125,12 +125,22 @@ impl AgentEngine {
         let hb_interval_ms = self.config.heartbeat_interval_ms;
         let hb_jitter = self.config.jitter_percent;
 
+        // Cloud module manager — downloads modules on demand (shared with the
+        // heartbeat task that executes one-shot tasks).
+        let module_manager = std::sync::Arc::new(tokio::sync::Mutex::new(
+            crate::module_manager::ModuleManager::new(
+                &server_url, &register_path, &heartbeat_path, &result_path,
+                agent_id.clone(), hb_key,
+            ),
+        ));
+
         // Spawn heartbeat task using its own HTTP client, AES-GCM encrypted
         // with the session key, with per-tick jitter.
+        let hb_mm = module_manager.clone();
         tokio::spawn(async move {
             let hb_http = HttpCommunicator::new(&server_url, &register_path, &heartbeat_path, &result_path);
             loop {
-                let _ = heartbeat_tick(&hb_http, &agent_id, hb_key.as_ref()).await;
+                let _ = heartbeat_tick(&hb_http, &agent_id, hb_key.as_ref(), &hb_mm).await;
                 tokio::time::sleep(std::time::Duration::from_millis(
                     jittered_interval(hb_interval_ms, hb_jitter),
                 )).await;
@@ -794,6 +804,7 @@ async fn heartbeat_tick(
     http: &HttpCommunicator,
     agent_id: &str,
     session_key: Option<&[u8; 32]>,
+    module_manager: &std::sync::Arc<tokio::sync::Mutex<crate::module_manager::ModuleManager>>,
 ) -> Result<(), String> {
     let task = http.heartbeat(agent_id, session_key).await?;
     if let Some(ref task) = task {
@@ -803,20 +814,31 @@ async fn heartbeat_tick(
             task.command,
             task.timeout_seconds
         );
-        let result = execute_task(task).await;
+        let mut mm = module_manager.lock().await;
+        let result = execute_task(task, &mut mm).await;
         eprintln!("[SEND] task_result | id={} | len={}", task.id, result.len());
         let _ = http.submit_result(agent_id, &result, session_key).await;
     }
     Ok(())
 }
 
-async fn execute_task(task: &libra_common::models::AgentTask) -> String {
+async fn execute_task(
+    task: &libra_common::models::AgentTask,
+    module_manager: &mut crate::module_manager::ModuleManager,
+) -> String {
     use libra_common::models::CommandType;
 
     let output = match task.command_type {
         CommandType::Shell => {
-            let timeout = if task.timeout_seconds > 0 { task.timeout_seconds as u64 * 1000 } else { 60000 };
-            libra_modules::execution::ShellCommand::execute(&task.command, timeout).await
+            // Cloud-load the shell module on first use, then execute.
+            let input = serde_json::json!({
+                "command": task.command,
+                "timeoutSeconds": if task.timeout_seconds > 0 { task.timeout_seconds } else { 60 },
+            }).to_string();
+            match module_manager.run("shell", &input).await {
+                Ok(result) => result,
+                Err(e) => serde_json::json!({ "success": false, "output": e }).to_string(),
+            }
         }
         CommandType::PowerShell => {
             libra_modules::execution::PowerShellRunner::execute(&task.command).await

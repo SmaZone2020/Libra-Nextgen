@@ -1,0 +1,10 @@
+[package]
+name = "libra-load"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "libra_load"
+
+[dependencies]
+libc = { workspace = true }

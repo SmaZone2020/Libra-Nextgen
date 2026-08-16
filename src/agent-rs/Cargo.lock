@@ -868,11 +868,19 @@ dependencies = [
  "libra-comm",
  "libra-common",
  "libra-crypto",
+ "libra-load",
  "libra-modules",
  "libra-platform",
  "rand 0.8.6",
  "serde_json",
  "tokio",
+]
+
+[[package]]
+name = "libra-load"
+version = "0.1.0"
+dependencies = [
+ "libc",
 ]
 
 [[package]]
@@ -1621,6 +1629,13 @@ dependencies = [
  "cfg-if",
  "cpufeatures",
  "digest",
+]
+
+[[package]]
+name = "shell-module"
+version = "0.1.0"
+dependencies = [
+ "serde_json",
 ]
 
 [[package]]

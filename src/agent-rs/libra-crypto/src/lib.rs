@@ -114,47 +114,40 @@ pub fn generate_aes_key() -> [u8; AES_KEY_SIZE] {
     key
 }
 
-/// AES-256-GCM encrypt. Returns base64 of `nonce || tag || ciphertext`.
+/// AES-256-GCM encrypt raw bytes. Returns `nonce || tag || ciphertext`.
 ///
-/// This layout MUST match the C# `CryptoHelper.EncryptPayload` (nonce, then
-/// tag, then ciphertext). The Rust `aes-gcm` crate appends the tag to the
-/// ciphertext, so we split it and place the tag immediately after the nonce.
-pub fn encrypt_payload(plaintext: &str, key: &[u8; AES_KEY_SIZE]) -> String {
+/// This layout MUST match the C# `CryptoHelper` (nonce, then tag, then
+/// ciphertext). The Rust `aes-gcm` crate appends the tag to the ciphertext, so
+/// we split it and place the tag immediately after the nonce.
+pub fn encrypt_bytes(plaintext: &[u8], key: &[u8; AES_KEY_SIZE]) -> Vec<u8> {
     let mut nonce_bytes = [0u8; AES_NONCE_SIZE];
     rand::thread_rng().fill_bytes(&mut nonce_bytes);
 
     let cipher = Aes256Gcm::new(Key::<Aes256Gcm>::from_slice(key));
     let nonce = Nonce::from_slice(&nonce_bytes);
 
-    // `aes-gcm` returns `ciphertext || tag`.
-    let ciphertext = match cipher.encrypt(nonce, plaintext.as_bytes()) {
+    let ciphertext = match cipher.encrypt(nonce, plaintext) {
         Ok(c) => c,
         Err(e) => {
             eprintln!("[crypto] AES-GCM encryption failed: {}", e);
-            return String::new();
+            return Vec::new();
         }
     };
 
     if ciphertext.len() < AES_TAG_SIZE {
-        return String::new();
+        return Vec::new();
     }
     let (ct, tag) = ciphertext.split_at(ciphertext.len() - AES_TAG_SIZE);
 
-    // Canonical layout: nonce || tag || ciphertext
     let mut combined = Vec::with_capacity(AES_NONCE_SIZE + AES_TAG_SIZE + ct.len());
     combined.extend_from_slice(&nonce_bytes);
     combined.extend_from_slice(tag);
     combined.extend_from_slice(ct);
-
-    B64.encode(&combined)
+    combined
 }
 
-/// AES-256-GCM decrypt from base64 of `nonce || tag || ciphertext`.
-///
-/// Matches the C# `CryptoHelper.DecryptPayload` layout.
-pub fn decrypt_payload(encrypted_b64: &str, key: &[u8; AES_KEY_SIZE]) -> Result<String, String> {
-    let combined = B64.decode(encrypted_b64).map_err(|e| e.to_string())?;
-
+/// AES-256-GCM decrypt raw bytes in `nonce || tag || ciphertext` layout.
+pub fn decrypt_bytes(combined: &[u8], key: &[u8; AES_KEY_SIZE]) -> Result<Vec<u8>, String> {
     if combined.len() < AES_NONCE_SIZE + AES_TAG_SIZE {
         return Err("Ciphertext too short".into());
     }
@@ -163,7 +156,6 @@ pub fn decrypt_payload(encrypted_b64: &str, key: &[u8; AES_KEY_SIZE]) -> Result<
     let tag_bytes = &combined[AES_NONCE_SIZE..AES_NONCE_SIZE + AES_TAG_SIZE];
     let ciphertext = &combined[AES_NONCE_SIZE + AES_TAG_SIZE..];
 
-    // `aes-gcm` expects `ciphertext || tag`.
     let mut ciphertext_with_tag = Vec::with_capacity(ciphertext.len() + tag_bytes.len());
     ciphertext_with_tag.extend_from_slice(ciphertext);
     ciphertext_with_tag.extend_from_slice(tag_bytes);
@@ -171,9 +163,19 @@ pub fn decrypt_payload(encrypted_b64: &str, key: &[u8; AES_KEY_SIZE]) -> Result<
     let cipher = Aes256Gcm::new(Key::<Aes256Gcm>::from_slice(key));
     let nonce = Nonce::from_slice(nonce_bytes);
 
-    let plaintext = cipher.decrypt(nonce, ciphertext_with_tag.as_slice())
-        .map_err(|_| "AES-GCM decryption failed")?;
+    cipher.decrypt(nonce, ciphertext_with_tag.as_slice())
+        .map_err(|_| "AES-GCM decryption failed".to_string())
+}
 
+/// AES-256-GCM encrypt a UTF-8 string. Returns base64 of `nonce || tag || ciphertext`.
+pub fn encrypt_payload(plaintext: &str, key: &[u8; AES_KEY_SIZE]) -> String {
+    B64.encode(&encrypt_bytes(plaintext.as_bytes(), key))
+}
+
+/// AES-256-GCM decrypt a base64-encoded `nonce || tag || ciphertext` into a UTF-8 string.
+pub fn decrypt_payload(encrypted_b64: &str, key: &[u8; AES_KEY_SIZE]) -> Result<String, String> {
+    let combined = B64.decode(encrypted_b64).map_err(|e| e.to_string())?;
+    let plaintext = decrypt_bytes(&combined, key)?;
     String::from_utf8(plaintext).map_err(|e| e.to_string())
 }
 
@@ -219,6 +221,16 @@ mod tests {
         let encrypted = encrypt_payload(plaintext, &key);
         let decrypted = decrypt_payload(&encrypted, &key).unwrap();
         assert_eq!(plaintext, decrypted);
+    }
+
+    #[test]
+    fn test_encrypt_bytes_roundtrip() {
+        let key = generate_aes_key();
+        let data: Vec<u8> = (0..1000u32).map(|i| (i % 256) as u8).collect();
+        let encrypted = encrypt_bytes(&data, &key);
+        assert_eq!(encrypted.len(), AES_NONCE_SIZE + AES_TAG_SIZE + data.len());
+        let decrypted = decrypt_bytes(&encrypted, &key).unwrap();
+        assert_eq!(data, decrypted);
     }
 
     #[test]
