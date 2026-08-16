@@ -92,6 +92,7 @@ export default function BuilderPage() {
   // Templates
   const [templates, setTemplates] = useState<TemplateInfo[]>([]);
   const [templateUploading, setTemplateUploading] = useState(false);
+  const [templateToDelete, setTemplateToDelete] = useState<string | null>(null);
   const templateFileRef = useRef<HTMLInputElement>(null);
 
   const loadHistory = useCallback(async () => {
@@ -202,7 +203,13 @@ export default function BuilderPage() {
   };
 
   const handleDeleteTemplate = async (platform: string) => {
-    if (!confirm(t('builder.deleteTemplateConfirm'))) return;
+    setTemplateToDelete(platform);
+  };
+
+  const confirmDeleteTemplate = async () => {
+    if (!templateToDelete) return;
+    const platform = templateToDelete;
+    setTemplateToDelete(null);
     try {
       await deleteTemplate(platform);
       await loadTemplates();
@@ -817,6 +824,24 @@ export default function BuilderPage() {
                   </Modal.Body>
                 </>
               )}
+            </Modal.Dialog>
+          </Modal.Container>
+        </Modal.Backdrop>
+
+        {/* Delete Template Confirm Modal */}
+        <Modal.Backdrop isOpen={!!templateToDelete} onOpenChange={(open) => { if (!open) setTemplateToDelete(null); }}>
+          <Modal.Container size="sm">
+            <Modal.Dialog>
+              <Modal.Header>
+                <Modal.Heading>{t('builder.deleteTemplate')}</Modal.Heading>
+              </Modal.Header>
+              <Modal.Body>
+                <p className="text-default-600">{t('builder.deleteTemplateConfirm')}</p>
+              </Modal.Body>
+              <Modal.Footer>
+                <Button variant="ghost" onPress={() => setTemplateToDelete(null)}>{t('common.cancel')}</Button>
+                <Button variant="danger" onPress={confirmDeleteTemplate}>{t('common.delete')}</Button>
+              </Modal.Footer>
             </Modal.Dialog>
           </Modal.Container>
         </Modal.Backdrop>
