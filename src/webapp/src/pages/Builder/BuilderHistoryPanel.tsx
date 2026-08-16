@@ -108,18 +108,20 @@ export function BuilderHistoryPanel({
                     {record.fileSize > 0 ? ` · ${formatSize(record.fileSize)}` : ''}
                   </ListView.Description>
                 </ListView.ItemContent>
-                {record.status === 'completed' && (
+                {record.status !== 'building' && (
                   <ListView.ItemAction>
                     <div className="flex gap-1">
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        isIconOnly
-                        aria-label={t('builder.download')}
-                        onPress={() => onDownload(record.id)}
-                      >
-                        <ArrowDownToLine className="w-4 h-4" />
-                      </Button>
+                      {record.status === 'completed' && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          isIconOnly
+                          aria-label={t('builder.download')}
+                          onPress={() => onDownload(record.id)}
+                        >
+                          <ArrowDownToLine className="w-4 h-4" />
+                        </Button>
+                      )}
                       <Button
                         size="sm"
                         variant="ghost"
