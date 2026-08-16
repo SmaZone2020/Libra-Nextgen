@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button, Card, Chip, Input, Label, Modal, Spinner, Switch, TextField } from '@heroui/react';
 import { getAccountStatus, listAccounts, createAccount, updateAccount, deleteAccount, changePassword } from '../../api/account';
+import { getStoredUser } from '../../api/auth';
 import type { AccountListItem, UserPermissions } from '../../types/models';
 import { useDialog } from '../../hooks/useDialog';
 
@@ -169,16 +170,6 @@ export default function AccountTab() {
 
   return (
     <div className="space-y-6">
-      {/* Change Password Card — shown to all users */}
-      <Card className="p-6">
-        <h2 className="text-lg font-semibold mb-3">{t('settings.account.changePassword')}</h2>
-        <div className="flex items-center gap-3">
-          <Button variant="secondary" size="sm" onPress={() => setPwModalOpen(true)}>
-            {t('settings.account.changePassword')}
-          </Button>
-        </div>
-      </Card>
-
       {/* Account Management Card — Admin only */}
       <Card className="p-6">
         <div className="flex items-center justify-between mb-4">
@@ -190,6 +181,7 @@ export default function AccountTab() {
         <div className="space-y-3">
           {accounts.map((a) => {
             const isRestricted = !(a.permissions?.fullAccess ?? true);
+            const isSelf = a.username === (getStoredUser()?.username ?? '');
             return (
               <Card key={a.id} className="p-4">
                 <div className="flex items-center justify-between gap-4">
@@ -222,7 +214,11 @@ export default function AccountTab() {
                         {t('settings.account.restricted')}
                       </Chip>
                     )}
-                    {!a.isInitial && (
+                    {isSelf ? (
+                      <Button size="sm" variant="ghost" onPress={() => setPwModalOpen(true)}>
+                        {t('settings.account.changePassword')}
+                      </Button>
+                    ) : !a.isInitial && (
                       <div className="flex gap-1 ml-1">
                         <Button size="sm" variant="ghost" onPress={() => openEditModal(a)}>
                           {t('settings.edit')}
