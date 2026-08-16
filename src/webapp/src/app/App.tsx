@@ -128,6 +128,7 @@ export function App() {
   });
   const [needsSetup, setNeedsSetup] = useState(false);
   const [checking, setChecking] = useState(true);
+  const [agreedAt, setAgreedAt] = useState<string | null | undefined>(undefined);
 
   useEffect(() => {
     checkSetupStatus().then(ns => {
@@ -137,6 +138,26 @@ export function App() {
       setChecking(false);
     });
   }, []);
+
+  // Fetch agreement status whenever the user changes.
+  useEffect(() => {
+    if (!user) {
+      setAgreedAt(undefined);
+      return;
+    }
+    getAccountMe()
+      .then((me) => setAgreedAt(me.agreedAt ?? null))
+      .catch(() => setAgreedAt(null));
+  }, [user]);
+
+  const handleAcceptAgreement = async () => {
+    try {
+      await acceptAgreement();
+    } catch {
+      /* ignore */
+    }
+    setAgreedAt(new Date().toISOString());
+  };
 
   const handleToggle = useCallback((v: boolean) => {
     setCollapsed(v);
@@ -184,6 +205,19 @@ export function App() {
     return <LoginPage onLogin={handleLogin} />;
   }
 
+  // Agreement gate: block the whole console until the account accepts the
+  // authorized-use agreement. Declining forces a logout.
+  if (agreedAt === null) {
+    return <AgreementModal onAccept={handleAcceptAgreement} onDecline={handleLogout} />;
+  }
+  if (agreedAt === undefined) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-neutral-500">Loading...</div>
+      </div>
+    );
+  }
+
   return (
     <BrowserRouter>
       <AgentProvider>
@@ -213,29 +247,13 @@ function AuthenticatedLayout({
   const location = useLocation();
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [permissions, setPermissions] = useState<UserPermissions | null>(null);
-  const [agreedAt, setAgreedAt] = useState<string | null | undefined>(undefined);
   const sidebarWidth = collapsed ? SIDEBAR_W.collapsed : SIDEBAR_W.expanded;
 
   useEffect(() => {
     getAccountMe()
-      .then((me) => {
-        setPermissions(me.permissions);
-        setAgreedAt(me.agreedAt ?? null);
-      })
-      .catch(() => {
-        setPermissions(null);
-        setAgreedAt(null);
-      });
+      .then((me) => setPermissions(me.permissions))
+      .catch(() => setPermissions(null));
   }, []);
-
-  const handleAcceptAgreement = async () => {
-    try {
-      await acceptAgreement();
-    } catch {
-      /* ignore */
-    }
-    setAgreedAt(new Date().toISOString());
-  };
 
   const canSee = (to: string) => {
     if (!permissions || permissions.fullAccess) return true;
@@ -348,10 +366,6 @@ function AuthenticatedLayout({
           </AnimatePresence>
         </div>
       </main>
-
-      {agreedAt === null && (
-        <AgreementModal onAccept={handleAcceptAgreement} onDecline={onLogout} />
-      )}
     </div>
   );
 }
