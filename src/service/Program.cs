@@ -54,6 +54,7 @@ builder.Services.AddScoped<RelayService>();
 builder.Services.AddSingleton<ISessionLock, ShellSessionLock>();
 builder.Services.AddSingleton<AgentTrafficService>();
 builder.Services.AddSingleton<ConnectionManager>();
+builder.Services.AddSingleton<SessionKeyStore>();
 builder.Services.AddSingleton<StressTestService>();
 builder.Services.AddScoped<AuditService>();
 builder.Services.AddScoped<AccessKeyService>();

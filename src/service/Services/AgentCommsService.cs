@@ -1,4 +1,5 @@
 using LibraNextgen.Common.Models;
+using LibraNextgen.Common.Protocol;
 using LibraNextgen.Service.Data;
 using LibraNextgen.Service.Profiles;
 using MongoDB.Driver;
@@ -13,19 +14,22 @@ public class AgentCommsService
     private readonly TaskService _taskService;
     private readonly ProfileService _profileService;
     private readonly AgentTrafficService _trafficAccumulator;
+    private readonly SessionKeyStore _sessionKeys;
 
     public AgentCommsService(
         Repository<Agent> agents,
         Repository<TrafficRecord> traffic,
         TaskService taskService,
         ProfileService profileService,
-        AgentTrafficService trafficAccumulator)
+        AgentTrafficService trafficAccumulator,
+        SessionKeyStore sessionKeys)
     {
         _agents = agents;
         _traffic = traffic;
         _taskService = taskService;
         _profileService = profileService;
         _trafficAccumulator = trafficAccumulator;
+        _sessionKeys = sessionKeys;
     }
 
     public DefaultProfile GetActiveProfile() =>
@@ -33,6 +37,32 @@ public class AgentCommsService
 
     public async Task<Agent?> GetAgentAsync(string agentId) =>
         await _agents.GetByIdAsync(agentId);
+
+    /// <summary>
+    /// Generate an AES-256 session key, encrypt it with the agent's RSA public
+    /// key (SPKI + OAEP-SHA256) and store it keyed by agent id.
+    /// Returns the base64-encoded RSA ciphertext to send back to the agent.
+    /// </summary>
+    public string? EstablishSessionKey(string agentId, string? publicKeyBase64)
+    {
+        if (string.IsNullOrWhiteSpace(publicKeyBase64))
+            return null;
+
+        var key = CryptoHelper.GenerateAesKey();
+        try
+        {
+            var encrypted = CryptoHelper.RsaEncrypt(key, publicKeyBase64);
+            _sessionKeys.Set(agentId, key);
+            return Convert.ToBase64String(encrypted);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    public bool TryGetSessionKey(string agentId, out byte[]? key) =>
+        _sessionKeys.TryGet(agentId, out key);
 
     public async Task<Agent?> HandleRegisterAsync(RegisterRequest request, string clientIp)
     {
