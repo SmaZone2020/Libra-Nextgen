@@ -48,7 +48,7 @@
 
 ASP.NET Core WebAPI，包含：
 
-- `Controllers/` — 17 个 REST 控制器（Agents、Tasks、Builder、Files、System、Media、Screen、StressTest、Proxy、Audit 等）
+- `Controllers/` — 17 个 REST 控制器（Agents、Tasks、Builder、Files、System、Media、Screen、Proxy、Audit 等）
 - `Services/` — 12 个业务服务（AgentService、TaskService、AuthService、HeartbeatMonitor 等）
 - `Hubs/` — WebSocket 连接管理（原生 WebSocket，非 SignalR）
 - `Middleware/` — 审计日志中间件
@@ -57,7 +57,7 @@ ASP.NET Core WebAPI，包含：
 
 ### Console 页面 (`src/webapp/src/pages/`)
 
-16 个页面模块：
+15 个页面模块：
 
 | 页面            | 路由             | 功能                                              |
 | ------------- | -------------- | ----------------------------------------------- |
@@ -66,12 +66,11 @@ ASP.NET Core WebAPI，包含：
 | Shell         | `/shell`       | 基于 xterm.js 的远程交互式终端                            |
 | ScreenMonitor | `/screen`      | 屏幕差异流媒体（64x64 块差分 + 关键帧）                        |
 | MediaMonitor  | `/media`       | 摄像头 / 麦克风实时流                                    |
-| FileManager   | `/files`       | 远程文件浏览、上传、下载、压缩                                 |
+| FileManager   | `/files`       | 远程文件浏览（分页懒加载）、打开/执行、压缩包浏览、上传、下载、压缩 |
 | System        | `/system`      | 进程列表、窗口枚举、环境变量、网络信息、WiFi 扫描、LAN 扫描              |
 | SoftwareData  | `/othersoft`   | 微信/QQ 数据、浏览器凭据（Chrome/Edge v10+v20）、AI Token 扫描 |
 | ProxyBrowser  | `/proxy`       | 通过受控代理访问网页                                      |
 | Builder       | `/builder`     | 代理载荷编译生成                                        |
-| StressTest    | `/stress-test` | 多点 DDoS 攻击管理与执行                                 |
 | AuditLogs     | `/audit`       | 操作审计日志查询                                        |
 | Settings      | `/settings`    | MCP AccessKey 管理                                 |
 
@@ -95,17 +94,12 @@ ASP.NET Core WebAPI，包含：
 ### 执行（Execution）
 
 - **Shell**：CMD / PowerShell（Windows），Bash / Zsh（Linux）
-- **文件操作**：大文件分块上传/下载、移动、复制、删除、时间戳伪造
+- **文件操作**：大文件分块上传/下载、移动、复制、删除、时间戳伪造；目录分页懒加载（200 条/页无限滚动）、压缩包在线浏览（ZIP store 模式零解压）、文件打开/执行
 - **屏幕捕获**：多显示器支持，64x64 块差异流媒体 + JPEG 关键帧，通过 DXGI Desktop Duplication API 实现
 - **摄像头**：WinRT `MediaCapture` + DirectShow 底层读取
 - **麦克风**：WinRT `MediaCapture` + WaveIn API
 - **凭据导出**：内存凭据 dump
 - **代理浏览器**：通过受控代理访问任意 URL
-
-### 压力测试（Stress Test）
-
-- HTTP 泛洪 · SYN 泛洪 · UDP 泛洪 · ICMP 泛洪
-- Slowloris · 反射攻击 · 畸形包
 
 ### 反分析（Anti-Analysis）
 
@@ -262,7 +256,6 @@ MCP 服务器提供以下工具集：
 | **Screen** | `take_screenshot`, `capture_webcam` | 屏幕截图与摄像头 |
 | **Data** | `get_browser_passwords`, `get_browser_history`, `scan_ai_tokens` | 数据窃取 |
 | **Builder** | `build_payload`, `list_builds`, `get_build_info` | 载荷编译 |
-| **Stress** | `start_stress_test`, `stop_stress_test`, `get_campaign_status` | 压力测试 |
 
 ### 使用示例
 

@@ -106,6 +106,7 @@ export default function AuditLogsPage() {
             aria-label={t('audit.risk')}
             selectedKey={riskFilter}
             onSelectionChange={(key) => { setRiskFilter(String(key)); setPage(1); }}
+            className="my-4"
           >
             <Tabs.List>
               <Tabs.Tab id="">{t('audit.riskAll')}<Tabs.Indicator /></Tabs.Tab>
