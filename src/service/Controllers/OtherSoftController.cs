@@ -77,7 +77,7 @@ public class OtherSoftController : ControllerBase
     [HttpPost("{agentId}/qq/clientkey")]
     public async Task<IActionResult> GetQQClientKey(string agentId, CancellationToken ct)
     {
-        return await RelayAndWaitAsync(agentId, "othersoft.qq_clientkey", null, ct, 60);
+        return await RelayAndWaitAsync(agentId, "othersoft.qq_clientkey", null, ct, 120);
     }
 
     /// <summary>Fetch QQ portraits from qzone (server-side, no CORS).</summary>
