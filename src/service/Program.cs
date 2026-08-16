@@ -59,6 +59,7 @@ builder.Services.AddSingleton<ISessionLock, ShellSessionLock>();
 builder.Services.AddSingleton<AgentTrafficService>();
 builder.Services.AddSingleton<ConnectionManager>();
 builder.Services.AddSingleton<SessionKeyStore>();
+builder.Services.AddSingleton<RiskPolicyService>();
 builder.Services.AddSingleton<StressTestService>();
 builder.Services.AddScoped<AuditService>();
 builder.Services.AddScoped<AccessKeyService>();
@@ -182,6 +183,8 @@ try
     {
         var indexBuilder = scope.ServiceProvider.GetRequiredService<MongoIndexBuilder>();
         indexBuilder.EnsureIndexesAsync().GetAwaiter().GetResult();
+        var riskPolicy = scope.ServiceProvider.GetRequiredService<RiskPolicyService>();
+        riskPolicy.LoadAsync().GetAwaiter().GetResult();
     }
 }
 catch (Exception ex)

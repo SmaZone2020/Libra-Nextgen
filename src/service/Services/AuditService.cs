@@ -7,14 +7,16 @@ namespace LibraNextgen.Service.Services;
 public class AuditService
 {
     private readonly Repository<AuditLog> _auditLogs;
+    private readonly RiskPolicyService _riskPolicy;
 
-    public AuditService(Repository<AuditLog> auditLogs)
+    public AuditService(Repository<AuditLog> auditLogs, RiskPolicyService riskPolicy)
     {
         _auditLogs = auditLogs;
+        _riskPolicy = riskPolicy;
     }
 
     public async Task LogAsync(
-        string userId, string userName, string action,
+        string userId, string userName, string action, string? actionKey,
         string? targetAgentId, string? details, string ipAddress, bool success = true)
     {
         var entry = new AuditLog
@@ -25,14 +27,16 @@ public class AuditService
             TargetAgentId = targetAgentId,
             Details = details,
             IpAddress = ipAddress,
-            Success = success
+            Success = success,
+            Risk = _riskPolicy.GetRisk(actionKey)
         };
         await _auditLogs.InsertAsync(entry);
     }
 
     public async Task<(List<AuditLog> logs, long total)> GetPagedAsync(
         int page, int pageSize, string? query = null,
-        DateTime? from = null, DateTime? to = null, bool excludeHeartbeats = true, CancellationToken ct = default)
+        DateTime? from = null, DateTime? to = null, bool excludeHeartbeats = true,
+        RiskLevel? risk = null, CancellationToken ct = default)
     {
         pageSize = Math.Clamp(pageSize, 1, 80);
 
@@ -50,6 +54,9 @@ public class AuditService
             );
             filters.Add(searchFilter);
         }
+
+        if (risk.HasValue)
+            filters.Add(builder.Eq(l => l.Risk, risk.Value));
 
         if (excludeHeartbeats)
             filters.Add(builder.Ne(l => l.Action, "POST /api/beacon/heartbeat"));

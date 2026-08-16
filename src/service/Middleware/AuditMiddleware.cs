@@ -1,12 +1,13 @@
 using System.Text;
 using System.Text.Json;
+using LibraNextgen.Common.Authorization;
 using LibraNextgen.Service.Services;
 
 namespace LibraNextgen.Service.Middleware;
 
 /// <summary>
-/// Automatically logs all mutating API calls to the audit log.
-/// Read-only endpoints (GET/HEAD/OPTIONS) are skipped.
+/// Automatically logs all mutating API calls to the audit log with a
+/// behavior-based risk classification. Read-only endpoints are skipped.
 /// </summary>
 public class AuditMiddleware
 {
@@ -26,6 +27,7 @@ public class AuditMiddleware
         {
             context.Request.EnableBuffering();
             var body = await ReadRequestBody(context.Request);
+            var actionKey = RiskClassifier.ClassifyAction(method, context.Request.Path, body);
 
             var originalStream = context.Response.Body;
             using var responseBody = new MemoryStream();
@@ -51,6 +53,7 @@ public class AuditMiddleware
                 await auditService.LogAsync(
                     userId, userName,
                     $"{method} {context.Request.Path}",
+                    actionKey,
                     null,
                     body?.Length > 500 ? body[..500] : body,
                     ip, success);

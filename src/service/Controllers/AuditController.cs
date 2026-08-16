@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using LibraNextgen.Common.Models;
 using LibraNextgen.Service.Services;
 
 namespace LibraNextgen.Service.Controllers;
@@ -24,9 +25,14 @@ public class AuditController : ControllerBase
         [FromQuery] DateTime? from = null,
         [FromQuery] DateTime? to = null,
         [FromQuery] bool excludeHeartbeats = true,
+        [FromQuery] string? risk = null,
         CancellationToken ct = default)
     {
-        var (logs, total) = await _auditService.GetPagedAsync(page, pageSize, query, from, to, excludeHeartbeats, ct);
+        RiskLevel? riskLevel = null;
+        if (!string.IsNullOrWhiteSpace(risk) && Enum.TryParse<RiskLevel>(risk, true, out var parsed))
+            riskLevel = parsed;
+
+        var (logs, total) = await _auditService.GetPagedAsync(page, pageSize, query, from, to, excludeHeartbeats, riskLevel, ct);
         return Ok(new { logs, total, page, pageSize });
     }
 }
