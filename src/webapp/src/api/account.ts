@@ -1,5 +1,9 @@
 import { api } from './client';
-import type { AccountListItem, AccountStatus, ChangePasswordRequest, CreateAccountRequest, UpdateAccountRequest } from '../types/models';
+import type { AccountListItem, AccountMe, AccountStatus, ChangePasswordRequest, CreateAccountRequest, UpdateAccountRequest } from '../types/models';
+
+export async function getAccountMe(): Promise<AccountMe> {
+  return api.get<AccountMe>('/account/me');
+}
 
 export async function getAccountStatus(): Promise<AccountStatus> {
   return api.get<AccountStatus>('/account/status');

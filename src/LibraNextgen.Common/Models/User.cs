@@ -13,6 +13,8 @@ public class User
     /// <summary>SHA-256 hash of the current refresh token (raw token never stored).</summary>
     public string? RefreshTokenHash { get; set; }
     public DateTime? RefreshTokenExpiresAt { get; set; }
+    /// <summary>Per-user access permissions (enforced for non-Admin users).</summary>
+    public UserPermissions Permissions { get; set; } = new();
 }
 
 public class LoginRequest
@@ -50,6 +52,7 @@ public class CreateAccountRequest
     public string Username { get; set; } = string.Empty;
     public string Password { get; set; } = string.Empty;
     public UserRole Role { get; set; } = UserRole.Operator;
+    public UserPermissions? Permissions { get; set; }
 }
 
 public class UpdateAccountRequest
@@ -57,6 +60,7 @@ public class UpdateAccountRequest
     public string? Username { get; set; }
     public UserRole? Role { get; set; }
     public bool? IsActive { get; set; }
+    public UserPermissions? Permissions { get; set; }
 }
 
 public class AccountListItem
@@ -68,4 +72,5 @@ public class AccountListItem
     public bool IsInitial { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime? LastLogin { get; set; }
+    public UserPermissions? Permissions { get; set; }
 }

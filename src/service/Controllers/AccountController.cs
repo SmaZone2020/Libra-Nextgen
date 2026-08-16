@@ -12,15 +12,31 @@ namespace LibraNextgen.Service.Controllers;
 public class AccountController : ControllerBase
 {
     private readonly AccountService _accountService;
+    private readonly PermissionService _permissionService;
 
-    public AccountController(AccountService accountService)
+    public AccountController(AccountService accountService, PermissionService permissionService)
     {
         _accountService = accountService;
+        _permissionService = permissionService;
     }
 
     private string UserId => User.FindFirst(ClaimTypes.NameIdentifier)?.Value
         ?? User.FindFirst("sub")?.Value
         ?? throw new UnauthorizedAccessException("No user identity.");
+
+    /// <summary>Current user's role and effective permissions.</summary>
+    [HttpGet("me")]
+    public async Task<IActionResult> Me()
+    {
+        var role = User.IsInRole("Admin") ? UserRole.Admin : UserRole.Operator;
+        var permissions = await _accountService.GetEffectivePermissionsAsync(UserId, role);
+        return Ok(new
+        {
+            username = User.Identity?.Name ?? "",
+            role = role.ToString(),
+            permissions,
+        });
+    }
 
     /// <summary>Check if current user is the initial account.</summary>
     [HttpGet("status")]
@@ -30,24 +46,20 @@ public class AccountController : ControllerBase
         return Ok(new { isInitial });
     }
 
-    /// <summary>List all accounts (initial account only).</summary>
+    /// <summary>List all accounts (Admin only).</summary>
     [HttpGet("list")]
+    [Authorize(Roles = "Admin")]
     public async Task<IActionResult> List()
     {
-        if (!await _accountService.IsInitialAccountAsync(UserId))
-            return Forbid();
-
         var accounts = await _accountService.ListAsync();
         return Ok(accounts);
     }
 
-    /// <summary>Create a new account (initial account only).</summary>
+    /// <summary>Create a new account (Admin only).</summary>
     [HttpPost]
+    [Authorize(Roles = "Admin")]
     public async Task<IActionResult> Create([FromBody] CreateAccountRequest request)
     {
-        if (!await _accountService.IsInitialAccountAsync(UserId))
-            return Forbid();
-
         try
         {
             var account = await _accountService.CreateAsync(request);
@@ -59,16 +71,15 @@ public class AccountController : ControllerBase
         }
     }
 
-    /// <summary>Update an account (initial account only).</summary>
+    /// <summary>Update an account (Admin only).</summary>
     [HttpPut("{id}")]
+    [Authorize(Roles = "Admin")]
     public async Task<IActionResult> Update(string id, [FromBody] UpdateAccountRequest request)
     {
-        if (!await _accountService.IsInitialAccountAsync(UserId))
-            return Forbid();
-
         try
         {
             await _accountService.UpdateAsync(id, request);
+            _permissionService.Invalidate(id);
             return Ok(new { status = "ok" });
         }
         catch (KeyNotFoundException ex)
@@ -85,16 +96,15 @@ public class AccountController : ControllerBase
         }
     }
 
-    /// <summary>Delete an account (initial account only).</summary>
+    /// <summary>Delete an account (Admin only).</summary>
     [HttpDelete("{id}")]
+    [Authorize(Roles = "Admin")]
     public async Task<IActionResult> Delete(string id)
     {
-        if (!await _accountService.IsInitialAccountAsync(UserId))
-            return Forbid();
-
         try
         {
             await _accountService.DeleteAsync(id, UserId);
+            _permissionService.Invalidate(id);
             return Ok(new { status = "ok" });
         }
         catch (KeyNotFoundException ex)

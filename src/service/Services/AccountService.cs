@@ -18,6 +18,16 @@ public class AccountService
         _jwtSettings = jwtSettings;
     }
 
+    /// <summary>Effective permissions for a user — Admins always have full access.</summary>
+    public async Task<UserPermissions> GetEffectivePermissionsAsync(string userId, UserRole role)
+    {
+        if (role == UserRole.Admin)
+            return new UserPermissions { FullAccess = true };
+
+        var user = await _users.GetByIdAsync(userId);
+        return user?.Permissions ?? new UserPermissions { FullAccess = false };
+    }
+
     public async Task<List<AccountListItem>> ListAsync()
     {
         var users = await _users.FindAsync(_ => true);
@@ -30,6 +40,7 @@ public class AccountService
             IsInitial = u.IsInitial,
             CreatedAt = u.CreatedAt,
             LastLogin = u.LastLogin,
+            Permissions = u.Permissions,
         }).ToList();
     }
 
@@ -52,6 +63,7 @@ public class AccountService
             IsActive = true,
             IsInitial = false,
             CreatedAt = DateTime.UtcNow,
+            Permissions = request.Permissions ?? new UserPermissions { FullAccess = true },
         };
         await _users.InsertAsync(user);
 
@@ -64,6 +76,7 @@ public class AccountService
             IsInitial = user.IsInitial,
             CreatedAt = user.CreatedAt,
             LastLogin = null,
+            Permissions = user.Permissions,
         };
     }
 
@@ -91,6 +104,9 @@ public class AccountService
 
         if (request.IsActive.HasValue)
             updates.Add(Builders<User>.Update.Set(u => u.IsActive, request.IsActive.Value));
+
+        if (request.Permissions != null)
+            updates.Add(Builders<User>.Update.Set(u => u.Permissions, request.Permissions));
 
         if (updates.Count > 0)
             await _users.UpdateAsync(id, Builders<User>.Update.Combine(updates));
