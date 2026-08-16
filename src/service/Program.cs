@@ -18,6 +18,7 @@ var builder = WebApplication.CreateBuilder(args);
 // MongoDB
 builder.Services.Configure<MongoSettings>(builder.Configuration.GetSection(MongoSettings.SectionName));
 builder.Services.AddSingleton<MongoDbContext>();
+builder.Services.AddSingleton<MongoIndexBuilder>();
 
 // Beacon authentication (shared secret injected at build time)
 builder.Services.Configure<BeaconSettings>(builder.Configuration.GetSection(BeaconSettings.SectionName));
@@ -173,4 +174,20 @@ app.UseMiddleware<AuditMiddleware>();
 app.MapControllers();
 app.MapMcp("/mcp").RequireAuthorization("McpPolicy");
 WebSocketHandler.Map(app);
+
+// Ensure MongoDB indexes exist before serving traffic (best-effort).
+try
+{
+    using (var scope = app.Services.CreateScope())
+    {
+        var indexBuilder = scope.ServiceProvider.GetRequiredService<MongoIndexBuilder>();
+        indexBuilder.EnsureIndexesAsync().GetAwaiter().GetResult();
+    }
+}
+catch (Exception ex)
+{
+    var logger = app.Services.GetRequiredService<ILoggerFactory>().CreateLogger("Startup");
+    logger.LogWarning(ex, "MongoDB index initialization failed — continuing without indexes.");
+}
+
 app.Run();

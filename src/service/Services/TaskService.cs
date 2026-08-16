@@ -22,19 +22,36 @@ public class TaskService
         int pageSize = 50,
         CancellationToken ct = default)
     {
-        Expression<Func<AgentTask, bool>> filter = t => true;
-
-        if (status.HasValue)
-            filter = t => t.Status == status.Value;
-
-        if (!string.IsNullOrEmpty(agentId))
-        {
-            var agentFilter = filter;
-            filter = t => agentFilter.Compile()(t) && t.AgentId == agentId;
-        }
-
+        var filter = BuildFilter(status, agentId);
         var sort = Builders<AgentTask>.Sort.Descending(t => t.CreatedAt);
         return await _tasks.FindPagedAsync(filter, page, pageSize, sort, ct);
+    }
+
+    /// <summary>
+    /// Builds a native MongoDB filter. Combining expressions with
+    /// <c>filter.Compile()(t)</c> inside a new lambda is not translatable by the
+    /// driver, so we compose FilterDefinitions directly instead.
+    /// </summary>
+    public static FilterDefinition<AgentTask> BuildFilter(TaskStatus? status, string? agentId)
+    {
+        var filters = CollectFilters(status, agentId);
+        return filters.Count > 0
+            ? Builders<AgentTask>.Filter.And(filters)
+            : Builders<AgentTask>.Filter.Empty;
+    }
+
+    public static IReadOnlyList<FilterDefinition<AgentTask>> CollectFilters(TaskStatus? status, string? agentId)
+    {
+        var builder = Builders<AgentTask>.Filter;
+        var filters = new List<FilterDefinition<AgentTask>>();
+
+        if (status.HasValue)
+            filters.Add(builder.Eq(t => t.Status, status.Value));
+
+        if (!string.IsNullOrEmpty(agentId))
+            filters.Add(builder.Eq(t => t.AgentId, agentId));
+
+        return filters;
     }
 
     public async Task<AgentTask?> GetByIdAsync(string id, CancellationToken ct = default)
