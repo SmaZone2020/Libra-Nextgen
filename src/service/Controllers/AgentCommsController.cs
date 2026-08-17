@@ -216,6 +216,14 @@ public class AgentCommsController : ControllerBase
         var ext = platform.StartsWith("linux") ? "so" : "dll";
         var modulePath = Path.Combine(modulesDir, $"{name}.{ext}");
         if (!System.IO.File.Exists(modulePath))
+        {
+            // Backward compat: pre-platform-scoped builds deployed modules
+            // directly under build-output/modules/.
+            var legacy = Path.Combine(BuildsDir, "modules", $"{name}.{ext}");
+            if (System.IO.File.Exists(legacy))
+                modulePath = legacy;
+        }
+        if (!System.IO.File.Exists(modulePath))
             return NotFound(new { error = "module not found" });
 
         var bytes = System.IO.File.ReadAllBytes(modulePath);
