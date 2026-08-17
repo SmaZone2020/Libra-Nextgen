@@ -46,7 +46,7 @@ export default function ShellPage() {
         disabled={!connected}
         onInput={sendInput}
         onResize={sendResize}
-        className="rounded-lg border border-neutral-700 p-2"
+        className="rounded-lg border border-neutral-700 overflow-hidden"
         style={{ height: 'calc(100vh - 240px)', minHeight: 400, display: agentId ? 'block' : 'none' }}
       />
     </div>

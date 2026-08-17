@@ -60,7 +60,7 @@ const TerminalView = forwardRef<TerminalHandle, Props>(function TerminalView(
       convertEol: true,
       fontFamily: 'Menlo, Consolas, "Courier New", monospace',
       fontSize: 13,
-      lineHeight: 1.2,
+      lineHeight: 1.15,
       scrollback: 10000,
       theme: { background: '#1a1b1e' },
     });
@@ -68,7 +68,11 @@ const TerminalView = forwardRef<TerminalHandle, Props>(function TerminalView(
     term.loadAddon(fit);
     term.loadAddon(new WebLinksAddon());
     term.open(containerRef.current);
-    try { fit.fit(); } catch { /* ignore */ }
+    // Fit twice: first pass right after mount, second after layout settles.
+    requestAnimationFrame(() => {
+      try { fit.fit(); } catch { /* ignore */ }
+      onResize?.(term.cols, term.rows);
+    });
 
     term.onData((data) => {
       if (disabledRef.current) return;
@@ -79,7 +83,6 @@ const TerminalView = forwardRef<TerminalHandle, Props>(function TerminalView(
 
     termRef.current = term;
     fitRef.current = fit;
-    onResize?.(term.cols, term.rows);
 
     // Keep the terminal sized to its container.
     const ro = new ResizeObserver(() => {
@@ -95,7 +98,13 @@ const TerminalView = forwardRef<TerminalHandle, Props>(function TerminalView(
     };
   }, [onInput, onResize]);
 
-  return <div ref={containerRef} className={className} style={style} />;
+  return (
+    <div
+      ref={containerRef}
+      className={className}
+      style={{ overflow: 'hidden', height: '100%', ...style }}
+    />
+  );
 });
 
 export default TerminalView;
