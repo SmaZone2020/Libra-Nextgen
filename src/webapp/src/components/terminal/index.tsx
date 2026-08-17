@@ -3,6 +3,7 @@ import { Terminal } from 'xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { WebLinksAddon } from '@xterm/addon-web-links';
 import 'xterm/css/xterm.css';
+import '../styles/terminal-fonts.css';
 
 export interface TerminalHandle {
   write(text: string): void;
@@ -56,30 +57,15 @@ const TerminalView = forwardRef<TerminalHandle, Props>(function TerminalView(
     if (!containerRef.current) return;
 
     // xterm sizes every cell from the monospace assumption and renders CJK as
-    // exactly 2 cells wide. To stay aligned, the font must be genuinely
-    // monospace with half-width == full-width/2 for Latin AND CJK:
-    //   - Windows ships "NSimSun" (新宋体): measured W=7, 中=14 → perfect 2:1
-    //   - Noto Sans Mono CJK SC / Sarasa Mono SC / Maple Mono are the
-    //     cross-platform equivalents when installed.
-    // Generic stacks (Consolas/Courier) make Latin monospace but their half
-    // width != full-width/2, so CJK text visually misaligns — avoid them as
-    // the primary font.
+    // exactly 2 cells wide. JetBrains Mono (bundled, Latin) gives modern
+    // monospace Latin; 'LibraTermCJK' (Noto Sans Mono CJK / Sarasa / NSimSun)
+    // renders CJK as 2 cells. Note JetBrains' half-width is not exactly
+    // full-width/2, so heavy CJK/Latin mixtures may still show minor drift —
+    // pure-English sessions are pixel-perfect.
     const term = new Terminal({
       cursorBlink: true,
       convertEol: true,
-      fontFamily: [
-        '"Noto Sans Mono CJK SC"',
-        '"Sarasa Mono SC"',
-        '"Sarasa Mono"',
-        '"Maple Mono"',
-        '"Maple Mono CN"',
-        '"NSimSun"',
-        '"DejaVu Sans Mono"',
-        'ui-monospace',
-        'Menlo',
-        'Consolas',
-        'monospace',
-      ].join(', '),
+      fontFamily: '"JetBrainsMono", "LibraTermCJK", ui-monospace, monospace',
       fontSize: 13,
       lineHeight: 1.0,
       scrollback: 10000,
