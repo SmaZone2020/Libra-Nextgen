@@ -3,6 +3,7 @@ import { Terminal } from 'xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { WebLinksAddon } from '@xterm/addon-web-links';
 import 'xterm/css/xterm.css';
+import '../../styles/terminal-fonts.css';
 
 export interface TerminalHandle {
   write(text: string): void;
