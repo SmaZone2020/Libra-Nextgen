@@ -19,10 +19,21 @@ interface Props {
   onInput?: (data: string) => void;
   onResize?: (cols: number, rows: number) => void;
   disabled?: boolean;
+  /** Font family stack; default is JetBrains Mono (Latin) + CJK fallback. */
+  fontFamily?: string;
 }
 
+/** Default: JetBrains Mono (bundled) for modern monospace Latin, with CJK
+ *  routed to a monospace CJK font (2 cells). */
+const DEFAULT_FONT = '"JetBrainsMono", "LibraTermCJK", ui-monospace, monospace';
+
+/** Fully-aligned mode: use a monospace CJK font for the whole terminal so
+ *  half-width == full-width/2 exactly (Chinese and Latin align perfectly,
+ *  at the cost of a Song-style (NSimSun) look when no modern font exists). */
+const CJK_FONT = '"LibraTermCJK", "NSimSun", "Noto Sans Mono CJK SC", "Sarasa Mono SC", monospace';
+
 const TerminalView = forwardRef<TerminalHandle, Props>(function TerminalView(
-  { className, style, onInput, onResize, disabled },
+  { className, style, onInput, onResize, disabled, fontFamily },
   ref,
 ) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -62,67 +73,53 @@ const TerminalView = forwardRef<TerminalHandle, Props>(function TerminalView(
     let fit: FitAddon | null = null;
     let ro: ResizeObserver | null = null;
 
-    // xterm sizes every cell from the monospace assumption and renders CJK as
-    // exactly 2 cells wide. JetBrains Mono (bundled, Latin) gives modern
-    // monospace Latin; 'LibraTermCJK' (Noto Sans Mono CJK / Sarasa / NSimSun)
-    // renders CJK as 2 cells.
-    const FONT = '"JetBrainsMono", "LibraTermCJK", ui-monospace, monospace';
+    // Create the terminal synchronously so the ref is usable immediately
+    // (shell output arriving before webfonts finish is not lost). Cell size
+    // is re-measured once the bundled font is ready.
+    const FONT = fontFamily ?? DEFAULT_FONT;
+    const t = new Terminal({
+      cursorBlink: true,
+      convertEol: true,
+      fontFamily: FONT,
+      fontSize: 13,
+      lineHeight: 1.0,
+      scrollback: 10000,
+      theme: { background: '#1a1b1e' },
+    });
+    const f = new FitAddon();
+    t.loadAddon(f);
+    t.loadAddon(new WebLinksAddon());
+    t.open(container);
+    term = t;
+    fit = f;
 
-    const createTerminal = () => {
+    t.onData((data) => {
+      if (disabledRef.current) return;
+      onInput?.(data);
+    });
+    t.onResize(({ cols, rows }) => onResize?.(cols, rows));
+
+    // Fit once after layout settles, then again once webfonts are loaded.
+    requestAnimationFrame(() => {
       if (disposed) return;
-      const t = new Terminal({
-        cursorBlink: true,
-        convertEol: true,
-        fontFamily: FONT,
-        fontSize: 13,
-        lineHeight: 1.0,
-        scrollback: 10000,
-        theme: { background: '#1a1b1e' },
-      });
-      const f = new FitAddon();
-      t.loadAddon(f);
-      t.loadAddon(new WebLinksAddon());
-      t.open(container);
-      term = t;
-      fit = f;
+      try { f.fit(); } catch { /* container may still be sizing */ }
+      onResize?.(t.cols, t.rows);
+    });
+    document.fonts.ready.then(() => {
+      if (disposed) return;
+      // Force xterm to re-measure cell size now that the real font is ready.
+      t.options.fontFamily = FONT;
+      try { f.fit(); } catch { /* ignore */ }
+      onResize?.(t.cols, t.rows);
+    });
 
-      t.onData((data) => {
-        if (disabledRef.current) return;
-        onInput?.(data);
-      });
-      t.onResize(({ cols, rows }) => onResize?.(cols, rows));
+    ro = new ResizeObserver(() => {
+      try { f.fit(); } catch { /* ignore */ }
+    });
+    ro.observe(container);
 
-      // Fit once after layout settles, then again once webfonts are loaded.
-      requestAnimationFrame(() => {
-        try { f.fit(); } catch { /* ignore */ }
-        onResize?.(t.cols, t.rows);
-      });
-      document.fonts.ready.then(() => {
-        if (disposed) return;
-        // Force xterm to re-measure cell size now that the real font is ready.
-        t.options.fontFamily = FONT;
-        try { f.fit(); } catch { /* ignore */ }
-        onResize?.(t.cols, t.rows);
-      });
-
-      ro = new ResizeObserver(() => {
-        try { f.fit(); } catch { /* ignore */ }
-      });
-      ro.observe(container);
-
-      termRef.current = t;
-      fitRef.current = f;
-    };
-
-    // Wait for the bundled webfont to be available before creating xterm, so
-    // the cell size is measured from JetBrains Mono instead of a fallback.
-    Promise.all([
-      document.fonts.load('13px "JetBrainsMono"'),
-      document.fonts.load('normal 13px "JetBrainsMono"'),
-    ])
-      .catch(() => { /* fallback fonts still work */ })
-      .then(() => document.fonts.ready)
-      .then(() => { if (!disposed) createTerminal(); });
+    termRef.current = t;
+    fitRef.current = f;
 
     return () => {
       disposed = true;
@@ -131,7 +128,7 @@ const TerminalView = forwardRef<TerminalHandle, Props>(function TerminalView(
       termRef.current = null;
       fitRef.current = null;
     };
-  }, [onInput, onResize]);
+  }, [onInput, onResize, fontFamily]);
 
   return (
     <div

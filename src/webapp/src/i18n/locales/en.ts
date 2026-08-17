@@ -148,6 +148,10 @@ export default {
       selectAgent: 'Select an online agent to open a remote shell session.',
       write: 'Write',
       readonly: 'Read-only',
+      font: {
+        jetbrains: 'Monospace (JetBrains)',
+        cjk: 'Full-aligned (Latin+CJK)',
+      },
     },
     screenMonitor: {
       selectAgent: 'Select an online agent to view its screen.',

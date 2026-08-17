@@ -148,6 +148,10 @@ export default {
       selectAgent: '选择一台在线设备以打开远程终端会话。',
       write: '读写',
       readonly: '只读',
+      font: {
+        jetbrains: '等宽字体 (JetBrains)',
+        cjk: '全对齐字体 (中英等宽)',
+      },
     },
     screenMonitor: {
       selectAgent: '选择一台在线设备以查看其屏幕。',
