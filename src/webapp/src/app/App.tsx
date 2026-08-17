@@ -27,6 +27,7 @@ import { consoleWs } from '../ws/consoleWs';
 import { NetworkOverlay } from '../components/NetworkOverlay';
 import { AgreementModal } from '../components/AgreementModal';
 import { AgentProvider, useAgent } from '../contexts/AgentContext';
+import { useAgentPlatform } from '../hooks/useAgentPlatform';
 import type { AgentListItem, UserPermissions } from '../types/models';
 import { sidebarItems, sidebarBottomItems } from '../config/site';
 import '../i18n';
@@ -252,6 +253,9 @@ function AuthenticatedLayout({
   const [permissions, setPermissions] = useState<UserPermissions | null>(null);
   const sidebarWidth = collapsed ? SIDEBAR_W.collapsed : SIDEBAR_W.expanded;
 
+  // Windows-only pages (screen/media streaming) are hidden for Linux agents.
+  const platform = useAgentPlatform();
+
   useEffect(() => {
     getAccountMe()
       .then((me) => setPermissions(me.permissions))
@@ -264,7 +268,12 @@ function AuthenticatedLayout({
     return permissions.allowedPages.includes(key);
   };
 
-  const visibleItems = sidebarItems.filter((i) => canSee(i.to));
+  const visibleItems = sidebarItems.filter((i) => {
+    if (!canSee(i.to)) return false;
+    // Windows-only streaming pages hidden on Linux agents.
+    if (platform === 'linux' && (i.to === '/screen' || i.to === '/media')) return false;
+    return true;
+  });
   const visibleBottom = sidebarBottomItems.filter((i) => canSee(i.to));
 
   return (
