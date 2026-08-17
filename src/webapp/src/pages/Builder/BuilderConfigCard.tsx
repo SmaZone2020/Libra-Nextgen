@@ -16,6 +16,8 @@ export function BuilderConfigCard({ config, set }: BuilderConfigCardProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [iconUploading, setIconUploading] = useState(false);
   const [iconPreview, setIconPreview] = useState<string | null>(null);
+  // PE icon/metadata embedding is Windows-only; hide for Linux targets.
+  const isLinux = config.platform === 'linux-x64';
 
   const handleIconUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -63,6 +65,8 @@ export function BuilderConfigCard({ config, set }: BuilderConfigCardProps) {
         </NumberFieldPrimitive>
       </div>
       <hr className="my-4 border-default-200" />
+      {!isLinux && (
+      <>
       <h2 className="text-lg font-semibold mb-3">{t('builder.metadata')}</h2>
       <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
         <TextField
@@ -137,6 +141,8 @@ export function BuilderConfigCard({ config, set }: BuilderConfigCardProps) {
           </div>
         </div>
       </div>
+      </>
+      )}
     </Card>
   );
 }

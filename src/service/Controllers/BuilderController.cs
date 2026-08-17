@@ -57,6 +57,26 @@ public class BuilderController : ControllerBase
         if (!BuilderBuildService.PlatformOs.ContainsKey(req.Platform))
             return BadRequest(new { error = $"Unsupported platform: {req.Platform}" });
 
+        // Windows-only options are force-reset for non-Windows targets.
+        if (BuilderBuildService.PlatformOs[req.Platform] != "windows")
+        {
+            req.ApplicationType = "Console";
+            req.EnableObfuscation = false;
+            req.RequireAdmin = false;
+            req.EnablePersistence = false;
+            req.IconUrl = null;
+            req.CompanyName = null;
+            req.FileDescription = null;
+            req.ProductName = null;
+            req.Copyright = null;
+            req.FileVersion = null;
+            if (req.AntiAnalysis != null)
+            {
+                req.AntiAnalysis.check_test_signing = false;
+                req.AntiAnalysis.enabled = req.AntiAnalysis.check_av_processes;
+            }
+        }
+
         var buildId = Guid.NewGuid().ToString("N")[..8];
         var ext = BuilderBuildService.PlatformOs[req.Platform] == "windows" ? ".exe" : "";
         var record = new Models.BuildRecord

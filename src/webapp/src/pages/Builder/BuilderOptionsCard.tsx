@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button, Card, Label, Popover, Slider, Tabs } from '@heroui/react';
 import { ListView } from '@components/list-view';
@@ -29,8 +29,38 @@ const ANTI_ANALYSIS_OPTIONS: AntiAnalysisToggle[] = [
   { id: 'checkAvProcesses', key: 'checkAvProcesses' },
 ];
 
+// Options that are Windows-only (no Linux equivalent / not implemented):
+// goldberg PE obfuscation, UAC elevation, scheduled-task persistence,
+// Test-Signing detection, and the Desktop (GUI subsystem) app type.
+const LINUX_DISABLED_BUILD = new Set(['enableObfuscation']);
+const LINUX_DISABLED_PERSIST = new Set(['requireAdmin', 'enablePersistence']);
+const LINUX_DISABLED_ANTI = new Set(['checkTestSigning']);
+
 export function BuilderOptionsCard({ config, set }: BuilderOptionsCardProps) {
   const { t } = useTranslation();
+  const isLinux = config.platform === 'linux-x64';
+
+  // Reset Windows-only options when switching to Linux.
+  useEffect(() => {
+    if (config.platform !== 'linux-x64') return;
+    let changed = false;
+    if (config.enableObfuscation) { set('enableObfuscation', false); changed = true; }
+    if (config.requireAdmin) { set('requireAdmin', false); changed = true; }
+    if (config.enablePersistence) { set('enablePersistence', false); changed = true; }
+    if (config.applicationType === 'Desktop') { set('applicationType', 'Console'); changed = true; }
+    if (config.antiAnalysis.checkTestSigning) {
+      set('antiAnalysis', {
+        ...config.antiAnalysis,
+        checkTestSigning: false,
+        enabled: config.antiAnalysis.checkAvProcesses,
+      });
+      changed = true;
+    }
+    if (changed) {
+      // eslint-disable-next-line no-console
+      console.log('[builder] reset Windows-only options for Linux target');
+    }
+  }, [config.platform]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const selectedBuildKeys = useMemo(
     () => new Set(BUILD_OPTIONS.filter((o) => !!config[o.key]).map((o) => o.id)),
@@ -47,9 +77,23 @@ export function BuilderOptionsCard({ config, set }: BuilderOptionsCardProps) {
     [config.antiAnalysis],
   );
 
+  const buildDisabled = useMemo(
+    () => new Set(isLinux ? [...LINUX_DISABLED_BUILD] : []),
+    [isLinux],
+  );
+  const persistDisabled = useMemo(
+    () => new Set(isLinux ? [...LINUX_DISABLED_PERSIST] : []),
+    [isLinux],
+  );
+  const antiDisabled = useMemo(
+    () => new Set(isLinux ? [...LINUX_DISABLED_ANTI] : []),
+    [isLinux],
+  );
+
   const handleBuildSelectionChange = (keys: Selection) => {
     const s = keys as Set<string>;
     for (const opt of BUILD_OPTIONS) {
+      if (s.has(opt.id) && buildDisabled.has(opt.id)) continue;
       set(opt.key, (s.has(opt.id) ? true : false) as BuildConfigRequest[typeof opt.key]);
     }
   };
@@ -57,6 +101,7 @@ export function BuilderOptionsCard({ config, set }: BuilderOptionsCardProps) {
   const handlePersistenceSelectionChange = (keys: Selection) => {
     const s = keys as Set<string>;
     for (const opt of PERSISTENCE_OPTIONS) {
+      if (s.has(opt.id) && persistDisabled.has(opt.id)) continue;
       set(opt.key, (s.has(opt.id) ? true : false) as BuildConfigRequest[typeof opt.key]);
     }
   };
@@ -97,7 +142,7 @@ export function BuilderOptionsCard({ config, set }: BuilderOptionsCardProps) {
             >
               <Tabs.List>
                 <Tabs.Tab id="Console">{t('builder.consoleApp')}<Tabs.Indicator /></Tabs.Tab>
-                <Tabs.Tab id="Desktop">{t('builder.desktopApp')}<Tabs.Indicator /></Tabs.Tab>
+                <Tabs.Tab id="Desktop" isDisabled={isLinux}>{t('builder.desktopApp')}<Tabs.Indicator /></Tabs.Tab>
               </Tabs.List>
             </Tabs>
             <p className="text-xs text-default-500 mt-2">
@@ -116,6 +161,7 @@ export function BuilderOptionsCard({ config, set }: BuilderOptionsCardProps) {
               aria-label={t('builder.buildOptions')}
               items={BUILD_OPTIONS}
               selectedKeys={selectedBuildKeys}
+              disabledKeys={buildDisabled}
               selectionMode="multiple"
               variant="primary"
               onSelectionChange={handleBuildSelectionChange}
@@ -167,6 +213,7 @@ export function BuilderOptionsCard({ config, set }: BuilderOptionsCardProps) {
               aria-label={t('builder.persistence')}
               items={PERSISTENCE_OPTIONS}
               selectedKeys={selectedPersistenceKeys}
+              disabledKeys={persistDisabled}
               selectionMode="multiple"
               variant="primary"
               onSelectionChange={handlePersistenceSelectionChange}
@@ -199,6 +246,7 @@ export function BuilderOptionsCard({ config, set }: BuilderOptionsCardProps) {
               aria-label={t('builder.antiAnalysis')}
               items={ANTI_ANALYSIS_OPTIONS}
               selectedKeys={selectedAntiAnalysisKeys}
+              disabledKeys={antiDisabled}
               selectionMode="multiple"
               variant="primary"
               onSelectionChange={handleAntiAnalysisSelectionChange}

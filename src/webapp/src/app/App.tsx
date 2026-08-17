@@ -85,6 +85,9 @@ function AgentSelector() {
 
   if (!AGENT_ROUTES.has(pathname)) return null;
 
+  // Only online agents are actionable; offline ones are hidden from the picker.
+  const onlineAgents = agents.filter((a) => a.status === 'Online');
+
   return (
     <div className="flex items-center gap-2 sm:gap-3">
       <Dropdown>
@@ -97,7 +100,7 @@ function AgentSelector() {
         <Dropdown.Popover>
           <Dropdown.Menu
             onAction={(key) => selectAgent(String(key))}
-            items={agents}
+            items={onlineAgents}
           >
             {(item: AgentListItem) => (
               <Dropdown.Item key={item.id} id={item.id} textValue={item.hostname}>
