@@ -55,33 +55,33 @@ const TerminalView = forwardRef<TerminalHandle, Props>(function TerminalView(
   useEffect(() => {
     if (!containerRef.current) return;
 
-    // xterm sizes every cell from a monospace assumption, so the font stack
-    // must stay monospace end-to-end. Prefer CJK-capable monospace fonts
-    // (Sarasa Mono SC, Maple Mono, Cascadia, Noto Sans Mono) so Chinese text
-    // stays 2-cells wide and aligned; `monospace` is the guaranteed fallback.
+    // xterm sizes every cell from the monospace assumption and renders CJK as
+    // exactly 2 cells wide. To stay aligned, the font must be genuinely
+    // monospace with half-width == full-width/2 for Latin AND CJK:
+    //   - Windows ships "NSimSun" (新宋体): measured W=7, 中=14 → perfect 2:1
+    //   - Noto Sans Mono CJK SC / Sarasa Mono SC / Maple Mono are the
+    //     cross-platform equivalents when installed.
+    // Generic stacks (Consolas/Courier) make Latin monospace but their half
+    // width != full-width/2, so CJK text visually misaligns — avoid them as
+    // the primary font.
     const term = new Terminal({
       cursorBlink: true,
       convertEol: true,
       fontFamily: [
+        '"Noto Sans Mono CJK SC"',
         '"Sarasa Mono SC"',
+        '"Sarasa Mono"',
         '"Maple Mono"',
         '"Maple Mono CN"',
-        '"JetBrains Mono"',
-        '"Cascadia Mono"',
-        '"Cascadia Code"',
-        '"Noto Sans Mono"',
+        '"NSimSun"',
         '"DejaVu Sans Mono"',
         'ui-monospace',
-        'SFMono-Regular',
         'Menlo',
-        'Monaco',
         'Consolas',
-        '"Liberation Mono"',
-        '"Courier New"',
         'monospace',
       ].join(', '),
       fontSize: 13,
-      lineHeight: 1.15,
+      lineHeight: 1.0,
       scrollback: 10000,
       theme: { background: '#1a1b1e' },
     });
