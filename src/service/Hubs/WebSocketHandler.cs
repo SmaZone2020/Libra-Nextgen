@@ -273,13 +273,13 @@ public static class WebSocketHandler
 
                 if (ms.Length > MaxMessageSize)
                 {
-                    await ws.CloseAsync(WebSocketCloseStatus.MessageTooBig, "message too big", CancellationToken.None);
+                    await TryCloseAsync(ws, WebSocketCloseStatus.MessageTooBig, "message too big");
                     break;
                 }
 
                 if (result.MessageType == WebSocketMessageType.Close)
                 {
-                    await ws.CloseAsync(WebSocketCloseStatus.NormalClosure, "closed", CancellationToken.None);
+                    await TryCloseAsync(ws, WebSocketCloseStatus.NormalClosure, "closed");
                     break;
                 }
 
@@ -342,6 +342,25 @@ public static class WebSocketHandler
             {
                 _ = BroadcastAgentStatus(wsManager, agentId, AgentStatus.Offline, context.RequestServices);
             }
+        }
+    }
+
+    /// Close the agent WebSocket tolerantly: the peer may already be gone
+    /// (abrupt TCP drop) which makes CloseAsync throw a WebSocketException.
+    private static async Task TryCloseAsync(System.Net.WebSockets.WebSocket ws, WebSocketCloseStatus status, string reason)
+    {
+        try
+        {
+            if (ws.State == WebSocketState.Open || ws.State == WebSocketState.CloseReceived)
+                await ws.CloseAsync(status, reason, CancellationToken.None);
+        }
+        catch (System.Net.WebSockets.WebSocketException)
+        {
+            // Peer vanished without completing the close handshake — ignore.
+        }
+        catch (ObjectDisposedException)
+        {
+            // Socket already torn down — ignore.
         }
     }
 }

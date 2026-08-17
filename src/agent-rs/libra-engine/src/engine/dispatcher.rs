@@ -64,6 +64,15 @@ impl AgentEngine {
                 })).await;
                 ws_send(tx, &agent_id, "file.read.result", &r, rid).await;
             }
+            ws_type::FILE_DOWNLOAD => {
+                let path = data_str(&data, "path", "");
+                let offset = data_u64(&data, "offset", 0);
+                let chunk_size = data_u64(&data, "chunkSize", 2 * 1024 * 1024);
+                let r = run_module(module_manager, "files", serde_json::json!({
+                    "op": "download", "path": path, "offset": offset, "chunkSize": chunk_size
+                })).await;
+                ws_send(tx, &agent_id, "file.download.result", &r, rid).await;
+            }
             ws_type::FILE_OPEN => {
                 let path = data_str(&data, "path", "");
                 let r = run_module(module_manager, "files", serde_json::json!({

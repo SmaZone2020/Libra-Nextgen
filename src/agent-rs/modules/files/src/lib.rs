@@ -35,6 +35,11 @@ fn dispatch(input: &str) -> String {
             file_ops::FileOps::list_directory_paged(path, offset, limit)
         }
         "read" => file_ops::FileOps::read_file(path),
+        "download" => {
+            let offset = v.get("offset").and_then(|o| o.as_u64()).unwrap_or(0);
+            let chunk_size = v.get("chunkSize").and_then(|c| c.as_u64()).unwrap_or(2 * 1024 * 1024) as usize;
+            file_ops::FileOps::download_chunk(path, offset, chunk_size)
+        }
         "write" => {
             let data = v.get("data").and_then(|d| d.as_str()).unwrap_or("");
             file_ops::FileOps::write_file(path, data)

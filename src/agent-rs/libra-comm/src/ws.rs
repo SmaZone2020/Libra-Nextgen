@@ -173,10 +173,19 @@ impl WsCommunicator {
         self.send_half(&msg).await
     }
 
-    /// Close the WebSocket connection gracefully.
+    /// Close the WebSocket connection gracefully: send a Close frame and flush
+    /// so the peer completes its close handshake instead of seeing an abrupt
+    /// TCP drop (which surfaces as a WebSocketException on the server side).
     pub async fn close(&mut self) {
+        {
+            let mut guard = self.write_half.write.lock().await;
+            if let Some(w) = guard.as_mut() {
+                let _ = w.send(Message::Close(None)).await;
+                let _ = w.flush().await;
+            }
+            *guard = None;
+        }
         self.read_half.take();
-        *self.write_half.write.lock().await = None;
     }
 }
 

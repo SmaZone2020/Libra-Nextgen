@@ -78,6 +78,51 @@ impl FileOps {
         )
     }
 
+    /// Read a chunk of a file starting at `offset` (streaming download).
+    /// Only `chunk_size` bytes are loaded into memory; large files can be
+    /// transferred piece by piece without exhausting memory on either side.
+    pub fn download_chunk(path: &str, offset: u64, chunk_size: usize) -> String {
+        use std::io::{Read, Seek, SeekFrom};
+
+        let file = match std::fs::File::open(path) {
+            Ok(f) => f,
+            Err(e) => return format!(r#"{{"error":"{}"}}"#, escape(&e.to_string())),
+        };
+        let total = match file.metadata() {
+            Ok(m) => m.len(),
+            Err(e) => return format!(r#"{{"error":"{}"}}"#, escape(&e.to_string())),
+        };
+
+        let remaining = total.saturating_sub(offset);
+        let want = (chunk_size as u64).min(remaining) as usize;
+        let mut reader = file;
+        if let Err(e) = reader.seek(SeekFrom::Start(offset)) {
+            return format!(r#"{{"error":"{}"}}"#, escape(&e.to_string()));
+        }
+
+        let mut buf = vec![0u8; want];
+        let mut filled = 0usize;
+        while filled < want {
+            match reader.read(&mut buf[filled..]) {
+                Ok(0) => break,
+                Ok(n) => filled += n,
+                Err(e) => return format!(r#"{{"error":"{}"}}"#, escape(&e.to_string())),
+            }
+        }
+        buf.truncate(filled);
+
+        let b64 = base64::engine::general_purpose::STANDARD.encode(&buf);
+        let done = offset + filled as u64 >= total;
+        format!(
+            r#"{{"path":"{}","size":{},"offset":{},"data":"{}","done":{}}}"#,
+            escape(path),
+            total,
+            offset,
+            escape(&b64),
+            done,
+        )
+    }
+
     /// Open/execute a file using the OS default handler.
     pub fn open_file(path: &str) -> String {
         if !Path::new(path).exists() {

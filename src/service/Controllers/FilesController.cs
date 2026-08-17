@@ -112,24 +112,75 @@ public class FilesController : ControllerBase
         return await RelayAndWaitAsync(agentId, "file.archive_list", new { path = req.Path }, ct);
     }
 
+    // Streaming download: the file is fetched from the agent in chunks
+    // (default 2 MB per relay round-trip) and written straight to the HTTP
+    // response body — neither the server nor the agent ever holds the whole
+    // file in memory, and each WS frame stays well under the 4 MB cap.
+    private const int DownloadChunkSize = 2 * 1024 * 1024;
+    private const int DownloadTimeoutSeconds = 30;
+
     [HttpPost("{agentId}/download")]
     public async Task<IActionResult> Download(string agentId, [FromBody] ReadRequest req, CancellationToken ct)
     {
-        var result = await RelayAndWaitAsync(agentId, "file.read", new { path = req.Path }, ct);
+        var fileName = System.IO.Path.GetFileName(req.Path);
+        var agentPath = req.Path;
 
-        if (result is ContentResult content)
+        // First chunk doubles as a probe: errors surface as a normal 4xx.
+        var first = await _relay.RelayAndWaitAsync(
+            agentId, "file.download",
+            new { path = agentPath, offset = 0L, chunkSize = DownloadChunkSize },
+            ct, TimeSpan.FromSeconds(DownloadTimeoutSeconds));
+        if (first == null)
+            return StatusCode(504, new { error = "Agent did not respond in time." });
+
+        var firstJson = first.Data != null ? first.Data.Value.GetRawText() : null;
+        if (firstJson == null)
+            return StatusCode(502, new { error = "Empty agent response." });
+
+        using var firstDoc = JsonDocument.Parse(firstJson);
+        if (firstDoc.RootElement.TryGetProperty("error", out var errProp))
+            return BadRequest(new { error = errProp.GetString() ?? "unknown error" });
+
+        var offset = firstDoc.RootElement.GetProperty("offset").GetInt64();
+        var done = firstDoc.RootElement.TryGetProperty("done", out var doneProp) && doneProp.GetBoolean();
+
+        // Stream started — set headers then write chunk-by-chunk.
+        Response.StatusCode = 200;
+        Response.ContentType = "application/octet-stream";
+        Response.Headers.ContentDisposition =
+            $"attachment; filename*=UTF-8''{Uri.EscapeDataString(fileName)}";
+
+        offset += await WriteChunkAsync(firstDoc, Response.Body, ct);
+
+        while (!done)
         {
-            var doc = System.Text.Json.JsonDocument.Parse(content.Content!);
-            if (doc.RootElement.TryGetProperty("error", out var errProp))
-                return BadRequest(new { error = errProp.GetString() });
+            var next = await _relay.RelayAndWaitAsync(
+                agentId, "file.download",
+                new { path = agentPath, offset, chunkSize = DownloadChunkSize },
+                ct, TimeSpan.FromSeconds(DownloadTimeoutSeconds));
+            if (next?.Data == null)
+                break; // stream already started — nothing else we can do
 
-            var base64 = doc.RootElement.GetProperty("content").GetString()!;
-            var bytes = Convert.FromBase64String(base64);
-            var fileName = System.IO.Path.GetFileName(req.Path);
-            return File(bytes, "application/octet-stream", fileName);
+            using var doc = JsonDocument.Parse(next.Data.Value.GetRawText());
+            if (doc.RootElement.TryGetProperty("error", out _))
+                break;
+
+            done = doc.RootElement.TryGetProperty("done", out var d) && d.GetBoolean();
+            offset += await WriteChunkAsync(doc, Response.Body, ct);
         }
 
-        return result;
+        return new EmptyResult();
+    }
+
+    private static async Task<long> WriteChunkAsync(JsonDocument doc, Stream body, CancellationToken ct)
+    {
+        var data = doc.RootElement.GetProperty("data").GetString();
+        if (string.IsNullOrEmpty(data))
+            return 0;
+        var bytes = Convert.FromBase64String(data);
+        await body.WriteAsync(bytes, ct);
+        await body.FlushAsync(ct);
+        return bytes.LongLength;
     }
 }
 
