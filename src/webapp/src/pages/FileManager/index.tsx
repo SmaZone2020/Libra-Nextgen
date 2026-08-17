@@ -1,11 +1,30 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Button, Modal, ProgressBar, useOverlayState } from '@heroui/react';
 import { listFiles, getDrives, deleteFile, renameFile, moveFile, copyFile, compressFile, decompressFile, createShortcut, downloadFile, openFile, listArchive } from '../../api/files';
 import type { FileEntry } from '../../api/files';
 import { PathBar } from './PathBar';
 import { FileList, isArchive } from './FileList';
 import { useAgent } from '../../contexts/AgentContext';
 import { useDialog } from '../../hooks/useDialog';
+
+interface DownloadState {
+  name: string;
+  total: number;
+  received: number;
+  speed: number;
+  status: 'downloading' | 'done' | 'error';
+  error?: string;
+}
+
+const formatBytes = (bytes: number): string => {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+};
+
+const formatSpeed = (bps: number): string => `${formatBytes(bps)}/s`;
 
 export default function FileManagerPage() {
   const { t } = useTranslation();
@@ -23,7 +42,10 @@ export default function FileManagerPage() {
 
   const contextRef = useRef<FileEntry | null>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const dlAbortRef = useRef<AbortController | null>(null);
   const [contextEntry, setContextEntry] = useState<FileEntry | null>(null);
+  const [dl, setDl] = useState<DownloadState | null>(null);
+  const dlModal = useOverlayState();
 
   const PAGE_SIZE = 200;
 
@@ -271,12 +293,57 @@ export default function FileManagerPage() {
   };
 
   const handleDownload = async () => {
-    if (!agentId || !contextRef.current) return;
+    const entry = contextRef.current;
+    if (!agentId || !entry) return;
+    const filePath = getContextPath();
+    const total = entry.size || 0;
+
+    dlAbortRef.current?.abort();
+    const abort = new AbortController();
+    dlAbortRef.current = abort;
+
+    setDl({ name: entry.name, total, received: 0, speed: 0, status: 'downloading' });
+    dlModal.open();
+
     try {
-      await downloadFile(agentId, getContextPath());
+      await downloadFile(agentId, filePath, {
+        total,
+        signal: abort.signal,
+        onProgress: (p) => setDl(prev => prev ? {
+          ...prev,
+          received: p.received,
+          total: p.total || prev.total,
+          speed: p.speed,
+        } : prev),
+      });
+      if (abort.signal.aborted) return;
+      setDl(prev => prev ? { ...prev, received: prev.total || prev.received, speed: 0, status: 'done' } : prev);
+      setTimeout(() => {
+        dlModal.close();
+        setDl(null);
+      }, 800);
     } catch (e) {
-      await alert(e instanceof Error ? e.message : t('fileManager.downloadFailed'));
+      if (abort.signal.aborted) {
+        dlModal.close();
+        setDl(null);
+        return;
+      }
+      setDl(prev => prev ? {
+        ...prev,
+        status: 'error',
+        error: e instanceof Error ? e.message : t('fileManager.downloadFailed'),
+      } : prev);
     }
+  };
+
+  const handleDownloadCancel = () => {
+    dlAbortRef.current?.abort();
+  };
+
+  const closeDownloadModal = () => {
+    if (dl?.status === 'downloading') handleDownloadCancel();
+    dlModal.close();
+    setDl(null);
   };
 
   useEffect(() => {
@@ -326,6 +393,66 @@ export default function FileManagerPage() {
       />
 
       {DialogComponent}
+
+      <Modal state={dlModal}>
+        <Modal.Backdrop isDismissable={dl?.status !== 'downloading'} isKeyboardDismissDisabled={dl?.status === 'downloading'}>
+          <Modal.Container>
+            <Modal.Dialog className="sm:max-w-[420px]">
+              {dl && (
+                <>
+                  <Modal.Header>
+                    <Modal.Heading className="break-all">{dl.name}</Modal.Heading>
+                  </Modal.Header>
+                  <Modal.Body>
+                    <div className="space-y-4">
+                      <ProgressBar aria-label={t('fileManager.downloadProgress')} value={dl.total > 0 ? Math.min(100, (dl.received / dl.total) * 100) : 0} className="w-full">
+                        <ProgressBar.Track>
+                          <ProgressBar.Fill />
+                        </ProgressBar.Track>
+                      </ProgressBar>
+
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-default-500">
+                          {formatBytes(dl.received)}
+                          {dl.total > 0 && <> / {formatBytes(dl.total)}</>}
+                        </span>
+                        <span className="font-mono text-xs text-default-600 tabular-nums">
+                          {dl.speed > 0 && formatSpeed(dl.speed)}
+                        </span>
+                      </div>
+
+                      {dl.total > 0 && (
+                        <div className="text-right text-xs text-default-400 tabular-nums">
+                          {Math.min(100, (dl.received / dl.total) * 100).toFixed(1)}%
+                        </div>
+                      )}
+
+                      {dl.status === 'done' && (
+                        <div className="text-sm text-success-500">{t('fileManager.downloadDone')}</div>
+                      )}
+                      {dl.status === 'error' && (
+                        <div className="text-sm text-danger-500">{dl.error ?? t('fileManager.downloadFailed')}</div>
+                      )}
+                    </div>
+                  </Modal.Body>
+                  <Modal.Footer>
+                    {dl.status === 'downloading' && (
+                      <Button className="flex-1" variant="ghost" onPress={handleDownloadCancel}>
+                        {t('fileManager.cancel')}
+                      </Button>
+                    )}
+                    {dl.status !== 'downloading' && (
+                      <Button className="flex-1" onPress={closeDownloadModal}>
+                        {t('fileManager.close')}
+                      </Button>
+                    )}
+                  </Modal.Footer>
+                </>
+              )}
+            </Modal.Dialog>
+          </Modal.Container>
+        </Modal.Backdrop>
+      </Modal>
     </div>
   );
 }

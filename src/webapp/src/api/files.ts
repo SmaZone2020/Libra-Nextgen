@@ -87,7 +87,26 @@ export function createShortcut(agentId: string, path: string): Promise<FileOpRes
   return api.post<FileOpResult>(`/files/${agentId}/shortcut`, { path });
 }
 
-export async function downloadFile(agentId: string, path: string): Promise<void> {
+export interface DownloadProgress {
+  received: number;
+  total: number;
+  /** bytes per second (smoothed over a sliding window) */
+  speed: number;
+}
+
+export interface DownloadOptions {
+  /** Known file size (from the listing); used when the server sends no Content-Length. */
+  total?: number;
+  signal?: AbortSignal;
+  onProgress?: (p: DownloadProgress) => void;
+}
+
+/**
+ * Download a file from an agent with progress reporting. The response body is
+ * consumed as a stream so the UI can render live progress/speed while the
+ * browser assembles the blob.
+ */
+export async function downloadFile(agentId: string, path: string, opts?: DownloadOptions): Promise<void> {
   const token = getToken();
   const res = await fetch(`${API_BASE}/files/${agentId}/download`, {
     method: 'POST',
@@ -96,6 +115,7 @@ export async function downloadFile(agentId: string, path: string): Promise<void>
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
     body: JSON.stringify({ path }),
+    signal: opts?.signal,
   });
 
   if (!res.ok) {
@@ -103,8 +123,46 @@ export async function downloadFile(agentId: string, path: string): Promise<void>
     throw new Error(err.error || 'Download failed');
   }
 
-  const blob = await res.blob();
+  const total = (opts?.total && opts.total > 0) ? opts.total : Number(res.headers.get('Content-Length')) || 0;
   const fileName = path.split(/[/\\]/).pop() || 'download';
+
+  if (!res.body) {
+    const blob = await res.blob();
+    triggerBlobDownload(blob, fileName);
+    opts?.onProgress?.({ received: total || blob.size, total: total || blob.size, speed: 0 });
+    return;
+  }
+
+  const reader = res.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let received = 0;
+  let speed = 0;
+
+  // Sliding window for speed: drop samples older than 3s.
+  const samples: Array<{ t: number; bytes: number }> = [];
+
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    chunks.push(value);
+    received += value.length;
+
+    const now = performance.now();
+    samples.push({ t: now, bytes: received });
+    while (samples.length > 1 && now - samples[0]!.t > 3000) samples.shift();
+    const first = samples[0]!;
+    const span = (now - first.t) / 1000;
+    if (span > 0.2) speed = (received - first.bytes) / span;
+
+    opts?.onProgress?.({ received, total, speed });
+  }
+
+  opts?.onProgress?.({ received, total, speed: 0 });
+  const blob = new Blob(chunks);
+  triggerBlobDownload(blob, fileName);
+}
+
+function triggerBlobDownload(blob: Blob, fileName: string) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
