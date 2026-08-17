@@ -435,6 +435,8 @@ export default {
         hint: '点击获取当前登录 QQ 的会话密钥',
         itemsFound: '共找到 {{count}} 个会话密钥',
         show: '显示/隐藏',
+        valid: '已兑换',
+        invalid: '无效',
       },
     },
     proxyBrowser: {

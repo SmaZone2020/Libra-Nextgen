@@ -401,6 +401,15 @@ export interface QQClientKeyItem {
   clientkey: string;
   pid: number;
   process: string;
+  source: string;
+  /** skey session cookie traded from the clientkey via ptlogin2 jump */
+  skey?: string;
+  /** p_skey session cookie (qzone) */
+  p_skey?: string;
+  /** bkn hash computed from skey */
+  bkn?: number;
+  /** whether the key passed the ptlogin2 jump validation */
+  valid?: boolean;
 }
 
 export interface QQClientKeyResult {

@@ -116,14 +116,30 @@ export function QQTab({ agentId }: QQTabProps) {
             </Button>
           </div>
           {clientkeys.map(ck => (
-            <div key={`${ck.pid}:${ck.uin}`} className="flex items-center gap-3 py-1.5 border-t border-default-100 first:border-t-0">
-              <div className="w-24 shrink-0 text-sm font-medium">{ck.uin || '—'}</div>
-              <div className="flex-1 min-w-0">
-                <span className="font-mono text-xs break-all" title={showRaw ? ck.clientkey : maskKey(ck.clientkey)}>
-                  {showRaw ? ck.clientkey : maskKey(ck.clientkey)}
-                </span>
+            <div key={`${ck.pid}:${ck.uin}:${ck.clientkey}`} className="py-1.5 border-t border-default-100 first:border-t-0">
+              <div className="flex items-center gap-3">
+                <div className="w-24 shrink-0 text-sm font-medium">{ck.uin || '—'}</div>
+                <div className="flex-1 min-w-0">
+                  <span className="font-mono text-xs break-all" title={showRaw ? ck.clientkey : maskKey(ck.clientkey)}>
+                    {showRaw ? ck.clientkey : maskKey(ck.clientkey)}
+                  </span>
+                </div>
+                <Chip
+                  size="sm"
+                  variant="soft"
+                  color={ck.valid ? 'success' : 'danger'}
+                >
+                  {ck.valid ? t('othersoft.qqClientKey.valid') : t('othersoft.qqClientKey.invalid')}
+                </Chip>
+                <div className="text-xs text-neutral-500 shrink-0">PID {ck.pid}</div>
               </div>
-              <div className="text-xs text-neutral-500 shrink-0">PID {ck.pid}</div>
+              {ck.valid && showRaw && (
+                <div className="mt-1 pl-24 space-y-0.5 font-mono text-[11px] text-neutral-500 break-all">
+                  <div>skey: {ck.skey || '—'}</div>
+                  <div>p_skey: {ck.p_skey || '—'}</div>
+                  <div>bkn: {ck.bkn ?? '—'}</div>
+                </div>
+              )}
             </div>
           ))}
         </Card>
