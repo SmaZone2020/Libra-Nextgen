@@ -8,10 +8,14 @@
 
 use base64::Engine;
 
+#[cfg(target_os = "windows")]
 use self::gdi::{capture_raw, capture_single, enum_display_monitors, ps_list_screens};
 
+#[cfg(target_os = "windows")]
 mod dxgi;
+#[cfg(target_os = "windows")]
 mod gdi;
+#[cfg(target_os = "windows")]
 mod win32_ffi;
 
 const DIFF_THRESHOLD_PERCENT: i32 = 70;

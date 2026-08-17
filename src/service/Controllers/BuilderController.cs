@@ -54,11 +54,11 @@ public class BuilderController : ControllerBase
     [HttpPost("build")]
     public IActionResult Build([FromBody] BuildConfigRequest req)
     {
-        if (!BuilderBuildService.PlatformTargets.ContainsKey(req.Platform))
+        if (!BuilderBuildService.PlatformOs.ContainsKey(req.Platform))
             return BadRequest(new { error = $"Unsupported platform: {req.Platform}" });
 
         var buildId = Guid.NewGuid().ToString("N")[..8];
-        var ext = BuilderBuildService.PlatformTargets[req.Platform].Os == "windows" ? ".exe" : "";
+        var ext = BuilderBuildService.PlatformOs[req.Platform] == "windows" ? ".exe" : "";
         var record = new Models.BuildRecord
         {
             Id = buildId,
@@ -252,7 +252,7 @@ public class BuilderController : ControllerBase
     [HttpPost("template/upload")]
     public async Task<IActionResult> UploadTemplate([FromForm] IFormFile file, [FromForm] string platform)
     {
-        var validPlatforms = new[] { "x64", "x86" };
+        var validPlatforms = BuilderBuildService.PlatformOs.Keys;
         if (!validPlatforms.Contains(platform))
             return BadRequest(new { error = $"Invalid platform. Must be one of: {string.Join(", ", validPlatforms)}" });
 
@@ -264,7 +264,7 @@ public class BuilderController : ControllerBase
             var platformDir = Path.Combine(BuilderBuildService.TemplateDir, platform);
             Directory.CreateDirectory(platformDir);
 
-            var fileName = platform == "arm" ? "loader" : "loader.exe";
+            var fileName = BuilderBuildService.PlatformOs[platform] == "windows" ? "loader.exe" : "loader";
             var targetPath = Path.Combine(platformDir, fileName);
 
             await using (var fs = System.IO.File.Create(targetPath))

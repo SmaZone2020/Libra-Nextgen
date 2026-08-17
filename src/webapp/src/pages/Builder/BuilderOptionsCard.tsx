@@ -85,6 +85,7 @@ export function BuilderOptionsCard({ config, set }: BuilderOptionsCardProps) {
               <Tabs.List>
                 <Tabs.Tab id="x64">Win x64<Tabs.Indicator /></Tabs.Tab>
                 <Tabs.Tab id="x86">Win x86<Tabs.Indicator /></Tabs.Tab>
+                <Tabs.Tab id="linux-x64">Linux x64<Tabs.Indicator /></Tabs.Tab>
               </Tabs.List>
             </Tabs>
           </div>

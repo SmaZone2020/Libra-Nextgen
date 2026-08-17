@@ -52,7 +52,12 @@ public class BuildJob
     }
 }
 
-/// <summary>Rust cross-compile target (triple + host OS).</summary>
-public readonly record struct PlatformTarget(string Triple, string Os);
+/// <summary>Rust cross-compile target OS (platform key → os).</summary>
+public static class BuildPlatforms
+{
+    public const string WindowsX64 = "x64";
+    public const string WindowsX86 = "x86";
+    public const string LinuxX64 = "linux-x64";
+}
 
 internal record struct ProcessResult(int ExitCode, string Stdout, string Stderr);

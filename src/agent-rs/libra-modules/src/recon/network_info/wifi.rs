@@ -1,7 +1,9 @@
 //! WiFi profile collection and nearby AP scanning (netsh / nmcli / iwlist).
 
 use super::escape;
-use super::wlan_ffi::{scan_wifi_wlanapi, WifiApInfo};
+use super::wlan_ffi::WifiApInfo;
+#[cfg(target_os = "windows")]
+use super::wlan_ffi::scan_wifi_wlanapi;
 
 /// Frequency in kHz → band label
 #[cfg(not(target_os = "windows"))]

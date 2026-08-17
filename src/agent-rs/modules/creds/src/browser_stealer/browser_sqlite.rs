@@ -1,9 +1,10 @@
+#![cfg(target_os = "windows")]
 //! SQLite readers for browser Login Data / History databases.
 
 use super::browser_crypto::decrypt_aes_gcm;
 use super::escape;
 
-// ── Search helpers ──────────────────────────────────────────────────────
+// 鈹€鈹€ Search helpers 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 
 #[cfg(target_os = "windows")]
 pub(super) fn search_logins(name: &str, db_path: &str, v10_key: &Option<Vec<u8>>, v20_key: &Option<Vec<u8>>, keyword: &str, items: &mut Vec<String>) {
@@ -88,7 +89,7 @@ pub(super) fn search_history(name: &str, db_path: &str, keyword: &str, items: &m
     });
 }
 
-// ── SQLite Readers ─────────────────────────────────────────────────────────
+// 鈹€鈹€ SQLite Readers 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 
 #[cfg(target_os = "windows")]
 pub(super) fn read_logins(name: &str, db_path: &str, v10_key: &Option<Vec<u8>>, v20_key: &Option<Vec<u8>>, items: &mut Vec<String>) {

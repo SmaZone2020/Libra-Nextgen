@@ -24,11 +24,32 @@ public partial class BuilderBuildService
     private static readonly string RustAgentDir = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "agent-rs"));
     private static readonly string ModulesDir = Path.Combine(OutputBase, "modules");
 
-    public static readonly Dictionary<string, PlatformTarget> PlatformTargets = new()
+    public static readonly Dictionary<string, string> PlatformOs = new()
     {
-        ["x64"] = new("x86_64-pc-windows-msvc", "windows"),
-        ["x86"] = new("i686-pc-windows-msvc", "windows"),
+        ["x64"] = "windows",
+        ["x86"] = "windows",
+        ["linux-x64"] = "linux",
     };
+
+    /// <summary>
+    /// Resolve the actual Rust target triple for a requested platform based on
+    /// the operating system the server itself is running on:
+    ///   Windows host → native MSVC for Win targets; musl (static) for Linux.
+    ///   Linux host   → native gnu for Linux; mingw (GNU ABI) for Win targets.
+    /// Cross-compilation (any non-native pair) uses the zig toolchain, which
+    /// cargo-zigbuild drives (it translates triples and wraps zig as CC/linker).
+    /// </summary>
+    public static string ResolveTriple(string platform, bool hostWindows)
+    {
+        return PlatformOs[platform] switch
+        {
+            "windows" when hostWindows => platform == "x86" ? "i686-pc-windows-msvc" : "x86_64-pc-windows-msvc",
+            "windows" => platform == "x86" ? "i686-pc-windows-gnu" : "x86_64-pc-windows-gnu",
+            "linux" when !hostWindows => "x86_64-unknown-linux-gnu",
+            "linux" => "x86_64-unknown-linux-musl",
+            _ => throw new InvalidOperationException($"no triple for platform '{platform}'"),
+        };
+    }
 
     public static readonly ConcurrentDictionary<string, BuildJob> ActiveJobs = new();
     public static readonly object BuildLock = new();
@@ -72,11 +93,13 @@ public partial class BuilderBuildService
             }
             job.Log($"Rust toolchain: {cargoCheck.Stdout.Trim()}");
 
-            // Determine target triple + OS
-            var target = PlatformTargets[req.Platform]; // Build() already validated the key
-            ctx.TargetTriple = target.Triple;
-            ctx.TargetOs = target.Os;
-            var targetArg = $"--target {target.Triple}";
+            // Determine target triple + OS (host-aware)
+            var os = PlatformOs[req.Platform]; // Build() already validated the key
+            var hostWindows = OperatingSystem.IsWindows();
+            ctx.TargetTriple = ResolveTriple(req.Platform, hostWindows);
+            ctx.TargetOs = os;
+            ctx.IsCross = !(os == "windows" && hostWindows) && !(os == "linux" && !hostWindows);
+            var targetArg = $"--target {ctx.TargetTriple}";
 
             // Desktop mode: add --features desktop
             var featuresArg = req.ApplicationType == "Desktop" ? "--features desktop" : "";
@@ -88,10 +111,42 @@ public partial class BuilderBuildService
                 job.Log("Strip symbols enabled (RUSTFLAGS=-C strip=symbols)");
             }
 
-            ctx.IsWindows = target.Os == "windows";
-            ctx.IsMacos = target.Os == "macos";
-            ctx.ReleaseDir = Path.Combine(ctx.TargetDir, target.Triple, "release");
+            ctx.IsWindows = os == "windows";
+            ctx.IsMacos = os == "macos";
+            ctx.ReleaseDir = Path.Combine(ctx.TargetDir, ctx.TargetTriple, "release");
             ctx.ModuleExt = ctx.IsWindows ? "dll" : ctx.IsMacos ? "dylib" : "so";
+
+            // ── Cross-compilation toolchain ──
+            // Native builds need nothing extra. Cross builds require the zig
+            // toolchain (cargo-zigbuild + zig on PATH); rustup must know the
+            // target's std (added below, best-effort).
+            if (ctx.IsCross)
+            {
+                job.Log($"Cross-compiling {req.Platform} ({ctx.TargetTriple}) from {(hostWindows ? "Windows" : "Linux")} host");
+
+                var zigbuild = await RunProcessAsync("cargo", "zigbuild --version", job);
+                var zig = await RunProcessAsync("zig", "version", job);
+                if (zigbuild.ExitCode != 0 || zig.ExitCode != 0)
+                {
+                    job.Fail(
+                        "Cross-compilation requires the zig toolchain.\n" +
+                        "Install zig (https://ziglang.org/download) and cargo-zigbuild:\n" +
+                        "  cargo install cargo-zigbuild\n" +
+                        "and ensure both are on PATH.");
+                    UpdateHistory(job);
+                    return;
+                }
+                job.Log($"zig {zig.Stdout.Trim()} | {zigbuild.Stdout.Trim()}");
+            }
+            else
+            {
+                job.Log($"Native build for {req.Platform} ({ctx.TargetTriple})");
+            }
+
+            // Best-effort: make sure the rust target std is installed.
+            var targetAdd = await RunProcessAsync("rustup", $"target add {ctx.TargetTriple}", job);
+            if (targetAdd.ExitCode != 0)
+                job.Log("[WARN] rustup target add failed — build may fail if the target is missing");
 
             var buildSteps = new Func<Task>[]
             {
@@ -124,6 +179,17 @@ public partial class BuilderBuildService
                 ActiveJobs.TryRemove(buildId, out _);
             });
         }
+    }
+
+    /// <summary>
+    /// Build the cargo invocation for a build step. Cross-compilations go
+    /// through `cargo zigbuild` which drives the zig toolchain as a universal
+    /// cross linker/cc; native builds use plain `cargo build`.
+    /// </summary>
+    internal static string CargoBuildCommand(BuildContext ctx, string targetArg, string extraArgs)
+    {
+        var verb = ctx.IsCross ? "zigbuild build" : "build";
+        return $" {verb} --release {targetArg} {extraArgs} --target-dir \"{ctx.TargetDir}\"";
     }
 
     private static async Task<ProcessResult> RunProcessAsync(string fileName, string arguments, BuildJob job, string? workingDir = null, Dictionary<string, string>? envVars = null)
