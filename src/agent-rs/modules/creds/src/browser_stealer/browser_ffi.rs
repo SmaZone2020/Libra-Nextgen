@@ -1,6 +1,6 @@
-//! Windows DPAPI / process FFI helpers for browser credential decryption.
+﻿//! Windows DPAPI / process FFI helpers for browser credential decryption.
 
-// ── DPAPI ──────────────────────────────────────────────────────────────────
+// 鈹€鈹€ DPAPI 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 
 #[cfg(target_os = "windows")]
 pub(super) fn dpapi_unprotect(data: &[u8]) -> Option<Vec<u8>> {
@@ -120,7 +120,7 @@ unsafe fn enable_debug_privilege() -> Option<()> {
     Some(())
 }
 
-// ── Windows FFI ────────────────────────────────────────────────────────────
+// 鈹€鈹€ Windows FFI 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 
 #[cfg(target_os = "windows")]
 #[repr(C)]
@@ -153,6 +153,8 @@ struct PROCESSENTRY32W {
 }
 
 #[cfg(target_os = "windows")]
+#[link(name = "crypt32")]
+#[link(name = "advapi32")]
 extern "system" {
     // crypt32
     fn CryptUnprotectData(
@@ -196,3 +198,4 @@ extern "system" {
         ReturnLength: *mut u32,
     ) -> i32;
 }
+

@@ -12,6 +12,11 @@ members = [
     "core",
     "srdi",
     "modules/shell",
+    "modules/recon",
+    "modules/creds",
+    "modules/files",
+    "modules/powershell",
+    "modules/proxy",
 ]
 resolver = "2"
 

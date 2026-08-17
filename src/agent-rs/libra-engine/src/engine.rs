@@ -186,7 +186,7 @@ impl AgentEngine {
                                 msg.data.as_ref().map(|v| v.to_string()).unwrap_or_else(|| "null".into())
                             );
                             self.handle_ws_message(
-                                msg, &tx, &shell_tx, &mut shell_session
+                                msg, &tx, &shell_tx, &mut shell_session, &module_manager
                             ).await;
                         }
                         None => {

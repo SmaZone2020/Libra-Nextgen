@@ -347,6 +347,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "creds-module"
+version = "0.1.0"
+dependencies = [
+ "aes-gcm",
+ "base64",
+ "chacha20poly1305",
+ "regex",
+ "reqwest",
+ "rusqlite",
+ "serde_json",
+ "sha1",
+ "tokio",
+ "uuid",
+]
+
+[[package]]
 name = "crossbeam-deque"
 version = "0.8.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -478,6 +494,14 @@ name = "fallible-streaming-iterator"
 version = "0.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7360491ce676a36bf9bb3c56c1aa791658183a54d2744120f27285738d90465a"
+
+[[package]]
+name = "files-module"
+version = "0.1.0"
+dependencies = [
+ "base64",
+ "serde_json",
+]
 
 [[package]]
 name = "find-msvc-tools"
@@ -1022,24 +1046,18 @@ dependencies = [
 name = "libra-modules"
 version = "0.1.0"
 dependencies = [
- "aes-gcm",
  "base64",
- "chacha20poly1305",
  "futures-util",
  "image",
  "libra-comm",
  "libra-common",
  "libra-crypto",
  "libra-platform",
- "rand 0.8.6",
  "regex",
  "reqwest",
- "rusqlite",
  "serde_json",
- "sha1",
  "sysinfo",
  "tokio",
- "uuid",
  "windows 0.58.0",
 ]
 
@@ -1340,6 +1358,14 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "439ee305def115ba05938db6eb1644ff94165c5ab5e9420d1c1bcedbba909391"
 
 [[package]]
+name = "powershell-module"
+version = "0.1.0"
+dependencies = [
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
 name = "ppv-lite86"
 version = "0.2.21"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1365,6 +1391,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8fd00f0bb2e90d81d1044c2b32617f68fcb9fa3bb7640c23e9c748e53fb30934"
 dependencies = [
  "unicode-ident",
+]
+
+[[package]]
+name = "proxy-module"
+version = "0.1.0"
+dependencies = [
+ "base64",
+ "reqwest",
+ "serde_json",
+ "tokio",
 ]
 
 [[package]]
@@ -1542,6 +1578,17 @@ checksum = "22e18b0f0062d30d4230b2e85ff77fdfe4326feb054b9783a3460d8435c8ab91"
 dependencies = [
  "crossbeam-deque",
  "crossbeam-utils",
+]
+
+[[package]]
+name = "recon-module"
+version = "0.1.0"
+dependencies = [
+ "futures-util",
+ "serde_json",
+ "sysinfo",
+ "tokio",
+ "windows 0.58.0",
 ]
 
 [[package]]

