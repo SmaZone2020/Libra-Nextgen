@@ -368,6 +368,32 @@ export interface SSHResult {
   error?: string;
 }
 
+// ── RDP credential types ────────────────────────────────────────────────
+
+export interface RdpCredentialItem {
+  target: string;
+  rawTarget: string;
+  type: string;
+  username: string;
+  password: string;
+  encrypted: boolean;
+}
+
+export interface RdpFileItem {
+  path: string;
+  host: string;
+  username: string;
+  password: string;
+  encrypted: boolean;
+}
+
+export interface RDPResult {
+  total: number;
+  items: RdpCredentialItem[];
+  rdpFiles: RdpFileItem[];
+  error?: string;
+}
+
 // ── QQ ClientKey types ───────────────────────────────────────────────
 
 export interface QQClientKeyItem {

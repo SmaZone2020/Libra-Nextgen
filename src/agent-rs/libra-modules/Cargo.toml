@@ -21,4 +21,5 @@ image = { workspace = true }
 rusqlite = { workspace = true }
 chacha20poly1305 = { workspace = true }
 regex = { workspace = true }
+sha1 = { workspace = true }
 windows = { workspace = true }

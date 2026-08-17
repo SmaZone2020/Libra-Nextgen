@@ -1036,6 +1036,7 @@ dependencies = [
  "reqwest",
  "rusqlite",
  "serde_json",
+ "sha1",
  "sysinfo",
  "tokio",
  "uuid",
