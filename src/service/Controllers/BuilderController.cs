@@ -52,7 +52,7 @@ public class BuilderController : ControllerBase
     // ── Build (async) ──────────────────────────────────────────────────
 
     [HttpPost("build")]
-    public IActionResult Build([FromBody] BuildConfigRequest req)
+    public IActionResult Build([FromBody] BuildConfigRequest req, [FromQuery] bool rebuild = false)
     {
         if (!BuilderBuildService.PlatformOs.ContainsKey(req.Platform))
             return BadRequest(new { error = $"Unsupported platform: {req.Platform}" });
@@ -78,7 +78,7 @@ public class BuilderController : ControllerBase
         BuilderBuildService.ActiveJobs[buildId] = job;
 
         // Run Rust build in background
-        _ = Task.Run(() => _buildService.RunBuildAsync(buildId, req, job));
+        _ = Task.Run(() => _buildService.RunBuildAsync(buildId, req, job, rebuild));
 
         return Ok(new { buildId });
     }

