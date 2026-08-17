@@ -2,9 +2,12 @@
    xterm requires a monospace font and renders CJK as 2 cells; the CJK
    fallback (NSimSun / Sarasa / Noto Sans Mono CJK) keeps Chinese aligned. */
 
-/* Ensure the xterm renderer always uses the monospace stack, even if
-   something else tries to override its font-family. */
-.xterm {
+/* Ensure the xterm renderer always uses the monospace stack. The global
+   `* { font-family: ... }` reset in app.css targets every descendant too,
+   so we must cover the whole xterm subtree (.xterm-rows renders the text),
+   not just the root element. */
+.xterm,
+.xterm * {
   font-family: "JetBrainsMono", "LibraTermCJK", ui-monospace, monospace !important;
 }
 
