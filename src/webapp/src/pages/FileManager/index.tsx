@@ -7,6 +7,7 @@ import { PathBar } from './PathBar';
 import { FileList, isArchive } from './FileList';
 import { useAgent } from '../../contexts/AgentContext';
 import { useDialog } from '../../hooks/useDialog';
+import { joinPath, getParentPath } from '../../utils/path';
 
 interface DownloadState {
   name: string;
@@ -25,29 +26,6 @@ const formatBytes = (bytes: number): string => {
 };
 
 const formatSpeed = (bps: number): string => `${formatBytes(bps)}/s`;
-
-/** Parent of a path, aware of UNC roots and drive roots. */
-const getParentPath = (p: string): string => {
-  const trimmed = p.replace(/[\\/]+$/, '');
-  if (!trimmed) return p;
-
-  // UNC root: \\host or \\host\ → stay there
-  if (trimmed.startsWith('\\\\')) {
-    const parts = trimmed.slice(2).split('\\');
-    if (parts.length <= 1) return '\\\\' + parts[0];
-    return '\\\\' + parts.slice(0, -1).join('\\');
-  }
-  // Unix root
-  if (trimmed.startsWith('/')) {
-    const idx = trimmed.lastIndexOf('/');
-    return idx <= 0 ? '/' : trimmed.slice(0, idx);
-  }
-  // Drive root: C:\ → stay
-  if (/^[A-Za-z]:$/.test(trimmed)) return trimmed + '\\';
-  const idx = trimmed.lastIndexOf('\\');
-  if (idx <= 1) return trimmed[0] + ':\\';
-  return trimmed.slice(0, idx);
-};
 
 export default function FileManagerPage() {
   const { t } = useTranslation();
@@ -172,7 +150,7 @@ export default function FileManagerPage() {
   }, [agentId, path]);
 
   const exitArchive = useCallback(() => {
-    const parentDir = path.replace(/\\+$/, '').split('\\').slice(0, -1).join('\\') || 'C:\\';
+    const parentDir = getParentPath(path);
     setInArchive(false);
     sendFileList(parentDir);
   }, [path, sendFileList]);
@@ -180,7 +158,7 @@ export default function FileManagerPage() {
   const handleRowAction = useCallback((key: string | number) => {
     const entry = entries.find(e => e.name === String(key));
     if (!entry) return;
-    const fullPath = path.replace(/\\+$/, '') + '\\' + entry.name;
+    const fullPath = joinPath(path, entry.name);
     if (entry.type === 'dir') {
       if (inArchive) return;
       navigateTo(fullPath);
@@ -222,7 +200,7 @@ export default function FileManagerPage() {
   const getContextPath = () => {
     const entry = contextRef.current;
     if (!entry) return '';
-    return path.replace(/\\+$/, '') + '\\' + entry.name;
+    return joinPath(path, entry.name);
   };
 
   const handleOpen = async () => {

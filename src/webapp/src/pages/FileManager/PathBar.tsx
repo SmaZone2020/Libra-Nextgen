@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button, Card, Dropdown, TextField, Input, Tooltip } from '@heroui/react';
 import { FolderArrowLeft, FolderTree, Pencil } from '@gravity-ui/icons';
+import { normalizePath, driveLabel } from '../../utils/path';
 
 interface PathBarProps {
   path: string;
@@ -14,27 +15,6 @@ interface PathBarProps {
 }
 
 /** Normalize a user-entered path: trim, unify separators, fix drive roots. */
-export function normalizePath(input: string): string {
-  let p = input.trim();
-  if (!p) return p;
-
-  const isUnc = p.startsWith('\\\\') || p.startsWith('//');
-  if (isUnc) {
-    // \\host\share or //host/share → \\host\share
-    p = '\\\\' + p.replace(/^[\\/]+/, '').replace(/\//g, '\\');
-  } else if (p.includes('\\') || /^[A-Za-z]:/.test(p)) {
-    // Windows-style path: unify separators, strip trailing backslash
-    p = p.replace(/\//g, '\\').replace(/\\+$/, '');
-  } else if (p.startsWith('/')) {
-    // Unix-style path: keep as-is
-    p = p.replace(/\/+$/, '');
-  }
-
-  // Drive root: "C:" → "C:\"
-  if (/^[A-Za-z]:$/.test(p)) p += '\\';
-  return p;
-}
-
 export function PathBar({ path, drives, historyLength, onGoBack, onGoUp, onDriveChange, onNavigate }: PathBarProps) {
   const { t } = useTranslation();
   const [editing, setEditing] = useState(false);
@@ -78,7 +58,7 @@ export function PathBar({ path, drives, historyLength, onGoBack, onGoUp, onDrive
           variant="ghost"
           className="w-[80px] justify-start"
         >
-          {path.split('\\')[0] + '\\'}
+          {driveLabel(path)}
         </Button>
         <Dropdown.Popover>
           <Dropdown.Menu
