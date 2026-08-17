@@ -20,7 +20,7 @@ public sealed class AgentTools
             _ => null
         };
         var agents = await agentService.GetAllAsync(status: filter);
-        return System.Text.Json.JsonSerializer.Serialize(agents);
+        return McpUtils.Limit(System.Text.Json.JsonSerializer.Serialize(agents));
     }
 
     [McpServerTool, Description("Get detailed information about a specific agent")]

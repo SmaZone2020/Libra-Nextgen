@@ -116,4 +116,24 @@ public class TaskService
             return await _tasks.CountAsync(t => t.Status == status.Value, ct);
         return await _tasks.CountAsync(ct: ct);
     }
+
+    /// <summary>
+    /// Polls until the task reaches a terminal state (Completed/Failed/Cancelled)
+    /// or the timeout elapses. Used by MCP tools so a single call can return the
+    /// final result instead of making the client poll get_task manually.
+    /// </summary>
+    public async Task<AgentTask?> WaitForCompletionAsync(string id, TimeSpan? timeout, CancellationToken ct = default)
+    {
+        var deadline = DateTime.UtcNow + (timeout ?? TimeSpan.FromSeconds(60));
+        while (DateTime.UtcNow < deadline)
+        {
+            ct.ThrowIfCancellationRequested();
+            var task = await GetByIdAsync(id, ct);
+            if (task == null) return null;
+            if (task.Status is TaskStatus.Completed or TaskStatus.Failed or TaskStatus.Cancelled)
+                return task;
+            await Task.Delay(500, ct);
+        }
+        return await GetByIdAsync(id, ct);
+    }
 }

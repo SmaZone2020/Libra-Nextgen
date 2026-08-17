@@ -1,6 +1,6 @@
 using System.ComponentModel;
-using System.Text.Json;
 using ModelContextProtocol.Server;
+using LibraNextgen.Common.Models;
 using LibraNextgen.Service.Services;
 
 namespace LibraNextgen.Service.Mcp;
@@ -8,35 +8,25 @@ namespace LibraNextgen.Service.Mcp;
 [McpServerToolType]
 public sealed class ScreenTools
 {
-    [McpServerTool, Description("Take a screenshot from an agent's display")]
+    [McpServerTool, Description("Take a screenshot from an agent's display and wait for the base64 result")]
     public static async Task<string> take_screenshot(
         TaskService taskService,
-        [Description("Target agent ID")] string agentId)
+        AgentService agents,
+        [Description("Target agent ID")] string agentId,
+        [Description("Timeout in seconds (default 20)")] int timeoutSeconds = 20)
     {
-        var request = new Common.Models.TaskCreateRequest
-        {
-            AgentId = agentId,
-            CommandType = Common.Models.CommandType.Screenshot,
-            Command = "capture",
-            TimeoutSeconds = 15
-        };
-        var task = await taskService.CreateAsync(request, "mcp-client");
-        return JsonSerializer.Serialize(new { task.Id, task.Status, message = "Screenshot task created. Poll get_task for base64 result." });
+        return await McpUtils.CreateTaskAndWait(
+            taskService, agents, agentId, CommandType.Screenshot, "capture", timeoutSeconds);
     }
 
-    [McpServerTool, Description("Capture a frame from the agent's webcam")]
+    [McpServerTool, Description("Capture a frame from the agent's webcam and wait for the base64 result")]
     public static async Task<string> capture_webcam(
         TaskService taskService,
-        [Description("Target agent ID")] string agentId)
+        AgentService agents,
+        [Description("Target agent ID")] string agentId,
+        [Description("Timeout in seconds (default 20)")] int timeoutSeconds = 20)
     {
-        var request = new Common.Models.TaskCreateRequest
-        {
-            AgentId = agentId,
-            CommandType = Common.Models.CommandType.Webcam,
-            Command = "capture",
-            TimeoutSeconds = 15
-        };
-        var task = await taskService.CreateAsync(request, "mcp-client");
-        return JsonSerializer.Serialize(new { task.Id, task.Status, message = "Webcam capture task created." });
+        return await McpUtils.CreateTaskAndWait(
+            taskService, agents, agentId, CommandType.Webcam, "capture", timeoutSeconds);
     }
 }

