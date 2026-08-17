@@ -38,8 +38,8 @@ public partial class BuilderBuildService
     private static async Task Stage1_BuildCoreAsync(BuildContext ctx, string targetArg, BuildJob job)
     {
         job.Log($"=== Stage 1: Building Core DLL ({ctx.TargetTriple}) ===");
-        var coreBuildArgs = $"build{BuilderBuildService.CargoBuildCommand(ctx, targetArg, "-p core")}";
-        job.Log($"cargo {coreBuildArgs}");
+        var coreBuildArgs = $"cargo {BuilderBuildService.CargoBuildCommand(ctx, targetArg, "-p core")}";
+        job.Log(coreBuildArgs);
 
         var coreBuildResult = await RunProcessAsync("cargo", coreBuildArgs, job, RustAgentDir, ctx.EnvVars);
         if (coreBuildResult.ExitCode != 0)
@@ -114,7 +114,7 @@ public partial class BuilderBuildService
             .Select(m => m.Lib.StartsWith("shell_") ? "-p shell-module" : $"-p {m.Module}-module")
             .Distinct());
 
-        var moduleBuildArgs = $"build{BuilderBuildService.CargoBuildCommand(ctx, targetArg, packages)}";
+        var moduleBuildArgs = $"cargo {BuilderBuildService.CargoBuildCommand(ctx, targetArg, packages)}";
         var moduleBuildResult = await RunProcessAsync("cargo", moduleBuildArgs, job, RustAgentDir, ctx.EnvVars);
         if (moduleBuildResult.ExitCode != 0)
         {
@@ -217,7 +217,7 @@ public partial class BuilderBuildService
         {
             // ── First time: compile loader and save as template ──
             job.Log("No template found, compiling loader from source...");
-            var loaderBuildArgs = $"build{BuilderBuildService.CargoBuildCommand(ctx, targetArg, $"{featuresArg} -p loader")}";
+            var loaderBuildArgs = $"cargo {BuilderBuildService.CargoBuildCommand(ctx, targetArg, $"{featuresArg} -p loader")}";
             job.Log($"cargo {loaderBuildArgs}");
 
             var loaderBuildResult = await RunProcessAsync("cargo", loaderBuildArgs, job, RustAgentDir, ctx.EnvVars);
