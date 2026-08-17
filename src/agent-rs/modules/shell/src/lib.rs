@@ -18,6 +18,11 @@ const DEFAULT_TIMEOUT: u64 = 60;
 /// Entry point invoked by the module manager. Writes JSON result into `output`,
 /// returns the number of bytes written (0 on error).
 #[no_mangle]
+pub extern "C" fn module_name() -> *const u8 {
+    concat!("shell", "\0").as_ptr() as *const u8
+}
+
+#[no_mangle]
 pub unsafe extern "system" fn module_main(
     input: *const u8,
     input_len: usize,

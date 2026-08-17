@@ -50,6 +50,18 @@ impl ModuleManager {
             .download_module(name, &self.agent_id, key)
             .await?;
         let module = load_module(&bytes, "module_main")?;
+
+        // Self-identification check: the downloaded artifact must claim to be
+        // the requested module, otherwise a corrupted/mismatched download
+        // would execute under the wrong name.
+        if !module.name.is_empty() && module.name != name {
+            eprintln!("[module] MISMATCH: requested '{name}', downloaded '{0}'", module.name);
+            return Err(format!(
+                "module content mismatch: requested '{name}', downloaded '{}'",
+                module.name
+            ));
+        }
+
         self.loaded.insert(name.to_string(), module);
         Ok(())
     }

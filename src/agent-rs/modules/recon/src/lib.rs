@@ -1,4 +1,4 @@
-//! Recon cloud module — system/process/window/env/lanscan/bluetooth/local accounts.
+//! Recon cloud module 鈥?system/process/window/env/lanscan/bluetooth/local accounts.
 #![allow(non_snake_case)]
 #![allow(clippy::upper_case_acronyms)]
 
@@ -12,6 +12,11 @@ mod local_accounts;
 use serde_json::Value;
 
 /// libra-load ABI entry point.
+#[no_mangle]
+pub extern "C" fn module_name() -> *const u8 {
+    concat!("recon", "\0").as_ptr() as *const u8
+}
+
 #[no_mangle]
 pub unsafe extern "system" fn module_main(
     input: *const u8,

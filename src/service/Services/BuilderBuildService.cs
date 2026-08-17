@@ -216,7 +216,7 @@ public partial class BuilderBuildService
             UpdateHistory(job);
 
             // Cache the compiled core artifacts for future builds of this platform.
-            if (!job.IsCompleted && !ctx.SkipCompile)
+            if (job.IsCompleted && job.Record.Status == "completed" && !ctx.SkipCompile)
             {
                 var artDir = Path.Combine(ArtifactsDir, req.Platform);
                 Directory.CreateDirectory(artDir);

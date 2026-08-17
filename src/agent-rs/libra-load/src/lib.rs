@@ -17,11 +17,15 @@
 //! - Linux: `memfd_create` + `dlopen` (never touches disk).
 
 pub type ModuleMainFn = unsafe extern "system" fn(*const u8, usize, *mut u8, usize) -> usize;
+pub type ModuleNameFn = extern "C" fn() -> *const u8;
 
 /// A loaded module handle. The underlying image is intentionally leaked so the
 /// entry point stays valid for the lifetime of the process.
 pub struct LoadedModule {
     pub main: ModuleMainFn,
+    /// Module self-identification (exported as `module_name`). Used to detect
+    /// content mismatches (e.g. a corrupted download) before execution.
+    pub name: String,
 }
 
 /// Load a module from raw bytes and resolve the named export.
@@ -47,6 +51,52 @@ pub fn load_module(bytes: &[u8], export: &str) -> Result<LoadedModule, String> {
         let _ = bytes;
         let _ = export;
         return Err("unsupported platform for in-memory module loading".into());
+    }
+}
+
+/// Resolve both `module_main` and `module_name` from a loaded handle.
+unsafe fn resolve_symbols(handle: *mut u8, export: &str) -> Result<LoadedModule, String> {
+    let export_c = format!("{}\0", export);
+    let proc = get_proc_address(handle, export_c.as_ptr());
+    if proc.is_null() {
+        return Err(format!("export '{}' not found", export));
+    }
+    let main: ModuleMainFn = std::mem::transmute(proc);
+
+    let name_c = "module_name\0".to_string();
+    let name_ptr = get_proc_address(handle, name_c.as_ptr());
+    let name = if name_ptr.is_null() {
+        String::new()
+    } else {
+        let f: ModuleNameFn = std::mem::transmute(name_ptr);
+        let p = f();
+        if p.is_null() {
+            String::new()
+        } else {
+            let mut len = 0usize;
+            while *p.add(len) != 0 {
+                len += 1;
+            }
+            String::from_utf8_lossy(std::slice::from_raw_parts(p, len)).to_string()
+        }
+    };
+
+    Ok(LoadedModule { main, name })
+}
+
+extern "system" {
+    fn GetProcAddress(hModule: *mut u8, lpProcName: *const u8) -> *mut u8;
+}
+
+fn get_proc_address(handle: *mut u8, name: *const u8) -> *mut u8 {
+    #[cfg(target_os = "windows")]
+    unsafe {
+        return GetProcAddress(handle, name);
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        let _ = (handle, name);
+        std::ptr::null_mut()
     }
 }
 
@@ -128,20 +178,13 @@ mod windows {
             return Err(format!("LoadLibraryW failed ({})", GetLastError()));
         }
 
-        let export_c = format!("{}\0", export);
-        let proc = GetProcAddress(h_module, export_c.as_ptr());
-        if proc.is_null() {
-            return Err(format!("export '{}' not found", export));
-        }
-
-        let main: ModuleMainFn = std::mem::transmute(proc);
-        Ok(LoadedModule { main })
+        super::resolve_symbols(h_module, export)
     }
 }
 
 #[cfg(target_os = "linux")]
 mod linux {
-    use super::{LoadedModule, ModuleMainFn};
+    use super::LoadedModule;
     use std::ffi::CStr;
 
     pub unsafe fn load(bytes: &[u8], export: &str) -> Result<LoadedModule, String> {
@@ -178,14 +221,7 @@ mod linux {
             return Err(format!("dlopen failed: {}", msg));
         }
 
-        let export_c = format!("{}\0", export);
-        let sym = libc::dlsym(handle, export_c.as_ptr() as *const libc::c_char);
-        if sym.is_null() {
-            return Err(format!("export '{}' not found", export));
-        }
-
-        let main: ModuleMainFn = std::mem::transmute(sym);
-        Ok(LoadedModule { main })
+        super::resolve_symbols(handle, export)
     }
 }
 
@@ -213,14 +249,7 @@ mod macos {
             return Err(format!("dlopen failed: {}", msg));
         }
 
-        let export_c = format!("{}\0", export);
-        let sym = libc::dlsym(handle, export_c.as_ptr() as *const libc::c_char);
-        if sym.is_null() {
-            return Err(format!("export '{}' not found", export));
-        }
-
-        let main: ModuleMainFn = std::mem::transmute(sym);
-        Ok(LoadedModule { main })
+        super::resolve_symbols(handle, export)
     }
 }
 

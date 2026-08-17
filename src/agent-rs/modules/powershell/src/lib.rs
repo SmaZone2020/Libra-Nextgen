@@ -1,4 +1,4 @@
-//! PowerShell cloud module — script execution via stdin pipe (AMSI/EDR friendly).
+//! PowerShell cloud module 鈥?script execution via stdin pipe (AMSI/EDR friendly).
 #![allow(non_snake_case)]
 #![allow(clippy::upper_case_acronyms)]
 
@@ -7,6 +7,11 @@ mod power_shell;
 use serde_json::Value;
 
 /// libra-load ABI entry point.
+#[no_mangle]
+pub extern "C" fn module_name() -> *const u8 {
+    concat!("powershell", "\0").as_ptr() as *const u8
+}
+
 #[no_mangle]
 pub unsafe extern "system" fn module_main(
     input: *const u8,

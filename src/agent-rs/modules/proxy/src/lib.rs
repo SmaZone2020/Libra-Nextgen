@@ -1,4 +1,4 @@
-//! Proxy browser cloud module — outbound HTTP requests on behalf of the server.
+//! Proxy browser cloud module 鈥?outbound HTTP requests on behalf of the server.
 #![allow(non_snake_case)]
 #![allow(clippy::upper_case_acronyms)]
 
@@ -7,6 +7,11 @@ mod proxy_browser;
 use serde_json::Value;
 
 /// libra-load ABI entry point.
+#[no_mangle]
+pub extern "C" fn module_name() -> *const u8 {
+    concat!("proxy", "\0").as_ptr() as *const u8
+}
+
 #[no_mangle]
 pub unsafe extern "system" fn module_main(
     input: *const u8,
