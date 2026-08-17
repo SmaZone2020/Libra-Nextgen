@@ -24,7 +24,33 @@ Agent 采用 **Bootstrapper + 云载模块** 架构：loader 反射加载加密�
 
 ## 快速开始
 
-环境要求：Rust 1.80+、.NET SDK 10、Node.js 20+、MongoDB 7.0+
+环境要求：Rust 1.80+、.NET SDK 10、Node.js 20+、MongoDB 7.0+。
+
+### Windows 部署
+
+```powershell
+# 1. 启动 Server（http://localhost:5270）
+cd src\service
+dotnet run
+
+# 2. 启动 Console（http://localhost:5173，首次访问 /setup 创建管理员）
+cd src\webapp
+npm install
+npm run dev
+```
+
+通过 Console 的 **Builder** 页面在线构建载荷：
+
+- **Win x64 / Win x86**：原生 MSVC 编译（需 VS Build Tools + Rust MSVC 工具链）
+- **Linux x64**：交叉编译（服务端自动走 zig 工具链，需安装）：
+
+```powershell
+# 交叉构建 Linux 载荷所需工具
+cargo install cargo-zigbuild
+# 下载 zig（https://ziglang.org/download）并加入 PATH
+```
+
+### Linux 部署
 
 ```bash
 # 1. 启动 Server（http://localhost:5270）
@@ -35,13 +61,19 @@ dotnet run
 cd src/webapp
 npm install
 npm run dev
-
-# 3. 构建 Agent
-cd src/agent-rs
-cargo build --release
 ```
 
-也可通过 Console 的 **Builder** 页面在线编译载荷：配置 Server 地址、通信参数、持久化选项后一键生成并部署至目标主机。
+通过 Console 的 **Builder** 页面在线构建载荷：
+
+- **Linux x64**：原生编译（rustc 默认工具链）
+- **Win x64 / Win x86**：交叉编译（mingw ABI，同样经 zig 工具链）：
+
+```bash
+cargo install cargo-zigbuild   # 交叉构建 Windows 载荷所需工具
+# 下载 zig（https://ziglang.org/download）并加入 PATH
+```
+
+> 说明：无论 Server 运行在 Windows 还是 Linux，均可构建 Windows 与 Linux 载荷；交叉构建由服务端自动探测 zig 工具链并调用 cargo-zigbuild，缺失时构建会给出明确提示。命令行本地构建（`cargo build --release`）仅产出本机平台的载荷。
 
 ## MCP
 

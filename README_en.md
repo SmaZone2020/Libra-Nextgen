@@ -2,282 +2,86 @@
 
 A modern C2 (Command & Control) framework for enterprise red-team operations.
 
-## Architecture Overview
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                    Libra-Console (React 19)                     │
-│                Operator Console · Collaboration · Live          │
-│                   http://localhost:5173                         │
-└──────────────────────────┬──────────────────────────────────────┘
-                           │ WebSocket / REST
-┌──────────────────────────▼──────────────────────────────────────┐
-│               Libra-Server (ASP.NET Core 10)                    │
-│          Traffic Intake · Task Scheduling · MongoDB · JWT       │
-│                   http://localhost:5270                         │
-└──────────────────────────┬──────────────────────────────────────┘
-                           │ HTTP(S) / WebSocket (AES-256-GCM)
-┌──────────────────────────▼──────────────────────────────────────┐
-│                    Libra-Agent (Rust)                           │
-│   Cross-Platform Payload · Modular Recon · In-Memory Execution  │
-│                  Anti-Sandbox · Persistence                     │
-└─────────────────────────────────────────────────────────────────┘
-```
-
-### Subsystems
+## Architecture
 
 | Component | Directory | Stack |
 |-----------|-----------|-------|
-| **Agent** | `src/agent-rs/` | Rust 2021 · Tokio · Win32/WinRT FFI · `windows` crate |
-| **Server** | `src/service/` | ASP.NET Core 10 · MongoDB · JWT (RSA) · WebSocket |
-| **Console** | `src/webapp/` | React 19 · TypeScript · HeroUI 3 · Vite 6 · Tailwind CSS 4 |
+| **Libra-Agent** | `src/agent-rs/` | Rust · Tokio · Win32 FFI |
+| **Libra-Server** | `src/service/` | ASP.NET Core 10 · MongoDB · JWT |
+| **Libra-Console** | `src/webapp/` | React 19 · HeroUI 3 · Vite |
 
-### Agent Workspace (`src/agent-rs/`)
+The Agent uses a **Bootstrapper + cloud modules** architecture: the loader reflectively loads an encrypted minimal kernel (comm / crypto / scheduling / streaming), while everything else (files, credentials, recon, shell, PowerShell, proxy) is delivered as standalone modules downloaded on demand from the Server and executed in memory — nothing touches disk.
 
-A Rust workspace of 6 crates:
+## Core Features
 
-| Crate | Purpose |
-|-------|---------|
-| `agent` | Standalone binary: config parsing, persistence management, anti-sandbox checks, main engine |
-| `libra-common` | Shared models (`InjectedConfig`, `AgentTask`), protocol constants |
-| `libra-crypto` | RSA-2048 + AES-256-GCM key negotiation and encryption |
-| `libra-comm` | Dual-mode comms: HTTP polling + WebSocket long-lived connection |
-| `libra-platform` | Hardware collection (CPU/GPU/RAM/disks/displays), WMI queries, `sysinfo` fallback |
-| `libra-modules` | All operational modules (see capability matrix below) |
-
-### Server Project (`src/service/`)
-
-ASP.NET Core WebAPI with:
-- `Controllers/` — 17 REST controllers (Agents, Tasks, Builder, Files, System, Media, Screen, Proxy, Audit, etc.)
-- `Services/` — 12 business services (AgentService, TaskService, AuthService, HeartbeatMonitor, etc.)
-- `Hubs/` — WebSocket connection management (native WebSocket, not SignalR)
-- `Middleware/` — Audit logging middleware
-- `Profiles/` — Malleable C2 profiles (traffic camouflage)
-- `Data/` — MongoDB context and generic repository
-
-### Console Pages (`src/webapp/src/pages/`)
-
-15 page modules:
-
-| Page | Route | Function |
-|------|-------|----------|
-| Dashboard | `/` | Stats cards, traffic charts, agent geo-distribution map |
-| Agents | `/agents` | Agent list, detail panel (hardware accordion), credential export |
-| Shell | `/shell` | Interactive remote terminal via xterm.js |
-| ScreenMonitor | `/screen` | Screen diff streaming (64×64 block diff + keyframe) |
-| MediaMonitor | `/media` | Camera / microphone live streaming |
-| FileManager | `/files` | Remote file browser (paged lazy loading), open/execute, archive browser, upload, download, compress |
-| System | `/system` | Process list, window enumeration, environment variables, network info, WiFi scan, LAN scan |
-| SoftwareData | `/othersoft` | WeChat/QQ data, browser credentials (Chrome/Edge v10+v20), AI token scanner |
-| ProxyBrowser | `/proxy` | Browse web pages through the compromised proxy |
-| Builder | `/builder` | Agent payload generation and compilation |
-| AuditLogs | `/audit` | Operation audit log viewer |
-| Settings | `/settings` | MCP AccessKey management |
-
-## Agent Capability Matrix
-
-### Reconnaissance
-- **System Fingerprint**: OS version, architecture, CPU, GPU, RAM, disk serial numbers, motherboard/BIOS version
-- **Network Intelligence**: Public IP, GeoIP (city/ISP/ASN/coordinates), proxy settings, DNS suffix
-- **WiFi Scanning**: Win32 Wlan API (primary) + `netsh wlan show networks mode=bssid` regex fallback. Outputs SSID, BSSID, authentication, encryption, signal strength, band (2.4GHz / 5GHz / 6GHz)
-- **LAN Scanning**: ARP table query + ICMP ping sweep
-- **Bluetooth Scanning**: WinRT `BluetoothDevice.GetDeviceSelector` + `FindAllAsync`, BLE support
-- **Process Enumeration**: CreateToolhelp32Snapshot + WMI fallback
-- **Window Enumeration**: EnumWindows + window title collection
-- **Local Accounts**: WMI `Win32_UserAccount`, SID-based admin group detection
-- **Environment Variables**: System/user PATH read and edit
-- **Browser Credentials**: Chrome/Edge v10 (DPAPI) and v20 (app-bound key via LSASS token impersonation → SYSTEM DPAPI → ChaCha20-Poly1305 decryption)
-- **AI Token Scanner**: API key file scanning for common AI vendors
-- **Third-Party Software**: WeChat wxid and file directories, QQ account data
-
-### Execution
-- **Shell**: CMD / PowerShell (Windows), Bash / Zsh (Linux)
-- **File Operations**: Chunked upload/download for large files, move, copy, delete, timestomping; paged lazy loading for directories (200 items/page infinite scroll), in-browser archive browsing (ZIP store mode with zero extraction), file open/execute
-- **Screen Capture**: Multi-monitor support, 64×64 block diff streaming + JPEG keyframes via DXGI Desktop Duplication API
-- **Camera**: WinRT `MediaCapture` + DirectShow low-level access
-- **Microphone**: WinRT `MediaCapture` + WaveIn API
-- **Credential Export**: In-memory credential dump
-- **Proxy Browser**: Browse arbitrary URLs through the compromised host
-
-### Anti-Analysis
-- CPU core count · RAM size · Disk capacity baseline checks
-- Sandbox bait username/hostname detection
-- Hypervisor artifact detection (VMware/VirtualBox/Hyper-V)
-
-### Persistence
-- **Windows**: Registry Run key · Scheduled task (`schtasks /create /rl highest`) · ShellExecuteW + `runas` UAC elevation
-- **Linux**: Crontab @reboot · systemd service
+- **Communication**: dual-mode HTTP(S) polling + WebSocket, AES-256-GCM end-to-end encryption, RSA dynamic key negotiation
+- **Stealth**: anti-sandbox / anti-VM probes, PEB spoofing, UAC elevation, multi-vector persistence (registry / scheduled tasks / cron / systemd)
+- **Recon**: system & hardware fingerprinting, network + GeoIP, WiFi / LAN / Bluetooth scanning, processes / windows / local accounts
+- **Credentials**: browser passwords (Chrome/Edge v10/v20), RDP credentials, SSH keys, QQ/WeChat data, QQ clientkey (jump exchange to skey/bkn), AI key scanning
+- **Execution**: interactive Shell (xterm.js), in-memory PowerShell, live screen / webcam / microphone streaming
+- **Files**: paged browsing, streaming download (live progress & speed), upload, in-archive browsing, timestomping
+- **MCP**: built-in MCP server — AI clients can drive every C2 capability
 
 ## Quick Start
 
-### Prerequisites
+Requirements: Rust 1.80+, .NET SDK 10, Node.js 20+, MongoDB 7.0+.
 
-- **Rust** 1.80+ (MSVC toolchain, Windows)
-- **.NET SDK** 10.0+
-- **Node.js** 20+
-- **MongoDB** 7.0+ (default: `mongodb://localhost:27017`)
+### Deploy on Windows
 
-### 1. Start Server
-
-```bash
-cd src/service
+```powershell
+# 1. Start Server (http://localhost:5270)
+cd src\service
 dotnet run
-# Listens on http://localhost:5270
-# API docs: http://localhost:5270/scalar/v1
+
+# 2. Start Console (http://localhost:5173; create the admin on first visit to /setup)
+cd src\webapp
+npm install
+npm run dev
 ```
 
-The database `libra_nextgen` and initial admin user are created on first launch.
+Build payloads from the Console **Builder** page:
 
-### 2. Start Console
+- **Win x64 / Win x86**: native MSVC (needs VS Build Tools + Rust MSVC toolchain)
+- **Linux x64**: cross-compiled (server drives the zig toolchain automatically):
+
+```powershell
+cargo install cargo-zigbuild
+# download zig (https://ziglang.org/download) and add it to PATH
+```
+
+### Deploy on Linux
 
 ```bash
+# 1. Start Server (http://localhost:5270)
+cd src/service
+dotnet run
+
+# 2. Start Console (http://localhost:5173; create the admin on first visit to /setup)
 cd src/webapp
 npm install
 npm run dev
-# Listens on http://localhost:5173
 ```
 
-Open the browser, go to `/setup` to create an admin account, then log in.
+Build payloads from the Console **Builder** page:
 
-### 3. Build Agent
+- **Linux x64**: native build (default rustc toolchain)
+- **Win x64 / Win x86**: cross-compiled (GNU ABI, also via the zig toolchain):
 
 ```bash
-cd src/agent-rs
-cargo build --release
-# Output: target/release/agent.exe
+cargo install cargo-zigbuild   # required for Windows cross-builds
+# download zig (https://ziglang.org/download) and add it to PATH
 ```
 
-Alternatively, use the Builder page in Console to compile online with custom server address, communication parameters, and persistence options.
+> Whether the Server runs on Windows or Linux, it can build both Windows and Linux payloads. Cross-compilation is detected automatically by the server (cargo-zigbuild + zig); a clear error is shown when the toolchain is missing. Plain `cargo build --release` on the CLI only produces payloads for the host platform.
 
-### 4. Deploy Agent
+## MCP
 
-Deploy `agent.exe` to the target Windows host and execute. On startup:
-1. If `requireAdmin` is set, request UAC elevation
-2. If `copyToPath` is set, copy to the target directory and relaunch
-3. If `enablePersistence` is set, install scheduled task / cron
-4. Run anti-sandbox checks
-5. Establish encrypted communication with Server and register online
-
-## Config Injection
-
-The Agent supports injected JSON configuration appended to the binary:
-
-```
-[Original PE data][CONFIG_MAGIC][4-byte LE length][JSON config]
-```
-
-The `InjectedConfig` model is defined in `libra-common/src/models.rs`:
-
-```json
-{
-  "serverUrl": "http://192.168.1.100:5270",
-  "registerPath": "/api/agentcomms/register",
-  "heartbeatPath": "/api/agentcomms/heartbeat",
-  "resultPath":  "/api/agentcomms/result",
-  "heartbeatIntervalSecs": 5,
-  "enablePersistence": true,
-  "requireAdmin": true,
-  "copyToPath": "Microsoft\\SecurityHealth"
-}
-```
-
-## MCP Server
-
-Libra-Nextgen includes a built-in [Model Context Protocol (MCP)](https://modelcontextprotocol.io) server, allowing AI clients (Claude Desktop, Cursor, Windsurf, etc.) to invoke the full C2 feature set via the standard MCP protocol.
-
-### Endpoint
-
-```
-http://localhost:5270/mcp
-```
-
-Supports both Streamable HTTP and SSE transports.
-
-### Authentication
-
-The MCP server uses AccessKey authentication. Include the key in the request header:
-
-```
-Authorization: Bearer lnk_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-```
-
-### Creating an AccessKey
-
-1. **Via Web Console**: Log in, navigate to the "Settings" page, click "Create Key", set a name and (optionally) an expiration date. Copy the key immediately after creation (shown only once).
-
-2. **Via API**:
-
-```bash
-curl -X POST http://localhost:5270/api/access-keys \
-  -H "Authorization: Bearer <JWT_TOKEN>" \
-  -H "Content-Type: application/json" \
-  -d '{"name": "my-ai-client", "expiresAt": "2025-12-31T00:00:00Z"}'
-```
-
-### Configuring AI Clients
-
-#### Claude Desktop
-
-Add to `claude_desktop_config.json`:
-
-```json
-{
-  "mcpServers": {
-    "libra-nextgen": {
-      "url": "http://localhost:5270/mcp",
-      "headers": {
-        "Authorization": "Bearer lnk_your_access_key_here"
-      }
-    }
-  }
-}
-```
-
-#### Cursor / Windsurf
-
-Add an HTTP-type MCP server in MCP settings. Set the URL to `http://localhost:5270/mcp` and add the header `Authorization: Bearer lnk_xxx`.
-
-### Available Tools
-
-The MCP server exposes the following tool sets:
-
-| Category | Tools | Description |
-|----------|-------|-------------|
-| **Agent** | `list_agents`, `get_agent`, `delete_agent` | Manage online agents |
-| **Task** | `list_tasks`, `get_task`, `create_task`, `cancel_task` | Task scheduling and management |
-| **Shell** | `execute_shell`, `execute_powershell` | Remote command execution |
-| **File** | `list_directory`, `get_drives`, `download_file`, `upload_file`, `delete_file`, `rename_file`, `move_file`, `copy_file` | File system operations |
-| **System** | `get_processes`, `kill_process`, `get_network_info`, `scan_wifi`, `scan_lan` | System info and network scanning |
-| **Screen** | `take_screenshot`, `capture_webcam` | Screenshots and webcam capture |
-| **Data** | `get_browser_passwords`, `get_browser_history`, `scan_ai_tokens` | Data exfiltration |
-| **Builder** | `build_payload`, `list_builds`, `get_build_info` | Payload compilation |
-
-### Usage Examples
-
-Once connected, interact with the AI using natural language:
-
-- "List all online agents"
-- "Execute whoami on agent xxx"
-- "Take a screenshot of agent xxx"
-- "Scan WiFi networks near agent xxx"
-- "Build an agent payload connecting to 192.168.1.100:5270"
+Endpoint `http://localhost:5270/mcp` (Streamable HTTP). Authenticate with an AccessKey (`Authorization: Bearer lnk_xxx`) created in the Console settings page or via API. Tool inventory: `GET /api/mcp/info`.
 
 ## License
 
-Libra-Nextgen is released under the **GNU General Public License v3.0 (GPL-3.0)**.
-
-This program is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version.
-
-This program is distributed in the hope that it will be useful for authorized security research and enterprise red-team operations, but **WITHOUT ANY WARRANTY**; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
-
-Full license text: <https://www.gnu.org/licenses/gpl-3.0.html>
+GNU General Public License v3.0 — <https://www.gnu.org/licenses/gpl-3.0.html>
 
 ## Disclaimer
 
-Libra-Nextgen may **only** be used in the following explicitly authorized scenarios:
-- Security assessment of your own infrastructure or systems
-- Red-team operations under a written Rules of Engagement (RoE)
-- Cybersecurity research in isolated laboratory environments
-- Authorized vulnerability verification within enterprise environments
-
-**Unauthorized access** to any computer system, network, or data without explicit written authorization from the system owner is strictly prohibited. Users must comply with all applicable local, national, and international laws.
+This software is **authorized-use only** (assessments of your own assets, red-team engagements with signed rules of engagement, isolated lab research, sanctioned vulnerability validation). **Unauthorized access to any system, network or data is strictly prohibited.** Users must comply with all applicable laws and regulations.
