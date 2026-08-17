@@ -182,17 +182,19 @@ public partial class BuilderBuildService
     }
 
     /// <summary>
-    /// Build the cargo invocation for a build step. Cross-compilations go
-    /// through `cargo zigbuild` which drives the zig toolchain as a universal
-    /// cross linker/cc; native builds use plain `cargo build`.
+    /// Build the cargo invocation for a build step. Cross-compilations invoke
+    /// the cargo-zigbuild binary directly with its explicit `zigbuild`
+    /// subcommand (cargo plugin forwarding is unreliable across cargo/rustup
+    /// versions); native builds use plain `cargo build`.
     /// </summary>
     internal static string CargoBuildCommand(BuildContext ctx, string targetArg, string extraArgs)
     {
-        // cargo-zigbuild 0.23 uses `cargo zigbuild --release ...` (no "build"
-        // subcommand); native builds use `cargo build --release ...`.
         var verb = ctx.IsCross ? "zigbuild" : "build";
         return $" {verb} --release {targetArg} {extraArgs} --target-dir \"{ctx.TargetDir}\"";
     }
+
+    /// <summary>Executable that drives a cargo build step (cross vs native).</summary>
+    internal static string CargoExe(BuildContext ctx) => ctx.IsCross ? "cargo-zigbuild" : "cargo";
 
     private static async Task<ProcessResult> RunProcessAsync(string fileName, string arguments, BuildJob job, string? workingDir = null, Dictionary<string, string>? envVars = null)
     {

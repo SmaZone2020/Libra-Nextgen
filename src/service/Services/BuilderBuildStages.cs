@@ -38,10 +38,10 @@ public partial class BuilderBuildService
     private static async Task Stage1_BuildCoreAsync(BuildContext ctx, string targetArg, BuildJob job)
     {
         job.Log($"=== Stage 1: Building Core DLL ({ctx.TargetTriple}) ===");
-        var coreBuildArgs = $"cargo {BuilderBuildService.CargoBuildCommand(ctx, targetArg, "-p core")}";
-        job.Log(coreBuildArgs);
+        var coreBuildArgs = BuilderBuildService.CargoBuildCommand(ctx, targetArg, "-p core");
+        job.Log($"{(ctx.IsCross ? "cargo-zigbuild" : "cargo")}{coreBuildArgs}");
 
-        var coreBuildResult = await RunProcessAsync("cargo", coreBuildArgs, job, RustAgentDir, ctx.EnvVars);
+        var coreBuildResult = await RunProcessAsync(BuilderBuildService.CargoExe(ctx), coreBuildArgs, job, RustAgentDir, ctx.EnvVars);
         if (coreBuildResult.ExitCode != 0)
         {
             job.Fail($"Core build failed (exit code {coreBuildResult.ExitCode})");
@@ -114,8 +114,8 @@ public partial class BuilderBuildService
             .Select(m => m.Lib.StartsWith("shell_") ? "-p shell-module" : $"-p {m.Module}-module")
             .Distinct());
 
-        var moduleBuildArgs = $"cargo {BuilderBuildService.CargoBuildCommand(ctx, targetArg, packages)}";
-        var moduleBuildResult = await RunProcessAsync("cargo", moduleBuildArgs, job, RustAgentDir, ctx.EnvVars);
+        var moduleBuildArgs = BuilderBuildService.CargoBuildCommand(ctx, targetArg, packages);
+        var moduleBuildResult = await RunProcessAsync(BuilderBuildService.CargoExe(ctx), moduleBuildArgs, job, RustAgentDir, ctx.EnvVars);
         if (moduleBuildResult.ExitCode != 0)
         {
             job.Log("[WARN] cloud module build failed — cloud modules unavailable");
@@ -217,10 +217,10 @@ public partial class BuilderBuildService
         {
             // ── First time: compile loader and save as template ──
             job.Log("No template found, compiling loader from source...");
-            var loaderBuildArgs = $"cargo {BuilderBuildService.CargoBuildCommand(ctx, targetArg, $"{featuresArg} -p loader")}";
-            job.Log($"cargo {loaderBuildArgs}");
+            var loaderBuildArgs = BuilderBuildService.CargoBuildCommand(ctx, targetArg, $"{featuresArg} -p loader");
+            job.Log($"{(ctx.IsCross ? "cargo-zigbuild" : "cargo")}{loaderBuildArgs}");
 
-            var loaderBuildResult = await RunProcessAsync("cargo", loaderBuildArgs, job, RustAgentDir, ctx.EnvVars);
+            var loaderBuildResult = await RunProcessAsync(BuilderBuildService.CargoExe(ctx), loaderBuildArgs, job, RustAgentDir, ctx.EnvVars);
             if (loaderBuildResult.ExitCode != 0)
             {
                 job.Fail($"Loader build failed (exit code {loaderBuildResult.ExitCode})");
