@@ -3,7 +3,6 @@ import { Terminal } from 'xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { WebLinksAddon } from '@xterm/addon-web-links';
 import 'xterm/css/xterm.css';
-import '../styles/terminal-fonts.css';
 
 export interface TerminalHandle {
   write(text: string): void;
@@ -54,52 +53,80 @@ const TerminalView = forwardRef<TerminalHandle, Props>(function TerminalView(
   }), []);
 
   useEffect(() => {
-    if (!containerRef.current) return;
+    const container = containerRef.current;
+    if (!container) return;
+
+    let disposed = false;
+    let term: Terminal | null = null;
+    let fit: FitAddon | null = null;
+    let ro: ResizeObserver | null = null;
 
     // xterm sizes every cell from the monospace assumption and renders CJK as
     // exactly 2 cells wide. JetBrains Mono (bundled, Latin) gives modern
     // monospace Latin; 'LibraTermCJK' (Noto Sans Mono CJK / Sarasa / NSimSun)
-    // renders CJK as 2 cells. Note JetBrains' half-width is not exactly
-    // full-width/2, so heavy CJK/Latin mixtures may still show minor drift —
-    // pure-English sessions are pixel-perfect.
-    const term = new Terminal({
-      cursorBlink: true,
-      convertEol: true,
-      fontFamily: '"JetBrainsMono", "LibraTermCJK", ui-monospace, monospace',
-      fontSize: 13,
-      lineHeight: 1.0,
-      scrollback: 10000,
-      theme: { background: '#1a1b1e' },
-    });
-    const fit = new FitAddon();
-    term.loadAddon(fit);
-    term.loadAddon(new WebLinksAddon());
-    term.open(containerRef.current);
-    // Fit twice: first pass right after mount, second after layout settles.
-    requestAnimationFrame(() => {
-      try { fit.fit(); } catch { /* ignore */ }
-      onResize?.(term.cols, term.rows);
-    });
+    // renders CJK as 2 cells.
+    const FONT = '"JetBrainsMono", "LibraTermCJK", ui-monospace, monospace';
 
-    term.onData((data) => {
-      if (disabledRef.current) return;
-      onInput?.(data);
-    });
+    const createTerminal = () => {
+      if (disposed) return;
+      const t = new Terminal({
+        cursorBlink: true,
+        convertEol: true,
+        fontFamily: FONT,
+        fontSize: 13,
+        lineHeight: 1.0,
+        scrollback: 10000,
+        theme: { background: '#1a1b1e' },
+      });
+      const f = new FitAddon();
+      t.loadAddon(f);
+      t.loadAddon(new WebLinksAddon());
+      t.open(container);
+      term = t;
+      fit = f;
 
-    term.onResize(({ cols, rows }) => onResize?.(cols, rows));
+      t.onData((data) => {
+        if (disabledRef.current) return;
+        onInput?.(data);
+      });
+      t.onResize(({ cols, rows }) => onResize?.(cols, rows));
 
-    termRef.current = term;
-    fitRef.current = fit;
+      // Fit once after layout settles, then again once webfonts are loaded.
+      requestAnimationFrame(() => {
+        try { f.fit(); } catch { /* ignore */ }
+        onResize?.(t.cols, t.rows);
+      });
+      document.fonts.ready.then(() => {
+        if (disposed) return;
+        // Force xterm to re-measure cell size now that the real font is ready.
+        t.options.fontFamily = FONT;
+        try { f.fit(); } catch { /* ignore */ }
+        onResize?.(t.cols, t.rows);
+      });
 
-    // Keep the terminal sized to its container.
-    const ro = new ResizeObserver(() => {
-      try { fit.fit(); } catch { /* ignore */ }
-    });
-    ro.observe(containerRef.current);
+      ro = new ResizeObserver(() => {
+        try { f.fit(); } catch { /* ignore */ }
+      });
+      ro.observe(container);
+
+      termRef.current = t;
+      fitRef.current = f;
+    };
+
+    // Wait for the bundled webfont to be available before creating xterm, so
+    // the cell size is measured from JetBrains Mono instead of a fallback.
+    Promise.all([
+      document.fonts.load('13px "JetBrainsMono"'),
+      document.fonts.load('normal 13px "JetBrainsMono"'),
+    ])
+      .catch(() => { /* fallback fonts still work */ })
+      .then(() => document.fonts.ready)
+      .then(() => { if (!disposed) createTerminal(); });
 
     return () => {
-      ro.disconnect();
-      term.dispose();
+      disposed = true;
+      ro?.disconnect();
+      term?.dispose();
       termRef.current = null;
       fitRef.current = null;
     };
