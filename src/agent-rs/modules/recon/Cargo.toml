@@ -13,3 +13,6 @@ serde_json = { workspace = true }
 sysinfo = { workspace = true }
 futures-util = { workspace = true }
 windows = { workspace = true }
+
+[target.'cfg(windows)'.dependencies]
+winreg = "0.52"

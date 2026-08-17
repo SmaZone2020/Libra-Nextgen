@@ -272,6 +272,37 @@ export interface LanScanResult {
   subnets: string[];
 }
 
+// ── Packages / Docker types ───────────────────────────────────────────
+
+export interface PackageItem {
+  name: string;
+  version: string;
+  arch?: string;
+  manager: string;
+}
+
+export interface PackagesResult {
+  pm: string;
+  total: number;
+  packages: PackageItem[];
+  error?: string;
+}
+
+export interface DockerContainer {
+  id: string;
+  name: string;
+  image: string;
+  status: string;
+}
+
+export interface DockerResult {
+  inContainer: boolean;
+  socketPresent: boolean;
+  cliAvailable: boolean;
+  total: number;
+  containers: DockerContainer[];
+}
+
 // ── Software Data types ─────────────────────────────────────────────
 
 export interface WeChatAccount {

@@ -212,6 +212,18 @@ impl AgentEngine {
                 })).await;
                 ws_send(tx, &agent_id, "system.bluetooth.result", &r, rid).await;
             }
+            ws_type::SYSTEM_PACKAGES => {
+                let r = run_module(module_manager, "recon", serde_json::json!({
+                    "op": "packages"
+                })).await;
+                ws_send(tx, &agent_id, "system.packages.result", &r, rid).await;
+            }
+            ws_type::SYSTEM_DOCKER => {
+                let r = run_module(module_manager, "recon", serde_json::json!({
+                    "op": "docker"
+                })).await;
+                ws_send(tx, &agent_id, "system.docker.result", &r, rid).await;
+            }
 
             // ── Other software (cloud creds module) ────────────────
             ws_type::OTHERSOFT_WECHAT => {

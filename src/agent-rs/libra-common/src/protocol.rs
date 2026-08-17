@@ -127,6 +127,8 @@ pub mod ws_type {
     pub const SYSTEM_NETWORK_PROXY: &str = "system.network.proxy";
     pub const SYSTEM_LANSCAN: &str = "system.lanscan";
     pub const SYSTEM_BLUETOOTH: &str = "system.bluetooth";
+    pub const SYSTEM_PACKAGES: &str = "system.packages";
+    pub const SYSTEM_DOCKER: &str = "system.docker";
 
     // Other software
     pub const OTHERSOFT_WECHAT: &str = "othersoft.wechat";

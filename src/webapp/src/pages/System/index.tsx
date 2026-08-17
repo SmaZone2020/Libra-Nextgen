@@ -6,6 +6,8 @@ import { ProcessTab } from './ProcessTab';
 import { WindowsTab } from './WindowsTab';
 import { EnvTab } from './EnvTab';
 import { NetworkTab } from './NetworkTab';
+import { PackagesTab } from './PackagesTab';
+import { DockerTab } from './DockerTab';
 import { useAgent } from '../../contexts/AgentContext';
 
 export default function SystemPage() {
@@ -34,6 +36,8 @@ export default function SystemPage() {
             <Tabs.Tab id="windows">{t('system.windows')}<Tabs.Indicator /></Tabs.Tab>
             <Tabs.Tab id="env">{t('system.environment')}<Tabs.Indicator /></Tabs.Tab>
             <Tabs.Tab id="network">{t('system.network')}<Tabs.Indicator /></Tabs.Tab>
+            <Tabs.Tab id="packages">{t('system.packages.title')}<Tabs.Indicator /></Tabs.Tab>
+            <Tabs.Tab id="docker">{t('system.docker.title')}<Tabs.Indicator /></Tabs.Tab>
           </Tabs.List>
         </Tabs.ListContainer>
         <Tabs.Panel id="localAccounts">
@@ -50,6 +54,12 @@ export default function SystemPage() {
         </Tabs.Panel>
         <Tabs.Panel id="network">
           <NetworkTab agentId={agentId} />
+        </Tabs.Panel>
+        <Tabs.Panel id="packages">
+          <PackagesTab agentId={agentId} />
+        </Tabs.Panel>
+        <Tabs.Panel id="docker">
+          <DockerTab agentId={agentId} />
         </Tabs.Panel>
       </Tabs>
     </div>

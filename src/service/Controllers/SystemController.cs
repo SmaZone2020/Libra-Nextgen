@@ -135,6 +135,18 @@ public class SystemController : ControllerBase
     {
         return await RelayAndWaitAsync(agentId, "system.lanscan", null, ct);
     }
+
+    [HttpPost("{agentId}/packages")]
+    public async Task<IActionResult> Packages(string agentId, CancellationToken ct)
+    {
+        return await RelayAndWaitAsync(agentId, "system.packages", null, ct, timeoutSeconds: 60);
+    }
+
+    [HttpPost("{agentId}/docker")]
+    public async Task<IActionResult> Docker(string agentId, CancellationToken ct)
+    {
+        return await RelayAndWaitAsync(agentId, "system.docker", null, ct, timeoutSeconds: 30);
+    }
 }
 
 public record ProcessesRequest(string? LastHash);

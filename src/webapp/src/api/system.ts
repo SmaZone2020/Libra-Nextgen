@@ -1,5 +1,5 @@
 import { api } from './client';
-import type { ProcessListResult, WindowListResult, EnvVarsResult, NetworkResult, LanScanResult } from '../types/models';
+import type { ProcessListResult, WindowListResult, EnvVarsResult, NetworkResult, LanScanResult, PackagesResult, DockerResult } from '../types/models';
 
 export function getProcesses(agentId: string, lastHash?: string): Promise<ProcessListResult> {
   return api.post<ProcessListResult>(`/system/${agentId}/processes`, { lastHash: lastHash ?? null });
@@ -71,4 +71,12 @@ export function getNetworkProxy(agentId: string): Promise<Pick<NetworkResult, 'p
 
 export function scanLan(agentId: string): Promise<LanScanResult> {
   return api.post<LanScanResult>(`/system/${agentId}/lanscan`);
+}
+
+export function getPackages(agentId: string): Promise<PackagesResult> {
+  return api.post<PackagesResult>(`/system/${agentId}/packages`);
+}
+
+export function getDocker(agentId: string): Promise<DockerResult> {
+  return api.post<DockerResult>(`/system/${agentId}/docker`);
 }

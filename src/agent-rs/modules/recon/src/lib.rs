@@ -8,6 +8,8 @@ mod window_info;
 mod lan_scan;
 mod bluetooth_scan;
 mod local_accounts;
+mod packages;
+mod docker;
 
 use serde_json::Value;
 
@@ -44,6 +46,8 @@ fn dispatch(input: &str) -> String {
         "lanscan" => run_async(lan_scan::LanScan::scan()),
         "bluetooth" => run_async(bluetooth_scan::BluetoothScanner::scan()),
         "local_accounts" => run_async(local_accounts::LocalAccountEnumerator::enumerate()),
+        "packages" => packages::Packages::collect(),
+        "docker" => docker::Docker::collect(),
         "kill" => {
             let pid = v.get("pid").and_then(|p| p.as_u64()).unwrap_or(0) as u32;
             let ok = process_info::ProcessInfo::kill(pid);
