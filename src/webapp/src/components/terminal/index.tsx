@@ -55,10 +55,31 @@ const TerminalView = forwardRef<TerminalHandle, Props>(function TerminalView(
   useEffect(() => {
     if (!containerRef.current) return;
 
+    // xterm sizes every cell from a monospace assumption, so the font stack
+    // must stay monospace end-to-end. Prefer CJK-capable monospace fonts
+    // (Sarasa Mono SC, Maple Mono, Cascadia, Noto Sans Mono) so Chinese text
+    // stays 2-cells wide and aligned; `monospace` is the guaranteed fallback.
     const term = new Terminal({
       cursorBlink: true,
       convertEol: true,
-      fontFamily: 'Menlo, Consolas, "Courier New", monospace',
+      fontFamily: [
+        '"Sarasa Mono SC"',
+        '"Maple Mono"',
+        '"Maple Mono CN"',
+        '"JetBrains Mono"',
+        '"Cascadia Mono"',
+        '"Cascadia Code"',
+        '"Noto Sans Mono"',
+        '"DejaVu Sans Mono"',
+        'ui-monospace',
+        'SFMono-Regular',
+        'Menlo',
+        'Monaco',
+        'Consolas',
+        '"Liberation Mono"',
+        '"Courier New"',
+        'monospace',
+      ].join(', '),
       fontSize: 13,
       lineHeight: 1.15,
       scrollback: 10000,
