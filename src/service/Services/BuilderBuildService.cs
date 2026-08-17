@@ -34,10 +34,11 @@ public partial class BuilderBuildService
     /// <summary>
     /// Resolve the actual Rust target triple for a requested platform based on
     /// the operating system the server itself is running on:
-    ///   Windows host → native MSVC for Win targets; musl (static) for Linux.
-    ///   Linux host   → native gnu for Linux; mingw (GNU ABI) for Win targets.
-    /// Cross-compilation (any non-native pair) uses the zig toolchain, which
-    /// cargo-zigbuild drives (it translates triples and wraps zig as CC/linker).
+    ///   Windows host → native MSVC for Win targets.
+    ///   Linux host   → native GNU for Linux targets.
+    /// All cross-combinations use the gnu ABI and the zig toolchain (cargo
+    /// zigbuild drives zig as CC/linker, which bundles glibc/msvc support).
+    /// Note: musl cannot be used here because the core payload is a cdylib.
     /// </summary>
     public static string ResolveTriple(string platform, bool hostWindows)
     {
@@ -45,8 +46,7 @@ public partial class BuilderBuildService
         {
             "windows" when hostWindows => platform == "x86" ? "i686-pc-windows-msvc" : "x86_64-pc-windows-msvc",
             "windows" => platform == "x86" ? "i686-pc-windows-gnu" : "x86_64-pc-windows-gnu",
-            "linux" when !hostWindows => "x86_64-unknown-linux-gnu",
-            "linux" => "x86_64-unknown-linux-musl",
+            "linux" => "x86_64-unknown-linux-gnu",
             _ => throw new InvalidOperationException($"no triple for platform '{platform}'"),
         };
     }
@@ -124,7 +124,7 @@ public partial class BuilderBuildService
             {
                 job.Log($"Cross-compiling {req.Platform} ({ctx.TargetTriple}) from {(hostWindows ? "Windows" : "Linux")} host");
 
-                var zigbuild = await RunProcessAsync("cargo", "zigbuild --version", job);
+                var zigbuild = await RunProcessAsync("cargo", "zigbuild --help", job);
                 var zig = await RunProcessAsync("zig", "version", job);
                 if (zigbuild.ExitCode != 0 || zig.ExitCode != 0)
                 {
@@ -136,7 +136,7 @@ public partial class BuilderBuildService
                     UpdateHistory(job);
                     return;
                 }
-                job.Log($"zig {zig.Stdout.Trim()} | {zigbuild.Stdout.Trim()}");
+                job.Log($"zig {zig.Stdout.Trim()} | cargo-zigbuild ready");
             }
             else
             {
@@ -188,7 +188,9 @@ public partial class BuilderBuildService
     /// </summary>
     internal static string CargoBuildCommand(BuildContext ctx, string targetArg, string extraArgs)
     {
-        var verb = ctx.IsCross ? "zigbuild build" : "build";
+        // cargo-zigbuild 0.23 uses `cargo zigbuild --release ...` (no "build"
+        // subcommand); native builds use `cargo build --release ...`.
+        var verb = ctx.IsCross ? "zigbuild" : "build";
         return $" {verb} --release {targetArg} {extraArgs} --target-dir \"{ctx.TargetDir}\"";
     }
 
