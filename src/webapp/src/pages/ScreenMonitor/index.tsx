@@ -10,7 +10,7 @@ import type { ScreenFrame } from './useScreenSession';
 
 export default function ScreenMonitorPage() {
   const { t } = useTranslation();
-  const { agentId } = useAgent();
+  const { agentId, selectedAgent } = useAgent();
   const canvasRef = useRef<ScreenCanvasHandle>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -70,6 +70,24 @@ export default function ScreenMonitorPage() {
     return (
       <div className="flex items-center justify-center py-20 text-neutral-500 text-sm select-none">
         {t('screenMonitor.selectAgent')}
+      </div>
+    );
+  }
+
+  // Screen capture is Windows-only; hide the module for Linux agents and
+  // agents without a display device.
+  const isLinux = selectedAgent?.osVersion?.toLowerCase().includes('linux');
+  if (isLinux) {
+    return (
+      <div className="flex items-center justify-center py-20 text-neutral-500 text-sm select-none">
+        {t('screenMonitor.linuxUnsupported')}
+      </div>
+    );
+  }
+  if (!streaming && screens.length === 0) {
+    return (
+      <div className="flex items-center justify-center py-20 text-neutral-500 text-sm select-none">
+        {t('screenMonitor.noDisplay')}
       </div>
     );
   }

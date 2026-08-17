@@ -14,7 +14,7 @@ import type { AudioChunk } from './useMicSession';
 
 export default function MediaMonitorPage() {
   const { t } = useTranslation();
-  const { agentId } = useAgent();
+  const { agentId, selectedAgent } = useAgent();
   const cameraCanvasRef = useRef<HTMLCanvasElement>(null);
   const audioRef = useRef<AudioPlayerHandle>(null);
   const [cameraError, setCameraError] = useState<string | null>(null);
@@ -158,13 +158,33 @@ export default function MediaMonitorPage() {
     );
   }
 
+  // Camera/mic streaming is Windows-only; hide the whole module for Linux
+  // agents. On Windows, hide each section when no matching device exists.
+  const isLinux = selectedAgent?.osVersion?.toLowerCase().includes('linux');
+  if (isLinux) {
+    return (
+      <div className="flex items-center justify-center py-20 text-neutral-500 text-sm select-none">
+        {t('mediaMonitor.linuxUnsupported')}
+      </div>
+    );
+  }
+
   const noCamera = cameras.length === 0;
   const noMic = mics.length === 0;
+
+  if (noCamera && noMic) {
+    return (
+      <div className="flex items-center justify-center py-20 text-neutral-500 text-sm select-none">
+        {t('mediaMonitor.noDevices')}
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col gap-4 h-[calc(100vh-180px)]">
 
       {/* Mic Section */}
+      {!noMic && (
       <div className="h-[80px] shrink-0 flex flex-col gap-2">
         <div className="flex items-center gap-3 flex-wrap">
           <h2 className="text-sm font-semibold text-neutral-700">{t('mediaMonitor.microphone')}</h2>
@@ -228,10 +248,12 @@ export default function MediaMonitorPage() {
           {micStreaming ? <span>{t('mediaMonitor.receivingAudio')}</span> : <span>{t('mediaMonitor.micStopped')}</span>}
         </div>
       </div>
+      )}
 
       <AudioPlayer ref={audioRef} active={audioActiveRef.current} />
 
       {/* Camera Section */}
+      {!noCamera && (
       <div className="flex-1 min-h-0 flex flex-col gap-2">
         <div className="flex items-center gap-3 shrink-0 flex-wrap">
           <h2 className="text-sm font-semibold text-neutral-700">{t('mediaMonitor.camera')}</h2>
@@ -326,6 +348,7 @@ export default function MediaMonitorPage() {
           )}
         </div>
       </div>
+      )}
 
     </div>
   );

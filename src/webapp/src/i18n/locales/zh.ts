@@ -154,6 +154,8 @@ export default {
       stopped: '屏幕捕获已停止',
       streaming: '传输中',
       stopped_status: '已停止',
+      linuxUnsupported: '该平台不支持屏幕监控',
+      noDisplay: '未检测到显示器',
       frameRate: '帧率',
       quality: '画质',
       fps: {
@@ -174,6 +176,8 @@ export default {
     },
     mediaMonitor: {
       selectAgent: '选择一台在线设备以监控摄像头和麦克风。',
+      linuxUnsupported: '该平台不支持媒体监控',
+      noDevices: '未检测到摄像头或麦克风',
       camera: '摄像头',
       microphone: '麦克风',
       streaming: '传输中',

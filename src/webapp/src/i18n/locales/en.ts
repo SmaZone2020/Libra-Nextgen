@@ -154,6 +154,8 @@ export default {
       stopped: 'Screen capture stopped',
       streaming: 'Streaming',
       stopped_status: 'Stopped',
+      linuxUnsupported: 'Screen monitoring is not supported on this platform',
+      noDisplay: 'No display detected',
       frameRate: 'Frame rate',
       quality: 'Quality',
       fps: {
@@ -174,6 +176,8 @@ export default {
     },
     mediaMonitor: {
       selectAgent: 'Select an online agent to monitor its camera and microphone.',
+      linuxUnsupported: 'Media monitoring is not supported on this platform',
+      noDevices: 'No camera or microphone detected',
       camera: 'Camera',
       microphone: 'Microphone',
       streaming: 'Streaming',
