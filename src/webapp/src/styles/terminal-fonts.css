@@ -11,7 +11,6 @@
   font-family: "JetBrainsMono", "LibraTermCJK", ui-monospace, monospace !important;
 }
 
-/* 鈹€鈹€ JetBrains Mono (Latin range) 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€ */
 @font-face {
   font-family: 'JetBrainsMono';
   src: url('../assets/fonts/JetBrainsMono/JetBrainsMono-Thin.woff2') format('woff2');

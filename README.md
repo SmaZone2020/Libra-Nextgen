@@ -75,6 +75,10 @@ cargo install cargo-zigbuild   # 交叉构建 Windows 载荷所需工具
 
 > 说明：无论 Server 运行在 Windows 还是 Linux，均可构建 Windows 与 Linux 载荷；交叉构建由服务端自动探测 zig 工具链并调用 cargo-zigbuild，缺失时构建会给出明确提示。命令行本地构建（`cargo build --release`）仅产出本机平台的载荷。
 
+## 已知问题
+
+- **Shell 页面终端字符无法对齐**：终端使用等宽字体渲染，但中英文混排时，中文字符与拉丁字符的宽度比例无法在网页端精确对齐（xterm.js 将 CJK 视为双倍宽度，受系统字体与网页字体 fallback 影响），可能导致 `ls` 等对齐排版在混合内容下出现轻微错位。
+
 ## MCP
 
 端点 `http://localhost:5270/mcp`（Streamable HTTP），使用 AccessKey 鉴权（`Authorization: Bearer lnk_xxx`），在 Console 设置页或 API 创建。可用工具清单见 `GET /api/mcp/info`。

@@ -27,11 +27,6 @@ interface Props {
  *  routed to a monospace CJK font (2 cells). */
 const DEFAULT_FONT = '"JetBrainsMono", "LibraTermCJK", ui-monospace, monospace';
 
-/** Fully-aligned mode: use a monospace CJK font for the whole terminal so
- *  half-width == full-width/2 exactly (Chinese and Latin align perfectly,
- *  at the cost of a Song-style (NSimSun) look when no modern font exists). */
-const CJK_FONT = '"LibraTermCJK", "NSimSun", "Noto Sans Mono CJK SC", "Sarasa Mono SC", monospace';
-
 const TerminalView = forwardRef<TerminalHandle, Props>(function TerminalView(
   { className, style, onInput, onResize, disabled, fontFamily },
   ref,
@@ -99,22 +94,47 @@ const TerminalView = forwardRef<TerminalHandle, Props>(function TerminalView(
     });
     t.onResize(({ cols, rows }) => onResize?.(cols, rows));
 
-    // Fit once after layout settles, then again once webfonts are loaded.
-    requestAnimationFrame(() => {
-      if (disposed) return;
+    // Fit the terminal and report geometry only once the container actually
+    // has a usable size (cols/rows > 0). On first mount the container may not
+    // be laid out yet (page transition / placeholder swap), so retry until it
+    // is — otherwise the shell is created with a degenerate 0-size PTY.
+    let retries = 0;
+    const tryFit = () => {
+      if (disposed) return false;
       try { f.fit(); } catch { /* container may still be sizing */ }
-      onResize?.(t.cols, t.rows);
-    });
-    document.fonts.ready.then(() => {
-      if (disposed) return;
-      // Force xterm to re-measure cell size now that the real font is ready.
-      t.options.fontFamily = FONT;
-      try { f.fit(); } catch { /* ignore */ }
-      onResize?.(t.cols, t.rows);
-    });
+      if (t.cols > 0 && t.rows > 0) {
+        onResize?.(t.cols, t.rows);
+        return true;
+      }
+      if (retries++ < 10) setTimeout(tryFit, 100);
+      return false;
+    };
+
+    // Fit once after layout settles, then again once the webfont is loaded.
+    // fonts.ready alone does NOT force-load an unused webfont, so explicitly
+    // load a Latin sample first — otherwise xterm measures a fallback cell
+    // width (7px) and then renders the wider JetBrains glyphs (7.8px) into
+    // those cells, which visually misaligns letters like a/w/m.
+    requestAnimationFrame(tryFit);
+    setTimeout(tryFit, 0);
+    const fontSample = 'WmsXZ012aA';
+    Promise.all([
+      document.fonts.load(`13px ${FONT}`, fontSample),
+      document.fonts.load('13px "JetBrainsMono"', fontSample),
+      document.fonts.ready,
+    ])
+      .catch(() => { /* fallback fonts still fine */ })
+      .then(() => {
+        if (disposed) return;
+        // Force xterm to re-measure the cell now that the real font is ready.
+        t.options.fontFamily = FONT;
+        tryFit();
+      });
 
     ro = new ResizeObserver(() => {
+      if (disposed) return;
       try { f.fit(); } catch { /* ignore */ }
+      if (t.cols > 0 && t.rows > 0) onResize?.(t.cols, t.rows);
     });
     ro.observe(container);
 
