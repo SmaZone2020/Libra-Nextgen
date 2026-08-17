@@ -221,6 +221,8 @@ export default {
       size: 'Size',
       modified: 'Modified',
       type: 'Type',
+      pathInput: 'Path input',
+      pathInputHint: 'Click to edit path (UNC like \\\\host\\share supported)',
       folder: 'Folder',
       file: 'File',
       emptyDir: 'Empty directory.',

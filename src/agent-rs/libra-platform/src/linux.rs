@@ -56,18 +56,36 @@ impl IPlatformExecutor for LinuxExecutor {
     }
 
     fn start_interactive_shell(&self) -> InteractiveShellHandle {
-        use std::process::Stdio;
+        use portable_pty::{native_pty_system, CommandBuilder, PtySize};
+
+        let pty_system = native_pty_system();
+        let pair = pty_system
+            .openpty(PtySize {
+                rows: 24,
+                cols: 80,
+                pixel_width: 0,
+                pixel_height: 0,
+            })
+            .expect("failed to open PTY");
+
+        let cmd = CommandBuilder::new(&self.shell);
+        let child = pair
+            .slave
+            .spawn_command(cmd)
+            .expect("failed to spawn shell on PTY");
+        drop(pair.slave);
+
+        let writer = pair.master.take_writer().expect("no pty writer");
+        let reader = pair.master.try_clone_reader().expect("no pty reader");
 
         let (cancel_tx, _) = watch::channel(false);
-        let child = Command::new(&self.shell)
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .current_dir("/")
-            .spawn()
-            .expect("Failed to start shell");
-
-        InteractiveShellHandle { child, cancel_tx }
+        InteractiveShellHandle {
+            child,
+            master: pair.master,
+            reader,
+            writer,
+            cancel_tx,
+        }
     }
 
     fn get_drives(&self) -> Vec<String> {

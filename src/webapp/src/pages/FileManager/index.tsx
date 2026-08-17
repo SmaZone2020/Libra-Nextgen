@@ -26,6 +26,29 @@ const formatBytes = (bytes: number): string => {
 
 const formatSpeed = (bps: number): string => `${formatBytes(bps)}/s`;
 
+/** Parent of a path, aware of UNC roots and drive roots. */
+const getParentPath = (p: string): string => {
+  const trimmed = p.replace(/[\\/]+$/, '');
+  if (!trimmed) return p;
+
+  // UNC root: \\host or \\host\ → stay there
+  if (trimmed.startsWith('\\\\')) {
+    const parts = trimmed.slice(2).split('\\');
+    if (parts.length <= 1) return '\\\\' + parts[0];
+    return '\\\\' + parts.slice(0, -1).join('\\');
+  }
+  // Unix root
+  if (trimmed.startsWith('/')) {
+    const idx = trimmed.lastIndexOf('/');
+    return idx <= 0 ? '/' : trimmed.slice(0, idx);
+  }
+  // Drive root: C:\ → stay
+  if (/^[A-Za-z]:$/.test(trimmed)) return trimmed + '\\';
+  const idx = trimmed.lastIndexOf('\\');
+  if (idx <= 1) return trimmed[0] + ':\\';
+  return trimmed.slice(0, idx);
+};
+
 export default function FileManagerPage() {
   const { t } = useTranslation();
   const { agentId } = useAgent();
@@ -178,7 +201,7 @@ export default function FileManagerPage() {
 
   const goUp = useCallback(() => {
     if (inArchive) { exitArchive(); return; }
-    const parent = path.split('\\').slice(0, -1).join('\\') || path[0] + ':\\';
+    const parent = getParentPath(path);
     navigateTo(parent);
   }, [path, navigateTo, inArchive, exitArchive]);
 

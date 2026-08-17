@@ -13,4 +13,5 @@ sha2 = { workspace = true }
 hex = { workspace = true }
 windows = { workspace = true }
 windows-core = "0.58"
+portable-pty = { workspace = true }
 

@@ -74,6 +74,7 @@ pub mod ws_type {
     pub const SHELL_OUTPUT: &str = "shell.output";
     pub const SHELL_BIND: &str = "shell.bind";
     pub const SHELL_UNBIND: &str = "shell.unbind";
+    pub const SHELL_RESIZE: &str = "shell.resize";
     pub const SHELL_LOCK_ACQUIRED: &str = "shell.lock.acquired";
     pub const SHELL_LOCK_RELEASED: &str = "shell.lock.released";
 

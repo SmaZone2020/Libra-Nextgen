@@ -18,6 +18,19 @@ interface UseShellSessionOptions {
 export function useShellSession({ termRef, onStateChange }: UseShellSessionOptions) {
   const agentIdRef = useRef<string>('');
   const connectedRef = useRef(false);
+  const termSizeRef = useRef({ cols: 80, rows: 24 });
+
+  const sendResize = useCallback((cols: number, rows: number) => {
+    termSizeRef.current = { cols, rows };
+    const id = agentIdRef.current;
+    if (!id || !connectedRef.current) return;
+    consoleWs.send({
+      type: 'shell.resize',
+      channel: id,
+      data: { cols, rows },
+      ts: Date.now(),
+    });
+  }, []);
 
   const unbind = useCallback(() => {
     const id = agentIdRef.current;
@@ -45,6 +58,8 @@ export function useShellSession({ termRef, onStateChange }: UseShellSessionOptio
           if (data?.mode === 'write') {
             connectedRef.current = true;
             onStateChange({ connected: true, lockMode: 'write' });
+            // Push the current terminal geometry once connected.
+            sendResize(termSizeRef.current.cols, termSizeRef.current.rows);
           }
           break;
         }
@@ -71,7 +86,7 @@ export function useShellSession({ termRef, onStateChange }: UseShellSessionOptio
       unsub();
       unbind();
     };
-  }, [unbind, onStateChange, termRef]);
+  }, [unbind, onStateChange, termRef, sendResize]);
 
   const bind = useCallback((agentId: string) => {
     if (!agentId) return;
@@ -99,19 +114,13 @@ export function useShellSession({ termRef, onStateChange }: UseShellSessionOptio
     const id = agentIdRef.current;
     if (!connectedRef.current || !id) return;
 
-    const cmd = text.replace(/\r?\n$/, '').trim().toLowerCase();
-    if (cmd === 'cls' || cmd === 'clear') {
-      termRef.current?.clear();
-      return;
-    }
-
     consoleWs.send({
       type: 'shell.input',
       channel: id,
       data: { text },
       ts: Date.now(),
     });
-  }, [termRef]);
+  }, []);
 
-  return { bind, disconnect, sendInput, agentIdRef };
+  return { bind, disconnect, sendInput, sendResize, agentIdRef };
 }

@@ -221,6 +221,8 @@ export default {
       size: '大小',
       modified: '修改时间',
       type: '类型',
+      pathInput: '路径输入',
+      pathInputHint: '点击编辑路径（支持 UNC 如 \\\\host\\share）',
       folder: '文件夹',
       file: '文件',
       emptyDir: '空目录。',

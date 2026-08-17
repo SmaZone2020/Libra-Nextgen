@@ -12,7 +12,7 @@
 //!
 //! The returned value is the number of bytes written to `output`. Loading is
 //! performed entirely in memory:
-//! - Windows: "phantom" DLL load — `LoadLibraryW` from a temp file that is
+//! - Windows: "phantom" DLL load 鈥?`LoadLibraryW` from a temp file that is
 //!   deleted immediately after mapping (no persistent disk footprint).
 //! - Linux: `memfd_create` + `dlopen` (never touches disk).
 
@@ -54,21 +54,21 @@ pub fn load_module(bytes: &[u8], export: &str) -> Result<LoadedModule, String> {
     }
 }
 
-/// Resolve both `module_main` and `module_name` from a loaded handle.
-unsafe fn resolve_symbols(handle: *mut u8, export: &str) -> Result<LoadedModule, String> {
-    let export_c = format!("{}\0", export);
-    let proc = get_proc_address(handle, export_c.as_ptr());
-    if proc.is_null() {
+/// Build a `LoadedModule` from raw symbol pointers (platform-agnostic).
+unsafe fn build_loaded(
+    main_sym: *mut u8,
+    name_sym: *mut u8,
+    export: &str,
+) -> Result<LoadedModule, String> {
+    if main_sym.is_null() {
         return Err(format!("export '{}' not found", export));
     }
-    let main: ModuleMainFn = std::mem::transmute(proc);
+    let main: ModuleMainFn = std::mem::transmute(main_sym);
 
-    let name_c = "module_name\0".to_string();
-    let name_ptr = get_proc_address(handle, name_c.as_ptr());
-    let name = if name_ptr.is_null() {
+    let name = if name_sym.is_null() {
         String::new()
     } else {
-        let f: ModuleNameFn = std::mem::transmute(name_ptr);
+        let f: ModuleNameFn = std::mem::transmute(name_sym);
         let p = f();
         if p.is_null() {
             String::new()
@@ -84,25 +84,9 @@ unsafe fn resolve_symbols(handle: *mut u8, export: &str) -> Result<LoadedModule,
     Ok(LoadedModule { main, name })
 }
 
-extern "system" {
-    fn GetProcAddress(hModule: *mut u8, lpProcName: *const u8) -> *mut u8;
-}
-
-fn get_proc_address(handle: *mut u8, name: *const u8) -> *mut u8 {
-    #[cfg(target_os = "windows")]
-    unsafe {
-        return GetProcAddress(handle, name);
-    }
-    #[cfg(not(target_os = "windows"))]
-    {
-        let _ = (handle, name);
-        std::ptr::null_mut()
-    }
-}
-
 #[cfg(target_os = "windows")]
 mod windows {
-    use super::{LoadedModule, ModuleMainFn};
+    use super::{LoadedModule, build_loaded};
     use std::ptr;
 
     extern "system" {
@@ -178,13 +162,19 @@ mod windows {
             return Err(format!("LoadLibraryW failed ({})", GetLastError()));
         }
 
-        super::resolve_symbols(h_module, export)
+        let main_c = format!("{}\0", export);
+        let name_c = "module_name\0".to_string();
+        build_loaded(
+            GetProcAddress(h_module, main_c.as_ptr()),
+            GetProcAddress(h_module, name_c.as_ptr()),
+            export,
+        )
     }
 }
 
 #[cfg(target_os = "linux")]
 mod linux {
-    use super::LoadedModule;
+    use super::{LoadedModule, build_loaded};
     use std::ffi::CStr;
 
     pub unsafe fn load(bytes: &[u8], export: &str) -> Result<LoadedModule, String> {
@@ -221,13 +211,19 @@ mod linux {
             return Err(format!("dlopen failed: {}", msg));
         }
 
-        super::resolve_symbols(handle, export)
+        let main_c = format!("{}\0", export);
+        let name_c = "module_name\0".to_string();
+        build_loaded(
+            libc::dlsym(handle, main_c.as_ptr() as *const libc::c_char) as *mut u8,
+            libc::dlsym(handle, name_c.as_ptr() as *const libc::c_char) as *mut u8,
+            export,
+        )
     }
 }
 
 #[cfg(target_os = "macos")]
 mod macos {
-    use super::{LoadedModule, ModuleMainFn};
+    use super::{LoadedModule, build_loaded};
     use std::ffi::CStr;
 
     pub unsafe fn load(bytes: &[u8], export: &str) -> Result<LoadedModule, String> {
@@ -249,7 +245,13 @@ mod macos {
             return Err(format!("dlopen failed: {}", msg));
         }
 
-        super::resolve_symbols(handle, export)
+        let main_c = format!("{}\0", export);
+        let name_c = "module_name\0".to_string();
+        build_loaded(
+            libc::dlsym(handle, main_c.as_ptr() as *const libc::c_char) as *mut u8,
+            libc::dlsym(handle, name_c.as_ptr() as *const libc::c_char) as *mut u8,
+            export,
+        )
     }
 }
 

@@ -1,8 +1,7 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Button, Card, Dropdown, Tooltip } from '@heroui/react';
-import { Breadcrumbs } from '@heroui/react/breadcrumbs';
-import { FolderArrowLeft, FolderTree } from '@gravity-ui/icons';
+import { Button, Card, Dropdown, TextField, Input, Tooltip } from '@heroui/react';
+import { FolderArrowLeft, FolderTree, Pencil } from '@gravity-ui/icons';
 
 interface PathBarProps {
   path: string;
@@ -14,19 +13,45 @@ interface PathBarProps {
   onNavigate: (path: string) => void;
 }
 
+/** Normalize a user-entered path: trim, unify separators, fix drive roots. */
+export function normalizePath(input: string): string {
+  let p = input.trim();
+  if (!p) return p;
+
+  const isUnc = p.startsWith('\\\\') || p.startsWith('//');
+  if (isUnc) {
+    // \\host\share or //host/share → \\host\share
+    p = '\\\\' + p.replace(/^[\\/]+/, '').replace(/\//g, '\\');
+  } else if (p.includes('\\') || /^[A-Za-z]:/.test(p)) {
+    // Windows-style path: unify separators, strip trailing backslash
+    p = p.replace(/\//g, '\\').replace(/\\+$/, '');
+  } else if (p.startsWith('/')) {
+    // Unix-style path: keep as-is
+    p = p.replace(/\/+$/, '');
+  }
+
+  // Drive root: "C:" → "C:\"
+  if (/^[A-Za-z]:$/.test(p)) p += '\\';
+  return p;
+}
+
 export function PathBar({ path, drives, historyLength, onGoBack, onGoUp, onDriveChange, onNavigate }: PathBarProps) {
   const { t } = useTranslation();
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState('');
 
   const driveItems = useMemo(() => (drives ?? []).map(d => ({ id: d, label: d })), [drives]);
 
-  const breadcrumbs = useMemo(() => {
-    const parts = path.split('\\').filter(Boolean);
-    if (parts.length === 0) return [{ label: path, path }];
-    return parts.map((part, i) => ({
-      label: part,
-      path: parts.slice(0, i + 1).join('\\'),
-    }));
-  }, [path]);
+  const startEdit = () => {
+    setDraft(path);
+    setEditing(true);
+  };
+
+  const submit = () => {
+    const normalized = normalizePath(draft);
+    setEditing(false);
+    if (normalized && normalized !== path) onNavigate(normalized);
+  };
 
   return (
     <div className="flex items-center gap-2 flex-wrap h-10">
@@ -71,21 +96,31 @@ export function PathBar({ path, drives, historyLength, onGoBack, onGoUp, onDrive
       </Dropdown>
 
       <Card className='flex-1 min-w-0 py-0 h-[40px] rounded-[12px]'>
-        <Breadcrumbs
-          className='w-full h-full'
-          onAction={(key) => {
-            const idx = breadcrumbs.findIndex(c => c.path === key);
-            if (idx >= 0 && idx < breadcrumbs.length - 1) {
-              onNavigate(String(key));
-            }
-          }}
-        >
-          {breadcrumbs.map((crumb) => (
-            <Breadcrumbs.Item key={crumb.path} id={crumb.path}>
-              {crumb.label}
-            </Breadcrumbs.Item>
-          ))}
-        </Breadcrumbs>
+        {editing ? (
+          <TextField
+            aria-label={t('fileManager.pathInput')}
+            value={draft}
+            onChange={setDraft}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') submit();
+              if (e.key === 'Escape') setEditing(false);
+            }}
+            onBlur={submit}
+            autoFocus
+            className="w-full h-full [&_input]:font-mono [&_input]:text-xs"
+          >
+            <Input className="h-full" />
+          </TextField>
+        ) : (
+          <div
+            className="flex items-center h-full px-3 cursor-text select-none font-mono text-xs truncate"
+            onClick={startEdit}
+            title={t('fileManager.pathInputHint')}
+          >
+            <span className="truncate">{path}</span>
+            <Pencil className="w-3.5 h-3.5 ml-2 shrink-0 text-neutral-400" />
+          </div>
+        )}
       </Card>
     </div>
   );

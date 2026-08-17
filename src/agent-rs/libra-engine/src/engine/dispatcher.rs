@@ -35,6 +35,9 @@ impl AgentEngine {
             ws_type::SHELL_INPUT => {
                 handle_shell_input(shell_session, &data, shell_tx, &agent_id).await;
             }
+            ws_type::SHELL_RESIZE => {
+                super::shell::resize_shell(shell_session, &data).await;
+            }
 
             // ── File operations (cloud module) ────────────────────
             ws_type::FILE_DRIVES => {

@@ -20,7 +20,7 @@ export default function ShellPage() {
     setLockMode(m);
   }, []);
 
-  const { bind, disconnect, sendInput } = useShellSession({ termRef, onStateChange: handleStateChange });
+  const { bind, disconnect, sendInput, sendResize } = useShellSession({ termRef, onStateChange: handleStateChange });
 
   useEffect(() => {
     if (agentId) {
@@ -45,7 +45,8 @@ export default function ShellPage() {
         ref={termRef}
         disabled={!connected}
         onInput={sendInput}
-        className="rounded-lg border border-neutral-700"
+        onResize={sendResize}
+        className="rounded-lg border border-neutral-700 p-2"
         style={{ height: 'calc(100vh - 240px)', minHeight: 400, display: agentId ? 'block' : 'none' }}
       />
     </div>
