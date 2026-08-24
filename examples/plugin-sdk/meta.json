@@ -35,6 +35,27 @@
         "op": "showcase",
         "entry": "main"
       }
+    },
+    {
+      "action": "shell",
+      "label": "执行 Shell 命令",
+      "method": "POST",
+      "argsSchema": {
+        "type": "object",
+        "properties": {
+          "command": {
+            "type": "string",
+            "title": "要执行的命令"
+          }
+        },
+        "required": ["command"]
+      },
+      "module": {
+        "kind": "script",
+        "name": "plugin_sdk",
+        "op": "shell",
+        "entry": "main"
+      }
     }
   ]
 }

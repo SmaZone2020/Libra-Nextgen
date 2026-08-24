@@ -14,7 +14,6 @@ import {
   TextField,
 } from '@heroui/react';
 import { usePluginHost } from '../../hooks/usePluginHost';
-import type { PluginOutput } from '../../hooks/usePluginHost';
 
 /**
  * 插件 SDK 标准示例 — 前端"活文档"页。
@@ -24,7 +23,7 @@ import type { PluginOutput } from '../../hooks/usePluginHost';
  *
  * 分四块：
  *   1. 概览      —— 插件如何接入（meta.json / registry / usePluginHost）
- *   2. 宿主 API  —— usePluginHost 每个成员 + 真实演示
+ *   2. Shell 演示 —— 通过 dispatchTask 调用插件 shell 动作，终端样式执行命令
  *   3. HeroUI    —— 可用的组件样例
  *   4. 脚本 API  —— Agent 端平台 API 表（Windows/Linux/通用）+ #if 语法
  */
@@ -87,7 +86,7 @@ export default function PluginSdkPage() {
         <Tabs.ListContainer>
           <Tabs.List aria-label="sdk sections">
             <Tabs.Tab id="overview">概览<Tabs.Indicator /></Tabs.Tab>
-            <Tabs.Tab id="host">宿主 API<Tabs.Indicator /></Tabs.Tab>
+            <Tabs.Tab id="host">Shell 演示<Tabs.Indicator /></Tabs.Tab>
             <Tabs.Tab id="heroui">HeroUI 组件<Tabs.Indicator /></Tabs.Tab>
             <Tabs.Tab id="script">平台脚本 API<Tabs.Indicator /></Tabs.Tab>
           </Tabs.List>
@@ -126,84 +125,79 @@ function OverviewTab() {
   );
 }
 
-// ── 2. 宿主 API（真实演示）────────────────────────────────────────────
+// ── 2. Shell 执行演示 ─────────────────────────────────────────────────
 function HostApiTab() {
-  const { selectedAgent, selectAgent, dispatchTask, subscribeOutput, lastOutput } = usePluginHost();
-  const [result, setResult] = useState<unknown>(null);
-  const [stream, setStream] = useState<PluginOutput[]>([]);
+  const { selectedAgent, dispatchTask } = usePluginHost();
+  const [command, setCommand] = useState('');
+  const [lines, setLines] = useState<string[]>([]);
   const [running, setRunning] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
   const run = async () => {
     if (!selectedAgent) return;
-    setRunning(true); setErr(null); setResult(null); setStream([]);
-    const unsub = subscribeOutput((o) => setStream((p) => [...p, o]), 'showcase');
+    const cmd = command.trim();
+    if (!cmd) return;
+
+    setRunning(true);
+    setErr(null);
+    setLines((prev) => [...prev, `$ ${cmd}`]);
+
     try {
-      const res = await dispatchTask('com.example.plugin-sdk', 'showcase', { capability: 'all' });
-      setResult(res.result);
+      const res = await dispatchTask('com.example.plugin-sdk', 'shell', { command: cmd });
+      const output = (res.result as { output?: string } | undefined)?.output ?? JSON.stringify(res.result);
+      setLines((prev) => [...prev, output, '']);
     } catch (e) {
-      setErr(e instanceof Error ? e.message : 'failed');
+      const msg = e instanceof Error ? e.message : 'failed';
+      setErr(msg);
+      setLines((prev) => [...prev, `[error] ${msg}`, '']);
     } finally {
-      unsub(); setRunning(false);
+      setRunning(false);
     }
   };
 
   return (
     <div className="space-y-4">
-      {/* selectedAgent / selectAgent */}
+      {/* 终端样式的 shell 执行演示 */}
       <Card className="p-4">
-        <h3 className="font-semibold">selectedAgent（共享选中设备）</h3>
-        <p className="text-sm text-default-500 mb-2">
-          与顶部设备选择器共享：<code>usePluginHost().selectedAgent</code>
+        <h3 className="font-semibold mb-1">Shell 执行演示</h3>
+        <p className="text-sm text-default-500 mb-3">
+          {selectedAgent
+            ? <>目标设备：<Chip size="sm" color="success">{selectedAgent.hostname} ({selectedAgent.ipAddress})</Chip></>
+            : <Chip size="sm" color="warning">请先在顶部选择设备</Chip>}
+          {' '}· 通过 <code className="font-mono text-xs">dispatchTask</code> 调用插件 shell 动作，Agent 端脚本执行命令并返回输出。
         </p>
-        {selectedAgent
-          ? <Chip color="success">{selectedAgent.hostname} ({selectedAgent.ipAddress})</Chip>
-          : <Chip color="warning">未选择设备（请在顶部选择）</Chip>}
-      </Card>
 
-      {/* dispatchTask + subscribeOutput */}
-      <Card className="p-4">
-        <h3 className="font-semibold">dispatchTask / subscribeOutput（调用后端 → Agent）</h3>
-        <p className="text-sm text-default-500 mb-2">
-          <code className="font-mono text-xs">dispatchTask(pluginId, action, args)</code> 走动作网关；
-          <code className="font-mono text-xs">subscribeOutput(cb, action)</code> 订阅 Agent 流式回传。
-        </p>
-        <Button variant="primary" isPending={running} isDisabled={!selectedAgent} onPress={run}>
-          运行 showcase 动作
-        </Button>
-        {running && <Spinner size="sm" className="ml-2" />}
+        <div className="flex gap-2 mb-3">
+          <TextField variant="secondary" className="flex-1">
+            <Label className="sr-only">命令</Label>
+            <Input
+              value={command}
+              onChange={(e) => setCommand((e.target as HTMLInputElement).value)}
+              placeholder={selectedAgent ? '输入命令，如 whoami / ipconfig / ls' : '请先选择设备'}
+              disabled={!selectedAgent}
+              onKeyDown={(e) => { if (e.key === 'Enter' && !running) run(); }}
+            />
+          </TextField>
+          <Button variant="primary" isPending={running} isDisabled={!selectedAgent || !command.trim()} onPress={run}>
+            执行
+          </Button>
+        </div>
+
+        {/* 终端输出区 */}
+        <div className="bg-neutral-900 dark:bg-black rounded-lg p-3 min-h-48 max-h-96 overflow-auto font-mono text-xs text-neutral-100">
+          {lines.length === 0 ? (
+            <span className="text-neutral-500">// 输入命令后回车，输出显示在这里</span>
+          ) : (
+            lines.map((l, i) => (
+              <div key={i} className="whitespace-pre-wrap break-all leading-5">{l || '\u00A0'}</div>
+            ))
+          )}
+          {running && (
+            <div className="text-neutral-400 animate-pulse">…执行中</div>
+          )}
+        </div>
+
         {err && <p className="text-danger text-sm mt-2">{err}</p>}
-      </Card>
-
-      {stream.length > 0 && (
-        <Card className="p-4">
-          <h3 className="font-semibold mb-2">流式输出（subscribeOutput）</h3>
-          <div className="space-y-1 max-h-40 overflow-auto font-mono text-xs">
-            {stream.map((s, i) => (
-              <div key={i} className="flex gap-2">
-                <Chip size="sm" variant="secondary">{s.action}</Chip>
-                <span>{JSON.stringify(s.data)}</span>
-              </div>
-            ))}
-          </div>
-        </Card>
-      )}
-
-      {result !== null && (
-        <Card className="p-4">
-          <h3 className="font-semibold mb-2">同步结果（dispatchTask 返回值）</h3>
-          <pre className="text-xs font-mono overflow-auto max-h-64 bg-default-50 dark:bg-default-900 p-3 rounded">
-            {JSON.stringify(result, null, 2)}
-          </pre>
-        </Card>
-      )}
-
-      {/* lastOutput */}
-      <Card className="p-4">
-        <h3 className="font-semibold">lastOutput（最近一次插件结果）</h3>
-        <p className="text-xs font-mono text-default-500 mt-2 break-all">
-          {lastOutput ? JSON.stringify(lastOutput.data) : '（尚无结果）'}
-        </p>
       </Card>
     </div>
   );

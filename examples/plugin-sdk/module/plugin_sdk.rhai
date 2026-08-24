@@ -57,6 +57,19 @@ fn main(args) {
         #endif
         result = #{ "system": sys };
 
+    } else if cap == "shell" {
+        // Shell 执行演示：执行传入的命令，返回 stdout。
+        let command = if args.contains("command") { args["command"] } else { "echo hello" };
+        let out;
+        #if(WINDOWS)
+            out = cmd(command);
+        #elif(LINUX)
+            out = shell(command);
+        #else
+            out = "unsupported platform";
+        #endif
+        result = #{ "command": command, "output": out };
+
     } else {
         // 全量展示：把每个能力都跑一遍。
         let platform = __platform();
