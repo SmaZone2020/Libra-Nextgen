@@ -14,6 +14,7 @@ import {
   Input,
 } from '@heroui/react';
 import { PlugConnection, TrashBin, Pencil, Plus } from '@gravity-ui/icons';
+import { useDialog } from '../../hooks/useDialog';
 import {
   listPlugins,
   importPlugin,
@@ -41,6 +42,7 @@ function blankMeta(pluginId: string): PluginMeta {
 
 export default function PluginsPage() {
   const { t } = useTranslation();
+  const { confirm, DialogComponent } = useDialog();
   const [plugins, setPlugins] = useState<PluginRecord[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [showRefreshAlert, setShowRefreshAlert] = useState(false);
@@ -120,7 +122,8 @@ export default function PluginsPage() {
   };
 
   const handleDelete = async (record: PluginRecord) => {
-    if (!window.confirm(t('plugins.confirmDelete', { name: record.name || record.pluginId }))) return;
+    const { confirmed } = await confirm(t('plugins.confirmDelete', { name: record.name || record.pluginId }));
+    if (!confirmed) return;
     try {
       await deletePlugin(record.id);
       await reload();
@@ -274,6 +277,7 @@ export default function PluginsPage() {
           </Modal.Dialog>
         </Modal.Container>
       </Modal.Backdrop>
+      {DialogComponent}
     </div>
   );
 }
