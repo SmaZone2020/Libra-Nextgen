@@ -59,8 +59,19 @@ public class PluginArgProperty
 /// <summary>Maps an action to an Agent-side in-memory module invocation.</summary>
 public class PluginModuleRef
 {
-    public string Name { get; set; } = "";   // module name ModuleManager downloads
-    public string? Op { get; set; }          // op field injected into module input JSON
+    /// <summary>"script" (Rhai source) or "native" (compiled cdylib). Defaults
+    /// to "native" when absent for backward compatibility.</summary>
+    public string Kind { get; set; } = "native";
+
+    /// <summary>Module name the agent's ModuleManager downloads (native), or
+    /// the script file stem (script).</summary>
+    public string Name { get; set; } = "";
+
+    /// <summary>op field injected into the module input JSON.</summary>
+    public string? Op { get; set; }
+
+    /// <summary>Script entry function name (script kind only; defaults "main").</summary>
+    public string? Entry { get; set; }
 }
 
 /// <summary>A parsed plugin package's meta.json (deserialization target).</summary>

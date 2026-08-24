@@ -69,16 +69,38 @@ public class PluginActionController : ControllerBase
         if (def.Module == null)
             return Ok(new { pluginId, action, status = "accepted" });
 
-        var result = await _relay.RelayAndWaitAsync(
-            agentId,
-            "plugin.exec",
-            new
+        var kind = string.Equals(def.Module.Kind, "script", StringComparison.OrdinalIgnoreCase)
+            ? "script" : "native";
+
+        object relayPayload;
+        if (kind == "script")
+        {
+            var script = LoadScriptSource(plugin.PluginId, def.Module.Name);
+            if (script == null)
+                return NotFound(new { error = $"script module '{def.Module.Name}.rhai' not found" });
+            relayPayload = new
             {
+                kind = "script",
+                module = def.Module.Name,
+                action,
+                entry = def.Module.Entry ?? "main",
+                script,
+                features = new string[0],
+                input,
+            };
+        }
+        else
+        {
+            relayPayload = new
+            {
+                kind = "native",
                 module = def.Module.Name,
                 action,
                 input,
-            },
-            ct);
+            };
+        }
+
+        var result = await _relay.RelayAndWaitAsync(agentId, "plugin.exec", relayPayload, ct);
 
         if (result == null)
             return StatusCode(504, new { error = "Agent did not respond in time." });
@@ -87,6 +109,19 @@ public class PluginActionController : ControllerBase
     }
 
     // ── helpers ────────────────────────────────────────────────────────
+
+    /// <summary>Read a plugin's Rhai script source from its extracted
+    /// <c>module/&lt;name&gt;.rhai</c>, guarding against path traversal.</summary>
+    private static string? LoadScriptSource(string pluginId, string name)
+    {
+        if (string.IsNullOrWhiteSpace(name)
+            || name.Any(c => !(char.IsAsciiLetterOrDigit(c) || c is '.' or '-' or '_')))
+            return null;
+
+        var dir = Path.Combine(PluginService.PluginsBaseDir, pluginId, "module");
+        var path = Path.Combine(dir, name + ".rhai");
+        return System.IO.File.Exists(path) ? System.IO.File.ReadAllText(path) : null;
+    }
 
     private static string? ReadString(JsonElement root, string key)
     {

@@ -14,8 +14,10 @@ export interface PluginArgsSchema {
 }
 
 export interface PluginModuleRef {
+  kind: 'script' | 'native';
   name: string;
   op?: string;
+  entry?: string;
 }
 
 export interface PluginAction {

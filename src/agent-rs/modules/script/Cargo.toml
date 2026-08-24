@@ -1,0 +1,12 @@
+[package]
+name = "script-module"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "script_module"
+crate-type = ["cdylib"]
+
+[dependencies]
+serde_json = { workspace = true }
+rhai = { workspace = true }

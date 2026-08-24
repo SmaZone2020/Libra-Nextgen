@@ -1,19 +1,15 @@
 {
   "schemaVersion": 1,
-  "pluginId": "com.example.soft-recon",
-  "name": "某软件信息探测",
+  "pluginId": "com.example.soft-recon-native",
+  "name": "某软件信息探测（Native）",
   "version": "1.0.0",
   "author": "example",
-  "description": "针对某软件的信息探测插件（示例）",
+  "description": "示例：用编译型 cdylib（Rust/C/C++）实现的 Agent 端模块，展示 native 逃生舱通道。",
   "entry": {
-    "route": "anothersoft",
-    "label": "nav.anothersoft",
+    "route": "anothersoft-native",
+    "label": "nav.anothersoftNative",
     "icon": "Magnifier",
-    "apiRoot": "/api/plugins/com.example.soft-recon"
-  },
-  "i18n": {
-    "zh": { "nav.anothersoft": "某软件探测" },
-    "en": { "nav.anothersoft": "Soft Recon" }
+    "apiRoot": "/api/plugins/com.example.soft-recon-native"
   },
   "actions": [
     {
@@ -28,10 +24,9 @@
         "required": ["target"]
       },
       "module": {
-        "kind": "script",
+        "kind": "native",
         "name": "soft_recon",
-        "op": "probe",
-        "entry": "main"
+        "op": "probe"
       }
     }
   ]

@@ -293,23 +293,40 @@ impl AgentEngine {
             }
 
             // ── Plugin generic execution ─────────────────────────────
-            // Server relays a declared module invocation: data = { module,
-            // action, input }. The module is downloaded/loaded on demand by
-            // ModuleManager, executed with the `input` object, and its JSON
-            // output is returned. This lets third-party plugins extend the
-            // agent without a compile-time dispatcher branch per plugin.
+            // Server relays a declared module invocation. Two kinds:
+            //   - kind="script"  -> run the `script` module (Rhai sandbox) with
+            //                       the source text + args; no per-plugin DLL.
+            //   - kind="native"  -> download/load a compiled cdylib by `module`
+            //                       name and invoke it (default behavior).
             ws_type::PLUGIN_EXEC => {
                 let module = data_str(&data, "module", "");
+                let kind = data_str(&data, "kind", "native");
                 let action = data_str(&data, "action", "");
-                if module.is_empty() {
+                // `input` is the server-assembled object (already carries the
+                // action's `op`). Fall back to an empty object.
+                let input = data.as_ref()
+                    .and_then(|d| d.get("input").cloned())
+                    .unwrap_or_else(|| serde_json::json!({ "action": action }));
+
+                if kind == "script" {
+                    let script = data_str(&data, "script", "");
+                    let entry = data_str(&data, "entry", "main");
+                    let features = data.as_ref()
+                        .and_then(|d| d.get("features").cloned())
+                        .unwrap_or(serde_json::json!([]));
+                    if script.is_empty() {
+                        ws_send(tx, &agent_id, ws_type::PLUGIN_RESULT,
+                            r#"{"error":"missing script source"}"#, rid).await;
+                    } else {
+                        let r = run_module(module_manager, "script", serde_json::json!({
+                            "script": script, "entry": entry, "args": input, "features": features
+                        })).await;
+                        ws_send(tx, &agent_id, ws_type::PLUGIN_RESULT, &r, rid).await;
+                    }
+                } else if module.is_empty() {
                     ws_send(tx, &agent_id, ws_type::PLUGIN_RESULT,
                         r#"{"error":"missing module"}"#, rid).await;
                 } else {
-                    // `input` is the server-assembled object (already carries
-                    // the action's `op`). Fall back to an empty object.
-                    let input = data.as_ref()
-                        .and_then(|d| d.get("input").cloned())
-                        .unwrap_or_else(|| serde_json::json!({ "action": action }));
                     let r = run_module(module_manager, &module, input).await;
                     ws_send(tx, &agent_id, ws_type::PLUGIN_RESULT, &r, rid).await;
                 }

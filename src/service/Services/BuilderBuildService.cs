@@ -51,6 +51,7 @@ public partial class BuilderBuildService
         ("files", "files_module"),
         ("powershell", "powershell_module"),
         ("proxy", "proxy_module"),
+        ("script", "script_module"),
     ];
 
     /// <summary>

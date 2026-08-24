@@ -17,6 +17,7 @@ members = [
     "modules/files",
     "modules/powershell",
     "modules/proxy",
+    "modules/script",
 ]
 resolver = "2"
 
@@ -67,6 +68,7 @@ windows = { version = "0.58", features = [
     "Win32_System_Diagnostics_ToolHelp",
 ] }
 portable-pty = "0.9"
+rhai = { version = "1", features = ["sync", "serde"] }
 
 [profile.release]
 strip = true
