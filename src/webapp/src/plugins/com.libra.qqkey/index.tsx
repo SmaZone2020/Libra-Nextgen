@@ -79,32 +79,34 @@ export default function QQKeyPage() {
           {result.items.length === 0 ? (
             <p className="text-sm text-default-500">未发现有效的 clientkey（本机可能未运行 QQ 或未登录）。</p>
           ) : (
-            <div className="overflow-x-auto">
-              <Table aria-label="qq keys" className="min-w-[700px]">
-                <Table.Header>
-                  <Table.Column>UIN</Table.Column>
-                  <Table.Column>ClientKey</Table.Column>
-                  <Table.Column>SKey</Table.Column>
-                  <Table.Column>BKN</Table.Column>
-                  <Table.Column>来源</Table.Column>
-                  <Table.Column>有效</Table.Column>
-                </Table.Header>
-                <Table.Body>
-                  {result.items.map((it, i) => (
-                    <Table.Row key={i}>
-                      <Table.Cell>{it.uin || '-'}</Table.Cell>
-                      <Table.Cell className="font-mono text-xs max-w-[180px] truncate">{it.clientkey || '-'}</Table.Cell>
-                      <Table.Cell className="font-mono text-xs max-w-[160px] truncate">{it.skey || '-'}</Table.Cell>
-                      <Table.Cell>{it.bkn || '-'}</Table.Cell>
-                      <Table.Cell>{it.source}</Table.Cell>
-                      <Table.Cell>
-                        <Chip size="sm" color={it.valid ? 'success' : 'danger'}>{it.valid ? '有效' : '无效'}</Chip>
-                      </Table.Cell>
-                    </Table.Row>
-                  ))}
-                </Table.Body>
-              </Table>
-            </div>
+            <Table>
+              <Table.ScrollContainer>
+                <Table.Content aria-label="qq keys" className="min-w-[700px]">
+                  <Table.Header>
+                    <Table.Column isRowHeader>UIN</Table.Column>
+                    <Table.Column>ClientKey</Table.Column>
+                    <Table.Column>SKey</Table.Column>
+                    <Table.Column>BKN</Table.Column>
+                    <Table.Column>来源</Table.Column>
+                    <Table.Column>有效</Table.Column>
+                  </Table.Header>
+                  <Table.Body>
+                    {result.items.map((it, i) => (
+                      <Table.Row key={i} id={`row-${i}`}>
+                        <Table.Cell>{it.uin || '-'}</Table.Cell>
+                        <Table.Cell className="font-mono text-xs max-w-[180px] truncate">{it.clientkey || '-'}</Table.Cell>
+                        <Table.Cell className="font-mono text-xs max-w-[160px] truncate">{it.skey || '-'}</Table.Cell>
+                        <Table.Cell>{it.bkn || '-'}</Table.Cell>
+                        <Table.Cell>{it.source}</Table.Cell>
+                        <Table.Cell>
+                          <Chip size="sm" color={it.valid ? 'success' : 'danger'}>{it.valid ? '有效' : '无效'}</Chip>
+                        </Table.Cell>
+                      </Table.Row>
+                    ))}
+                  </Table.Body>
+                </Table.Content>
+              </Table.ScrollContainer>
+            </Table>
           )}
         </Card>
       )}

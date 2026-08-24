@@ -71,28 +71,30 @@ export default function AITokenPage() {
           {result.items.length === 0 ? (
             <p className="text-sm text-default-500">未发现 AI 软件 API Key。</p>
           ) : (
-            <div className="overflow-x-auto">
-              <Table aria-label="ai keys" className="min-w-[700px]">
-                <Table.Header>
-                  <Table.Column>软件</Table.Column>
-                  <Table.Column>Key 名</Table.Column>
-                  <Table.Column>Key 值</Table.Column>
-                  <Table.Column>来源</Table.Column>
-                  <Table.Column>路径</Table.Column>
-                </Table.Header>
-                <Table.Body>
-                  {result.items.map((it, i) => (
-                    <Table.Row key={i}>
-                      <Table.Cell>{it.vendor}</Table.Cell>
-                      <Table.Cell className="font-mono text-xs">{it.keyName}</Table.Cell>
-                      <Table.Cell className="font-mono text-xs max-w-[220px] truncate">{it.keyValue}</Table.Cell>
-                      <Table.Cell>{it.source}</Table.Cell>
-                      <Table.Cell className="font-mono text-xs max-w-[200px] truncate">{it.path}</Table.Cell>
-                    </Table.Row>
-                  ))}
-                </Table.Body>
-              </Table>
-            </div>
+            <Table>
+              <Table.ScrollContainer>
+                <Table.Content aria-label="ai keys" className="min-w-[700px]">
+                  <Table.Header>
+                    <Table.Column isRowHeader>软件</Table.Column>
+                    <Table.Column>Key 名</Table.Column>
+                    <Table.Column>Key 值</Table.Column>
+                    <Table.Column>来源</Table.Column>
+                    <Table.Column>路径</Table.Column>
+                  </Table.Header>
+                  <Table.Body>
+                    {result.items.map((it, i) => (
+                      <Table.Row key={i} id={`row-${i}`}>
+                        <Table.Cell>{it.vendor}</Table.Cell>
+                        <Table.Cell className="font-mono text-xs">{it.keyName}</Table.Cell>
+                        <Table.Cell className="font-mono text-xs max-w-[220px] truncate">{it.keyValue}</Table.Cell>
+                        <Table.Cell>{it.source}</Table.Cell>
+                        <Table.Cell className="font-mono text-xs max-w-[200px] truncate">{it.path}</Table.Cell>
+                      </Table.Row>
+                    ))}
+                  </Table.Body>
+                </Table.Content>
+              </Table.ScrollContainer>
+            </Table>
           )}
         </Card>
       )}
