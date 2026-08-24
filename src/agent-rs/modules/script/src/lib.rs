@@ -92,3 +92,36 @@ fn write_output(s: &str, output: *mut u8, output_cap: usize) -> usize {
     }
     n
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn shell_script_returns_map() {
+        let script = r#"
+fn main(args) {
+    let op = if args.contains("op") { args["op"] } else { "showcase" };
+    let result;
+    if op == "shell" {
+        let command = args["command"];
+        result = #{ "command": command, "output": "OK" };
+    } else {
+        result = #{ "other": true };
+    }
+    result
+}
+"#;
+        let out = run_script(&serde_json::json!({
+            "script": script,
+            "args": { "op": "shell", "command": "whoami" },
+            "entry": "main",
+            "features": []
+        }).to_string());
+        let v: Value = serde_json::from_str(&out).unwrap();
+        assert_eq!(v["ok"], true);
+        assert!(v["result"].is_object(), "result should be object, got {:?}", v["result"]);
+        assert_eq!(v["result"]["output"], "OK");
+    }
+}
+

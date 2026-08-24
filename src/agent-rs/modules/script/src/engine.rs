@@ -1,6 +1,7 @@
 //! Rhai engine construction and script execution with platform API gating.
 
 use rhai::{Dynamic, Engine, Map, Scope, AST};
+use rhai::packages::{Package, BasicArrayPackage, BasicMapPackage, BasicStringPackage};
 use serde_json::Value;
 
 use super::ifdef::preprocess;
@@ -33,6 +34,12 @@ pub fn execute(
     register_core_api(&mut engine, platform);
     register_common_api(&mut engine);
     register_platform_api(&mut engine, features);
+
+    // Restore basic Map/Array/String methods (contains/len/keys/...) that
+    // `new_raw()` omits, while still excluding print/eval/IO from the sandbox.
+    engine.register_global_module(BasicMapPackage::new().as_shared_module());
+    engine.register_global_module(BasicArrayPackage::new().as_shared_module());
+    engine.register_global_module(BasicStringPackage::new().as_shared_module());
 
     // 3. Compile.
     let ast: AST = engine
