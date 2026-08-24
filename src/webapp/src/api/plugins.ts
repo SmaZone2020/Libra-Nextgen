@@ -1,4 +1,4 @@
-import { api } from './client';
+import { api, API_ORIGIN, getToken } from './client';
 
 // ── Types mirroring the server's PluginModels ─────────────────────────
 
@@ -74,6 +74,24 @@ export interface PluginManifest {
   actions: PluginAction[];
 }
 
+/** One entry of the marketplace index (Libra-Plugins/index.json). */
+export interface PluginRegistryEntry {
+  pluginId: string;
+  name: string;
+  version: string;
+  author: string;
+  description: string;
+  file: string;
+  size: number;
+}
+
+export interface PluginRegistryIndex {
+  schemaVersion: number;
+  generatedAt: string;
+  pluginCount: number;
+  plugins: PluginRegistryEntry[];
+}
+
 // ── Management API ─────────────────────────────────────────────────────
 
 export async function listPlugins(): Promise<PluginRecord[]> {
@@ -102,6 +120,28 @@ export async function importPlugin(file: File, enable: boolean): Promise<PluginR
     throw new Error(err.error || `Import failed: ${res.status}`);
   }
   return res.json();
+}
+
+// ── Plugin marketplace (Libra-Plugins registry) ─────────────────────────
+
+/** Fetch the marketplace index.json served by the backend. */
+export async function getPluginRegistry(): Promise<PluginRegistryIndex> {
+  return api.get<PluginRegistryIndex>('/plugins/manager/registry');
+}
+
+/** Download a marketplace archive and import it (one-click install). */
+export async function installPluginFromRegistry(file: string): Promise<PluginRecord> {
+  const url = `${API_ORIGIN}/api/plugins/manager/registry/plugins/${encodeURIComponent(file)}`;
+  const res = await fetch(url, {
+    headers: { Authorization: `Bearer ${getToken() ?? ''}` },
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error(err.error || `Download failed: ${res.status}`);
+  }
+  const blob = await res.blob();
+  const f = new File([blob], file, { type: 'application/zip' });
+  return importPlugin(f, true);
 }
 
 export async function importPluginFromGit(gitUrl: string, enable: boolean): Promise<PluginRecord> {

@@ -7,6 +7,7 @@ import {
   Modal,
   Spinner,
   Switch,
+  Tabs,
   TextArea,
   TextField,
   Label,
@@ -18,11 +19,14 @@ import {
   listPlugins,
   importPlugin,
   importPluginFromGit,
+  installPluginFromRegistry,
+  getPluginRegistry,
   updatePlugin,
   deletePlugin,
   togglePlugin,
   type PluginRecord,
   type PluginMeta,
+  type PluginRegistryIndex,
 } from '../../api/plugins';
 
 function isValidGitUrl(url: string): boolean {
@@ -146,6 +150,8 @@ export default function PluginsPage() {
     }
   };
 
+  const installedIds = new Set(plugins?.map((p) => p.pluginId) ?? []);
+
   if (plugins === null) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -163,7 +169,7 @@ export default function PluginsPage() {
             <p className="text-sm text-default-500">{t('plugins.desc')}</p>
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="outline" onPress={() => fileRef.current?.click()}>
+            <Button onPress={() => fileRef.current?.click()}>
               <PlugConnection />
               {t('plugins.import')}
             </Button>
@@ -186,52 +192,69 @@ export default function PluginsPage() {
         />
       </Card>
 
-      {error && (
-        <Card className="p-4 border border-danger">
-          <p className="text-danger text-sm">{error}</p>
-        </Card>
-      )}
+      <Tabs defaultSelectedKey="installed" className="w-full">
+        <Tabs.ListContainer>
+          <Tabs.List aria-label="plugins sections">
+            <Tabs.Tab id="installed">{t('plugins.installedTab')}<Tabs.Indicator /></Tabs.Tab>
+            <Tabs.Tab id="market">{t('plugins.market')}<Tabs.Indicator /></Tabs.Tab>
+          </Tabs.List>
+        </Tabs.ListContainer>
 
-      {plugins.length === 0 ? (
-        <Card className="p-12 text-center text-default-500">
-          {t('plugins.empty')}
-        </Card>
-      ) : (
-        <div className="grid gap-4">
-          {plugins.map((p) => (
-            <Card key={p.id} className="p-4">
-              <div className="flex items-start justify-between gap-4">
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
-                    <span className="font-semibold">{p.name || p.pluginId}</span>
-                    <Chip size="sm" variant="secondary">{p.version}</Chip>
-                    <Chip size="sm" color={p.enabled ? 'success' : 'default'}>
-                      {p.enabled ? t('plugins.enabled') : t('plugins.disabled')}
-                    </Chip>
-                  </div>
-                  <p className="text-xs text-default-500 mt-1 font-mono">{p.pluginId}</p>
-                  {p.description && <p className="text-sm mt-1 text-default-600">{p.description}</p>}
-                  <p className="text-xs text-default-400 mt-1">
-                    {p.author && `${p.author} · `}{p.actions.length} {t('plugins.actions')} · {p.entry?.route ? `/plugins/${p.entry.route}` : t('plugins.noRoute')}
-                  </p>
-                </div>
+        <Tabs.Panel id="installed">
+          <div className="space-y-4">
+            {error && (
+              <Card className="p-4 border border-danger">
+                <p className="text-danger text-sm">{error}</p>
+              </Card>
+            )}
 
-                <div className="flex items-center gap-2 shrink-0">
-                  <Switch isSelected={p.enabled} onChange={(v) => handleToggle(p, v)}>
-                    <Switch.Control><Switch.Thumb /></Switch.Control>
-                  </Switch>
-                  <Button isIconOnly variant="ghost" size="sm" onPress={() => openEditor(p)}>
-                    <Pencil />
-                  </Button>
-                  <Button isIconOnly variant="ghost" size="sm" onPress={() => handleDelete(p)}>
-                    <TrashBin />
-                  </Button>
-                </div>
+            {plugins!.length === 0 ? (
+              <Card className="p-12 text-center text-default-500">
+                {t('plugins.empty')}
+              </Card>
+            ) : (
+              <div className="grid gap-4">
+                {plugins!.map((p) => (
+                  <Card key={p.id} className="p-4">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className="font-semibold">{p.name || p.pluginId}</span>
+                          <Chip size="sm" variant="secondary">{p.version}</Chip>
+                          <Chip size="sm" color={p.enabled ? 'success' : 'default'}>
+                            {p.enabled ? t('plugins.enabled') : t('plugins.disabled')}
+                          </Chip>
+                        </div>
+                        <p className="text-xs text-default-500 mt-1 font-mono">{p.pluginId}</p>
+                        {p.description && <p className="text-sm mt-1 text-default-600">{p.description}</p>}
+                        <p className="text-xs text-default-400 mt-1">
+                          {p.author && `${p.author} · `}{p.actions.length} {t('plugins.actions')} · {p.entry?.route ? `/plugins/${p.entry.route}` : t('plugins.noRoute')}
+                        </p>
+                      </div>
+
+                      <div className="flex items-center gap-2 shrink-0">
+                        <Switch isSelected={p.enabled} onChange={(v) => handleToggle(p, v)}>
+                          <Switch.Control><Switch.Thumb /></Switch.Control>
+                        </Switch>
+                        <Button isIconOnly variant="ghost" size="sm" onPress={() => openEditor(p)}>
+                          <Pencil />
+                        </Button>
+                        <Button isIconOnly variant="ghost" size="sm" onPress={() => handleDelete(p)}>
+                          <TrashBin />
+                        </Button>
+                      </div>
+                    </div>
+                  </Card>
+                ))}
               </div>
-            </Card>
-          ))}
-        </div>
-      )}
+            )}
+          </div>
+        </Tabs.Panel>
+
+        <Tabs.Panel id="market">
+          <MarketTab installedIds={installedIds} />
+        </Tabs.Panel>
+      </Tabs>
 
       {/* Editor modal */}
       <Modal.Backdrop isOpen={editing !== null} onOpenChange={(open) => { if (!open) closeEditor(); }}>
@@ -299,6 +322,90 @@ export default function PluginsPage() {
       </Modal.Backdrop>
 
       {DialogComponent}
+    </div>
+  );
+}
+
+// ── 插件市场（Libra-Plugins 索引）──────────────────────────────────────
+function MarketTab({ installedIds }: { installedIds: Set<string> }) {
+  const { t } = useTranslation();
+  const [registry, setRegistry] = useState<PluginRegistryIndex | null>(null);
+  const [fail, setFail] = useState<string | null>(null);
+  const [installing, setInstalling] = useState<string | null>(null);
+
+  useEffect(() => {
+    getPluginRegistry()
+      .then(setRegistry)
+      .catch((e) => setFail(e instanceof Error ? e.message : t('plugins.marketFail')));
+  }, [t]);
+
+  const install = async (file: string) => {
+    setInstalling(file);
+    try {
+      await installPluginFromRegistry(file);
+      window.location.reload();
+    } catch (e) {
+      setFail(e instanceof Error ? e.message : 'Install failed');
+      setInstalling(null);
+    }
+  };
+
+  if (registry === null && !fail) {
+    return (
+      <Card className="p-12 flex items-center justify-center">
+        <Spinner size="lg" />
+      </Card>
+    );
+  }
+
+  if (fail) {
+    return (
+      <Card className="p-4 border border-danger">
+        <p className="text-danger text-sm">{fail}</p>
+      </Card>
+    );
+  }
+
+  if (!registry || registry.plugins.length === 0) {
+    return (
+      <Card className="p-12 text-center text-default-500">
+        {t('plugins.marketEmpty')}
+      </Card>
+    );
+  }
+
+  return (
+    <div className="grid gap-4">
+      {registry.plugins.map((p) => {
+        const installed = installedIds.has(p.pluginId);
+        return (
+          <Card key={p.pluginId} className="p-4">
+            <div className="flex items-start justify-between gap-4">
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2">
+                  <span className="font-semibold">{p.name || p.pluginId}</span>
+                  <Chip size="sm" variant="secondary">{p.version}</Chip>
+                  {installed && <Chip size="sm" variant="soft" color="success">{t('plugins.installedChip')}</Chip>}
+                </div>
+                <p className="text-xs text-default-500 mt-1 font-mono">{p.pluginId}</p>
+                {p.description && <p className="text-sm mt-1 text-default-600">{p.description}</p>}
+                <p className="text-xs text-default-400 mt-1">
+                  {p.author && `${p.author} · `}{(p.size / 1024).toFixed(0)} KB
+                </p>
+              </div>
+              <Button
+                variant={installed ? 'ghost' : 'primary'}
+                size="sm"
+                isDisabled={installed}
+                isPending={installing === p.file}
+                onPress={() => install(p.file)}
+              >
+                {t('plugins.install')}
+              </Button>
+            </div>
+          </Card>
+        );
+      })}
     </div>
   );
 }
