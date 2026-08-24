@@ -31,10 +31,15 @@ interface SidebarProps {
   onMobileClose: () => void;
 }
 
-/** Recursively collect the routes contained by an item (incl. its children). */
+/** Recursively collect the routes contained by an item (incl. its children and
+ *  the item's own `to` when it is a navigable group). */
 function collectRoutes(item: NavItem): string[] {
-  if (!item.children || item.children.length === 0) return [item.to];
-  return item.children.map((c) => c.to);
+  const routes: string[] = [];
+  if (item.to) routes.push(item.to);
+  if (item.children && item.children.length > 0) {
+    routes.push(...item.children.map((c) => c.to));
+  }
+  return routes;
 }
 
 /** True when any route inside the item matches the current pathname. */
