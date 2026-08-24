@@ -4,6 +4,7 @@ use rhai::{Dynamic, Engine, Map, Scope, AST};
 use serde_json::Value;
 
 use super::ifdef::preprocess;
+use super::platform_common::register_common_api;
 
 #[cfg(target_os = "windows")]
 use super::platform_windows::register_platform_api;
@@ -30,6 +31,7 @@ pub fn execute(
     engine.set_max_operations(100_000);
 
     register_core_api(&mut engine, platform);
+    register_common_api(&mut engine);
     register_platform_api(&mut engine, features);
 
     // 3. Compile.

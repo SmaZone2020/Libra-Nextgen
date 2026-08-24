@@ -5,33 +5,40 @@
 //! (on Linux it fails to compile with "function not found").
 //!
 //! The API surface is a curated allowlist, gated by features:
-//!   - `core` (always on): `sys.cmd`, `sys.powershell`, `sys.reg_query`, `reg_set`
+//!   - `core` (always on): `cmd`, `powershell`, `reg_*`, `ipconfig`, `wmic`,
+//!     `tasklist`, `process_affinity` (via `wmic`)
 //!   - `full` (opt-in): deep Win32 (deliberately not wired — see §security)
 
 use rhai::Engine;
 use std::process::Command;
 
 pub fn register_platform_api(engine: &mut Engine, features: &[String]) {
-    // ── sys.cmd(cmdline) -> String ─────────────────────────────────────
-    engine.register_fn("cmd", run_cmd_external);
-
-    // ── sys.powershell(script) -> String ──────────────────────────────
+    // ── core capabilities ─────────────────────────────────────────────
+    engine.register_fn("cmd", run_cmd);
     engine.register_fn("powershell", powershell);
 
-    // ── sys.reg_query(key, name) -> String ────────────────────────────
     engine.register_fn("reg_query", reg_query);
-
-    // ── sys.reg_set(key, name, data) -> bool ──────────────────────────
     engine.register_fn("reg_set", reg_set);
+    engine.register_fn("reg_delete", reg_delete);
+
+    engine.register_fn("ipconfig", || -> String {
+        run("ipconfig", &["/all"])
+    });
+
+    engine.register_fn("wmic", |query: &str| -> String {
+        run("wmic", &[query])
+    });
+
+    engine.register_fn("tasklist", || -> String {
+        run("tasklist", &["/FO", "LIST"])
+    });
 
     if features.iter().any(|f| f == "full") {
         register_full_api(engine);
     }
 }
 
-/// `sys.cmd("...")` — run a command via `cmd /C`, return stdout (stderr if
-/// stdout is empty), prefixed with nothing.
-fn run_cmd_external(cmdline: &str) -> String {
+fn run_cmd(cmdline: &str) -> String {
     run("cmd", &["/C", cmdline])
 }
 
@@ -44,10 +51,19 @@ fn reg_query(key: &str, name: &str) -> String {
 }
 
 fn reg_set(key: &str, name: &str, data: &str) -> bool {
-    let out = Command::new("reg")
+    Command::new("reg")
         .args(["add", key, "/v", name, "/d", data, "/f"])
-        .output();
-    matches!(out, Ok(o) if o.status.success())
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false)
+}
+
+fn reg_delete(key: &str, name: &str) -> bool {
+    Command::new("reg")
+        .args(["delete", key, "/v", name, "/f"])
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false)
 }
 
 /// Run a program, returning stdout (falling back to stderr) as a string.

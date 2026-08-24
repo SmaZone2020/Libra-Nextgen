@@ -18,6 +18,7 @@
 
 mod engine;
 mod ifdef;
+mod platform_common;
 #[cfg(target_os = "windows")]
 mod platform_windows;
 #[cfg(not(target_os = "windows"))]
