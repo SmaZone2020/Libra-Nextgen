@@ -82,6 +82,43 @@ impl QQClientKey {
 
         json_error("no uin list returned from local ports")
     }
+
+    /// 轻量列表模式：只取已登录 QQ 的 uin + nickname（不取 clientkey/ptsigx）。
+    /// 供页面自动加载列表与头像使用，避免每次进入页面都做完整的兑换。
+    pub async fn list() -> String {
+        let session = match build_session() {
+            Ok(c) => c,
+            Err(e) => return json_error(&format!("client build failed: {e}")),
+        };
+
+        let token = match get_pt_local_token(&session).await {
+            Some(t) => t,
+            None => return json_error("no pt_local_token"),
+        };
+
+        let ports = probe_local_ports();
+        if ports.is_empty() {
+            return json_error("no alive local qq ports");
+        }
+
+        for port in ports {
+            let accounts = match get_uins_on_port(&session, port, &token).await {
+                Ok(a) => a,
+                Err(_) => continue,
+            };
+            if accounts.is_empty() {
+                continue;
+            }
+
+            let results: Vec<_> = accounts
+                .into_iter()
+                .map(|acc| serde_json::json!({ "uin": acc.uin, "nickname": acc.nickname }))
+                .collect();
+            return serde_json::json!({ "accounts": results }).to_string();
+        }
+
+        json_error("no uin list returned from local ports")
+    }
 }
 
 fn json_error(msg: &str) -> String {

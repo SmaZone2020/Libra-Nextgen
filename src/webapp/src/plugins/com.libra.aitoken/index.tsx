@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Accordion, Button, Card, Chip, Spinner } from '@heroui/react';
 import { ChevronDown } from '@gravity-ui/icons';
 import { API_ORIGIN } from '../../api/client';
@@ -36,26 +36,18 @@ function assetUrl(file: string): string {
   return `${API_ORIGIN}/api/plugins/${PLUGIN_ID}/assets/${file}`;
 }
 
-function maskKey(key: string): string {
-  if (!key) return '';
-  if (key.length <= 8) return '*'.repeat(key.length);
-  return key.slice(0, 4) + '*'.repeat(key.length - 8) + key.slice(-4);
-}
-
 /** 获取本机 AI Agent 工具 APIKey。 */
 export default function AITokenPage() {
   const { selectedAgent, dispatchTask } = usePluginHost();
   const [running, setRunning] = useState(false);
   const [result, setResult] = useState<AITokenResult | null>(null);
   const [err, setErr] = useState<string | null>(null);
-  const [showRaw, setShowRaw] = useState(false);
+  const autoRanAgentRef = useRef<string | null>(null);
 
-  const run = async () => {
+  const run = useCallback(async () => {
     if (!selectedAgent) return;
     setRunning(true);
     setErr(null);
-    setResult(null);
-    setShowRaw(false);
     try {
       const res = await dispatchTask(PLUGIN_ID, 'collect', {});
       setResult(res.result as AITokenResult);
@@ -64,7 +56,15 @@ export default function AITokenPage() {
     } finally {
       setRunning(false);
     }
-  };
+  }, [selectedAgent, dispatchTask]);
+
+  // 进入页面自动扫描；切换设备后自动重新扫描。
+  useEffect(() => {
+    if (selectedAgent && autoRanAgentRef.current !== selectedAgent.id) {
+      autoRanAgentRef.current = selectedAgent.id;
+      run();
+    }
+  }, [selectedAgent, run]);
 
   const groups = useMemo(() => {
     if (!result) return [];
@@ -83,14 +83,9 @@ export default function AITokenPage() {
         <h1 className="text-xl font-semibold">获取本机 AI Agent 工具 APIKey</h1>
         <div className="mt-4 flex items-center gap-3">
           <Button variant="primary" isPending={running} isDisabled={!selectedAgent} onPress={run}>
-            扫描 AI API Key
+            重新扫描
           </Button>
           {!selectedAgent && <Chip size="sm" color="warning">请先在顶部选择设备</Chip>}
-          {result && (
-            <Button size="sm" variant="ghost" onPress={() => setShowRaw(s => !s)}>
-              {showRaw ? '隐藏明文' : '显示明文'}
-            </Button>
-          )}
         </div>
       </Card>
 
@@ -143,9 +138,7 @@ export default function AITokenPage() {
                                   {it.source === 'config-file' ? 'Config' : 'Env'}
                                 </Chip>
                               </div>
-                              <div className="mt-1 font-mono text-xs text-default-500 break-all">
-                                {showRaw ? it.keyValue : maskKey(it.keyValue)}
-                              </div>
+                              <div className="mt-1 font-mono text-xs text-default-500 break-all">{it.keyValue}</div>
                               <div className="mt-1 text-[11px] text-default-400 truncate">{it.path}</div>
                             </div>
                           ))}

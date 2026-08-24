@@ -132,11 +132,37 @@ const PLUGIN_MARKET_BASE =
   import.meta.env.VITE_PLUGIN_MARKET_BASE ||
   'https://raw.githubusercontent.com/SmaZone2020/Libra-Plugins/refs/heads/main';
 
-/** Fetch the marketplace index.json directly from GitHub raw. */
+const REGISTRY_CACHE_KEY = 'libra.plugin.registry';
+const REGISTRY_TTL_MS = 60 * 60 * 1000; // 1 hour
+
+/**
+ * Fetch the marketplace index.json directly from GitHub raw, caching it in
+ * localStorage for up to 1 hour so repeated visits don't re-download it.
+ */
 export async function getPluginRegistry(): Promise<PluginRegistryIndex> {
+  // Serve from browser cache first (within TTL).
+  try {
+    const cached = localStorage.getItem(REGISTRY_CACHE_KEY);
+    if (cached) {
+      const parsed = JSON.parse(cached) as { ts: number; data: PluginRegistryIndex };
+      if (Date.now() - parsed.ts < REGISTRY_TTL_MS && parsed.data?.plugins) {
+        return parsed.data;
+      }
+    }
+  } catch {
+    /* stale or corrupt cache — fall through to fetch */
+  }
+
   const res = await fetch(`${PLUGIN_MARKET_BASE}/index.json`);
   if (!res.ok) throw new Error(`Failed to fetch plugin index: ${res.status}`);
-  return res.json();
+  const data = (await res.json()) as PluginRegistryIndex;
+
+  try {
+    localStorage.setItem(REGISTRY_CACHE_KEY, JSON.stringify({ ts: Date.now(), data }));
+  } catch {
+    /* storage full/blocked — cache is best-effort */
+  }
+  return data;
 }
 
 /** Download a marketplace archive from GitHub raw and import it. */
