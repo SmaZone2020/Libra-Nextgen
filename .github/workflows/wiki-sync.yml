@@ -1,0 +1,77 @@
+name: Wiki Sync
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'docs/**'
+      - 'README.md'
+      - 'README_en.md'
+      - '.github/workflows/wiki-sync.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    name: Publish docs to GitHub Wiki
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Clone wiki repository
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git clone "https://x-access-token:${GH_TOKEN}@github.com/SmaZone2020/Libra-Nextgen.wiki.git" wiki
+          git -C wiki config user.name "github-actions[bot]"
+          git -C wiki config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Sync docs/ into wiki pages
+        run: |
+          set -e
+          cd wiki
+          # 清空旧页面（保留 .git），让 Wiki 与 docs/ 完全一致
+          find . -mindepth 1 -maxdepth 1 ! -name '.git' -exec rm -rf {} +
+
+          # 中文页面 → Wiki 根
+          cp ../docs/zh/index.md Home.md
+          cp ../docs/zh/插件开发.md 插件开发.md
+          cp ../docs/zh/部署与构建.md 部署与构建.md
+          cp ../docs/zh/操作手册.md 操作手册.md
+
+          # 英文页面 → en/
+          mkdir -p en
+          cp ../docs/en/index.md en/index.md
+          cp ../docs/en/plugin-development.md en/plugin-development.md
+          cp ../docs/en/deployment.md en/deployment.md
+          cp ../docs/en/operations.md en/operations.md
+
+          # 侧边栏导航
+          cat > _Sidebar.md <<'EOF'
+* [概览](Home)
+* [插件开发教程](插件开发)
+* [部署与构建](部署与构建)
+* [操作手册](操作手册)
+---
+* [Overview](en/index)
+* [Plugin Development](en/plugin-development)
+* [Deployment](en/deployment)
+* [Operations](en/operations)
+EOF
+
+          cat > _Footer.md <<'EOF'
+Libra-Nextgen · 仅限授权场景使用
+EOF
+
+      - name: Commit and push wiki changes
+        working-directory: wiki
+        run: |
+          if git diff --quiet; then
+            echo "wiki is up to date"
+          else
+            git add -A
+            git commit -m "docs: sync from main repo"
+            git push
+          fi

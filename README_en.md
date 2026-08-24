@@ -1,101 +1,50 @@
 # Libra-Nextgen
 
-A modern C2 (Command & Control) framework for enterprise red-team operations.
+A modern **C2 (Command & Control) framework** for enterprise red-team operations: Rust Agent + ASP.NET Core Server + React/HeroUI Console.
 
 ## Architecture
 
 | Component | Directory | Stack |
 |-----------|-----------|-------|
-| **Libra-Agent** | `src/agent-rs/` | Rust · Tokio · Win32 FFI |
+| **Libra-Agent** | `src/agent-rs/` | Rust · Tokio · Win32 FFI · concurrent task processing |
 | **Libra-Server** | `src/service/` | ASP.NET Core 10 · MongoDB · JWT |
 | **Libra-Console** | `src/webapp/` | React 19 · HeroUI 3 · Vite |
 
-The Agent uses a **Bootstrapper + cloud modules** architecture: the loader reflectively loads an encrypted minimal kernel (comm / crypto / scheduling / streaming), while everything else (files, credentials, recon, shell, PowerShell, proxy) is delivered as standalone modules downloaded on demand from the Server and executed in memory — nothing touches disk. It also ships a **plugin system**: users deliver custom plugins as a zip package, with an Agent-side dual channel of Rhai scripts (no compiler needed) or native `cdylib`.
-
-## Core Features
-
-- **Communication**: dual-mode HTTP(S) polling + WebSocket, AES-256-GCM end-to-end encryption, RSA dynamic key negotiation
-- **Plugin system**: three-layer (Agent / Server / Console), Rhai scripting with `#if/#elif/#else/#endif` conditional compilation + platform API gating + sandbox; frontend runtime registration + `usePluginHost` shared state; plugin management page (import/enable)
-- **Stealth**: anti-sandbox / anti-VM probes, PEB spoofing, UAC elevation, multi-vector persistence (registry / scheduled tasks / cron / systemd)
-- **Recon**: system & hardware fingerprinting, network + GeoIP, WiFi / LAN / Bluetooth scanning, processes / windows / local accounts
-- **Credentials**: browser passwords (Chrome/Edge v10/v20), RDP credentials, SSH keys, QQ/WeChat data, QQ clientkey (jump exchange to skey/bkn), AI key scanning
-- **Execution**: interactive Shell (xterm.js), in-memory PowerShell, live screen / webcam / microphone streaming
-- **Files**: paged browsing, streaming download (live progress & speed), upload, in-archive browsing, timestomping
-- **MCP**: built-in MCP server — AI clients can drive every C2 capability
+The Agent uses a **Bootstrapper + cloud modules** architecture: the loader reflectively loads an encrypted minimal kernel (comm / crypto / scheduling / streaming), while everything else (files, credentials, recon, shell, PowerShell, proxy) is delivered as modules downloaded on demand from the Server and executed in memory — nothing touches disk. A **plugin system** extends it with zip-delivered capabilities: Agent-side Rhai scripts (no compiler) or native `cdylib`, and frontend runtime page registration.
 
 ## Quick Start
 
-Requirements: Rust 1.80+, .NET SDK 10, Node.js 20+, MongoDB 7.0+.
-
-### Deploy on Windows
-
-```powershell
-# 1. Start Server (http://localhost:5270)
-cd src\service
-dotnet run
-
-# 2. Start Console (http://localhost:5173; create the admin on first visit to /setup)
-cd src\webapp
-npm install
-npm run dev
-```
-
-Build payloads from the Console **Builder** page:
-
-- **Win x64 / Win x86**: native MSVC (needs VS Build Tools + Rust MSVC toolchain)
-- **Linux x64**: cross-compiled (server drives the zig toolchain automatically):
-
-```powershell
-cargo install cargo-zigbuild
-# download zig (https://ziglang.org/download) and add it to PATH
-```
-
-### Deploy on Linux
+Requirements: Rust 1.80+ · .NET SDK 10 · Node.js 20+ · MongoDB 7.0+.
 
 ```bash
-# 1. Start Server (http://localhost:5270)
-cd src/service
-dotnet run
-
-# 2. Start Console (http://localhost:5173; create the admin on first visit to /setup)
-cd src/webapp
-npm install
-npm run dev
+# 1. Server (http://localhost:5270)
+cd src/service && dotnet run
+# 2. Console (http://localhost:5173; create the admin on first visit to /setup)
+cd src/webapp && npm install && npm run dev
+# 3. Payloads: build Win/Linux payloads online from the Console Builder page
+#    (cross-builds need the zig toolchain)
 ```
 
-Build payloads from the Console **Builder** page:
+Three plugin channels: **Upload** (zip) / **Import from Git** (a Git URL) / **Plugin Market** (Libra-Plugins repo, one-click install — fetched directly from GitHub raw with a 1h browser cache).
 
-- **Linux x64**: native build (default rustc toolchain)
-- **Win x64 / Win x86**: cross-compiled (GNU ABI, also via the zig toolchain):
+## Core Features
 
-```bash
-cargo install cargo-zigbuild   # required for Windows cross-builds
-# download zig (https://ziglang.org/download) and add it to PATH
-```
+- **Communication**: HTTP(S) polling + WebSocket, AES-256-GCM end-to-end encryption, RSA dynamic key negotiation
+- **Agent**: concurrent task processing (modules run lock-free), interactive Shell (xterm.js/PTY), live screen / webcam / microphone streaming, anti-sandbox / anti-VM, multi-vector persistence
+- **Recon**: system & hardware fingerprinting, network + GeoIP, WiFi / LAN / Bluetooth scanning, processes / windows / accounts
+- **Credentials**: browser passwords, RDP credentials, SSH keys, WeChat data, AI tool API keys (plugin)
+- **Plugin Market**: a standalone repo of zips + `index.json` (rebuilt by CI), one-click install/update from the Console
+- **MCP**: built-in MCP server (Streamable HTTP) — AI clients can drive every C2 capability
 
-> Whether the Server runs on Windows or Linux, it can build both Windows and Linux payloads. Cross-compilation is detected automatically by the server (cargo-zigbuild + zig); a clear error is shown when the toolchain is missing. Plain `cargo build --release` on the CLI only produces payloads for the host platform.
+## Docs
 
-## Plugin Development
+| Topic | Content |
+| --- | --- |
+| [Plugin Development](docs/en/plugin-development.md) | meta.json contract, zip layout, Rhai/native channels, frontend `usePluginHost`, sample plugins |
+| [Deployment & Building](docs/en/deployment.md) | Server/Console setup, Builder, Win/Linux cross-compile, plugin module staging |
+| [Operations](docs/en/operations.md) | Agent onboarding, market/upload/Git installs, Shell/files/MCP usage, audit & risk policy |
 
-Plugins are delivered as a zip package, imported/enabled from the Console **plugin management page**:
-
-```
-plugin.zip
-├── meta.json      # plugin contract: pluginId / entry(route, icon) / actions(argsSchema)
-├── module/        # Agent-side module (either)
-│   ├── xxx.rhai   # script channel (no compiler, recommended) — supports #if(WINDOWS)/#elif(LINUX)/#endif
-│   └── xxx.dll    # native channel (Rust/C/C++ cdylib exporting module_main/module_name)
-└── page/          # frontend page source (HeroUI; place into src/webapp/src/plugins/<pluginId>/ and rebuild)
-```
-
-- **Agent side**: the script channel runs in a built-in Rhai engine with platform-gated APIs (Windows `cmd/powershell/reg_*`, Linux `shell/bash/uname/ip_route`); a `full` feature can extend deep APIs. The native channel loads in memory via `libra-load`
-- **Server side**: declarative `meta.json` contract + action gateway `POST /api/plugins/{pluginId}/{action}` (validates argsSchema → dispatches to Agent → collects result); no third-party code runs in the server process
-- **Frontend**: pages use `usePluginHost()` for `selectedAgent` / `dispatchTask` / `subscribeOutput` (shared console state); `import.meta.glob` registers routes and sidebar entries at runtime
-- **Examples**: `examples/plugin-sdk/` (living docs + full multi-platform module), `examples/soft-recon/` (end-to-end)
-
-## MCP
-
-Endpoint `http://localhost:5270/mcp` (Streamable HTTP). Authenticate with an AccessKey (`Authorization: Bearer lnk_xxx`) created in the Console settings page or via API. Tool inventory: `GET /api/mcp/info`.
+> Full docs are also published to the [GitHub Wiki](https://github.com/SmaZone2020/Libra-Nextgen/wiki) (zh + en).
 
 ## License
 
