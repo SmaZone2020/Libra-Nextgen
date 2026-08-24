@@ -180,7 +180,7 @@ export function NetworkTab({ agentId }: NetworkTabProps) {
   );
 
   return (
-    <div className="space-y-3 max-h-[calc(100vh-330px)] overflow-y-auto">
+    <div className="space-y-3 overflow-y-auto">
       {/* LAN Scan */}
       <Card className="p-4 rounded-xl">
         <div className="flex items-center justify-between mb-3">
