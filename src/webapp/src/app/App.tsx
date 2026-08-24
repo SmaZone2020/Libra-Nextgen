@@ -4,7 +4,7 @@ import { AnimatePresence, motion } from 'motion/react';
 import { Bars } from '@gravity-ui/icons';
 import { Button, Chip, Dropdown } from '@heroui/react';
 import { useTranslation } from 'react-i18next';
-import { Sidebar } from '../shared/layout/Sidebar';
+import { Sidebar, type NavItem } from '../shared/layout/Sidebar';
 import LoginPage from '../pages/Login';
 import SetupPage from '../pages/Setup';
 import Dashboard from '../pages/Dashboard';
@@ -281,22 +281,44 @@ function AuthenticatedLayout({
     return permissions.allowedPages.includes(key);
   };
 
-  const visibleItems = sidebarItems.filter((i) => {
-    if (!canSee(i.to)) return false;
-    // Windows-only streaming pages hidden on Linux agents.
-    if (platform === 'linux' && (i.to === '/screen' || i.to === '/media')) return false;
-    return true;
-  });
-  const visibleBottom = sidebarBottomItems.filter((i) => canSee(i.to));
+  // Filter sidebar items: apply permission check + Linux platform exclusions.
+  // "功能" 母项的 children 会被逐个筛选；"插件页面" 母项的 children 由 enabled
+  // 插件动态填充。
+  const visibleItems = sidebarItems
+    .map((item): NavItem | null => {
+      if (item.children && item.children.length > 0) {
+        const children = item.children.filter((c) => {
+          if (!canSee(c.to)) return false;
+          if (platform === 'linux' && (c.to === '/screen' || c.to === '/media')) return false;
+          return true;
+        });
+        if (children.length === 0) return null;
+        return { ...item, children };
+      }
+      // Plugins group (placeholder children) is filled below.
+      if (item.label === 'nav.pluginPages') return item;
+      if (!canSee(item.to)) return null;
+      return item;
+    })
+    .filter((i): i is NavItem => i !== null);
 
-  // Plugin sidebar entries: built from enabled manifests, icon resolved via
-  // the allowlist. label uses the manifest name directly (t() passes it
-  // through unchanged when it is not a registered i18n key).
-  const pluginItems = registeredPlugins.map((p) => ({
+  // Fill the plugins group children with enabled plugin pages.
+  const pluginChildren: NavItem['children'] = registeredPlugins.map((p) => ({
     icon: resolvePluginIcon(p.manifest.entry?.icon),
     to: p.route,
     label: p.manifest.name || p.pluginId,
   }));
+  const visibleItemsWithPlugins = visibleItems.map((item) =>
+    item.label === 'nav.pluginPages'
+      ? { ...item, children: pluginChildren }
+      : item,
+  );
+  // Drop the plugins group entirely when there are no enabled plugin pages.
+  const finalItems = pluginChildren.length > 0
+    ? visibleItemsWithPlugins
+    : visibleItemsWithPlugins.filter((i) => i.label !== 'nav.pluginPages');
+
+  const visibleBottom = sidebarBottomItems.filter((i) => canSee(i.to));
 
   // Route → display name for plugin page headers.
   const pluginLabels = new Map(registeredPlugins.map((p) => [p.route, p.manifest.name || p.pluginId]));
@@ -307,7 +329,7 @@ function AuthenticatedLayout({
       <Sidebar
         brand="Libra Next"
         collapsed={collapsed}
-        items={[...visibleItems, ...pluginItems]}
+        items={finalItems}
         bottomItems={visibleBottom}
         onToggle={onToggle}
         mobileOpen={mobileSidebarOpen}

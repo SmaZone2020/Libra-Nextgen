@@ -15,6 +15,8 @@ export default {
       about: '关于',
       settings: '设置',
       plugins: '插件',
+      features: '功能',
+      pluginPages: '插件页面',
       expandSidebar: '展开侧边栏',
       collapseSidebar: '收起侧边栏',
       toggleSidebar: '切换侧边栏',

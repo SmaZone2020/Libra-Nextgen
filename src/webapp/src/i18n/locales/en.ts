@@ -15,6 +15,8 @@ export default {
       about: 'About',
       settings: 'Settings',
       plugins: 'Plugins',
+      features: 'Features',
+      pluginPages: 'Plugin Pages',
       expandSidebar: 'Expand sidebar',
       collapseSidebar: 'Collapse sidebar',
       toggleSidebar: 'Toggle sidebar',
