@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { ComponentType, ReactNode, SVGProps } from 'react';
+import type { ComponentType, MouseEvent, ReactNode, SVGProps } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { Bars, ChevronDown, Xmark } from '@gravity-ui/icons';
 import { Button, Tooltip } from '@heroui/react';
@@ -173,8 +173,9 @@ function DesktopNavItem({ item, collapsed, onExpand }: { item: NavItem; collapse
 
   if (hasChildren) {
     const label = t(item.label);
-    // A "navigable" group: tapping the body navigates to item.to, while the
-    // chevron (or the whole button when item.to is empty) toggles children.
+    // A "navigable" group navigates to item.to on body click; the chevron
+    // (nested inside the button, right side) toggles children. For a
+    // non-navigable group, the whole button toggles children.
     const navigable = !!item.to;
     const handlePress = () => {
       if (collapsed) {
@@ -186,7 +187,8 @@ function DesktopNavItem({ item, collapsed, onExpand }: { item: NavItem; collapse
         setOpen((v) => !v);
       }
     };
-    const handleChevron = () => {
+    const handleChevron = (e: MouseEvent) => {
+      e.stopPropagation();
       if (collapsed) {
         setOpen(true);
         onExpand();
@@ -212,27 +214,26 @@ function DesktopNavItem({ item, collapsed, onExpand }: { item: NavItem; collapse
               >
                 {label}
               </span>
+              {!collapsed && (
+                <span
+                  onClick={handleChevron}
+                  onPointerDown={(e) => e.stopPropagation()}
+                  className="shrink-0 -mr-1 ml-1 rounded p-0.5 text-neutral-400 cursor-pointer hover:text-neutral-700 dark:hover:text-neutral-300"
+                  aria-label={t('nav.toggleGroup')}
+                  role="button"
+                >
+                  <motion.span
+                    animate={{ rotate: open ? 180 : 0 }}
+                    transition={{ duration: 0.25, ease: 'easeInOut' }}
+                    className="block"
+                  >
+                    <ChevronDown className="w-4 h-4" />
+                  </motion.span>
+                </span>
+              )}
             </Button>
             <Tooltip.Content placement="right">{label}</Tooltip.Content>
           </Tooltip>
-          {!collapsed && (
-            <Button
-              isIconOnly
-              size="sm"
-              variant="ghost"
-              className="shrink-0 -ml-2 mr-1 text-neutral-400"
-              onPress={handleChevron}
-              aria-label={t('nav.toggleGroup')}
-            >
-              <motion.span
-                animate={{ rotate: open ? 180 : 0 }}
-                transition={{ duration: 0.25, ease: 'easeInOut' }}
-                className="block"
-              >
-                <ChevronDown className="w-4 h-4" />
-              </motion.span>
-            </Button>
-          )}
           <AnimatePresence>
             {groupActive && !collapsed && (
               <motion.div
@@ -342,6 +343,10 @@ function MobileNavItem({ item, onNavigate }: { item: NavItem; onNavigate: () => 
         setOpen((v) => !v);
       }
     };
+    const handleChevron = (e: MouseEvent) => {
+      e.stopPropagation();
+      setOpen((v) => !v);
+    };
     return (
       <div>
         <div className="flex items-center">
@@ -353,22 +358,21 @@ function MobileNavItem({ item, onNavigate }: { item: NavItem; onNavigate: () => 
           >
             <item.icon className="w-5 h-5 shrink-0" />
             <span className="font-medium ml-3 flex-1 text-left">{label}</span>
-          </Button>
-          <Button
-            isIconOnly
-            size="sm"
-            variant="ghost"
-            className="shrink-0 mx-1 text-neutral-400"
-            onPress={() => setOpen((v) => !v)}
-            aria-label={t('nav.toggleGroup')}
-          >
-            <motion.span
-              animate={{ rotate: open ? 180 : 0 }}
-              transition={{ duration: 0.25 }}
-              className="block"
+            <span
+              onClick={handleChevron}
+              onPointerDown={(e) => e.stopPropagation()}
+              className="shrink-0 ml-1 rounded p-0.5 text-neutral-400 cursor-pointer hover:text-neutral-700 dark:hover:text-neutral-300"
+              aria-label={t('nav.toggleGroup')}
+              role="button"
             >
-              <ChevronDown className="w-4 h-4" />
-            </motion.span>
+              <motion.span
+                animate={{ rotate: open ? 180 : 0 }}
+                transition={{ duration: 0.25 }}
+                className="block"
+              >
+                <ChevronDown className="w-4 h-4" />
+              </motion.span>
+            </span>
           </Button>
           {groupActive && <div className="h-6 w-2 bg-blue-500 shrink-0 rounded-md" />}
         </div>
