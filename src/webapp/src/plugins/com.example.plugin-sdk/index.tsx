@@ -6,6 +6,7 @@ import {
   Chip,
   Input,
   Label,
+  Link,
   ProgressCircle,
   Spinner,
   Switch,
@@ -251,7 +252,11 @@ function HeroUiTab() {
         <p className="text-sm text-default-500">
           Card、Tabs、Modal、Table、Dropdown、Tooltip、Accordion、Select、ListBox、
           Alert、Skeleton、Divider 等 —— 全部从
-          <code className="font-mono text-xs"> @heroui/react</code> 导入，用法见本项目其余页面。
+          <code className="font-mono text-xs"> @heroui/react</code> 导入。
+          完整组件列表与用法详见{' '}
+          <Link href="https://heroui.com/cn/docs/react/components" target="_blank">
+            https://heroui.com/cn/docs/react/components
+          </Link>
         </p>
       </div>
     </Card>
