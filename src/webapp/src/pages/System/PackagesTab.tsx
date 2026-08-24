@@ -90,6 +90,7 @@ export function PackagesTab({ agentId }: PackagesTabProps) {
         </div>
         <div className="flex items-center gap-2">
           <TextField
+            variant="secondary"
             aria-label={t('system.packages.search')}
             value={filter}
             onChange={setFilter}

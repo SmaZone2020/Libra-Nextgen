@@ -140,7 +140,7 @@ function AccessKeysTab() {
                 <Modal.Body>
                   <p className="text-sm text-default-500 mb-3">{t('settings.keyCreatedHint')}</p>
                   <div className="flex items-center gap-2">
-                    <TextField className="flex-1">
+                    <TextField variant="secondary" className="flex-1">
                       <Label className="sr-only">{t('settings.key')}</Label>
                       <Input readOnly value={createdKey} className="font-mono text-xs" />
                     </TextField>
@@ -162,11 +162,11 @@ function AccessKeysTab() {
                 </Modal.Header>
                 <Modal.Body>
                   <div className="space-y-4">
-                    <TextField value={newName} onChange={setNewName}>
+                    <TextField variant="secondary" value={newName} onChange={setNewName}>
                       <Label>{t('settings.name')}</Label>
                       <Input placeholder="My AI Client" />
                     </TextField>
-                    <TextField value={newExpires} onChange={setNewExpires}>
+                    <TextField variant="secondary" value={newExpires} onChange={setNewExpires}>
                       <Label>{t('settings.expiresAt')}</Label>
                       <Input type="date" />
                     </TextField>

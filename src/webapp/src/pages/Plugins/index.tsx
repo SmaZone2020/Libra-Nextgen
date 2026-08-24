@@ -233,7 +233,7 @@ export default function PluginsPage() {
               </Modal.Heading>
             </Modal.Header>
             <Modal.Body>
-              <TextField>
+              <TextField variant="secondary">
                 <Label className="sr-only">meta.json</Label>
                 <TextArea
                   value={metaJson}

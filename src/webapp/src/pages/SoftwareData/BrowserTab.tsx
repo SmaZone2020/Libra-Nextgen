@@ -268,7 +268,7 @@ export function BrowserTab({ agentId }: BrowserTabProps) {
 
       {/* Search bar */}
       <div className="flex gap-2 items-center">
-        <TextField value={searchKeyword} onChange={setSearchKeyword} className="flex-1">
+        <TextField variant="secondary" value={searchKeyword} onChange={setSearchKeyword} className="flex-1">
           <Input
             placeholder={t('othersoft.browser.searchPlaceholder')}
             onKeyDown={(e) => { if (e.key === 'Enter') handleSearch(); }}

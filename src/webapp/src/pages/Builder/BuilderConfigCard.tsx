@@ -44,6 +44,7 @@ export function BuilderConfigCard({ config, set }: BuilderConfigCardProps) {
         <TextField
           className="col-span-2"
           value={config.serverHost}
+          variant="secondary"
           onChange={(v) => set('serverHost', v)}
         >
           <Label>{t('builder.serverHost')}</Label>
@@ -52,6 +53,7 @@ export function BuilderConfigCard({ config, set }: BuilderConfigCardProps) {
         <NumberFieldPrimitive
           className="w-full max-w-64"
           value={config.serverPort}
+          variant="secondary"
           minValue={1}
           maxValue={65535}
           onChange={(v) => set('serverPort', v)}
@@ -71,6 +73,7 @@ export function BuilderConfigCard({ config, set }: BuilderConfigCardProps) {
       <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
         <TextField
           value={config.productName || ''}
+          variant="secondary"
           onChange={(v) => set('productName', v || undefined)}
         >
           <Label>{t('builder.productName')}</Label>
@@ -78,6 +81,7 @@ export function BuilderConfigCard({ config, set }: BuilderConfigCardProps) {
         </TextField>
         <TextField
           value={config.fileDescription || ''}
+          variant="secondary"
           onChange={(v) => set('fileDescription', v || undefined)}
         >
           <Label>{t('builder.fileDescription')}</Label>
@@ -85,6 +89,7 @@ export function BuilderConfigCard({ config, set }: BuilderConfigCardProps) {
         </TextField>
         <TextField
           value={config.companyName || ''}
+          variant="secondary"
           onChange={(v) => set('companyName', v || undefined)}
         >
           <Label>{t('builder.companyName')}</Label>
@@ -92,6 +97,7 @@ export function BuilderConfigCard({ config, set }: BuilderConfigCardProps) {
         </TextField>
         <TextField
           value={config.copyright || ''}
+          variant="secondary"
           onChange={(v) => set('copyright', v || undefined)}
         >
           <Label>{t('builder.copyright')}</Label>
@@ -99,6 +105,7 @@ export function BuilderConfigCard({ config, set }: BuilderConfigCardProps) {
         </TextField>
         <TextField
           value={config.fileVersion || ''}
+          variant="secondary"
           onChange={(v) => set('fileVersion', v || undefined)}
         >
           <Label>{t('builder.fileVersion')}</Label>

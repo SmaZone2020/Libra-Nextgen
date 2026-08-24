@@ -50,7 +50,7 @@ export function useDialog() {
           <Modal.Body>
             <p className="text-sm text-default-700">{state.message}</p>
             {state.type === 'prompt' && (
-              <TextField className="mt-3" autoFocus>
+              <TextField variant="secondary" className="mt-3" autoFocus>
                 <Label className="sr-only">Input</Label>
                 <Input
                   value={inputValue}

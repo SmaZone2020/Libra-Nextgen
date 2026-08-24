@@ -79,6 +79,7 @@ export function PathBar({ path, drives, historyLength, onGoBack, onGoUp, onDrive
         {editing ? (
           <TextField
             aria-label={t('fileManager.pathInput')}
+            variant="secondary"
             value={draft}
             onChange={setDraft}
             onKeyDown={(e) => {

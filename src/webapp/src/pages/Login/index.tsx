@@ -44,11 +44,11 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
                 {error}
               </div>
             )}
-            <TextField autoFocus value={username} onChange={setUsername}>
+            <TextField variant="secondary" autoFocus value={username} onChange={setUsername}>
               <Label>{t('login.username')}</Label>
               <Input placeholder="admin" />
             </TextField>
-            <TextField type="password" value={password} onChange={setPassword}>
+            <TextField variant="secondary" type="password" value={password} onChange={setPassword}>
               <Label>{t('login.password')}</Label>
               <Input placeholder="admin123" />
             </TextField>

@@ -165,17 +165,17 @@ export function EnvTab({ agentId }: EnvTabProps) {
             </Modal.Header>
             <Modal.Body>
               <div className="flex flex-col gap-4">
-                <TextField value={editName} onChange={setEditName} isDisabled={isEditing}>
+                <TextField variant="secondary" value={editName} onChange={setEditName} isDisabled={isEditing}>
                   <Label>{t('common.name')}</Label>
                   <Input placeholder={t('system.varName')} />
                 </TextField>
                 {useTextarea ? (
-                  <TextField value={editValue} onChange={setEditValue}>
+                  <TextField variant="secondary" value={editValue} onChange={setEditValue}>
                     <Label>{t('system.valueMultiline')}</Label>
                     <TextArea className="font-mono text-sm" rows={10} placeholder="entry1&#10;entry2&#10;entry3" />
                   </TextField>
                 ) : (
-                  <TextField value={editValue} onChange={setEditValue}>
+                  <TextField variant="secondary" value={editValue} onChange={setEditValue}>
                     <Label>{t('common.value')}</Label>
                     <Input placeholder={t('system.valuePlaceholder')} />
                   </TextField>

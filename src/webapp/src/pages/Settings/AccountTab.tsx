@@ -255,12 +255,12 @@ export default function AccountTab() {
                 {formError && (
                   <div className="p-2 bg-danger-50 text-danger-700 rounded text-xs">{formError}</div>
                 )}
-                <TextField value={formName} onChange={setFormName}>
+                <TextField variant="secondary" value={formName} onChange={setFormName}>
                   <Label>{t('settings.account.username')}</Label>
                   <Input autoFocus />
                 </TextField>
                 {!editingAccount && (
-                  <TextField value={formPassword} onChange={setFormPassword}>
+                  <TextField variant="secondary" value={formPassword} onChange={setFormPassword}>
                     <Label>{t('settings.account.password')}</Label>
                     <Input type="password" />
                   </TextField>
@@ -355,11 +355,11 @@ export default function AccountTab() {
                 {pwError && (
                   <div className="p-2 bg-danger-50 text-danger-700 rounded text-xs">{pwError}</div>
                 )}
-                <TextField value={currentPw} onChange={setCurrentPw}>
+                <TextField variant="secondary" value={currentPw} onChange={setCurrentPw}>
                   <Label>{t('settings.account.currentPassword')}</Label>
                   <Input type="password" autoFocus />
                 </TextField>
-                <TextField value={newPw} onChange={setNewPw}>
+                <TextField variant="secondary" value={newPw} onChange={setNewPw}>
                   <Label>{t('settings.account.newPassword')}</Label>
                   <Input type="password" />
                 </TextField>

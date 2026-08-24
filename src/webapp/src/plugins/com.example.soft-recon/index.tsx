@@ -55,7 +55,7 @@ export default function SoftReconPage() {
         </p>
 
         <div className="mt-4 space-y-3">
-          <TextField>
+          <TextField variant="secondary">
             <Label>{t('softRecon.target')}</Label>
             <Input
               value={target}

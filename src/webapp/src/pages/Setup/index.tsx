@@ -61,15 +61,15 @@ export default function SetupPage({ onSetup }: SetupPageProps) {
                 {error}
               </div>
             )}
-            <TextField autoFocus value={username} onChange={setUsername}>
+            <TextField variant="secondary" autoFocus value={username} onChange={setUsername}>
               <Label>{t('setup.username')}</Label>
               <Input placeholder="admin" />
             </TextField>
-            <TextField type="password" value={password} onChange={setPassword}>
+            <TextField variant="secondary" type="password" value={password} onChange={setPassword}>
               <Label>{t('setup.password')}</Label>
               <Input placeholder="••••••••" />
             </TextField>
-            <TextField type="password" value={confirmPassword} onChange={setConfirmPassword}>
+            <TextField variant="secondary" type="password" value={confirmPassword} onChange={setConfirmPassword}>
               <Label>{t('setup.confirmPassword')}</Label>
               <Input placeholder="••••••••" />
             </TextField>
