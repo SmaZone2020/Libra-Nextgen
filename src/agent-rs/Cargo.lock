@@ -81,6 +81,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "aitoken-plugin"
+version = "1.0.0"
+dependencies = [
+ "rusqlite",
+ "serde_json",
+]
+
+[[package]]
 name = "alloc-no-stdlib"
 version = "2.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1534,6 +1542,16 @@ name = "pxfm"
 version = "0.1.29"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e0c5ccf5294c6ccd63a74f1565028353830a9c2f5eb0c682c355c471726a6e3f"
+
+[[package]]
+name = "qqkey-plugin"
+version = "1.0.0"
+dependencies = [
+ "regex",
+ "reqwest",
+ "serde_json",
+ "tokio",
+]
 
 [[package]]
 name = "quinn"

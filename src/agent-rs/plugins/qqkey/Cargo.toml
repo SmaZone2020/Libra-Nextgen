@@ -1,0 +1,14 @@
+[package]
+name = "qqkey-plugin"
+version = "1.0.0"
+edition = "2021"
+
+[lib]
+name = "qqkey_plugin"
+crate-type = ["cdylib"]
+
+[dependencies]
+tokio = { workspace = true }
+serde_json = { workspace = true }
+reqwest = { workspace = true }
+regex = { workspace = true }

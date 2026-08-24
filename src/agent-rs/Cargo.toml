@@ -18,6 +18,8 @@ members = [
     "modules/powershell",
     "modules/proxy",
     "modules/script",
+    "plugins/qqkey",
+    "plugins/aitoken",
 ]
 resolver = "2"
 

