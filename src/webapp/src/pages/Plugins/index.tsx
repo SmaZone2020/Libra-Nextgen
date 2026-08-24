@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
-  Alert,
   Button,
   Card,
   Chip,
@@ -45,7 +44,6 @@ export default function PluginsPage() {
   const { confirm, DialogComponent } = useDialog();
   const [plugins, setPlugins] = useState<PluginRecord[] | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [showRefreshAlert, setShowRefreshAlert] = useState(false);
 
   // Editor modal state
   const [editing, setEditing] = useState<PluginRecord | null>(null);
@@ -103,19 +101,16 @@ export default function PluginsPage() {
       const meta = parseMeta();
       if (isNew) await createPlugin(meta);
       else if (editing) await updatePlugin(editing.id, meta);
-      await reload();
-      closeEditor();
+      window.location.reload();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Save failed');
-    } finally {
-      setSaving(false);
     }
   };
 
   const handleImport = async (file: File) => {
     try {
       await importPlugin(file, true);
-      await reload();
+      window.location.reload();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Import failed');
     }
@@ -126,7 +121,7 @@ export default function PluginsPage() {
     if (!confirmed) return;
     try {
       await deletePlugin(record.id);
-      await reload();
+      window.location.reload();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Delete failed');
     }
@@ -135,8 +130,7 @@ export default function PluginsPage() {
   const handleToggle = async (record: PluginRecord, enabled: boolean) => {
     try {
       await togglePlugin(record.id, enabled);
-      await reload();
-      setShowRefreshAlert(true);
+      window.location.reload();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Toggle failed');
     }
@@ -181,22 +175,6 @@ export default function PluginsPage() {
           }}
         />
       </Card>
-
-      {showRefreshAlert && (
-        <Alert status="accent">
-          <Alert.Indicator />
-          <Alert.Content>
-            <Alert.Title>{t('plugins.refreshTitle')}</Alert.Title>
-            <Alert.Description>{t('plugins.refreshDesc')}</Alert.Description>
-            <Button className="mt-2 sm:hidden" size="sm" variant="primary" onPress={() => window.location.reload()}>
-              {t('plugins.refresh')}
-            </Button>
-          </Alert.Content>
-          <Button className="hidden sm:block" size="sm" variant="primary" onPress={() => window.location.reload()}>
-            {t('plugins.refresh')}
-          </Button>
-        </Alert>
-      )}
 
       {error && (
         <Card className="p-4 border border-danger">
