@@ -277,7 +277,12 @@ public class PluginService
             ?? throw new InvalidDataException("archive is missing meta.json");
 
         using var sr = new StreamReader(entry.Open());
-        return JsonSerializer.Deserialize<PluginMeta>(sr.ReadToEnd())
+        // Case-insensitive + camelCase matching: meta.json uses camelCase keys
+        // (e.g. "argsSchema", "pluginId") while the C# model is PascalCase.
+        // Without this, nested classes like PluginAction.Action stay "" and
+        // fail validation with "each action requires a non-empty 'action'".
+        var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+        return JsonSerializer.Deserialize<PluginMeta>(sr.ReadToEnd(), options)
             ?? throw new InvalidDataException("meta.json could not be parsed");
     }
 
