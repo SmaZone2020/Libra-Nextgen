@@ -1,4 +1,4 @@
-import { api, API_ORIGIN, getToken } from './client';
+import { api } from './client';
 
 // ── Types mirroring the server's PluginModels ─────────────────────────
 
@@ -122,23 +122,27 @@ export async function importPlugin(file: File, enable: boolean): Promise<PluginR
   return res.json();
 }
 
-// ── Plugin marketplace (Libra-Plugins registry) ─────────────────────────
+// ── Plugin marketplace (GitHub raw, fetched directly from the browser) ──
 
-/** Fetch the marketplace index.json served by the backend. */
+/**
+ * Raw base URL of the plugin market repository (Libra-Plugins).
+ * Override with VITE_PLUGIN_MARKET_BASE at build time if the repo moves.
+ */
+const PLUGIN_MARKET_BASE =
+  import.meta.env.VITE_PLUGIN_MARKET_BASE ||
+  'https://raw.githubusercontent.com/SmaZone2020/Libra-Plugins/refs/heads/main';
+
+/** Fetch the marketplace index.json directly from GitHub raw. */
 export async function getPluginRegistry(): Promise<PluginRegistryIndex> {
-  return api.get<PluginRegistryIndex>('/plugins/manager/registry');
+  const res = await fetch(`${PLUGIN_MARKET_BASE}/index.json`);
+  if (!res.ok) throw new Error(`Failed to fetch plugin index: ${res.status}`);
+  return res.json();
 }
 
-/** Download a marketplace archive and import it (one-click install). */
+/** Download a marketplace archive from GitHub raw and import it. */
 export async function installPluginFromRegistry(file: string): Promise<PluginRecord> {
-  const url = `${API_ORIGIN}/api/plugins/manager/registry/plugins/${encodeURIComponent(file)}`;
-  const res = await fetch(url, {
-    headers: { Authorization: `Bearer ${getToken() ?? ''}` },
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({ error: res.statusText }));
-    throw new Error(err.error || `Download failed: ${res.status}`);
-  }
+  const res = await fetch(`${PLUGIN_MARKET_BASE}/${encodeURIComponent(file)}`);
+  if (!res.ok) throw new Error(`Download failed: ${res.status}`);
   const blob = await res.blob();
   const f = new File([blob], file, { type: 'application/zip' });
   return importPlugin(f, true);
