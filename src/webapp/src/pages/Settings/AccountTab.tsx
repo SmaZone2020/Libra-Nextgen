@@ -257,12 +257,12 @@ export default function AccountTab() {
                 )}
                 <TextField variant="secondary" value={formName} onChange={setFormName}>
                   <Label>{t('settings.account.username')}</Label>
-                  <Input autoFocus />
+                  <Input variant="secondary" autoFocus />
                 </TextField>
                 {!editingAccount && (
                   <TextField variant="secondary" value={formPassword} onChange={setFormPassword}>
                     <Label>{t('settings.account.password')}</Label>
-                    <Input type="password" />
+                    <Input variant="secondary" type="password" />
                   </TextField>
                 )}
                 <div className="space-y-2">
@@ -300,7 +300,7 @@ export default function AccountTab() {
                         <div className="grid grid-cols-2 gap-1 mt-1">
                           {PAGE_OPTIONS.map((p) => (
                             <label key={p.key} className="flex items-center gap-2 text-sm cursor-pointer">
-                              <input
+                              <Input variant="secondary"
                                 type="checkbox"
                                 checked={formPages.includes(p.key)}
                                 onChange={(e) => setFormPages((prev) => e.target.checked ? [...prev, p.key] : prev.filter((x) => x !== p.key))}
@@ -315,7 +315,7 @@ export default function AccountTab() {
                         <div className="grid grid-cols-2 gap-1 mt-1">
                           {ACTION_OPTIONS.map((a) => (
                             <label key={a} className="flex items-center gap-2 text-sm cursor-pointer">
-                              <input
+                              <Input variant="secondary"
                                 type="checkbox"
                                 checked={formActions.includes(a)}
                                 onChange={(e) => setFormActions((prev) => e.target.checked ? [...prev, a] : prev.filter((x) => x !== a))}
@@ -357,11 +357,11 @@ export default function AccountTab() {
                 )}
                 <TextField variant="secondary" value={currentPw} onChange={setCurrentPw}>
                   <Label>{t('settings.account.currentPassword')}</Label>
-                  <Input type="password" autoFocus />
+                  <Input variant="secondary" type="password" autoFocus />
                 </TextField>
                 <TextField variant="secondary" value={newPw} onChange={setNewPw}>
                   <Label>{t('settings.account.newPassword')}</Label>
-                  <Input type="password" />
+                  <Input variant="secondary" type="password" />
                 </TextField>
               </div>
             </Modal.Body>

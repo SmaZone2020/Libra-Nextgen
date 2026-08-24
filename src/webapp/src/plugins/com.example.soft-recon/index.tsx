@@ -57,7 +57,7 @@ export default function SoftReconPage() {
         <div className="mt-4 space-y-3">
           <TextField variant="secondary">
             <Label>{t('softRecon.target')}</Label>
-            <Input
+            <Input variant="secondary"
               value={target}
               onChange={(e) => setTarget((e.target as HTMLInputElement).value)}
               placeholder="UIN / 账号 / 目标标识"

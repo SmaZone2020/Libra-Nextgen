@@ -13,7 +13,7 @@ export function SearchBar({ value, onChange, onSearch, loading }: SearchBarProps
   return (
     <div className="flex gap-3 mb-4">
       <div className="flex-1 max-w-md">
-        <Input
+        <Input variant="secondary"
           fullWidth
           placeholder={t('audit.searchPlaceholder')}
           value={value}

@@ -96,7 +96,7 @@ export function PackagesTab({ agentId }: PackagesTabProps) {
             onChange={setFilter}
             className="w-56"
           >
-            <Input placeholder={t('system.packages.search')} />
+            <Input variant="secondary" placeholder={t('system.packages.search')} />
           </TextField>
           <Button size="sm" variant="ghost" isIconOnly onPress={fetchData}>
             <ArrowRotateLeft className="w-4 h-4" />

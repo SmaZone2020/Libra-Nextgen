@@ -114,7 +114,7 @@ export default function ProxyBrowserPage() {
           <ArrowRotateLeft className="w-4 h-4" />
         </Button>
 
-        <Input
+        <Input variant="secondary"
           value={activeTab.urlInput}
           onChange={(e) => updateTab(activeTab.id, { urlInput: e.target.value })}
           placeholder={t('proxyBrowser.urlPlaceholder')}

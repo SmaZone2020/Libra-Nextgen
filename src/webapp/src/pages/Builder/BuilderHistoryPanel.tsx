@@ -1,6 +1,6 @@
 import { useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Button, Card, Spinner } from '@heroui/react';
+import { Button, Card, Input, Spinner } from '@heroui/react';
 import { ListView } from '@components/list-view';
 import { ArrowDownToLine, TrashBin } from '@gravity-ui/icons';
 import type { BuildRecord, TemplateInfo } from '../../types/models';
@@ -153,7 +153,7 @@ export function BuilderHistoryPanel({
             {t('builder.uploadTemplate')}
           </Button>
         </div>
-        <input
+        <Input
           title={t('builder.uploadTemplate')}
           ref={templateFileRef}
           type="file"

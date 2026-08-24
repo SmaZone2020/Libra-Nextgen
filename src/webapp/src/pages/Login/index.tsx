@@ -46,11 +46,11 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
             )}
             <TextField variant="secondary" autoFocus value={username} onChange={setUsername}>
               <Label>{t('login.username')}</Label>
-              <Input placeholder="admin" />
+              <Input variant="secondary" placeholder="admin" />
             </TextField>
             <TextField variant="secondary" type="password" value={password} onChange={setPassword}>
               <Label>{t('login.password')}</Label>
-              <Input placeholder="admin123" />
+              <Input variant="secondary" placeholder="admin123" />
             </TextField>
           </Card.Content>
           <Card.Footer className="pt-6">

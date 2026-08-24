@@ -231,7 +231,7 @@ function HeroUiTab() {
         <h3 className="font-semibold mb-2">Input / TextField</h3>
         <TextField variant="secondary">
           <Label>示例输入</Label>
-          <Input value={input} onChange={(e) => setInput((e.target as HTMLInputElement).value)} />
+          <Input variant="secondary" value={input} onChange={(e) => setInput((e.target as HTMLInputElement).value)} />
         </TextField>
       </div>
 

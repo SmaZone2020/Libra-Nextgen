@@ -167,7 +167,7 @@ export function EnvTab({ agentId }: EnvTabProps) {
               <div className="flex flex-col gap-4">
                 <TextField variant="secondary" value={editName} onChange={setEditName} isDisabled={isEditing}>
                   <Label>{t('common.name')}</Label>
-                  <Input placeholder={t('system.varName')} />
+                  <Input variant="secondary" placeholder={t('system.varName')} />
                 </TextField>
                 {useTextarea ? (
                   <TextField variant="secondary" value={editValue} onChange={setEditValue}>
@@ -177,7 +177,7 @@ export function EnvTab({ agentId }: EnvTabProps) {
                 ) : (
                   <TextField variant="secondary" value={editValue} onChange={setEditValue}>
                     <Label>{t('common.value')}</Label>
-                    <Input placeholder={t('system.valuePlaceholder')} />
+                    <Input variant="secondary" placeholder={t('system.valuePlaceholder')} />
                   </TextField>
                 )}
                 {!isEditing && (

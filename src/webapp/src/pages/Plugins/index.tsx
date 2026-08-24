@@ -10,6 +10,7 @@ import {
   TextArea,
   TextField,
   Label,
+  Input,
 } from '@heroui/react';
 import { PlugConnection, TrashBin, Pencil, Plus } from '@gravity-ui/icons';
 import {
@@ -162,7 +163,7 @@ export default function PluginsPage() {
             </Button>
           </div>
         </div>
-        <input
+        <Input
           ref={fileRef}
           type="file"
           accept=".zip,.7z,.rar"

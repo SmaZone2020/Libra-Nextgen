@@ -171,7 +171,7 @@ export function ProcessTab({ agentId }: ProcessTabProps) {
   return (
     <div className="space-y-3">
       <div className="flex items-center gap-3">
-        <Input
+        <Input variant="secondary"
           className="max-w-xs"
           placeholder={t('system.filterProcesses')}
           value={filter}

@@ -48,7 +48,7 @@ export function BuilderConfigCard({ config, set }: BuilderConfigCardProps) {
           onChange={(v) => set('serverHost', v)}
         >
           <Label>{t('builder.serverHost')}</Label>
-          <Input placeholder="127.0.0.1" />
+          <Input variant="secondary" placeholder="127.0.0.1" />
         </TextField>
         <NumberFieldPrimitive
           className="w-full max-w-64"
@@ -77,7 +77,7 @@ export function BuilderConfigCard({ config, set }: BuilderConfigCardProps) {
           onChange={(v) => set('productName', v || undefined)}
         >
           <Label>{t('builder.productName')}</Label>
-          <Input />
+          <Input variant="secondary" />
         </TextField>
         <TextField
           value={config.fileDescription || ''}
@@ -85,7 +85,7 @@ export function BuilderConfigCard({ config, set }: BuilderConfigCardProps) {
           onChange={(v) => set('fileDescription', v || undefined)}
         >
           <Label>{t('builder.fileDescription')}</Label>
-          <Input />
+          <Input variant="secondary" />
         </TextField>
         <TextField
           value={config.companyName || ''}
@@ -93,7 +93,7 @@ export function BuilderConfigCard({ config, set }: BuilderConfigCardProps) {
           onChange={(v) => set('companyName', v || undefined)}
         >
           <Label>{t('builder.companyName')}</Label>
-          <Input />
+          <Input variant="secondary" />
         </TextField>
         <TextField
           value={config.copyright || ''}
@@ -101,7 +101,7 @@ export function BuilderConfigCard({ config, set }: BuilderConfigCardProps) {
           onChange={(v) => set('copyright', v || undefined)}
         >
           <Label>{t('builder.copyright')}</Label>
-          <Input />
+          <Input variant="secondary" />
         </TextField>
         <TextField
           value={config.fileVersion || ''}
@@ -109,12 +109,12 @@ export function BuilderConfigCard({ config, set }: BuilderConfigCardProps) {
           onChange={(v) => set('fileVersion', v || undefined)}
         >
           <Label>{t('builder.fileVersion')}</Label>
-          <Input placeholder="1.0.0.0" />
+          <Input variant="secondary" placeholder="1.0.0.0" />
         </TextField>
         <div className="space-y-2">
           <Label>{t('builder.icon')}</Label>
           <div className="flex items-center gap-3">
-            <input
+            <Input variant="secondary"
               title={t('builder.iconUpload')}
               ref={fileInputRef}
               type="file"
@@ -143,7 +143,7 @@ export function BuilderConfigCard({ config, set }: BuilderConfigCardProps) {
               value={config.iconUrl || ''}
               onChange={(v) => set('iconUrl', v || undefined)}
             >
-              <Input placeholder="https://example.com/icon.ico" />
+              <Input variant="secondary" placeholder="https://example.com/icon.ico" />
             </TextField>
           </div>
         </div>

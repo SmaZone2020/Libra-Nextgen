@@ -90,7 +90,7 @@ export function PathBar({ path, drives, historyLength, onGoBack, onGoUp, onDrive
             autoFocus
             className="w-full h-full [&_input]:font-mono [&_input]:text-xs"
           >
-            <Input className="h-full" />
+            <Input variant="secondary" className="h-full" />
           </TextField>
         ) : (
           <div

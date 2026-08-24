@@ -52,7 +52,7 @@ export function useDialog() {
             {state.type === 'prompt' && (
               <TextField variant="secondary" className="mt-3" autoFocus>
                 <Label className="sr-only">Input</Label>
-                <Input
+                <Input variant="secondary"
                   value={inputValue}
                   onChange={(e) => setInputValue((e.target as HTMLInputElement).value)}
                   onKeyDown={(e) => { if (e.key === 'Enter') handleClose(true); }}

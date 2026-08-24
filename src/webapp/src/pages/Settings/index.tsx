@@ -142,7 +142,7 @@ function AccessKeysTab() {
                   <div className="flex items-center gap-2">
                     <TextField variant="secondary" className="flex-1">
                       <Label className="sr-only">{t('settings.key')}</Label>
-                      <Input readOnly value={createdKey} className="font-mono text-xs" />
+                      <Input variant="secondary" readOnly value={createdKey} className="font-mono text-xs" />
                     </TextField>
                     <Button size="sm" variant="secondary" onPress={() => handleCopy(createdKey)}>
                       {copied ? t('settings.copied') : t('settings.copy')}
@@ -164,11 +164,11 @@ function AccessKeysTab() {
                   <div className="space-y-4">
                     <TextField variant="secondary" value={newName} onChange={setNewName}>
                       <Label>{t('settings.name')}</Label>
-                      <Input placeholder="My AI Client" />
+                      <Input variant="secondary" placeholder="My AI Client" />
                     </TextField>
                     <TextField variant="secondary" value={newExpires} onChange={setNewExpires}>
                       <Label>{t('settings.expiresAt')}</Label>
-                      <Input type="date" />
+                      <Input variant="secondary" type="date" />
                     </TextField>
                   </div>
                 </Modal.Body>
