@@ -173,7 +173,20 @@ function DesktopNavItem({ item, collapsed, onExpand }: { item: NavItem; collapse
 
   if (hasChildren) {
     const label = t(item.label);
+    // A "navigable" group: tapping the body navigates to item.to, while the
+    // chevron (or the whole button when item.to is empty) toggles children.
+    const navigable = !!item.to;
     const handlePress = () => {
+      if (collapsed) {
+        setOpen(true);
+        onExpand();
+      } else if (navigable) {
+        if (item.to) navigate(item.to);
+      } else {
+        setOpen((v) => !v);
+      }
+    };
+    const handleChevron = () => {
       if (collapsed) {
         setOpen(true);
         onExpand();
@@ -199,18 +212,27 @@ function DesktopNavItem({ item, collapsed, onExpand }: { item: NavItem; collapse
               >
                 {label}
               </span>
-              {!collapsed && (
-                <motion.span
-                  animate={{ rotate: open ? 180 : 0 }}
-                  transition={{ duration: 0.25, ease: 'easeInOut' }}
-                  className="shrink-0 text-neutral-400"
-                >
-                  <ChevronDown className="w-4 h-4" />
-                </motion.span>
-              )}
             </Button>
             <Tooltip.Content placement="right">{label}</Tooltip.Content>
           </Tooltip>
+          {!collapsed && (
+            <Button
+              isIconOnly
+              size="sm"
+              variant="ghost"
+              className="shrink-0 -ml-2 mr-1 text-neutral-400"
+              onPress={handleChevron}
+              aria-label={t('nav.toggleGroup')}
+            >
+              <motion.span
+                animate={{ rotate: open ? 180 : 0 }}
+                transition={{ duration: 0.25, ease: 'easeInOut' }}
+                className="block"
+              >
+                <ChevronDown className="w-4 h-4" />
+              </motion.span>
+            </Button>
+          )}
           <AnimatePresence>
             {groupActive && !collapsed && (
               <motion.div
@@ -311,6 +333,15 @@ function MobileNavItem({ item, onNavigate }: { item: NavItem; onNavigate: () => 
 
   if (hasChildren) {
     const label = t(item.label);
+    const navigable = !!item.to;
+    const handleBody = () => {
+      if (navigable && item.to) {
+        navigate(item.to);
+        onNavigate();
+      } else {
+        setOpen((v) => !v);
+      }
+    };
     return (
       <div>
         <div className="flex items-center">
@@ -318,14 +349,23 @@ function MobileNavItem({ item, onNavigate }: { item: NavItem; onNavigate: () => 
             size="lg"
             variant={groupActive ? 'primary' : 'ghost'}
             className={`flex-1 justify-start px-3 mr-1 ${groupActive ? 'rounded-[15px]' : ''}`}
-            onPress={() => setOpen((v) => !v)}
+            onPress={handleBody}
           >
             <item.icon className="w-5 h-5 shrink-0" />
             <span className="font-medium ml-3 flex-1 text-left">{label}</span>
+          </Button>
+          <Button
+            isIconOnly
+            size="sm"
+            variant="ghost"
+            className="shrink-0 mx-1 text-neutral-400"
+            onPress={() => setOpen((v) => !v)}
+            aria-label={t('nav.toggleGroup')}
+          >
             <motion.span
               animate={{ rotate: open ? 180 : 0 }}
               transition={{ duration: 0.25 }}
-              className="text-neutral-400"
+              className="block"
             >
               <ChevronDown className="w-4 h-4" />
             </motion.span>

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
+  Alert,
   Button,
   Card,
   Chip,
@@ -42,6 +43,7 @@ export default function PluginsPage() {
   const { t } = useTranslation();
   const [plugins, setPlugins] = useState<PluginRecord[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [showRefreshAlert, setShowRefreshAlert] = useState(false);
 
   // Editor modal state
   const [editing, setEditing] = useState<PluginRecord | null>(null);
@@ -131,6 +133,7 @@ export default function PluginsPage() {
     try {
       await togglePlugin(record.id, enabled);
       await reload();
+      setShowRefreshAlert(true);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Toggle failed');
     }
@@ -175,6 +178,22 @@ export default function PluginsPage() {
           }}
         />
       </Card>
+
+      {showRefreshAlert && (
+        <Alert status="accent">
+          <Alert.Indicator />
+          <Alert.Content>
+            <Alert.Title>{t('plugins.refreshTitle')}</Alert.Title>
+            <Alert.Description>{t('plugins.refreshDesc')}</Alert.Description>
+            <Button className="mt-2 sm:hidden" size="sm" variant="primary" onPress={() => window.location.reload()}>
+              {t('plugins.refresh')}
+            </Button>
+          </Alert.Content>
+          <Button className="hidden sm:block" size="sm" variant="primary" onPress={() => window.location.reload()}>
+            {t('plugins.refresh')}
+          </Button>
+        </Alert>
+      )}
 
       {error && (
         <Card className="p-4 border border-danger">

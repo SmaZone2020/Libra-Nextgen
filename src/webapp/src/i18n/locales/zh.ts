@@ -17,6 +17,8 @@ export default {
       plugins: '插件',
       features: '功能',
       pluginPages: '插件页面',
+      pluginManager: '插件管理',
+      toggleGroup: '展开/收起分组',
       expandSidebar: '展开侧边栏',
       collapseSidebar: '收起侧边栏',
       toggleSidebar: '切换侧边栏',
@@ -80,6 +82,9 @@ export default {
       empty: '暂无插件，点击上方「导入插件」或「新建插件」开始。',
       invalidJson: 'meta.json 不是有效的 JSON',
       confirmDelete: '确定要删除插件「{{name}}」吗？此操作不可撤销。',
+      refreshTitle: '插件状态已变更',
+      refreshDesc: '启用/禁用插件会影响侧边栏与路由。请刷新页面以生效。',
+      refresh: '刷新',
     },
     softRecon: {
       title: '某软件信息探测',

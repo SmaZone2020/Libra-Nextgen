@@ -281,9 +281,10 @@ function AuthenticatedLayout({
     return permissions.allowedPages.includes(key);
   };
 
+  const NO_PADDING_ROUTES = new Set(['/shell']);
   // Filter sidebar items: apply permission check + Linux platform exclusions.
-  // "功能" 母项的 children 会被逐个筛选；"插件页面" 母项的 children 由 enabled
-  // 插件动态填充。
+  // "功能" 母项的 children 会被逐个筛选；"插件管理" 母项（to=/plugins）的
+  // children 由 enabled 插件动态填充，母项本身始终保留（可跳转管理页）。
   const visibleItems = sidebarItems
     .map((item): NavItem | null => {
       if (item.children && item.children.length > 0) {
@@ -295,28 +296,27 @@ function AuthenticatedLayout({
         if (children.length === 0) return null;
         return { ...item, children };
       }
-      // Plugins group (placeholder children) is filled below.
-      if (item.label === 'nav.pluginPages') return item;
+      // Plugins manager group (placeholder children) is filled below.
+      if (item.label === 'nav.pluginManager') {
+        if (!canSee(item.to)) return null;
+        return item;
+      }
       if (!canSee(item.to)) return null;
       return item;
     })
     .filter((i): i is NavItem => i !== null);
 
-  // Fill the plugins group children with enabled plugin pages.
+  // Fill the plugin-manager group children with enabled plugin pages.
   const pluginChildren: NavItem['children'] = registeredPlugins.map((p) => ({
     icon: resolvePluginIcon(p.manifest.entry?.icon),
     to: p.route,
     label: p.manifest.name || p.pluginId,
   }));
-  const visibleItemsWithPlugins = visibleItems.map((item) =>
-    item.label === 'nav.pluginPages'
+  const finalItems = visibleItems.map((item) =>
+    item.label === 'nav.pluginManager'
       ? { ...item, children: pluginChildren }
       : item,
   );
-  // Drop the plugins group entirely when there are no enabled plugin pages.
-  const finalItems = pluginChildren.length > 0
-    ? visibleItemsWithPlugins
-    : visibleItemsWithPlugins.filter((i) => i.label !== 'nav.pluginPages');
 
   const visibleBottom = sidebarBottomItems.filter((i) => canSee(i.to));
 
@@ -397,7 +397,7 @@ function AuthenticatedLayout({
           </div>
         </header>
 
-        <div className="px-4 py-6 sm:px-6 lg:px-8">
+        <div className={NO_PADDING_ROUTES.has(location.pathname) ? '' : 'px-4 py-6 sm:px-6 lg:px-8'}>
           <AnimatePresence mode="wait">
             <motion.div
               key={location.pathname}

@@ -32,14 +32,14 @@ const featuresGroup: NavItem = {
 const bottomTopItems: NavItem[] = [
   { icon: Code, to: '/builder', label: 'nav.builder' },
   { icon: ListTimeline, to: '/audit', label: 'nav.auditLogs' },
-  { icon: Puzzle, to: '/plugins', label: 'nav.plugins' },
 ];
 
-// "插件页面" 母项：children 由 App.tsx 从 enabled 插件动态填充。
-const pluginsGroup: NavItem = {
+// "插件管理" 母项：单击跳转 /plugins，下拉展开 enabled 插件页面列表
+// （children 由 App.tsx 从 enabled 插件动态填充）。
+const pluginManagerGroup: NavItem = {
   icon: Puzzle,
-  to: '',
-  label: 'nav.pluginPages',
+  to: '/plugins',
+  label: 'nav.pluginManager',
   children: [],
 };
 
@@ -47,7 +47,7 @@ export const sidebarItems: NavItem[] = [
   ...topLevelItems,
   featuresGroup,
   ...bottomTopItems,
-  pluginsGroup,
+  pluginManagerGroup,
 ];
 
 export const sidebarBottomItems: NavItem[] = [

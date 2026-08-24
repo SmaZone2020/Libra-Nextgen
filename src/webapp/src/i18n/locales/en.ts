@@ -17,6 +17,8 @@ export default {
       plugins: 'Plugins',
       features: 'Features',
       pluginPages: 'Plugin Pages',
+      pluginManager: 'Plugin Manager',
+      toggleGroup: 'Toggle group',
       expandSidebar: 'Expand sidebar',
       collapseSidebar: 'Collapse sidebar',
       toggleSidebar: 'Toggle sidebar',
@@ -80,6 +82,9 @@ export default {
       empty: 'No plugins yet. Click "Import" or "New Plugin" above to get started.',
       invalidJson: 'meta.json is not valid JSON',
       confirmDelete: 'Delete plugin "{{name}}"? This cannot be undone.',
+      refreshTitle: 'Plugin status changed',
+      refreshDesc: 'Enabling/disabling plugins affects the sidebar and routes. Refresh the page to apply.',
+      refresh: 'Refresh',
     },
     softRecon: {
       title: 'Soft Recon',
