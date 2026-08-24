@@ -10,11 +10,12 @@
 | **Libra-Server** | `src/service/` | ASP.NET Core 10 · MongoDB · JWT |
 | **Libra-Console** | `src/webapp/` | React 19 · HeroUI 3 · Vite |
 
-Agent 采用 **Bootstrapper + 云载模块** 架构：loader 反射加载加密的最小内核（通信 / 加密 / 调度 / 流式功能），其余能力（文件、凭据、侦查、Shell、PowerShell、代理等）作为独立模块按需从 Server 下载并在内存中加载，磁盘零落地。
+Agent 采用 **Bootstrapper + 云载模块** 架构：loader 反射加载加密的最小内核（通信 / 加密 / 调度 / 流式功能），其余能力（文件、凭据、侦查、Shell、PowerShell、代理等）作为独立模块按需从 Server 下载并在内存中加载，磁盘零落地。同时提供**插件体系**：用户可通过 zip 包交付自定义插件，Agent 端支持 Rhai 脚本（免编译）与 native `cdylib` 双通道。
 
 ## 核心功能
 
 - **通信**：HTTP(S) 轮询 + WebSocket 长连接双模，AES-256-GCM 全链路加密，RSA 动态密钥协商
+- **插件体系**：三层贯通（Agent / Server / Console），Rhai 脚本免编译 + `#if/#elif/#else/#endif` 条件编译 + 平台 API 门控 + 沙箱；前端运行时注册 + `usePluginHost` 共享状态；插件管理页导入/启停
 - **隐蔽性**：反沙盒 / 反虚拟机探针、PEB 伪装、UAC 提权、多维度持久化（注册表 / 计划任务 / Cron / systemd）
 - **侦查**：系统 / 硬件指纹、网络与 GeoIP、WiFi / LAN / 蓝牙扫描、进程 / 窗口 / 本地账户
 - **凭据**：浏览器密码（Chrome/Edge v10/v20）、RDP 凭证、SSH 密钥、QQ/微信数据、QQ clientkey（jump 兑换 skey/bkn）、AI 密钥扫描
@@ -74,6 +75,24 @@ cargo install cargo-zigbuild   # 交叉构建 Windows 载荷所需工具
 ```
 
 > 说明：无论 Server 运行在 Windows 还是 Linux，均可构建 Windows 与 Linux 载荷；交叉构建由服务端自动探测 zig 工具链并调用 cargo-zigbuild，缺失时构建会给出明确提示。命令行本地构建（`cargo build --release`）仅产出本机平台的载荷。
+
+## 插件开发
+
+插件以 zip 包交付，在 Console 的**插件管理页**导入/启用即可。包结构：
+
+```
+plugin.zip
+├── meta.json      # 插件契约：pluginId / entry(route, icon) / actions(argsSchema)
+├── module/        # Agent 端模块（二选一）
+│   ├── xxx.rhai   # 脚本通道（免编译，推荐）—— 支持 #if(WINDOWS)/#elif(LINUX)/#endif
+│   └── xxx.dll    # native 通道（Rust/C/C++ 编译为 cdylib，导出 module_main/module_name）
+└── page/          # 前端页面源码（HeroUI，放入前端 src/webapp/src/plugins/<pluginId>/ 重新构建）
+```
+
+- **Agent 端**：脚本通道由内置 Rhai 引擎执行，按平台开放不同 API（Windows `cmd/powershell/reg_*`、Linux `shell/bash/uname/ip_route`），`full` feature 可扩展深度 API；native 通道走 `libra-load` 内存加载
+- **服务端**：`meta.json` 声明式契约 + 动作网关 `POST /api/plugins/{pluginId}/{action}`（自动校验 argsSchema → 下发 Agent → 回收结果）；不加载第三方代码进主进程
+- **前端**：页面通过 `usePluginHost()` 拿到 `selectedAgent` / `dispatchTask` / `subscribeOutput`（复用控制台共享状态）；`import.meta.glob` 运行时注册路由与侧边栏
+- **示例**：`examples/plugin-sdk/`（活文档 + 全功能多平台模块）、`examples/soft-recon/`（端到端）
 
 ## 已知问题
 
