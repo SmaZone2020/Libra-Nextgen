@@ -14,9 +14,18 @@ interface AgentContextValue {
 }
 
 const NOTICE_SOUND_KEY = 'notice_sound';
+const SELECTED_AGENT_KEY = 'selected_agent_id';
 
 function isNoticeSoundEnabled(): boolean {
   return localStorage.getItem(NOTICE_SOUND_KEY) !== 'false';
+}
+
+function readStoredAgentId(): string {
+  try {
+    return localStorage.getItem(SELECTED_AGENT_KEY) ?? '';
+  } catch {
+    return '';
+  }
 }
 
 const AgentContext = createContext<AgentContextValue>({
@@ -30,7 +39,10 @@ const AgentContext = createContext<AgentContextValue>({
 export function AgentProvider({ children }: { children: React.ReactNode }) {
   const { t } = useTranslation();
   const [agents, setAgents] = useState<AgentListItem[]>([]);
-  const [agentId, setAgentId] = useState<string>('');
+  // 从浏览器恢复上次选择的 Agent
+  const [agentId, setAgentId] = useState<string>(readStoredAgentId);
+  // 自动选择只执行一次（首次拿到非空 agent 列表时）
+  const autoSelectedRef = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -38,10 +50,36 @@ export function AgentProvider({ children }: { children: React.ReactNode }) {
       try {
         // Fetch all agents (not just online) to keep full list
         const res = await getAgents(1, 100);
-        if (!cancelled) {
-          setAgents(res.agents);
+        if (cancelled) return;
+        setAgents(res.agents);
+
+        if (!autoSelectedRef.current) {
+          // 首次列表为空（后端未就绪）时先不决策，等下次轮询
+          if (res.agents.length === 0) return;
+          autoSelectedRef.current = true;
+
+          const stored = readStoredAgentId();
+          // 1. 上次选择的 Agent 在线 → 自动恢复连接
+          if (stored) {
+            const storedAgent = res.agents.find((a) => a.id === stored);
+            if (storedAgent?.status === 'Online') {
+              setAgentId(stored);
+              return;
+            }
+          }
+          // 2. 只有一个 Agent → 自动连接
+          if (res.agents.length === 1) {
+            const only = res.agents[0]!.id;
+            setAgentId(only);
+            try { localStorage.setItem(SELECTED_AGENT_KEY, only); } catch { /* ignore */ }
+            return;
+          }
+          // 3. 其余情况：不自动选择
+          setAgentId('');
+        } else {
+          // 后续轮询：当前选中的 Agent 从列表消失则清空
           setAgentId((prev) => {
-            if (prev && !res.agents.some(a => a.id === prev)) return '';
+            if (prev && !res.agents.some((a) => a.id === prev)) return '';
             return prev;
           });
         }
@@ -75,7 +113,13 @@ export function AgentProvider({ children }: { children: React.ReactNode }) {
         setAgents((prev) => prev.map(a =>
           a.id === data.agentId ? { ...a, status: 'Offline' as const } : a
         ));
-        setAgentId((prev) => prev === data.agentId ? '' : prev);
+        setAgentId((prev) => {
+          if (prev === data.agentId) {
+            try { localStorage.removeItem(SELECTED_AGENT_KEY); } catch { /* ignore */ }
+            return '';
+          }
+          return prev;
+        });
         onlineIdsRef.current.delete(data.agentId);
 
         if (wasOnline) {
@@ -105,11 +149,15 @@ export function AgentProvider({ children }: { children: React.ReactNode }) {
   }, [getNotice, t]);
 
   const selectAgent = useCallback((id: string) => {
-    if (id) setAgentId(id);
+    if (id) {
+      setAgentId(id);
+      try { localStorage.setItem(SELECTED_AGENT_KEY, id); } catch { /* ignore */ }
+    }
   }, []);
 
   const disconnect = useCallback(() => {
     setAgentId('');
+    try { localStorage.removeItem(SELECTED_AGENT_KEY); } catch { /* ignore */ }
   }, []);
 
   const selectedAgent = useMemo(
