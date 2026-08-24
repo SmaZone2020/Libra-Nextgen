@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { ComponentType, MouseEvent, ReactNode, SVGProps } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { Bars, ChevronDown, Xmark } from '@gravity-ui/icons';
@@ -176,6 +176,14 @@ function DesktopNavItem({ item, collapsed, onExpand }: { item: NavItem; collapse
   const [open, setOpen] = useState(isGroupActive(item, location.pathname));
   const groupActive = hasChildren && isGroupActive(item, location.pathname);
 
+  // Auto-expand when navigating to a route owned by this group (e.g. the
+  // navigable /plugins route or one of its children).
+  useEffect(() => {
+    if (isGroupActive(item, location.pathname)) {
+      setOpen(true);
+    }
+  }, [item, location.pathname]);
+
   if (hasChildren) {
     const label = t(item.label);
     // A "navigable" group navigates to item.to on body click; the chevron
@@ -223,7 +231,11 @@ function DesktopNavItem({ item, collapsed, onExpand }: { item: NavItem; collapse
                 <span
                   onClick={handleChevron}
                   onPointerDown={(e) => e.stopPropagation()}
-                  className="shrink-0 -mr-1 ml-1 rounded p-0.5 text-neutral-400 cursor-pointer hover:text-neutral-700 dark:hover:text-neutral-300"
+                  className={`shrink-0 -mr-1 ml-1 rounded p-0.5 cursor-pointer ${
+                    groupActive
+                      ? 'text-white'
+                      : 'text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-300'
+                  }`}
                   aria-label={t('nav.toggleGroup')}
                   role="button"
                 >
@@ -337,6 +349,13 @@ function MobileNavItem({ item, onNavigate }: { item: NavItem; onNavigate: () => 
   const [open, setOpen] = useState(isGroupActive(item, location.pathname));
   const groupActive = hasChildren && isGroupActive(item, location.pathname);
 
+  // Auto-expand when navigating to a route owned by this group.
+  useEffect(() => {
+    if (isGroupActive(item, location.pathname)) {
+      setOpen(true);
+    }
+  }, [item, location.pathname]);
+
   if (hasChildren) {
     const label = t(item.label);
     const navigable = !!item.to;
@@ -366,7 +385,11 @@ function MobileNavItem({ item, onNavigate }: { item: NavItem; onNavigate: () => 
             <span
               onClick={handleChevron}
               onPointerDown={(e) => e.stopPropagation()}
-              className="shrink-0 ml-1 rounded p-0.5 text-neutral-400 cursor-pointer hover:text-neutral-700 dark:hover:text-neutral-300"
+              className={`shrink-0 ml-1 rounded p-0.5 cursor-pointer ${
+                groupActive
+                  ? 'text-white'
+                  : 'text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-300'
+              }`}
               aria-label={t('nav.toggleGroup')}
               role="button"
             >
