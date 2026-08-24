@@ -21,6 +21,8 @@ import BuilderPage from '../pages/Builder';
 import AboutPage from '../pages/About';
 import SettingsPage from '../pages/Settings';
 import PluginsPage from '../pages/Plugins';
+import { useRegisteredPlugins } from '../plugins/registry';
+import { resolvePluginIcon } from '../plugins/icons';
 import { getStoredUser, logout, checkSetupStatus } from '../api/auth';
 import { getAccountMe, acceptAgreement } from '../api/account';
 import { setOnAuthFailed } from '../api/client';
@@ -43,6 +45,10 @@ const SIDEBAR_W = { collapsed: 72, expanded: 256 };
 
 const AGENT_ROUTES = new Set(['/agents', '/shell', '/files', '/system', '/screen', '/media', '/othersoft', '/proxy']);
 
+// A plugin route is any path under /plugins/ except the management page itself.
+const isPluginRoute = (pathname: string) =>
+  pathname.startsWith('/plugins/') && pathname !== '/plugins';
+
 const PAGE_META_KEYS: Record<string, [string, string]> = {
   '/': ['pageMeta.dashboard.label', 'pageMeta.dashboard.subtitle'],
   '/agents': ['pageMeta.agents.label', 'pageMeta.agents.subtitle'],
@@ -60,11 +66,13 @@ const PAGE_META_KEYS: Record<string, [string, string]> = {
   '/plugins': ['pageMeta.plugins.label', 'pageMeta.plugins.subtitle'],
 };
 
-function PageHeader() {
+function PageHeader({ pluginLabels }: { pluginLabels: Map<string, string> }) {
   const { t } = useTranslation();
   const { pathname } = useLocation();
   const keys = PAGE_META_KEYS[pathname];
-  if (!keys) return null;
+  // Plugin pages resolve their heading from the enabled manifest name.
+  const pluginName = isPluginRoute(pathname) ? pluginLabels.get(pathname) : undefined;
+  if (!keys && !pluginName) return null;
   return (
     <motion.div
       key={pathname}
@@ -74,9 +82,11 @@ function PageHeader() {
       transition={{ duration: 0.25, ease: 'easeOut' }}
     >
       <h1 className="mt-0.5 text-xl font-semibold tracking-normal text-neutral-950 dark:text-neutral-50">
-        {t(keys[0])}
+        {pluginName ? pluginName : t(keys![0])}
       </h1>
-      <p className="mt-0.5 text-sm text-neutral-600 dark:text-neutral-400">{t(keys[1])}</p>
+      <p className="mt-0.5 text-sm text-neutral-600 dark:text-neutral-400">
+        {pluginName ? t('plugins.desc') : t(keys![1])}
+      </p>
     </motion.div>
   );
 }
@@ -86,7 +96,7 @@ function AgentSelector() {
   const { pathname } = useLocation();
   const { agents, agentId, selectedAgent, selectAgent, disconnect } = useAgent();
 
-  if (!AGENT_ROUTES.has(pathname)) return null;
+  if (!AGENT_ROUTES.has(pathname) && !isPluginRoute(pathname)) return null;
 
   // Only online agents are actionable; offline ones are hidden from the picker.
   const onlineAgents = agents.filter((a) => a.status === 'Online');
@@ -254,6 +264,7 @@ function AuthenticatedLayout({
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [permissions, setPermissions] = useState<UserPermissions | null>(null);
   const sidebarWidth = collapsed ? SIDEBAR_W.collapsed : SIDEBAR_W.expanded;
+  const registeredPlugins = useRegisteredPlugins();
 
   // Windows-only pages (screen/media streaming) are hidden for Linux agents.
   const platform = useAgentPlatform();
@@ -278,13 +289,25 @@ function AuthenticatedLayout({
   });
   const visibleBottom = sidebarBottomItems.filter((i) => canSee(i.to));
 
+  // Plugin sidebar entries: built from enabled manifests, icon resolved via
+  // the allowlist. label uses the manifest name directly (t() passes it
+  // through unchanged when it is not a registered i18n key).
+  const pluginItems = registeredPlugins.map((p) => ({
+    icon: resolvePluginIcon(p.manifest.entry?.icon),
+    to: p.route,
+    label: p.manifest.name || p.pluginId,
+  }));
+
+  // Route → display name for plugin page headers.
+  const pluginLabels = new Map(registeredPlugins.map((p) => [p.route, p.manifest.name || p.pluginId]));
+
   return (
     <div className="min-h-screen bg-neutral-50 dark:bg-neutral-950">
       <NetworkOverlay />
       <Sidebar
         brand="Libra Next"
         collapsed={collapsed}
-        items={visibleItems}
+        items={[...visibleItems, ...pluginItems]}
         bottomItems={visibleBottom}
         onToggle={onToggle}
         mobileOpen={mobileSidebarOpen}
@@ -307,7 +330,7 @@ function AuthenticatedLayout({
               <Bars className="w-5 h-5" />
             </Button>
             <div className="flex-1 min-w-0">
-              <PageHeader />
+              <PageHeader pluginLabels={pluginLabels} />
             </div>
             <Dropdown>
               <Button isIconOnly size="sm" variant="ghost">
@@ -333,7 +356,7 @@ function AuthenticatedLayout({
 
           {/* Desktop header row */}
           <div className="hidden sm:flex justify-between items-center">
-            <PageHeader />
+            <PageHeader pluginLabels={pluginLabels} />
             <div className="flex items-center gap-3">
               <AgentSelector />
               <Dropdown>
@@ -376,6 +399,10 @@ function AuthenticatedLayout({
                 <Route path="/settings" element={<SettingsPage />} />
                 <Route path="/plugins" element={<PluginsPage />} />
                 <Route path="/about" element={<AboutPage />} />
+                {registeredPlugins.map((p) => {
+                  const Page = p.Page;
+                  return <Route key={p.pluginId} path={p.route} element={<Page />} />;
+                })}
               </Routes>
             </motion.div>
           </AnimatePresence>

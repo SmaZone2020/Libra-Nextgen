@@ -79,6 +79,15 @@ export default {
       invalidJson: 'meta.json 不是有效的 JSON',
       confirmDelete: '确定要删除插件「{{name}}」吗？此操作不可撤销。',
     },
+    softRecon: {
+      title: '某软件信息探测',
+      targetHint: '将对 {{agent}} 执行探测',
+      noAgent: '请先在顶部选择一个在线设备',
+      target: '探测目标',
+      probe: '开始探测',
+      result: '探测结果',
+      running: '探测中...',
+    },
     login: {
       username: '用户名',
       password: '密码',

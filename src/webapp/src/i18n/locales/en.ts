@@ -79,6 +79,15 @@ export default {
       invalidJson: 'meta.json is not valid JSON',
       confirmDelete: 'Delete plugin "{{name}}"? This cannot be undone.',
     },
+    softRecon: {
+      title: 'Soft Recon',
+      targetHint: 'Probing {{agent}}',
+      noAgent: 'Select an online agent above first',
+      target: 'Target',
+      probe: 'Probe',
+      result: 'Result',
+      running: 'Probing...',
+    },
     login: {
       username: 'Username',
       password: 'Password',
