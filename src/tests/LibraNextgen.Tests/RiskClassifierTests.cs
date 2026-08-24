@@ -12,7 +12,6 @@ public class RiskClassifierTests
     [InlineData("/api/screen/stream/abc", RiskActions.ScreenMonitor)]
     [InlineData("/api/files/abc/list", RiskActions.FileList)]
     [InlineData("/api/files/abc/read", RiskActions.FileRead)]
-    [InlineData("/api/othersoft/abc/qq", RiskActions.Qq)]
     [InlineData("/api/othersoft/abc/browser", RiskActions.Browser)]
     [InlineData("/api/othersoft/abc/ai", RiskActions.Ai)]
     public void ClassifyAction_MapsKnownPaths(string path, string expected)
@@ -55,7 +54,6 @@ public class RiskClassifierTests
     {
         var m = RiskActions.DefaultMappings();
         Assert.Equal(RiskLevel.Safe, m[RiskActions.SystemInfo]);
-        Assert.Equal(RiskLevel.Safe, m[RiskActions.Qq]);
         Assert.Equal(RiskLevel.Dangerous, m[RiskActions.ScreenMonitor]);
         Assert.Equal(RiskLevel.Dangerous, m[RiskActions.FileDelete]);
         Assert.Equal(RiskLevel.Dangerous, m[RiskActions.Browser]);

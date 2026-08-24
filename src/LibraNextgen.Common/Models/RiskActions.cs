@@ -30,7 +30,6 @@ public static class RiskActions
     public const string FileShortcut = "file.shortcut";
     public const string Shell = "shell.command";
     public const string Wechat = "othersoft.wechat";
-    public const string Qq = "othersoft.qq";
     public const string Browser = "othersoft.browser";
     public const string BrowserSearch = "othersoft.browser.search";
     public const string Ai = "othersoft.ai";
@@ -52,7 +51,6 @@ public static class RiskActions
         [SystemEnv] = RiskLevel.Safe,
         [SystemNetwork] = RiskLevel.Safe,
         [SystemLanScan] = RiskLevel.Safe,
-        [Qq] = RiskLevel.Safe,
         [Wechat] = RiskLevel.Safe,
         [FileList] = RiskLevel.Normal,
         [FileRead] = RiskLevel.Normal,

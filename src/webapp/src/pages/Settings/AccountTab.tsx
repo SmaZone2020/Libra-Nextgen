@@ -26,7 +26,7 @@ const ACTION_OPTIONS = [
   'file.mkdir', 'file.rename', 'file.move', 'file.copy', 'file.compress', 'file.decompress',
   'screen.monitor', 'media.camera', 'media.mic',
   'system.info', 'system.processes', 'system.process.kill', 'system.network',
-  'othersoft.qq', 'othersoft.wechat', 'othersoft.browser', 'othersoft.ai', 'credentials',
+  'othersoft.wechat', 'othersoft.browser', 'othersoft.ai', 'credentials',
   'proxy.fetch',
 ];
 

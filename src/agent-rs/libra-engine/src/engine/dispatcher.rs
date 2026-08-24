@@ -5,7 +5,7 @@ use libra_platform::get_executor;
 use super::AgentEngine;
 use super::shell::{ShellSession, bind_shell, handle_shell_input, unbind_shell};
 use super::streams::{start_camera_stream, start_screen_stream};
-use super::utils::{blocking_string, blocking_val, data_str, data_u64, run_module, ws_send};
+use super::utils::{blocking_val, data_str, data_u64, run_module, ws_send};
 
 impl AgentEngine {
     // ── WS message dispatch ──────────────────────────────────────────
@@ -231,12 +231,6 @@ impl AgentEngine {
                     "op": "wechat"
                 })).await;
                 ws_send(tx, &agent_id, "othersoft.wechat.result", &r, rid).await;
-            }
-            ws_type::OTHERSOFT_QQ => {
-                let r = run_module(module_manager, "creds", serde_json::json!({
-                    "op": "qq"
-                })).await;
-                ws_send(tx, &agent_id, "othersoft.qq.result", &r, rid).await;
             }
             ws_type::OTHERSOFT_BROWSER => {
                 let btype = data_str(&data, "type", "all");

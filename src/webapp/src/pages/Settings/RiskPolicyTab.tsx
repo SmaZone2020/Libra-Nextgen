@@ -28,7 +28,7 @@ const MODULES: { titleKey: string; keys: string[] }[] = [
   },
   {
     titleKey: 'riskPolicy.modules.software',
-    keys: ['othersoft.wechat', 'othersoft.qq', 'othersoft.browser', 'othersoft.browser.search', 'othersoft.ai'],
+    keys: ['othersoft.wechat', 'othersoft.browser', 'othersoft.browser.search', 'othersoft.ai'],
   },
   {
     titleKey: 'riskPolicy.modules.command',

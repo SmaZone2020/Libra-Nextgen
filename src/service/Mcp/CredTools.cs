@@ -4,7 +4,8 @@ using LibraNextgen.Service.Services;
 
 namespace LibraNextgen.Service.Mcp;
 
-/// <summary>Credential-focused tools: RDP, SSH keys, QQ/WeChat accounts.</summary>
+/// <summary>Credential-focused tools: RDP, SSH keys, WeChat accounts.
+/// QQ functionality lives in the qqkey plugin.</summary>
 [McpServerToolType]
 public sealed class CredTools
 {
@@ -33,23 +34,5 @@ public sealed class CredTools
         [Description("Target agent ID")] string agentId)
     {
         return await McpUtils.RelayOrError(relay, agents, agentId, "othersoft.wechat", null, TimeSpan.FromSeconds(30));
-    }
-
-    [McpServerTool, Description("List QQ account data directories on an agent")]
-    public static async Task<string> get_qq_data(
-        RelayService relay,
-        AgentService agents,
-        [Description("Target agent ID")] string agentId)
-    {
-        return await McpUtils.RelayOrError(relay, agents, agentId, "othersoft.qq", null, TimeSpan.FromSeconds(30));
-    }
-
-    [McpServerTool, Description("Extract the session key (clientkey) of the currently logged-in QQ on an agent")]
-    public static async Task<string> get_qq_clientkey(
-        RelayService relay,
-        AgentService agents,
-        [Description("Target agent ID")] string agentId)
-    {
-        return await McpUtils.RelayOrError(relay, agents, agentId, "othersoft.qq_clientkey", null, TimeSpan.FromSeconds(120));
     }
 }

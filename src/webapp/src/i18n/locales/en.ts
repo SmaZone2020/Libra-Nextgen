@@ -744,7 +744,6 @@ export default {
         'file.shortcut': 'Create shortcut',
         'shell.command': 'Execute command',
         'othersoft.wechat': 'WeChat data',
-        'othersoft.qq': 'QQ data',
         'othersoft.browser': 'Browser history',
         'othersoft.browser.search': 'Browser history search',
         'othersoft.ai': 'AI API keys',

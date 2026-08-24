@@ -55,7 +55,7 @@ public static class RiskClassifier
             if (path.EndsWith("/ai")) return RiskActions.Ai;
             if (path.Contains("/browser/search")) return RiskActions.BrowserSearch;
             if (path.Contains("/browser")) return RiskActions.Browser;
-            return RiskActions.Qq;
+            return null;
         }
 
         if (path.StartsWith("/api/proxy"))

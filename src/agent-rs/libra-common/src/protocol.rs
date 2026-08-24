@@ -132,13 +132,11 @@ pub mod ws_type {
 
     // Other software
     pub const OTHERSOFT_WECHAT: &str = "othersoft.wechat";
-    pub const OTHERSOFT_QQ: &str = "othersoft.qq";
     pub const OTHERSOFT_BROWSER: &str = "othersoft.browser";
     pub const OTHERSOFT_BROWSER_SEARCH: &str = "othersoft.browser.search";
     pub const OTHERSOFT_AI: &str = "othersoft.ai";
     pub const OTHERSOFT_SSH: &str = "othersoft.ssh";
     pub const OTHERSOFT_RDP: &str = "othersoft.rdp";
-    pub const OTHERSOFT_QQ_CLIENTKEY: &str = "othersoft.qq_clientkey";
 
     // Proxy
     pub const PROXY_FETCH: &str = "proxy.fetch";
