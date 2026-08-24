@@ -73,6 +73,36 @@ public class PluginsController : ControllerBase
         }
     }
 
+    /// <summary>Import a plugin by cloning a Git repository (repo name = plugin id).</summary>
+    [HttpPost("git-import")]
+    public async Task<IActionResult> GitImport([FromBody] PluginGitImportRequest request, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(request.GitUrl))
+            return BadRequest(new { error = "Git URL is required." });
+
+        try
+        {
+            var record = await _plugins.ImportFromGitAsync(request.GitUrl, request.Enable, ct);
+            return Ok(record);
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+        catch (InvalidDataException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return StatusCode(500, new { error = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { error = ex.Message });
+        }
+    }
+
     /// <summary>Create a plugin from a raw meta.json (no archive).</summary>
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] PluginCreateRequest request, CancellationToken ct)

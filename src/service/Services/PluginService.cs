@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.IO.Compression;
 using System.Text.Json;
 using LibraNextgen.Service.Data;
@@ -125,6 +126,53 @@ public class PluginService
         ExtractZip(archiveStream, targetDir);
         InvalidateScriptCache(pluginId);
 
+        return await PersistMetaAsync(meta, enableOnImport, ct);
+    }
+
+    /// <summary>
+    /// Import a plugin by cloning a Git repository. The repository is cloned into
+    /// <c>PluginsBaseDir/&lt;repoName&gt;</c> and the repository name is used as the
+    /// plugin id. The cloned tree must contain a <c>meta.json</c> at its root.
+    /// </summary>
+    public async Task<PluginRecord> ImportFromGitAsync(
+        string gitUrl, bool enableOnImport, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(gitUrl))
+            throw new ArgumentException("git url is required");
+
+        var repoName = ExtractRepoName(gitUrl)
+            ?? throw new ArgumentException("could not derive a repository name from the git url");
+
+        if (repoName.Any(c => !(char.IsAsciiLetterOrDigit(c) || c is '.' or '-' or '_')))
+            throw new ArgumentException($"repository name '{repoName}' contains invalid characters");
+
+        var targetDir = Path.Combine(PluginsBaseDir, repoName);
+        if (Directory.Exists(targetDir))
+            Directory.Delete(targetDir, recursive: true);
+
+        await CloneRepoAsync(gitUrl, targetDir, ct);
+
+        var metaPath = Path.Combine(targetDir, "meta.json");
+        if (!File.Exists(metaPath))
+            throw new InvalidDataException("repository does not contain a meta.json at its root");
+
+        var meta = JsonSerializer.Deserialize<PluginMeta>(File.ReadAllText(metaPath),
+            new JsonSerializerOptions { PropertyNameCaseInsensitive = true })
+            ?? throw new InvalidDataException("meta.json could not be parsed");
+
+        // 以仓库名为插件 id（覆盖仓库内 meta.json 自带的 pluginId）。
+        meta.PluginId = repoName;
+        ValidateMeta(meta);
+        InvalidateScriptCache(repoName);
+
+        return await PersistMetaAsync(meta, enableOnImport, ct);
+    }
+
+    /// <summary>Insert or update a plugin record from a validated meta, then stage modules.</summary>
+    private async Task<PluginRecord> PersistMetaAsync(
+        PluginMeta meta, bool enableOnImport, CancellationToken ct)
+    {
+        var pluginId = meta.PluginId;
         var existing = await _plugins.FirstOrDefaultAsync(p => p.PluginId == pluginId, ct);
         var now = DateTime.UtcNow.ToString("o");
 
@@ -175,6 +223,52 @@ public class PluginService
             UnstageModules(existing);
 
         return existing!;
+    }
+
+    // ── Git helpers ─────────────────────────────────────────────────────
+
+    /// <summary>Derive a repository name from a Git URL (drops trailing <c>.git</c>).</summary>
+    private static string? ExtractRepoName(string url)
+    {
+        var trimmed = url.Trim().TrimEnd('/');
+        if (trimmed.EndsWith(".git", StringComparison.OrdinalIgnoreCase))
+            trimmed = trimmed[..^4];
+
+        var idx = Math.Max(trimmed.LastIndexOf('/'), trimmed.LastIndexOf(':'));
+        if (idx < 0)
+            return string.IsNullOrWhiteSpace(trimmed) ? null : trimmed;
+
+        var name = trimmed[(idx + 1)..];
+        return string.IsNullOrWhiteSpace(name) ? null : name;
+    }
+
+    /// <summary>Run <c>git clone --depth 1</c> into the target directory.</summary>
+    private static async Task CloneRepoAsync(string gitUrl, string targetDir, CancellationToken ct)
+    {
+        var psi = new ProcessStartInfo
+        {
+            FileName = "git",
+            UseShellExecute = false,
+            CreateNoWindow = true,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+        };
+        psi.ArgumentList.Add("clone");
+        psi.ArgumentList.Add("--depth");
+        psi.ArgumentList.Add("1");
+        psi.ArgumentList.Add(gitUrl);
+        psi.ArgumentList.Add(targetDir);
+
+        using var proc = Process.Start(psi)
+            ?? throw new InvalidOperationException("failed to start git (is git installed?)");
+
+        var stdoutTask = proc.StandardOutput.ReadToEndAsync(ct);
+        var stderrTask = proc.StandardError.ReadToEndAsync(ct);
+        await Task.WhenAll(stdoutTask, stderrTask);
+        await proc.WaitForExitAsync(ct);
+
+        if (proc.ExitCode != 0)
+            throw new InvalidOperationException($"git clone failed: {stderrTask.Result.Trim()}");
     }
 
     // ── Create / Edit / Delete / Toggle ────────────────────────────────

@@ -12,12 +12,12 @@ import {
   Label,
   Input,
 } from '@heroui/react';
-import { PlugConnection, TrashBin, Pencil, Plus } from '@gravity-ui/icons';
+import { PlugConnection, TrashBin, Pencil, LogoGithub } from '@gravity-ui/icons';
 import { useDialog } from '../../hooks/useDialog';
 import {
   listPlugins,
   importPlugin,
-  createPlugin,
+  importPluginFromGit,
   updatePlugin,
   deletePlugin,
   togglePlugin,
@@ -25,18 +25,10 @@ import {
   type PluginMeta,
 } from '../../api/plugins';
 
-// A blank meta template used for "new plugin" authoring.
-function blankMeta(pluginId: string): PluginMeta {
-  return {
-    schemaVersion: 1,
-    pluginId,
-    name: '',
-    version: '1.0.0',
-    author: '',
-    description: '',
-    entry: { route: pluginId, label: `nav.${pluginId}`, icon: 'Cpu', apiRoot: `/api/plugins/${pluginId}` },
-    actions: [],
-  };
+function isValidGitUrl(url: string): boolean {
+  const u = url.trim();
+  if (!u || /\s/.test(u)) return false;
+  return /^(https?:\/\/|git@|ssh:\/\/)/i.test(u);
 }
 
 export default function PluginsPage() {
@@ -47,11 +39,14 @@ export default function PluginsPage() {
 
   // Editor modal state
   const [editing, setEditing] = useState<PluginRecord | null>(null);
-  const [isNew, setIsNew] = useState(false);
   const [metaJson, setMetaJson] = useState('');
   const [saving, setSaving] = useState(false);
 
-  const editorOpen = editing !== null || isNew;
+  // Git import modal state
+  const [gitOpen, setGitOpen] = useState(false);
+  const [gitUrl, setGitUrl] = useState('');
+  const [gitError, setGitError] = useState<string | null>(null);
+  const [gitImporting, setGitImporting] = useState(false);
 
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -68,22 +63,14 @@ export default function PluginsPage() {
     reload();
   }, [reload]);
 
-  const openEditor = (record: PluginRecord | null) => {
-    if (record) {
-      setIsNew(false);
-      setEditing(record);
-      const { id: _id, enabled: _en, installedAt: _i, updatedAt: _u, ...meta } = record;
-      setMetaJson(JSON.stringify(meta, null, 2));
-    } else {
-      setIsNew(true);
-      setEditing(null);
-      setMetaJson(JSON.stringify(blankMeta('com.example.my-plugin'), null, 2));
-    }
+  const openEditor = (record: PluginRecord) => {
+    setEditing(record);
+    const { id: _id, enabled: _en, installedAt: _i, updatedAt: _u, ...meta } = record;
+    setMetaJson(JSON.stringify(meta, null, 2));
   };
 
   const closeEditor = () => {
     setEditing(null);
-    setIsNew(false);
     setMetaJson('');
   };
 
@@ -99,8 +86,7 @@ export default function PluginsPage() {
     setSaving(true);
     try {
       const meta = parseMeta();
-      if (isNew) await createPlugin(meta);
-      else if (editing) await updatePlugin(editing.id, meta);
+      if (editing) await updatePlugin(editing.id, meta);
       window.location.reload();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Save failed');
@@ -113,6 +99,30 @@ export default function PluginsPage() {
       window.location.reload();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Import failed');
+    }
+  };
+
+  const openGitModal = () => {
+    setGitUrl('');
+    setGitError(null);
+    setGitOpen(true);
+  };
+
+  const handleGitImport = async () => {
+    setGitError(null);
+    const url = gitUrl.trim();
+    if (!isValidGitUrl(url)) {
+      setGitError(t('plugins.gitInvalidUrl'));
+      return;
+    }
+    setGitImporting(true);
+    try {
+      await importPluginFromGit(url, true);
+      window.location.reload();
+    } catch (e) {
+      setGitError(e instanceof Error ? e.message : 'Git import failed');
+    } finally {
+      setGitImporting(false);
     }
   };
 
@@ -157,9 +167,9 @@ export default function PluginsPage() {
               <PlugConnection />
               {t('plugins.import')}
             </Button>
-            <Button variant="primary" onPress={() => openEditor(null)}>
-              <Plus />
-              {t('plugins.new')}
+            <Button variant="outline" onPress={openGitModal}>
+              <LogoGithub />
+              {t('plugins.gitImport')}
             </Button>
           </div>
         </div>
@@ -224,13 +234,13 @@ export default function PluginsPage() {
       )}
 
       {/* Editor modal */}
-      <Modal.Backdrop isOpen={editorOpen} onOpenChange={(open) => { if (!open) closeEditor(); }}>
+      <Modal.Backdrop isOpen={editing !== null} onOpenChange={(open) => { if (!open) closeEditor(); }}>
         <Modal.Container size="lg">
           <Modal.Dialog>
             <Modal.CloseTrigger />
             <Modal.Header>
               <Modal.Heading>
-                {isNew ? t('plugins.new') : t('plugins.edit', { name: editing?.name || editing?.pluginId })}
+                {t('plugins.edit', { name: editing?.name || editing?.pluginId })}
               </Modal.Heading>
             </Modal.Header>
             <Modal.Body>
@@ -255,6 +265,39 @@ export default function PluginsPage() {
           </Modal.Dialog>
         </Modal.Container>
       </Modal.Backdrop>
+
+      {/* Git import modal */}
+      <Modal.Backdrop isOpen={gitOpen} onOpenChange={(open) => { if (!open) setGitOpen(false); }}>
+        <Modal.Container size="md">
+          <Modal.Dialog>
+            <Modal.CloseTrigger />
+            <Modal.Header>
+              <Modal.Heading>{t('plugins.gitImport')}</Modal.Heading>
+            </Modal.Header>
+            <Modal.Body>
+              <TextField variant="secondary">
+                <Label>{t('plugins.gitUrl')}</Label>
+                <Input
+                  value={gitUrl}
+                  onChange={(e) => setGitUrl((e.target as HTMLInputElement).value)}
+                  placeholder={t('plugins.gitUrlPlaceholder')}
+                  autoFocus
+                />
+              </TextField>
+              {gitError && <p className="text-danger text-sm mt-2">{gitError}</p>}
+            </Modal.Body>
+            <Modal.Footer>
+              <Button variant="ghost" onPress={() => setGitOpen(false)}>
+                {t('common.cancel')}
+              </Button>
+              <Button variant="primary" isPending={gitImporting} onPress={handleGitImport}>
+                {t('plugins.importing')}
+              </Button>
+            </Modal.Footer>
+          </Modal.Dialog>
+        </Modal.Container>
+      </Modal.Backdrop>
+
       {DialogComponent}
     </div>
   );

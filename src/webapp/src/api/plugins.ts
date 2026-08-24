@@ -104,8 +104,8 @@ export async function importPlugin(file: File, enable: boolean): Promise<PluginR
   return res.json();
 }
 
-export async function createPlugin(meta: PluginMeta): Promise<PluginRecord> {
-  return api.post<PluginRecord>('/plugins/manager', { meta });
+export async function importPluginFromGit(gitUrl: string, enable: boolean): Promise<PluginRecord> {
+  return api.post<PluginRecord>('/plugins/manager/git-import', { gitUrl, enable });
 }
 
 export async function updatePlugin(id: string, meta: PluginMeta): Promise<PluginRecord> {

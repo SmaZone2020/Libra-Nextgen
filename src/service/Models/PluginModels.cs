@@ -111,6 +111,13 @@ public class PluginCreateRequest
     public PluginMeta? Meta { get; set; }
 }
 
+/// <summary>Request to import a plugin by cloning a Git repository.</summary>
+public class PluginGitImportRequest
+{
+    public string GitUrl { get; set; } = "";
+    public bool Enable { get; set; } = true;
+}
+
 /// <summary>Request to enable/disable a plugin.</summary>
 public class PluginToggleRequest
 {
