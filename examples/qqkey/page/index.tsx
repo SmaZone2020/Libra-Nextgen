@@ -25,12 +25,7 @@ function maskKey(key: string): string {
   return key.slice(0, 4) + '*'.repeat(key.length - 8) + key.slice(-4);
 }
 
-/**
- * QQ ClientKey 探测插件页面。
- * 完全对齐 qq_ck_test.py：本地端口取全部已登录 QQ，每个 uin 取 clientkey，
- * jump 提取 ptsigx（QQ 空间免登 URL），不做 bkn/skey。
- * 打开页面自动采集一次，切换设备后也会自动重新采集。
- */
+/** 探测本机 QQ ClientKey。 */
 export default function QQKeyPage() {
   const { selectedAgent, dispatchTask } = usePluginHost();
   const [running, setRunning] = useState(false);
@@ -73,10 +68,7 @@ export default function QQKeyPage() {
   return (
     <div className="space-y-4">
       <Card className="p-6">
-        <h1 className="text-xl font-semibold">QQ ClientKey 探测</h1>
-        <p className="text-sm text-default-500 mt-1">
-          探测本机 QQ 快速登录端口（4300-4310），列出已登录 QQ 并采集 clientkey，可跳转 QQ 空间免登链接。
-        </p>
+        <h1 className="text-xl font-semibold">探测本机 QQ ClientKey</h1>
         <div className="mt-4 flex items-center gap-3">
           <Button variant="primary" isPending={running} isDisabled={!selectedAgent} onPress={run}>
             重新采集

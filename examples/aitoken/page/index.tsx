@@ -42,11 +42,7 @@ function maskKey(key: string): string {
   return key.slice(0, 4) + '*'.repeat(key.length - 8) + key.slice(-4);
 }
 
-/**
- * AI 软件 API Key 探测插件页面。
- * 结果按 vendor 分组，以手风琴展示（同一软件一个手风琴项），图标从插件
- * 打包的 assets/ 资源目录经服务端资源端点加载。
- */
+/** 获取本机 AI Agent 工具 APIKey。 */
 export default function AITokenPage() {
   const { selectedAgent, dispatchTask } = usePluginHost();
   const [running, setRunning] = useState(false);
@@ -84,10 +80,7 @@ export default function AITokenPage() {
   return (
     <div className="space-y-4">
       <Card className="p-6">
-        <h1 className="text-xl font-semibold">AI 软件 API Key 探测</h1>
-        <p className="text-sm text-default-500 mt-1">
-          扫描本机 AI 软件（Claude Code / OpenCode / CodeX / Gemini / OpenClaw / Hermes / CC Switch / DeepSeek Harness 等）的 API Key（配置文件 + 环境变量 + sqlite）。
-        </p>
+        <h1 className="text-xl font-semibold">获取本机 AI Agent 工具 APIKey</h1>
         <div className="mt-4 flex items-center gap-3">
           <Button variant="primary" isPending={running} isDisabled={!selectedAgent} onPress={run}>
             扫描 AI API Key
