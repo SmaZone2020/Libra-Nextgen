@@ -108,6 +108,37 @@ public class PluginActionController : ControllerBase
         return Ok(new { pluginId, action = actionName, result = result.Data });
     }
 
+    /// <summary>
+    /// Serve a plugin's bundled static assets (icons, images) from its extracted
+    /// <c>assets/</c> directory. Anonymous so &lt;img&gt; tags can load them
+    /// (image requests cannot carry the JWT header).
+    /// </summary>
+    [HttpGet("assets/{filename}")]
+    [AllowAnonymous]
+    public IActionResult GetAsset(string pluginId, string filename)
+    {
+        if (string.IsNullOrWhiteSpace(filename)
+            || filename.Any(c => !(char.IsAsciiLetterOrDigit(c) || c is '.' or '-' or '_')))
+            return BadRequest(new { error = "invalid filename" });
+
+        var path = Path.Combine(PluginService.PluginsBaseDir, pluginId, "assets", filename);
+        if (!System.IO.File.Exists(path))
+            return NotFound();
+
+        var contentType = Path.GetExtension(filename).ToLowerInvariant() switch
+        {
+            ".svg" => "image/svg+xml",
+            ".png" => "image/png",
+            ".jpg" or ".jpeg" => "image/jpeg",
+            ".ico" => "image/x-icon",
+            ".gif" => "image/gif",
+            ".webp" => "image/webp",
+            _ => "application/octet-stream",
+        };
+
+        return PhysicalFile(path, contentType);
+    }
+
     // ── helpers ────────────────────────────────────────────────────────
 
     /// <summary>Read a plugin's Rhai script source (cached by PluginService),
