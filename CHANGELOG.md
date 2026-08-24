@@ -2,11 +2,54 @@
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-08-24
+
 ### 新增
-- **跨平台构建**：Builder 新增 `Linux x64` 平台，服务端无论在 Windows 还是 Linux 上运行，均可构建 Windows（x64/x86）与 Linux 载荷
-  - 目标 triple 按服务端主机自动解析：Windows 主机 → MSVC 原生 / musl 交叉；Linux 主机 → GNU 原生 / mingw 交叉
-  - 交叉构建经 cargo-zigbuild + zig 工具链驱动（自动探测，缺失时给出安装提示），`rustup target add` 自动执行
-  - goldberg 混淆仅 Windows 目标执行；模板上传支持 Linux 平台
+- **插件体系（三层贯通）**：用户可通过一个 zip 包交付完整插件，贯穿 Agent / 服务端 / 前端三层
+  - **Agent 端双通道**：Rhai 脚本（免编译环境）+ native `cdylib`（Rust/C/C++，性能/深度系统调用）
+  - **Rhai 脚本引擎**：`#if(WINDOWS)/#elif(LINUX)/#else/#endif` 条件编译（解析前文本裁剪）；平台 API 门控（Windows `cmd/powershell/reg_*`、Linux `shell/bash/uname/ip_route` 等）；沙箱执行（`new_raw` + 白名单函数，排除 print/eval/IO）
+  - **服务端**：插件管理（导入/新建/编辑/删除/启用/禁用）、动作网关（`/api/plugins/{pluginId}/{action}` → Agent 任务）、脚本内存缓存（启动预加载）
+  - **前端**：插件管理页（HeroUI）、运行时页面注册（`import.meta.glob` 懒加载 + 动态路由）、`usePluginHost` 共享状态（复用 AgentContext + consoleWs）
+- **侧边栏树状子母导航**：「功能」与「插件管理」两个折叠母项，子项缩进 + 竖向引导线，展开/收起动画，母项可导航 + 箭头内嵌
+- **标准示例插件**：`plugin-sdk`（前端活文档页 + 全功能多平台 Agent 模块）+ `soft-recon` 端到端示例
+- **跨平台构建**：Builder 新增 `Linux x64` 平台，服务端在 Windows/Linux 上均可构建 Windows（x64/x86）与 Linux 载荷
+
+### 改进
+- **插件脚本内存缓存**：启动时预加载 enabled 插件的 `.rhai`，导入/启停/删除时失效，避免每次执行读磁盘
+- **HeroUI 规范**：Input/TextField/NumberField 统一 `variant="secondary"`，文件选择改用 HeroUI Input
+- **终端/路径栏/Shell 页面** UI 细节调整
+
+### 修复
+- 插件导入 meta.json 反序列化大小写不敏感（camelCase → PascalCase）
+- 插件动作网关路由 `{action}` 保留字冲突导致 404（改为 `{actionName}`）
+- 插件页面不显示（`import.meta.glob` key 路径未对齐，改用后缀匹配）
+- `Engine::new_raw` 缺 Map/Array/String 基础方法导致脚本返回 null（注册 BasicMap/Array/StringPackage）
+- rhai 脚本用 `op` 字段分发，否则 shell action 走不到 shell 分支
+- 选中插件管理页时母项按钮不激活（`collectRoutes` 纳入母项自身 `to`）
+
+### 安全
+- **去除 WebSocket 明文 fallback**：Agent 与服务端在无 session key 时拒绝发送消息（不再明文降级），与 native 模块通道一致
+
+### 其他
+- gitignore 屏蔽 `src/plugins/`（服务端插件运行时解压目录）
+- QQ clientkey/cookie 提取对齐 `qq_ck_test.py` 流程
+
+## [1.2.2] - 2026-08-18
+
+### 修复
+- Shell 页面首次连接重连、移除字体切换器
+- 终端字体强制等宽、JetBrains Mono 打包加载、CJK 对齐、字符错位
+
+### 新增
+- 平台感知 UI：按选中 Agent 平台显示相关页面/标签页
+- Linux 侦察：包管理器清单 + Docker/容器检测
+- 可编辑路径栏 + 真实 xterm.js 终端（Agent PTY）
+
+### 改进
+- Agent 选择器仅显示在线设备；Linux 构建隐藏 Windows-only 选项
+- 平台感知文件路径（Windows 反斜杠 vs Linux 斜杠）
+- 模块身份自检 + 构建产物缓存条件
+- Builder 预构建产物缓存 + 共享增量 target 目录
 
 ## [1.2.1] - 2026-08-17
 
