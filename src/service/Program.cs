@@ -11,6 +11,7 @@ using LibraNextgen.Service.Profiles;
 using LibraNextgen.Common.Protocol;
 using LibraNextgen.Service.Hubs;
 using LibraNextgen.Service.Middleware;
+using LibraNextgen.Service.Models;
 using LibraNextgen.Service.Services;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -40,6 +41,8 @@ builder.Services.AddScoped<Repository<TrafficRecord>>(sp =>
     new Repository<TrafficRecord>(sp.GetRequiredService<MongoDbContext>(), "traffic"));
 builder.Services.AddScoped<Repository<AccessKey>>(sp =>
     new Repository<AccessKey>(sp.GetRequiredService<MongoDbContext>(), "access_keys"));
+builder.Services.AddScoped<Repository<PluginRecord>>(sp =>
+    new Repository<PluginRecord>(sp.GetRequiredService<MongoDbContext>(), "plugins"));
 
 // JWT Settings (singleton, holds RSA key pair)
 var jwtSettings = new JwtSettings();
@@ -63,6 +66,7 @@ builder.Services.AddSingleton<McpService>();
 builder.Services.AddScoped<AuditService>();
 builder.Services.AddScoped<AccessKeyService>();
 builder.Services.AddSingleton<BuilderBuildService>();
+builder.Services.AddScoped<PluginService>();
 builder.Services.AddHostedService<HeartbeatMonitor>();
 
 // MCP Server

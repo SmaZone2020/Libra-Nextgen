@@ -20,6 +20,7 @@ import ProxyBrowserPage from '../pages/ProxyBrowser';
 import BuilderPage from '../pages/Builder';
 import AboutPage from '../pages/About';
 import SettingsPage from '../pages/Settings';
+import PluginsPage from '../pages/Plugins';
 import { getStoredUser, logout, checkSetupStatus } from '../api/auth';
 import { getAccountMe, acceptAgreement } from '../api/account';
 import { setOnAuthFailed } from '../api/client';
@@ -56,6 +57,7 @@ const PAGE_META_KEYS: Record<string, [string, string]> = {
   '/audit': ['pageMeta.audit.label', 'pageMeta.audit.subtitle'],
   '/about': ['pageMeta.about.label', 'pageMeta.about.subtitle'],
   '/settings': ['pageMeta.settings.label', 'pageMeta.settings.subtitle'],
+  '/plugins': ['pageMeta.plugins.label', 'pageMeta.plugins.subtitle'],
 };
 
 function PageHeader() {
@@ -372,6 +374,7 @@ function AuthenticatedLayout({
                 <Route path="/proxy" element={<ProxyBrowserPage />} />
                 <Route path="/builder" element={<BuilderPage />} />
                 <Route path="/settings" element={<SettingsPage />} />
+                <Route path="/plugins" element={<PluginsPage />} />
                 <Route path="/about" element={<AboutPage />} />
               </Routes>
             </motion.div>

@@ -1,0 +1,131 @@
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+using LibraNextgen.Service.Models;
+using LibraNextgen.Service.Services;
+
+namespace LibraNextgen.Service.Controllers;
+
+/// <summary>
+/// Plugin lifecycle management: import, create, edit, delete, enable/disable,
+/// plus the enabled-manifest feed that the console consumes at startup.
+/// </summary>
+[ApiController]
+[Route("api/plugins/manager")]
+[Authorize]
+public class PluginsController : ControllerBase
+{
+    private readonly PluginService _plugins;
+    private const long MaxArchiveBytes = 64L * 1024 * 1024; // 64 MB package cap
+
+    public PluginsController(PluginService plugins)
+    {
+        _plugins = plugins;
+    }
+
+    /// <summary>All plugins (management view, includes disabled).</summary>
+    [HttpGet]
+    public async Task<IActionResult> List(CancellationToken ct)
+        => Ok(await _plugins.GetAllAsync(ct));
+
+    /// <summary>Enabled plugin manifests, consumed by the console at startup.</summary>
+    [AllowAnonymous]
+    [HttpGet("manifests")]
+    public async Task<IActionResult> Manifests(CancellationToken ct)
+    {
+        var enabled = await _plugins.GetEnabledAsync(ct);
+        var manifests = enabled.Select(p => new
+        {
+            id = p.Id,
+            p.PluginId,
+            p.Name,
+            p.Version,
+            p.Author,
+            p.Description,
+            p.Entry,
+            p.I18n,
+            p.Actions,
+        });
+        return Ok(manifests);
+    }
+
+    /// <summary>Import a plugin from an uploaded archive (.zip / .7z / .rar).</summary>
+    [HttpPost("import")]
+    public async Task<IActionResult> Import([FromForm] IFormFile file, [FromForm] bool enable = true, CancellationToken ct = default)
+    {
+        if (file == null || file.Length == 0)
+            return BadRequest(new { error = "No file provided." });
+        if (file.Length > MaxArchiveBytes)
+            return BadRequest(new { error = "Archive exceeds 64 MB." });
+
+        try
+        {
+            await using var stream = file.OpenReadStream();
+            var record = await _plugins.ImportAsync(stream, enable, ct);
+            return Ok(record);
+        }
+        catch (InvalidDataException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { error = ex.Message });
+        }
+    }
+
+    /// <summary>Create a plugin from a raw meta.json (no archive).</summary>
+    [HttpPost]
+    public async Task<IActionResult> Create([FromBody] PluginCreateRequest request, CancellationToken ct)
+    {
+        try
+        {
+            var record = await _plugins.CreateAsync(request, ct);
+            return Ok(record);
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Conflict(new { error = ex.Message });
+        }
+    }
+
+    [HttpGet("{id}")]
+    public async Task<IActionResult> Get(string id, CancellationToken ct)
+    {
+        var record = await _plugins.GetByIdAsync(id, ct);
+        return record == null ? NotFound(new { error = "Plugin not found." }) : Ok(record);
+    }
+
+    /// <summary>Edit a plugin's meta.json (name/version/actions/entry/i18n).</summary>
+    [HttpPut("{id}")]
+    public async Task<IActionResult> Update(string id, [FromBody] PluginCreateRequest request, CancellationToken ct)
+    {
+        try
+        {
+            var record = await _plugins.UpdateAsync(id, request.Meta!, ct);
+            return record == null ? NotFound(new { error = "Plugin not found." }) : Ok(record);
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+    }
+
+    [HttpDelete("{id}")]
+    public async Task<IActionResult> Delete(string id, CancellationToken ct)
+    {
+        var record = await _plugins.DeleteAsync(id, ct);
+        return record == null ? NotFound(new { error = "Plugin not found." }) : Ok(new { status = "ok" });
+    }
+
+    /// <summary>Enable or disable a plugin.</summary>
+    [HttpPost("{id}/toggle")]
+    public async Task<IActionResult> Toggle(string id, [FromBody] PluginToggleRequest request, CancellationToken ct)
+    {
+        var record = await _plugins.SetEnabledAsync(id, request.Enabled, ct);
+        return record == null ? NotFound(new { error = "Plugin not found." }) : Ok(record);
+    }
+}

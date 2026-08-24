@@ -142,4 +142,9 @@ pub mod ws_type {
 
     // Proxy
     pub const PROXY_FETCH: &str = "proxy.fetch";
+
+    // Plugin generic execution channel: the server relays a plugin action's
+    // declared module invocation. data = { module, action, input }.
+    pub const PLUGIN_EXEC: &str = "plugin.exec";
+    pub const PLUGIN_RESULT: &str = "plugin.result";
 }

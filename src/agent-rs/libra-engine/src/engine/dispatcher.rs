@@ -292,6 +292,29 @@ impl AgentEngine {
                 ws_send(tx, &agent_id, "proxy.fetch.result", &r, rid).await;
             }
 
+            // ── Plugin generic execution ─────────────────────────────
+            // Server relays a declared module invocation: data = { module,
+            // action, input }. The module is downloaded/loaded on demand by
+            // ModuleManager, executed with the `input` object, and its JSON
+            // output is returned. This lets third-party plugins extend the
+            // agent without a compile-time dispatcher branch per plugin.
+            ws_type::PLUGIN_EXEC => {
+                let module = data_str(&data, "module", "");
+                let action = data_str(&data, "action", "");
+                if module.is_empty() {
+                    ws_send(tx, &agent_id, ws_type::PLUGIN_RESULT,
+                        r#"{"error":"missing module"}"#, rid).await;
+                } else {
+                    // `input` is the server-assembled object (already carries
+                    // the action's `op`). Fall back to an empty object.
+                    let input = data.as_ref()
+                        .and_then(|d| d.get("input").cloned())
+                        .unwrap_or_else(|| serde_json::json!({ "action": action }));
+                    let r = run_module(module_manager, &module, input).await;
+                    ws_send(tx, &agent_id, ws_type::PLUGIN_RESULT, &r, rid).await;
+                }
+            }
+
             // ── Screen ─────────────────────────────────────────
             ws_type::SCREEN_LIST => {
                 let r = libra_modules::execution::ScreenCapture::list_screens();

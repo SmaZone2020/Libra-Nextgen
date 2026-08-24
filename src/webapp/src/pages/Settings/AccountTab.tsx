@@ -18,6 +18,7 @@ const PAGE_OPTIONS: { key: string; labelKey: string }[] = [
   { key: 'proxy', labelKey: 'nav.proxyBrowser' },
   { key: 'builder', labelKey: 'nav.builder' },
   { key: 'audit', labelKey: 'nav.auditLogs' },
+  { key: 'plugins', labelKey: 'nav.plugins' },
 ];
 
 const ACTION_OPTIONS = [
