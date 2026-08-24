@@ -1,7 +1,7 @@
 //! QQ clientkey 插件 — 独立 native 插件（cdylib）。
 //!
-//! 复用 creds 模块的 QQClientKey 逻辑：本地快速登录端口 + QQ.exe 进程内存扫描，
-//! 经 ptlogin2 jump 兑换 skey/p_skey/bkn/ptsigx。
+//! 完全对齐 qq_ck_test.py 脚本方法：本地快速登录端口取全部已登录 QQ，
+//! 每个 uin 取 clientkey，并生成 QQ 空间免登链接（ptsigx）。不做内存扫描/skey/bkn。
 //!
 //! ABI（libra-load）：
 //!   module_name() -> *const u8
