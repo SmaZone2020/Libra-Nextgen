@@ -162,43 +162,43 @@ export default function PluginsPage() {
 
   return (
     <div className="space-y-4">
-      <Card className="p-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-lg font-semibold">{t('plugins.title')}</h2>
-            <p className="text-sm text-default-500">{t('plugins.desc')}</p>
-          </div>
-          <div className="flex items-center gap-2">
-            <Button onPress={() => fileRef.current?.click()}>
-              <PlugConnection />
-              {t('plugins.import')}
-            </Button>
-            <Button variant="outline" onPress={openGitModal}>
-              <LogoGithub />
-              {t('plugins.gitImport')}
-            </Button>
-          </div>
-        </div>
-        <Input
-          ref={fileRef}
-          type="file"
-          accept=".zip,.7z,.rar"
-          className="hidden"
-          onChange={(e) => {
-            const f = e.target.files?.[0];
-            if (f) handleImport(f);
-            e.target.value = '';
-          }}
-        />
-      </Card>
 
       <Tabs defaultSelectedKey="installed" className="w-full">
-        <Tabs.ListContainer>
-          <Tabs.List aria-label="plugins sections">
-            <Tabs.Tab id="installed">{t('plugins.installedTab')}<Tabs.Indicator /></Tabs.Tab>
-            <Tabs.Tab id="market">{t('plugins.market')}<Tabs.Indicator /></Tabs.Tab>
-          </Tabs.List>
-        </Tabs.ListContainer>
+        <Card className="p-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-lg font-semibold">{t('plugins.title')}</h2>
+              <p className="text-sm text-default-500">{t('plugins.desc')}</p>
+            </div>
+              <Tabs.ListContainer>
+                <Tabs.List aria-label="plugins sections">
+                  <Tabs.Tab id="installed" className="w-[160px]">{t('plugins.installedTab')}<Tabs.Indicator /></Tabs.Tab>
+                  <Tabs.Tab id="market" className="w-[160px]">{t('plugins.market')}<Tabs.Indicator /></Tabs.Tab>
+                </Tabs.List>
+              </Tabs.ListContainer>
+            <div className="flex items-center gap-2">
+              <Button onPress={() => fileRef.current?.click()}>
+                <PlugConnection />
+                {t('plugins.import')}
+              </Button>
+              <Button variant="outline" onPress={openGitModal}>
+                <LogoGithub />
+                {t('plugins.gitImport')}
+              </Button>
+            </div>
+          </div>
+          <Input
+            ref={fileRef}
+            type="file"
+            accept=".zip,.7z,.rar"
+            className="hidden"
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) handleImport(f);
+              e.target.value = '';
+            }}
+          />
+        </Card>
 
         <Tabs.Panel id="installed">
           <div className="space-y-4">
