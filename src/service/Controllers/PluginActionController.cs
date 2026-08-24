@@ -29,9 +29,9 @@ public class PluginActionController : ControllerBase
         _relay = relay;
     }
 
-    [HttpPost("{action}")]
+    [HttpPost("{actionName}")]
     public async Task<IActionResult> Execute(
-        string pluginId, string action, [FromBody] JsonElement? body, CancellationToken ct)
+        string pluginId, string actionName, [FromBody] JsonElement? body, CancellationToken ct)
     {
         var plugin = await _plugins.GetByPluginIdAsync(pluginId, ct);
         if (plugin == null)
@@ -39,9 +39,9 @@ public class PluginActionController : ControllerBase
         if (!plugin.Enabled)
             return StatusCode(409, new { error = "Plugin is disabled." });
 
-        var def = plugin.Actions.FirstOrDefault(a => a.Action == action);
+        var def = plugin.Actions.FirstOrDefault(a => a.Action == actionName);
         if (def == null)
-            return NotFound(new { error = $"Action '{action}' not found." });
+            return NotFound(new { error = $"Action '{actionName}' not found." });
 
         // Agent selection: body.agentId or a top-level query param.
         body ??= JsonSerializer.Deserialize<JsonElement>("{}");
@@ -67,7 +67,7 @@ public class PluginActionController : ControllerBase
         // Relay. If no module is declared, this is a server-legacy action with
         // no agent round-trip — treat it as an accepted no-op with a placeholder.
         if (def.Module == null)
-            return Ok(new { pluginId, action, status = "accepted" });
+            return Ok(new { pluginId, action = actionName, status = "accepted" });
 
         var kind = string.Equals(def.Module.Kind, "script", StringComparison.OrdinalIgnoreCase)
             ? "script" : "native";
@@ -82,7 +82,7 @@ public class PluginActionController : ControllerBase
             {
                 kind = "script",
                 module = def.Module.Name,
-                action,
+                action = actionName,
                 entry = def.Module.Entry ?? "main",
                 script,
                 features = new string[0],
@@ -95,7 +95,7 @@ public class PluginActionController : ControllerBase
             {
                 kind = "native",
                 module = def.Module.Name,
-                action,
+                action = actionName,
                 input,
             };
         }
@@ -105,7 +105,7 @@ public class PluginActionController : ControllerBase
         if (result == null)
             return StatusCode(504, new { error = "Agent did not respond in time." });
 
-        return Ok(new { pluginId, action, result = result.Data });
+        return Ok(new { pluginId, action = actionName, result = result.Data });
     }
 
     // ── helpers ────────────────────────────────────────────────────────
