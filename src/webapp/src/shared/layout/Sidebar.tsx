@@ -248,7 +248,7 @@ function DesktopNavItem({ item, collapsed, onExpand }: { item: NavItem; collapse
                         onPress={() => navigate(child.to)}
                       >
                         <child.icon className="ml-1 w-5 h-5 shrink-0" />
-                        <span className=" text-sm truncate">{childLabel}</span>
+                        <span className="text-[15px] truncate">{childLabel}</span>
                       </Button>
                     </div>
                   );
