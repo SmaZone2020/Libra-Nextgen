@@ -2,18 +2,18 @@ use serde_json::Value;
 
 use libra_comm::ws::WsSender;
 
-use super::AgentEngine;
+use super::EngineShared;
 use super::utils::{data_str, data_u64, ws_send};
 
 // ── Screen stream ────────────────────────────────────────────────────
 
 pub(crate) async fn start_screen_stream(
-    engine: &AgentEngine,
+    shared: &std::sync::Arc<EngineShared>,
     data: Option<Value>,
     agent_id: String,
     tx: WsSender,
 ) {
-    if let Some(old_tx) = engine.screen_session.lock().unwrap().take() {
+    if let Some(old_tx) = shared.screen_session.lock().unwrap().take() {
         let _ = old_tx.send(true);
     }
 
@@ -22,7 +22,7 @@ pub(crate) async fn start_screen_stream(
     let screen_index = data_u64(&data, "screenIndex", 0) as u32;
     let interval_ms = 1000u64 / fps as u64;
     let (cancel_tx, mut cancel_rx) = tokio::sync::watch::channel(false);
-    engine.screen_session.lock().unwrap().replace(cancel_tx);
+    shared.screen_session.lock().unwrap().replace(cancel_tx);
 
     tokio::spawn(async move {
         let mut stream = libra_modules::execution::ScreenStream::new();
@@ -52,14 +52,14 @@ pub(crate) async fn start_screen_stream(
 // ── Camera stream ────────────────────────────────────────────────────
 
 pub(crate) async fn start_camera_stream(
-    engine: &AgentEngine,
+    shared: &std::sync::Arc<EngineShared>,
     data: Option<Value>,
     agent_id: String,
     tx: WsSender,
     rid: Option<&str>,
 ) {
     // Stop any existing stream
-    if let Some(cancel) = engine.camera_session.lock().unwrap().take() {
+    if let Some(cancel) = shared.camera_session.lock().unwrap().take() {
         cancel.store(true, std::sync::atomic::Ordering::Relaxed);
     }
 
@@ -70,7 +70,7 @@ pub(crate) async fn start_camera_stream(
     let tx2 = tx.clone();
     let cancel = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
     let cancel2 = cancel.clone();
-    engine.camera_session.lock().unwrap().replace(cancel);
+    shared.camera_session.lock().unwrap().replace(cancel);
 
     let (frame_tx, mut frame_rx) = tokio::sync::mpsc::channel::<String>(4);
 

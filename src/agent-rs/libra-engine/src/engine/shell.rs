@@ -33,7 +33,7 @@ pub(crate) async fn bind_shell(
     }
 
     let handle = get_executor().start_interactive_shell();
-    let mut child = handle.child;
+    let child = handle.child;
     let cancel_tx = handle.cancel_tx;
     let writer = handle.writer;
     let master = handle.master;
@@ -104,7 +104,7 @@ fn spawn_output_reader(
     shell_tx: &tokio::sync::mpsc::UnboundedSender<WebSocketMessage>,
     agent_id: &str,
 ) {
-    let mut cancel_rx = cancel_tx.subscribe();
+    let cancel_rx = cancel_tx.subscribe();
     let s_tx = shell_tx.clone();
     let aid = agent_id.to_string();
 

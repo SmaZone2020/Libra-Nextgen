@@ -48,16 +48,21 @@ pub(crate) async fn ws_send(tx: &WsSender, agent_id: &str, msg_type: &str, data_
     ws_send_via(tx, agent_id, msg_type, data_str, rid).await;
 }
 
-/// Run a cloud module with a JSON input, returning its JSON output.
-/// Download/load/execution failures are converted to a JSON error object so
-/// the caller can always forward a well-formed response.
+/// Download/load a module under the lock, then execute its entry **without**
+/// holding the module manager lock so independent tasks run in parallel.
 pub(crate) async fn run_module(
     mm: &std::sync::Arc<tokio::sync::Mutex<crate::module_manager::ModuleManager>>,
     name: &str,
     input: serde_json::Value,
 ) -> String {
-    let mut mgr = mm.lock().await;
-    match mgr.run(name, &input.to_string()).await {
+    let prepared = {
+        let mut mgr = mm.lock().await;
+        match mgr.prepare(name, &input.to_string()).await {
+            Ok(p) => p,
+            Err(e) => return serde_json::json!({ "error": e }).to_string(),
+        }
+    };
+    match crate::module_manager::execute_module(prepared.0, &prepared.1).await {
         Ok(r) => r,
         Err(e) => serde_json::json!({ "error": e }).to_string(),
     }

@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use libra_comm::http::HttpCommunicator;
-use libra_load::{load_module, LoadedModule};
+use libra_load::{load_module, LoadedModule, ModuleMainFn};
 
 const MODULE_OUTPUT_CAP: usize = 16 * 1024 * 1024; // 16 MB per module result
 
@@ -68,23 +68,41 @@ impl ModuleManager {
 
     /// Invoke a module by name with a JSON input, returning its JSON output.
     pub async fn run(&mut self, name: &str, input: &str) -> Result<String, String> {
-        self.ensure_loaded(name).await?;
-        let module = self.loaded.get(name).ok_or("module not loaded")?;
-        let main = module.main;
-        let input = input.to_string();
-
-        tokio::task::spawn_blocking(move || {
-            let mut out = vec![0u8; MODULE_OUTPUT_CAP];
-            let written = unsafe { main(input.as_ptr(), input.len(), out.as_mut_ptr(), out.len()) };
-            if written > out.len() {
-                return Err("module output exceeded capacity".to_string());
-            }
-            String::from_utf8(out[..written].to_vec())
-                .map_err(|e| format!("module returned invalid UTF-8: {}", e))
-        })
-        .await
-        .map_err(|e| format!("module task panicked: {}", e))?
+        let (main, input) = self.prepare(name, input).await?;
+        execute_module(main, &input).await
     }
+
+    /// Download/load a module and resolve its entry point, returning the entry
+    /// plus the owned input. The caller must NOT hold `&mut self` (or the
+    /// module manager lock) while executing, so concurrent tasks can run
+    /// different modules in parallel instead of serializing on the loader.
+    pub async fn prepare(&mut self, name: &str, input: &str) -> Result<(ModuleMainFn, String), String> {
+        self.ensure_loaded(name).await?;
+        let main = self
+            .loaded
+            .get(name)
+            .map(|m| m.main)
+            .ok_or("module not loaded")?;
+        Ok((main, input.to_string()))
+    }
+}
+
+/// Execute a resolved module entry point on the blocking pool. No module
+/// manager lock is held here, so independent tasks run their modules in
+/// parallel.
+pub async fn execute_module(main: ModuleMainFn, input: &str) -> Result<String, String> {
+    let input = input.to_string();
+    tokio::task::spawn_blocking(move || {
+        let mut out = vec![0u8; MODULE_OUTPUT_CAP];
+        let written = unsafe { main(input.as_ptr(), input.len(), out.as_mut_ptr(), out.len()) };
+        if written > out.len() {
+            return Err("module output exceeded capacity".to_string());
+        }
+        String::from_utf8(out[..written].to_vec())
+            .map_err(|e| format!("module returned invalid UTF-8: {}", e))
+    })
+    .await
+    .map_err(|e| format!("module task panicked: {}", e))?
 }
 
 #[cfg(test)]
