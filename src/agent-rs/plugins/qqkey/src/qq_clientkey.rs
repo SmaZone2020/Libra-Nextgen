@@ -227,9 +227,10 @@ async fn exchange_for_ptsigx(token: &str, uin: &str, clientkey: &str) -> String 
 
     let res = match client
         .get(&url)
+        .header(reqwest::header::REFERER, REFERER)
         .header(
             reqwest::header::COOKIE,
-            format!("clientuin={uin}; clientkey={clientkey}"),
+            format!("pt_local_token={token}; clientuin={uin}; clientkey={clientkey}"),
         )
         .send()
         .await

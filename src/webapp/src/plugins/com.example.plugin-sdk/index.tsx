@@ -102,6 +102,50 @@ export default function PluginSdkPage() {
 }
 
 // ── 1. 概览 ────────────────────────────────────────────────────────────
+const DIR_TREE = `com.example.plugin-sdk/
+├── meta.json               # 插件契约（必需）
+├── module/                 # Agent 端模块
+│   ├── plugin_sdk.rhai     #   script 通道：Rhai，无需编译
+│   ├── x64/plugin.dll      #   native 通道：按平台目录
+│   ├── x86/plugin.dll
+│   └── linux-x64/plugin.so
+├── page/index.tsx          # 前端页面（源码分发，需重建前端）
+├── service/                # 服务端逻辑（占位）
+└── assets/logo.svg         # 静态资源（经 assets 端点访问）`;
+
+const META_SAMPLE = `{
+  "schemaVersion": 1,
+  "pluginId": "com.example.plugin-sdk",   // 仅 [A-Za-z0-9.-_]
+  "name": "插件开发 SDK 示例",
+  "version": "1.0.0",
+  "author": "libra",
+  "description": "标准示例插件",
+  "entry": {                                // 前端入口
+    "route": "plugin-sdk",                  //  /plugins/plugin-sdk
+    "label": "nav.pluginSdk",               //  i18n 键
+    "icon": "Puzzle",                       //  @gravity-ui/icons 图标名
+    "apiRoot": "/api/plugins/com.example.plugin-sdk"
+  },
+  "i18n": { "zh": { "nav.pluginSdk": "插件 SDK 示例" } },
+  "actions": [                              // 动作 = 按钮 + 转发 + 模块调用
+    {
+      "action": "showcase",                 //  前端 dispatchTask 用
+      "label": "运行能力展示",
+      "method": "POST",
+      "argsSchema": {                       //  参数表单（type/properties/required）
+        "type": "object",
+        "properties": { "capability": { "type": "string", "title": "能力名称" } }
+      },
+      "module": {
+        "kind": "script",                   //  script=Rhai / native=cdylib
+        "name": "plugin_sdk",               //  .rhai stem 或 .dll/.so 名
+        "op": "showcase",                   //  注入输入 JSON 的 op
+        "entry": "main"                     //  脚本入口函数
+      }
+    }
+  ]
+}`;
+
 function OverviewTab() {
   const steps = [
     ['meta.json', '写明 pluginId / entry.route / actions（含 module.kind=script|native）'],
@@ -111,17 +155,38 @@ function OverviewTab() {
     ['Agent 模块', 'script 通道写 .rhai；native 通道写 .rs 编译 cdylib'],
   ];
   return (
-    <Card className="p-6 space-y-3">
-      {steps.map(([title, desc], i) => (
-        <div key={title} className="flex gap-3">
-          <Chip size="sm" variant="secondary">{i + 1}</Chip>
-          <div>
-            <div className="font-mono text-sm">{title}</div>
-            <div className="text-sm text-default-500">{desc}</div>
+    <div className="space-y-4">
+      <Card className="p-6 space-y-3">
+        <h3 className="font-semibold">接入流程</h3>
+        {steps.map(([title, desc], i) => (
+          <div key={title} className="flex gap-3">
+            <Chip size="sm" variant="secondary">{i + 1}</Chip>
+            <div>
+              <div className="font-mono text-sm">{title}</div>
+              <div className="text-sm text-default-500">{desc}</div>
+            </div>
           </div>
-        </div>
-      ))}
-    </Card>
+        ))}
+      </Card>
+
+      <Card className="p-4">
+        <h3 className="font-semibold mb-2">插件目录结构</h3>
+        <pre className="text-xs font-mono overflow-auto bg-default-50 dark:bg-default-900 p-3 rounded">
+          {DIR_TREE}
+        </pre>
+      </Card>
+
+      <Card className="p-4">
+        <h3 className="font-semibold mb-2">meta.json 编写</h3>
+        <p className="text-sm text-default-500 mb-2">
+          meta.json 是插件唯一契约：服务端登记插件、前端渲染按钮、Agent 执行模块都靠它。
+          完整逐字段说明见 <code className="font-mono text-xs">examples/plugin-sdk/README.md</code>。
+        </p>
+        <pre className="text-xs font-mono overflow-auto bg-default-50 dark:bg-default-900 p-3 rounded">
+          {META_SAMPLE}
+        </pre>
+      </Card>
+    </div>
   );
 }
 
