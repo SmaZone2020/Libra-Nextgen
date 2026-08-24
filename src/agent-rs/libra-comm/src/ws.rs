@@ -33,7 +33,7 @@ pub struct WsSender {
 }
 
 impl WsSender {
-    fn wrap(&self, json: String) -> String {
+    fn wrap(&self, json: String) -> Result<String, String> {
         let key = self.key.read().unwrap().clone();
         wrap_outgoing(json, &key)
     }
@@ -143,7 +143,7 @@ impl WsCommunicator {
     async fn send_half(&self, msg: &WebSocketMessage) -> Result<(), String> {
         let mut write = self.write_half.write.lock().await;
         let w = write.as_mut().ok_or("WebSocket not connected")?;
-        let json = self.write_half.wrap(msg.to_json());
+        let json = self.write_half.wrap(msg.to_json())?;
         w.send(Message::Text(json)).await.map_err(|e| e.to_string())
     }
 
@@ -190,8 +190,16 @@ impl WsCommunicator {
 }
 
 /// Send a pre-built WebSocketMessage using only the sender handle.
+/// Messages are silently dropped when no session key is established — plaintext
+/// fallback is forbidden.
 pub async fn send_msg_via(sender: &WsSender, msg: &WebSocketMessage) {
-    let json = sender.wrap(msg.to_json());
+    let json = match sender.wrap(msg.to_json()) {
+        Ok(j) => j,
+        Err(e) => {
+            eprintln!("[ws] refusing to send '{}': {}", msg.msg_type, e);
+            return;
+        }
+    };
     let mut write = sender.write.lock().await;
     if let Some(w) = write.as_mut() {
         let _ = w.send(Message::Text(json)).await;
@@ -226,10 +234,10 @@ pub async fn ws_send_via(
 
 // ── Envelope helpers ────────────────────────────────────────────────────
 
-fn wrap_outgoing(json: String, key: &Option<[u8; 32]>) -> String {
+fn wrap_outgoing(json: String, key: &Option<[u8; 32]>) -> Result<String, String> {
     match key {
-        Some(k) => format!(r#"{{"e":"{}"}}"#, libra_crypto::encrypt_payload(&json, k)),
-        None => json,
+        Some(k) => Ok(format!(r#"{{"e":"{}"}}"#, libra_crypto::encrypt_payload(&json, k))),
+        None => Err("no session key — refusing to send plaintext".to_string()),
     }
 }
 
@@ -251,15 +259,15 @@ mod tests {
     use super::*;
 
     #[test]
-    fn wrap_without_key_is_identity() {
-        assert_eq!(wrap_outgoing("{}".into(), &None), "{}");
+    fn wrap_without_key_is_error() {
+        assert!(wrap_outgoing("{}".into(), &None).is_err());
     }
 
     #[test]
     fn wrap_then_unwrap_roundtrips() {
         let key = libra_crypto::generate_aes_key();
         let original = r#"{"type":"shell.output","data":{"text":"hi"}}"#;
-        let wrapped = wrap_outgoing(original.into(), &Some(key));
+        let wrapped = wrap_outgoing(original.into(), &Some(key)).unwrap();
         assert!(wrapped.contains("\"e\""));
         let unwrapped = unwrap_incoming(&wrapped, &Some(key));
         assert_eq!(unwrapped, original);

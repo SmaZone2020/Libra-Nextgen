@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.IO.Compression;
 using System.Text.Json;
 using LibraNextgen.Service.Data;
@@ -28,6 +29,11 @@ public class PluginService
     /// <summary>Platform keys understood by the module staging logic.</summary>
     private static readonly string[] Platforms = ["x64", "x86", "linux-x64"];
 
+    /// <summary>In-memory cache of plugin script sources, keyed by
+    /// <c>pluginId/moduleName</c>. Populated at startup and refreshed on
+    /// import/enable so the action gateway does not re-read disk per request.</summary>
+    private static readonly ConcurrentDictionary<string, string> ScriptCache = new();
+
     public PluginService(Repository<PluginRecord> plugins, ILogger<PluginService> logger)
     {
         _plugins = plugins;
@@ -45,6 +51,59 @@ public class PluginService
 
     public async Task<List<PluginRecord>> GetEnabledAsync(CancellationToken ct = default) =>
         await _plugins.FindAsync(p => p.Enabled, ct);
+
+    // ── Script source cache ────────────────────────────────────────────
+
+    /// <summary>
+    /// Read a plugin's Rhai script source (guarding against path traversal),
+    /// caching it in memory so repeated action invocations don't re-read disk.
+    /// Returns <c>null</c> when the script file is missing.
+    /// </summary>
+    public static string? GetScriptSource(string pluginId, string name)
+    {
+        if (string.IsNullOrWhiteSpace(name)
+            || name.Any(c => !(char.IsAsciiLetterOrDigit(c) || c is '.' or '-' or '_')))
+            return null;
+
+        var key = $"{pluginId}/{name}";
+        if (ScriptCache.TryGetValue(key, out var cached))
+            return cached;
+
+        var path = Path.Combine(PluginsBaseDir, pluginId, "module", name + ".rhai");
+        if (!File.Exists(path))
+            return null;
+
+        var content = File.ReadAllText(path);
+        ScriptCache[key] = content;
+        return content;
+    }
+
+    /// <summary>Preload all enabled plugins' script sources into the cache.
+    /// Called at startup so the first action invocation is already warm.</summary>
+    public async Task PreloadScriptsAsync(CancellationToken ct = default)
+    {
+        var enabled = await GetEnabledAsync(ct);
+        var loaded = 0;
+        foreach (var plugin in enabled)
+        {
+            foreach (var action in plugin.Actions)
+            {
+                if (!string.Equals(action.Module?.Kind, "script", StringComparison.OrdinalIgnoreCase))
+                    continue;
+                if (action.Module?.Name is { } name && GetScriptSource(plugin.PluginId, name) is not null)
+                    loaded++;
+            }
+        }
+        _logger.LogInformation("Preloaded {Count} plugin scripts into cache", loaded);
+    }
+
+    /// <summary>Drop cached script sources for one plugin (after re-import/delete).</summary>
+    private static void InvalidateScriptCache(string pluginId)
+    {
+        var prefix = pluginId + "/";
+        foreach (var key in ScriptCache.Keys.Where(k => k.StartsWith(prefix, StringComparison.Ordinal)).ToList())
+            ScriptCache.TryRemove(key, out _);
+    }
 
     // ── Import from archive ────────────────────────────────────────────
 
@@ -64,6 +123,7 @@ public class PluginService
         // Re-read the stream for extraction (ParseMetaFromZip consumed position).
         archiveStream.Position = 0;
         ExtractZip(archiveStream, targetDir);
+        InvalidateScriptCache(pluginId);
 
         var existing = await _plugins.FirstOrDefaultAsync(p => p.PluginId == pluginId, ct);
         var now = DateTime.UtcNow.ToString("o");
@@ -175,6 +235,7 @@ public class PluginService
 
         UnstageModules(existing);
         await _plugins.DeleteAsync(id, ct);
+        InvalidateScriptCache(existing.PluginId);
 
         // Best-effort cleanup of extracted files.
         try
@@ -196,6 +257,7 @@ public class PluginService
 
         await _plugins.UpdateAsync(id,
             Builders<PluginRecord>.Update.Set(p => p.Enabled, enabled), ct);
+        InvalidateScriptCache(existing.PluginId);
 
         if (enabled) StageModules(existing);
         else UnstageModules(existing);

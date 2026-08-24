@@ -110,18 +110,10 @@ public class PluginActionController : ControllerBase
 
     // ── helpers ────────────────────────────────────────────────────────
 
-    /// <summary>Read a plugin's Rhai script source from its extracted
-    /// <c>module/&lt;name&gt;.rhai</c>, guarding against path traversal.</summary>
+    /// <summary>Read a plugin's Rhai script source (cached by PluginService),
+    /// guarding against path traversal.</summary>
     private static string? LoadScriptSource(string pluginId, string name)
-    {
-        if (string.IsNullOrWhiteSpace(name)
-            || name.Any(c => !(char.IsAsciiLetterOrDigit(c) || c is '.' or '-' or '_')))
-            return null;
-
-        var dir = Path.Combine(PluginService.PluginsBaseDir, pluginId, "module");
-        var path = Path.Combine(dir, name + ".rhai");
-        return System.IO.File.Exists(path) ? System.IO.File.ReadAllText(path) : null;
-    }
+        => PluginService.GetScriptSource(pluginId, name);
 
     private static string? ReadString(JsonElement root, string key)
     {

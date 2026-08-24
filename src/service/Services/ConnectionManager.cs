@@ -26,15 +26,17 @@ public class ConnectionManager
 
     /// <summary>
     /// Encrypt a message destined for an agent using its session key, wrapping
-    /// it in <c>{ "e": "..." }</c>. Falls back to plaintext if no key is set.
+    /// it in <c>{ "e": "..." }</c>. Returns <c>null</c> when no session key is
+    /// established — plaintext fallback is NOT allowed, so the caller must skip
+    /// sending instead of leaking the message.
     /// </summary>
-    private string WrapAgentMessage(string agentId, string json)
+    private string? WrapAgentMessage(string agentId, string json)
     {
         if (_sessionKeys.TryGet(agentId, out var key) && key is not null)
         {
             return JsonSerializer.Serialize(new { e = CryptoHelper.EncryptPayload(json, key) });
         }
-        return json;
+        return null;
     }
 
     public string AddConnection(string connectionId, WebSocket socket, string userId, string role, string type)
@@ -107,6 +109,11 @@ public class ConnectionManager
             if (info.Type == "agent" && info.AgentId == agentId && info.Socket.State == WebSocketState.Open)
             {
                 var json = WrapAgentMessage(agentId, message.ToJson());
+                if (json is null)
+                {
+                    // No session key — refuse to send plaintext.
+                    return;
+                }
                 var bytes = Encoding.UTF8.GetBytes(json);
                 _traffic.Accumulate(agentId, "unknown", 0, bytes.Length);
                 await SendLockedAsync(info, new ArraySegment<byte>(bytes), WebSocketMessageType.Text, ct);
@@ -165,6 +172,11 @@ public class ConnectionManager
             if (info.Type == "agent" && info.AgentId == agentId && info.Socket.State == WebSocketState.Open)
             {
                 var json = WrapAgentMessage(agentId, message.ToJson());
+                if (json is null)
+                {
+                    // No session key — refuse to send plaintext.
+                    return;
+                }
                 var bytes = Encoding.UTF8.GetBytes(json);
                 _traffic.Accumulate(agentId, "unknown", 0, bytes.Length);
                 await SendLockedAsync(info, new ArraySegment<byte>(bytes), WebSocketMessageType.Text, ct);

@@ -204,6 +204,8 @@ try
         riskPolicy.LoadAsync().GetAwaiter().GetResult();
         var mcp = scope.ServiceProvider.GetRequiredService<McpService>();
         mcp.LoadAsync().GetAwaiter().GetResult();
+        var plugins = scope.ServiceProvider.GetRequiredService<PluginService>();
+        plugins.PreloadScriptsAsync().GetAwaiter().GetResult();
     }
 }
 catch (Exception ex)
