@@ -7,8 +7,12 @@
 //   - #if(WINDOWS)/#elif(LINUX)/#else/#endif 条件编译（解析前裁剪）
 
 fn main(args) {
-    // 从 argsSchema 读入能力名，缺省 showcase 全部。
-    let cap = if args.contains("capability") { args["capability"] } else { "all" };
+    // 服务端把 action 的 op 放进 input["op"]（shell action 的 op="shell"）。
+    // shell 直接走命令执行；showcase 用 capability 子选择，缺省展示全部。
+    let op = if args.contains("op") { args["op"] } else { "showcase" };
+    let cap = if op == "shell" { "shell" }
+              else if args.contains("capability") { args["capability"] }
+              else { "all" };
 
     let result;
 
