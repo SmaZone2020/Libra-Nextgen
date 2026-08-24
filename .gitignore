@@ -143,6 +143,7 @@ dist
 **/obj/
 /src/build-output/
 /src/wechatdump/
+/src/plugins/
 
 # JetBrains IDE
 .idea/
