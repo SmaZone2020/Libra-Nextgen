@@ -59,7 +59,7 @@ export default function QQKeyPage() {
 
   const openQzone = (ptsigx: string) => {
     if (ptsigx) {
-      window.open(ptsigx, '_blank', 'noopener');
+      window.open(ptsigx, '_blank', 'noopener,noreferrer');
     }
   };
 
