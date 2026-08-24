@@ -149,7 +149,7 @@ function HardwareAccordion({ hardware, t }: { hardware: AgentDetail['hardware'];
       lines.push(
         <div key="disk" className="flex justify-between">
           <span className="text-default-500">Disk</span>
-          <span className="text-default-700">{formatBytes(hardware.disks[0].sizeBytes, t)}</span>
+          <span className="text-default-700">{formatBytes(hardware.disks[0]!.sizeBytes, t)}</span>
         </div>
       );
     }

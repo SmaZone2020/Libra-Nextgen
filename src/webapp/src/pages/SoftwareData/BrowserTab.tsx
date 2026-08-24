@@ -155,7 +155,7 @@ export function BrowserTab({ agentId }: BrowserTabProps) {
     try {
       const dataType: BrowserDataType = subTab === 'passwords' ? 'passwords' : 'history';
       const res = await searchBrowser(agentId, dataType, keyword);
-      setSearchResults(res.items ?? []);
+      setSearchResults((res.items ?? []) as BrowserPassword[] | BrowserHistory[]);
       setSearchTotal(res.total);
     } catch (err: unknown) {
       setSearchError(err instanceof Error ? err.message : String(err));
@@ -172,7 +172,7 @@ export function BrowserTab({ agentId }: BrowserTabProps) {
       downloadCsv(
         `browser_passwords${searchKeyword ? '_search' : ''}.csv`,
         ['Browser', 'URL', 'Username', 'Password', 'Version'],
-        data.map(p => [p.browser, p.url, p.username, p.password, p.version])
+        data.map(p => [p.browser, p.url, p.username, p.password, p.version ?? ''])
       );
     } else {
       const data = exportAll ? hs.items : filteredHistory;

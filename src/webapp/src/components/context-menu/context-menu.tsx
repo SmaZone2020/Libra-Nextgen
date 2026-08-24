@@ -243,7 +243,7 @@ export const ContextMenuTrigger = <
   const onTouchStart = useCallback(
     (e: React.TouchEvent) => {
       if (e.touches.length !== 1) return;
-      const touch = e.touches[0];
+      const touch = e.touches[0]!;
       touchStartPos.current = { x: touch.clientX, y: touch.clientY };
       longPressTimeoutRef.current = setTimeout(() => {
         if (touchStartPos.current)
@@ -255,7 +255,7 @@ export const ContextMenuTrigger = <
 
   const onTouchMove = useCallback((e: React.TouchEvent) => {
     if (!touchStartPos.current || e.touches.length !== 1) return;
-    const touch = e.touches[0];
+    const touch = e.touches[0]!;
     const dx = Math.abs(touch.clientX - touchStartPos.current.x);
     const dy = Math.abs(touch.clientY - touchStartPos.current.y);
     if (dx > 10 || dy > 10) clearTimeout(longPressTimeoutRef.current);

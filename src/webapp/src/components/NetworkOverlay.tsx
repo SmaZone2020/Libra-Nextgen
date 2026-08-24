@@ -99,7 +99,7 @@ export function NetworkOverlay() {
             <p className="text-sm text-red-500">
               All {MAX_RETRIES} attempts failed. The server may be down.
             </p>
-            <Button color="primary" onPress={() => window.location.reload()}>
+            <Button variant="primary" onPress={() => window.location.reload()}>
               <ArrowRotateLeft className="w-4 h-4" />
               Refresh Page
             </Button>

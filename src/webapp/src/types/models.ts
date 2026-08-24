@@ -323,6 +323,7 @@ export interface BrowserPassword {
   url: string;
   username: string;
   password: string;
+  version?: string;
 }
 
 export interface BrowserHistory {
