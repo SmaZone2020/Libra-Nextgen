@@ -46,8 +46,8 @@ const pluginManagerGroup: NavItem = {
 export const sidebarItems: NavItem[] = [
   ...topLevelItems,
   featuresGroup,
-  ...bottomTopItems,
   pluginManagerGroup,
+  ...bottomTopItems,
 ];
 
 export const sidebarBottomItems: NavItem[] = [

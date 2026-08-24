@@ -153,8 +153,7 @@ const TerminalView = forwardRef<TerminalHandle, Props>(function TerminalView(
   return (
     <div
       ref={containerRef}
-      className={className}
-      style={{ overflow: 'hidden', height: '100%', ...style }}
+      className={`${className} overflow-hidden`}
     />
   );
 });

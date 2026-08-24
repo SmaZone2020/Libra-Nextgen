@@ -34,8 +34,8 @@ export default function ShellPage() {
     <div className="space-y-3">
       {!agentId && (
         <div
-          className="flex items-center justify-center border border-neutral-700 rounded-lg text-neutral-500 text-sm select-none"
-          style={{ height: 'calc(100vh - 240px)', minHeight: 400, background: '#1a1b1e' }}
+          className="flex items-center justify-center text-neutral-500 text-sm select-none"
+          style={{ height: 'calc(100vh - 240px)', minHeight: 400 }}
         >
           {t('shell.selectAgent')}
         </div>
@@ -48,8 +48,7 @@ export default function ShellPage() {
           disabled={!connected}
           onInput={sendInput}
           onResize={sendResize}
-          className="rounded-lg border border-neutral-700 overflow-hidden"
-          style={{ height: 'calc(100vh - 260px)', minHeight: 400 }}
+          style={{ height: '100%', width: '100%' }}
         />
       )}
     </div>

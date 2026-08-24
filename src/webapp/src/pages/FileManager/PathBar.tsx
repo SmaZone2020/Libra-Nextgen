@@ -54,9 +54,8 @@ export function PathBar({ path, drives, historyLength, onGoBack, onGoUp, onDrive
 
       <Dropdown>
         <Button
-          size="sm"
-          variant="ghost"
-          className="w-[80px] justify-start"
+          variant="secondary"
+          className="w-[60px] justify-start rounded-[13px]"
         >
           {driveLabel(path)}
         </Button>
@@ -75,7 +74,7 @@ export function PathBar({ path, drives, historyLength, onGoBack, onGoUp, onDrive
         </Dropdown.Popover>
       </Dropdown>
 
-      <Card className='flex-1 min-w-0 py-0 h-[40px] rounded-[12px]'>
+      <div className='flex-1 min-w-0 py-0 h-[40px] rounded-[12px]'>
         {editing ? (
           <TextField
             aria-label={t('fileManager.pathInput')}
@@ -93,16 +92,18 @@ export function PathBar({ path, drives, historyLength, onGoBack, onGoUp, onDrive
             <Input variant="secondary" className="h-full" />
           </TextField>
         ) : (
-          <div
-            className="flex items-center h-full px-3 cursor-text select-none font-mono text-xs truncate"
+          <Card
             onClick={startEdit}
+            className="h-full py-0 px-4 rounded-[13px]"
             title={t('fileManager.pathInputHint')}
           >
-            <span className="truncate">{path}</span>
-            <Pencil className="w-3.5 h-3.5 ml-2 shrink-0 text-neutral-400" />
-          </div>
+            <div className="flex items-center cursor-text font-mono text-bash truncate h-full">
+              <span className="truncate">{path}</span>
+              <Pencil className="w-3.5 h-3.5 ml-2 shrink-0 text-neutral-400" />
+            </div>
+          </Card>
         )}
-      </Card>
+      </div>
     </div>
   );
 }
