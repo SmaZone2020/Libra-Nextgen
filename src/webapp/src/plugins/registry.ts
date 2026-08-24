@@ -16,16 +16,21 @@ const pageModules = import.meta.glob<{ default: React.ComponentType }>('../plugi
 const lazyCache = new Map<string, React.LazyExoticComponent<React.ComponentType>>();
 
 function resolvePage(pluginId: string): React.LazyExoticComponent<React.ComponentType> | null {
-  const path = `../plugins/${pluginId}/index.tsx`;
-  const loader = pageModules[path];
-  if (!loader) return null;
-
-  let comp = lazyCache.get(pluginId);
-  if (!comp) {
-    comp = lazy(loader);
-    lazyCache.set(pluginId, comp);
+  // Vite normalizes import.meta.glob keys relative to the glob's target dir,
+  // so the actual key is "./<pluginId>/index.tsx" (NOT "../plugins/<id>/...").
+  // Match by suffix instead of hand-building a path to avoid drift.
+  const target = `/${pluginId}/index.tsx`;
+  for (const [key, loader] of Object.entries(pageModules)) {
+    if (key.endsWith(target)) {
+      let comp = lazyCache.get(pluginId);
+      if (!comp) {
+        comp = lazy(loader);
+        lazyCache.set(pluginId, comp);
+      }
+      return comp;
+    }
   }
-  return comp;
+  return null;
 }
 
 /**
