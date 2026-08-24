@@ -4,7 +4,7 @@
   "name": "QQ ClientKey 探测",
   "version": "1.0.0",
   "author": "libra",
-  "description": "探测本机 QQ 快速登录端口（4300-4310）+ QQ.exe 进程内存扫描，经 ptlogin2 jump 兑换 skey/p_skey/bkn/ptsigx。",
+  "description": "探测本机 QQ ClientKey，并生成 QQ 空间免登链接（ptsigx）。",
   "entry": {
     "route": "qqkey",
     "label": "nav.qqkey",
