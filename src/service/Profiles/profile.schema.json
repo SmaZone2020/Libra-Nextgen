@@ -1,0 +1,57 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Libra Malleable C2 Profile",
+  "description": "Declarative traffic-shaping profile consumed by the teamserver and delivered to agents at registration.",
+  "type": "object",
+  "required": ["name", "heartbeatPath", "resultPath"],
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Unique profile name, e.g. teams-mimic."
+    },
+    "description": {
+      "type": "string",
+      "description": "Human-readable purpose of this profile."
+    },
+    "registerPath": {
+      "type": "string",
+      "default": "/api/v1/user/profile",
+      "description": "Beacon registration path."
+    },
+    "heartbeatPath": {
+      "type": "string",
+      "description": "Beacon heartbeat path, e.g. /api/v1/user/status."
+    },
+    "resultPath": {
+      "type": "string",
+      "description": "Beacon task-result path, e.g. /api/v1/user/avatar."
+    },
+    "webSocketPath": {
+      "type": "string",
+      "default": "/ws/chat",
+      "description": "Agent WebSocket upgrade path."
+    },
+    "userAgent": {
+      "type": "string",
+      "description": "User-Agent string the agent presents."
+    },
+    "customHeaders": {
+      "type": "object",
+      "additionalProperties": { "type": "string" },
+      "description": "Extra HTTP headers to attach to every beacon request."
+    },
+    "heartbeatIntervalSeconds": {
+      "type": "integer",
+      "minimum": 5,
+      "default": 30,
+      "description": "Base beacon interval in seconds."
+    },
+    "jitterPercent": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1,
+      "default": 0.2,
+      "description": "Fractional jitter applied to the heartbeat interval."
+    }
+  }
+}
