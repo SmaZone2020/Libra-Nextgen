@@ -70,7 +70,8 @@ public static class McpUtils
         string agentId,
         CommandType commandType,
         string command,
-        int timeoutSeconds = 30)
+        int timeoutSeconds = 30,
+        List<string>? arguments = null)
     {
         if (string.IsNullOrWhiteSpace(agentId))
             return Error("agentId is required");
@@ -83,7 +84,8 @@ public static class McpUtils
             AgentId = agentId,
             CommandType = commandType,
             Command = command,
-            TimeoutSeconds = Math.Max(1, timeoutSeconds)
+            TimeoutSeconds = Math.Max(1, timeoutSeconds),
+            Arguments = (arguments ?? new List<string>()).ToArray()
         };
         var task = await tasks.CreateAsync(request, "mcp-client");
 

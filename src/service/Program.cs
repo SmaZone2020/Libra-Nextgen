@@ -183,7 +183,11 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseWebSockets();
+// 显式路由点：路径改写中间件必须在 UseRouting 之前执行，
+// 否则 EndpointRouting 已按原路径匹配，改写不会生效。
+app.UseMiddleware<BeaconEntryMiddleware>();
 app.UseMiddleware<ProfileFingerprintMiddleware>();
+app.UseRouting();
 app.UseCors("CorsSignalR");
 app.UseRateLimiter();
 app.UseAuthentication();

