@@ -104,6 +104,66 @@ public class BuilderController : ControllerBase
     }
 
     /// <summary>
+    /// 枚举平台模块目录中的模块（文件名驱动，含插件 staging 的 dll）：
+    /// 返回 [{name, enabled}]；禁用 = 文件被重命名为 {name}.{ext}.disable。
+    /// </summary>
+    [HttpGet("modules")]
+    public IActionResult ListModules([FromQuery] string platform = "x64")
+    {
+        if (!BuilderBuildService.PlatformOs.ContainsKey(platform))
+            return BadRequest(new { error = $"Unsupported platform: {platform}" });
+
+        var dir = BuilderBuildService.ModulesDirFor(platform);
+        if (!Directory.Exists(dir))
+            return Ok(new { modules = Array.Empty<object>() });
+
+        var ext = platform.StartsWith("linux") ? ".so" : platform.StartsWith("mac") ? ".dylib" : ".dll";
+        var modules = new List<object>();
+        foreach (var file in Directory.GetFiles(dir))
+        {
+            var name = Path.GetFileName(file);
+            if (name.EndsWith(ext, StringComparison.OrdinalIgnoreCase))
+                modules.Add(new { name = Path.GetFileNameWithoutExtension(name), enabled = true });
+            else if (name.EndsWith(ext + ".disable", StringComparison.OrdinalIgnoreCase))
+                modules.Add(new { name = Path.GetFileNameWithoutExtension(name[..^".disable".Length]), enabled = false });
+        }
+        return Ok(new { modules });
+    }
+
+    /// <summary>启用/禁用模块：重命名 {name}.{ext} ↔ {name}.{ext}.disable（保留文件可恢复）。</summary>
+    [HttpPost("modules/toggle")]
+    public IActionResult ToggleModule([FromBody] ToggleModuleRequest req)
+    {
+        if (!BuilderBuildService.PlatformOs.ContainsKey(req.Platform))
+            return BadRequest(new { error = $"Unsupported platform: {req.Platform}" });
+        if (string.IsNullOrWhiteSpace(req.Name) || req.Name.Any(c => !(char.IsAsciiLetterOrDigit(c) || c == '-' || c == '_')))
+            return BadRequest(new { error = "invalid module name" });
+
+        var dir = BuilderBuildService.ModulesDirFor(req.Platform);
+        if (!Directory.Exists(dir))
+            return NotFound(new { error = "modules directory not found" });
+
+        var ext = req.Platform.StartsWith("linux") ? ".so" : req.Platform.StartsWith("mac") ? ".dylib" : ".dll";
+        var normal = Path.Combine(dir, req.Name + ext);
+        var disabled = Path.Combine(dir, req.Name + ext + ".disable");
+
+        if (req.Enabled)
+        {
+            if (!System.IO.File.Exists(normal) && System.IO.File.Exists(disabled))
+                System.IO.File.Move(disabled, normal);
+            if (!System.IO.File.Exists(normal))
+                return NotFound(new { error = $"module '{req.Name}' not found" });
+        }
+        else
+        {
+            if (!System.IO.File.Exists(normal))
+                return NotFound(new { error = $"module '{req.Name}' not found (or already disabled)" });
+            System.IO.File.Move(normal, disabled);
+        }
+        return Ok(new { status = "ok", name = req.Name, enabled = req.Enabled });
+    }
+
+    /// <summary>
     /// 仅构建云模块（不构建 agent）：body { platform, enabledModules }。
     /// 写入构建历史（FileName 带 modules- 前缀区分），日志走 stream/{buildId}。
     /// </summary>
@@ -385,3 +445,6 @@ public class BuilderController : ControllerBase
 
 /// <summary>仅构建模块的请求体。</summary>
 public record BuildModulesRequest(string Platform, List<string>? EnabledModules);
+
+/// <summary>启用/禁用模块的请求体。</summary>
+public record ToggleModuleRequest(string Platform, string Name, bool Enabled);

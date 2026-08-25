@@ -1,10 +1,12 @@
 import { useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Button, Card, Input, Spinner, Switch } from '@heroui/react';
+import { Button, Card, Input, Popover, Spinner } from '@heroui/react';
 import { ListView } from '@components/list-view';
-import { ArrowDownToLine, TrashBin } from '@gravity-ui/icons';
+import type { Selection } from 'react-aria-components';
+import { ArrowDownToLine, CircleInfo, TrashBin } from '@gravity-ui/icons';
 import type { BuildRecord, TemplateInfo } from '../../types/models';
-import { MODULE_OPTIONS, PLATFORM_LABEL, STATUS_LABEL } from './constants';
+import type { ModuleEntry } from '../../api/build';
+import { PLATFORM_LABEL, STATUS_LABEL } from './constants';
 
 interface BuilderHistoryPanelProps {
   building: boolean;
@@ -14,11 +16,12 @@ interface BuilderHistoryPanelProps {
   templates: TemplateInfo[];
   historyLoading: boolean;
   templateUploading: boolean;
-  enabledModules: Record<string, boolean>;
+  enabledModules: ModuleEntry[];
+  modulesLoading: boolean;
   modulesBuilding: boolean;
   onBuild: () => void;
   onBuildModules: () => void;
-  onToggleModule: (id: string, value: boolean) => void;
+  onToggleModule: (name: string, enabled: boolean) => void;
   onOpenInfo: (id: string) => void;
   onDownload: (id: string) => void;
   onDelete: (id: string) => void;
@@ -49,6 +52,7 @@ export function BuilderHistoryPanel({
   historyLoading,
   templateUploading,
   enabledModules,
+  modulesLoading,
   modulesBuilding,
   onBuild,
   onBuildModules,
@@ -68,6 +72,15 @@ export function BuilderHistoryPanel({
     if (!file) return;
     onUploadTemplate(file);
     if (templateFileRef.current) templateFileRef.current.value = '';
+  };
+
+  // 多选 ListView：选中 = 启用。比较前后集合，逐项切换（乐观更新由父组件处理）。
+  const handleModuleSelectionChange = (keys: Selection) => {
+    const selected = keys as Set<string>;
+    for (const m of enabledModules) {
+      const now = selected.has(m.name);
+      if (now !== m.enabled) onToggleModule(m.name, now);
+    }
   };
 
   return (
@@ -214,7 +227,7 @@ export function BuilderHistoryPanel({
           </ListView>
         )}
       </Card>
-      {/* 模块管理：启用/禁用（构建选项子开关），Title 右侧"构建模块"按钮 */}
+      {/* 模块管理：文件名驱动（含插件 dll），多选 ListView 启用/禁用 */}
       <Card className="p-4 mt-4">
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-lg font-semibold">{t('builder.modules')}</h2>
@@ -228,21 +241,42 @@ export function BuilderHistoryPanel({
             {t('builder.buildModules')}
           </Button>
         </div>
-        <div className="space-y-1.5">
-          {MODULE_OPTIONS.map((m) => (
-            <div key={m.id} className="flex items-center justify-between py-0.5">
-              <span className="text-sm text-neutral-700 dark:text-neutral-300">{t(m.labelKey)}</span>
-              <Switch
-                size="sm"
-                isSelected={enabledModules[m.id] ?? false}
-                onChange={(v) => onToggleModule(m.id, v)}
-              >
-                <Switch.Control><Switch.Thumb /></Switch.Control>
-              </Switch>
-            </div>
-          ))}
-        </div>
-        <p className="text-xs text-default-400 mt-2">{t('builder.moduleDisabledHint')}</p>
+        {modulesLoading ? (
+          <Spinner className="w-6 h-6 mx-auto my-4" />
+        ) : enabledModules.length === 0 ? (
+          <p className="text-sm text-default-500 py-4 text-center">{t('builder.noModules')}</p>
+        ) : (
+          <ListView
+            aria-label={t('builder.modules')}
+            items={enabledModules}
+            selectedKeys={new Set(enabledModules.filter(m => m.enabled).map(m => m.name))}
+            disabledKeys={modulesBuilding || building ? new Set(enabledModules.map(m => m.name)) : new Set()}
+            selectionMode="multiple"
+            variant="primary"
+            onSelectionChange={handleModuleSelectionChange}
+          >
+            {(m: ModuleEntry) => (
+              <ListView.Item id={m.name} textValue={m.name}>
+                <ListView.ItemContent>
+                  <div className="flex items-center justify-between w-full">
+                    <ListView.Title className="font-mono text-xs">{m.name}</ListView.Title>
+                    <Popover>
+                      <Button isIconOnly variant="ghost" className="h-8 w-8 min-w-0">
+                        <CircleInfo className="h-6 w-6" />
+                      </Button>
+                      <Popover.Content className="max-w-64">
+                        <Popover.Dialog>
+                          <Popover.Heading className="text-sm">{m.name}</Popover.Heading>
+                          <p className="mt-1 text-xs text-default-500">{t('builder.moduleDesc')}</p>
+                        </Popover.Dialog>
+                      </Popover.Content>
+                    </Popover>
+                  </div>
+                </ListView.ItemContent>
+              </ListView.Item>
+            )}
+          </ListView>
+        )}
       </Card>
 
       {historyLoading && <Spinner className="w-6 h-6 mx-auto mt-3" />}

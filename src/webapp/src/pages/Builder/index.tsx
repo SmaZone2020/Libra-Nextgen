@@ -8,16 +8,19 @@ import {
   getBuildInfo,
   getBuildStreamUrl,
   listBuilds,
+  listModules,
   listTemplates,
   startBuild,
+  toggleModule,
   uploadTemplate,
 } from '../../api/build';
 import type { BuildConfigRequest, BuildRecord, BuildRecordDetail, TemplateInfo } from '../../types/models';
+import type { ModuleEntry } from '../../api/build';
 import { BuilderConfigCard } from './BuilderConfigCard';
 import { BuilderHistoryPanel } from './BuilderHistoryPanel';
 import { BuilderModals } from './BuilderModals';
 import { BuilderOptionsCard } from './BuilderOptionsCard';
-import { DEFAULT_CONFIG, MODULE_OPTIONS } from './constants';
+import { DEFAULT_CONFIG } from './constants';
 
 export default function BuilderPage() {
   const { t } = useTranslation();
@@ -44,17 +47,35 @@ export default function BuilderPage() {
   const [templateUploading, setTemplateUploading] = useState(false);
   const [templateToDelete, setTemplateToDelete] = useState<string | null>(null);
 
-  // Modules（构建选项子开关，默认全部启用）
-  const [enabledModules, setEnabledModules] = useState<Record<string, boolean>>(
-    () => Object.fromEntries(MODULE_OPTIONS.map(m => [m.id, true])),
-  );
+  // Modules（文件名驱动，含插件 dll；启用状态 = 文件名后缀状态）
+  const [modules, setModules] = useState<ModuleEntry[]>([]);
+  const [modulesLoading, setModulesLoading] = useState(false);
   const [modulesBuilding, setModulesBuilding] = useState(false);
 
-  const activeModules = () => MODULE_OPTIONS.filter(m => enabledModules[m.id]).map(m => m.id);
+  const activeModules = () => modules.filter(m => m.enabled).map(m => m.name);
 
-  const toggleModule = useCallback((id: string, value: boolean) => {
-    setEnabledModules(prev => ({ ...prev, [id]: value }));
-  }, []);
+  const loadModules = useCallback(async () => {
+    try {
+      setModulesLoading(true);
+      const items = await listModules(config.platform);
+      setModules(items);
+    } catch { /* ignore */ } finally {
+      setModulesLoading(false);
+    }
+  }, [config.platform]);
+
+  useEffect(() => { loadModules(); }, [loadModules]);
+
+  const handleToggleModule = async (name: string, enabled: boolean) => {
+    // 乐观更新，失败回滚
+    const prev = modules;
+    setModules(prev.map(m => (m.name === name ? { ...m, enabled } : m)));
+    try {
+      await toggleModule(config.platform, name, enabled);
+    } catch {
+      setModules(prev);
+    }
+  };
 
   const loadHistory = useCallback(async () => {
     try {
@@ -264,11 +285,12 @@ export default function BuilderPage() {
           templates={templates}
           historyLoading={historyLoading}
           templateUploading={templateUploading}
-          enabledModules={enabledModules}
+          enabledModules={modules}
+          modulesLoading={modulesLoading}
           modulesBuilding={modulesBuilding}
           onBuild={handleBuild}
           onBuildModules={handleBuildModules}
-          onToggleModule={toggleModule}
+          onToggleModule={handleToggleModule}
           onOpenInfo={handleOpenInfo}
           onDownload={handleDownload}
           onDelete={handleDelete}

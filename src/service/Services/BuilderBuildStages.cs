@@ -107,17 +107,26 @@ public partial class BuilderBuildService
             .Where(m => enabledSet.Contains(m.Module))
             .ToList();
 
-        // 清理被禁用模块的旧产物：禁用 = agent 不再能下载该模块
+        // 禁用/启用状态 = 文件名后缀：禁用 → {name}.{ext}.disable（保留，可恢复）；
+        // 启用 → 恢复为 {name}.{ext}。agent 请求原文件名，禁用后自然 404。
         if (Directory.Exists(ctx.ModulesDir))
         {
             foreach (var (moduleName, _) in BuilderBuildService.CloudModules)
             {
-                if (enabledSet.Contains(moduleName)) continue;
-                var stale = Path.Combine(ctx.ModulesDir, $"{moduleName}.{ctx.ModuleExt}");
-                if (System.IO.File.Exists(stale))
+                var normal = Path.Combine(ctx.ModulesDir, $"{moduleName}.{ctx.ModuleExt}");
+                var disabled = Path.Combine(ctx.ModulesDir, $"{moduleName}.{ctx.ModuleExt}.disable");
+                if (enabledSet.Contains(moduleName))
                 {
-                    System.IO.File.Delete(stale);
-                    job.Log($"Removed disabled module artifact {moduleName}.{ctx.ModuleExt}");
+                    if (!System.IO.File.Exists(normal) && System.IO.File.Exists(disabled))
+                    {
+                        System.IO.File.Move(disabled, normal);
+                        job.Log($"Re-enabled module {moduleName}.{ctx.ModuleExt}");
+                    }
+                }
+                else if (System.IO.File.Exists(normal))
+                {
+                    System.IO.File.Move(normal, disabled);
+                    job.Log($"Disabled module {moduleName}.{ctx.ModuleExt} -> {moduleName}.{ctx.ModuleExt}.disable");
                 }
             }
         }

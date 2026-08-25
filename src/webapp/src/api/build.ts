@@ -146,3 +146,34 @@ export async function buildModules(platform: string, enabledModules: string[]): 
   const data = await response.json();
   return data.buildId;
 }
+
+export interface ModuleEntry {
+  name: string;
+  enabled: boolean;
+}
+
+/** 枚举平台模块（文件名驱动，含插件 dll）：{name, enabled}[]。 */
+export async function listModules(platform: string): Promise<ModuleEntry[]> {
+  const response = await fetch(`${API_BASE}/builder/modules?platform=${encodeURIComponent(platform)}`, {
+    headers: { Authorization: `Bearer ${getToken()}` },
+  });
+  if (!response.ok) throw new Error(`Failed to list modules (HTTP ${response.status})`);
+  const data = await response.json();
+  return data.modules ?? [];
+}
+
+/** 启用/禁用模块（重命名 .dll ↔ .dll.disable）。 */
+export async function toggleModule(platform: string, name: string, enabled: boolean): Promise<void> {
+  const response = await fetch(`${API_BASE}/builder/modules/toggle`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${getToken()}`,
+    },
+    body: JSON.stringify({ platform, name, enabled }),
+  });
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({ error: 'Toggle failed' }));
+    throw new Error(err.error || `Toggle failed (HTTP ${response.status})`);
+  }
+}
