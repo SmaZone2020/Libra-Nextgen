@@ -1,0 +1,8 @@
+[package]
+name = "libra-syscalls"
+version = "0.1.0"
+edition = "2021"
+
+# 地基 crate：零外部依赖，仅 std + 手写 Win32 FFI。
+# 保持独立可编译/可测试，避免把 windows crate 拉进 bootstrapper。
+[dependencies]

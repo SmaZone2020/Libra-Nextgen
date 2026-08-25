@@ -132,6 +132,17 @@ pub unsafe extern "system" fn core_main(config_ptr: *const u8, config_len: usize
         winlog::write_log(LOG_FILE, &format!("{}\n", msg));
     }));
 
+    // Phase 1: initialize the indirect-syscall table so downstream modules can
+    // use libra-syscalls instead of direct ntdll FFI. Best-effort — a failure
+    // is logged and must not abort agent startup.
+    #[cfg(target_os = "windows")]
+    {
+        match libra_syscalls::init() {
+            Ok(()) => log!(LOG_FILE, "[core] libra-syscalls ready (indirect syscall)"),
+            Err(e) => log!(LOG_FILE, "[core] libra-syscalls init failed: {}", e),
+        }
+    }
+
     // Reconnect loop: if the engine disconnects or errors, retry after delay
     let mut iteration = 0u32;
     loop {

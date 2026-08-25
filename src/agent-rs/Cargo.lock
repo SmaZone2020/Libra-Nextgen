@@ -360,6 +360,7 @@ dependencies = [
  "libra-common",
  "libra-engine",
  "libra-modules",
+ "libra-syscalls",
  "serde_json",
  "tokio",
 ]
@@ -1142,6 +1143,10 @@ dependencies = [
  "windows 0.58.0",
  "windows-core 0.58.0",
 ]
+
+[[package]]
+name = "libra-syscalls"
+version = "0.1.0"
 
 [[package]]
 name = "libsqlite3-sys"

@@ -13,6 +13,8 @@ public class ConnectionManager
 {
     private readonly ConcurrentDictionary<string, ConnectionInfo> _connections = new();
     private readonly ConcurrentDictionary<string, TaskCompletionSource<WebSocketMessage>> _pendingRequests = new();
+    /// <summary>已下发、尚未回包的 requestId 集合 —— 用于校验 agent 回包的真实性。</summary>
+    private readonly ConcurrentDictionary<string, byte> _issuedRequestIds = new();
     private readonly ISessionLock _sessionLock;
     private readonly AgentTrafficService _traffic;
     private readonly SessionKeyStore _sessionKeys;
@@ -71,12 +73,16 @@ public class ConnectionManager
     public TaskCompletionSource<WebSocketMessage> RegisterPendingRequest(string requestId)
     {
         var tcs = new TaskCompletionSource<WebSocketMessage>(TaskCreationOptions.RunContinuationsAsynchronously);
+        _issuedRequestIds[requestId] = 0;
         _pendingRequests[requestId] = tcs;
         // Auto-cleanup after 30s to prevent memory leaks
-        _ = Task.Delay(TimeSpan.FromSeconds(30)).ContinueWith(_ =>
+        _ = Task.Delay(TimeSpan.FromSeconds(30)).ContinueWith(t =>
         {
             if (_pendingRequests.TryRemove(requestId, out var stale))
+            {
+                _issuedRequestIds.TryRemove(requestId, out var _);
                 stale.TrySetCanceled();
+            }
         });
         return tcs;
     }
@@ -87,6 +93,12 @@ public class ConnectionManager
     /// </summary>
     public bool CompletePendingRequest(string requestId, WebSocketMessage message)
     {
+        // 只有已下发的 rid 才允许完成回包；未登记（伪造或已超时）直接拒绝。
+        if (!_issuedRequestIds.TryRemove(requestId, out _))
+        {
+            return false;
+        }
+
         if (_pendingRequests.TryRemove(requestId, out var tcs))
         {
             return tcs.TrySetResult(message);

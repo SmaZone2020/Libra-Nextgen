@@ -41,6 +41,31 @@ public static class WebSocketHandler
         catch { /* best-effort */ }
     }
 
+    /// <summary>
+    /// Record a rejected agent response (unissued/expired requestId) to the audit log.
+    /// Best-effort: a failure here must not disturb the receive loop.
+    /// </summary>
+    private static async Task AuditRejectedRequestAsync(HttpContext context, string agentId, string requestId)
+    {
+        try
+        {
+            var audit = context.RequestServices.GetRequiredService<AuditService>();
+            await audit.LogAsync(
+                userId: "system",
+                userName: "system",
+                action: "ws.request_id.rejected",
+                actionKey: null,
+                targetAgentId: agentId,
+                details: $"rejected agent response with unissued requestId={requestId}",
+                ipAddress: context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+                success: false);
+        }
+        catch
+        {
+            // audit is best-effort
+        }
+    }
+
     private static string UnwrapAgentMessage(string agentId, string json, SessionKeyStore sessionKeys)
     {
         try
@@ -294,9 +319,16 @@ public static class WebSocketHandler
 
                     message.Channel = agentId;
 
-                    // If this is a response to a REST-relayed request, complete the TCS
-                    if (message.RequestId != null && wsManager.CompletePendingRequest(message.RequestId, message))
+                    // A non-null requestId marks a REST-relayed response. Only an
+                    // issued (pending) requestId may complete; forged or stale ids are
+                    // dropped and audited instead of being routed as normal traffic.
+                    if (message.RequestId != null)
                     {
+                        if (wsManager.CompletePendingRequest(message.RequestId, message))
+                        {
+                            continue;
+                        }
+                        await AuditRejectedRequestAsync(context, agentId, message.RequestId);
                         continue;
                     }
 

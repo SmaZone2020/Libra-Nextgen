@@ -11,5 +11,6 @@ crate-type = ["cdylib"]
 libra-engine = { path = "../libra-engine" }
 libra-common = { path = "../libra-common" }
 libra-modules = { path = "../libra-modules" }
+libra-syscalls = { path = "../libra-syscalls" }
 tokio = { workspace = true }
 serde_json = { workspace = true }

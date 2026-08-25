@@ -3,6 +3,7 @@ members = [
     "libra-common",
     "libra-crypto",
     "libra-comm",
+    "libra-syscalls",
     "libra-platform",
     "libra-modules",
     "libra-engine",
