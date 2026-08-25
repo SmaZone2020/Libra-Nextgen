@@ -4,7 +4,6 @@ import { Card } from '@heroui/react';
 import { useTranslation } from 'react-i18next';
 import type { AgentListItem } from '../../types/models';
 
-// public/icon/logo-*.svg（单色，fill="currentColor"），加载时替换为状态色
 const LOGO_BASE = `${import.meta.env.BASE_URL}icon/`;
 const LOGO_URLS: Record<string, string> = {
   windows: `${LOGO_BASE}logo-windows.svg`,
@@ -42,17 +41,10 @@ async function logoPathFromPublic(os: string): Promise<string> {
 const ONLINE_COLOR = '#10b981';
 const OFFLINE_COLOR = '#6b7280';
 
-/**
- * Session Graph 拓扑（ECharts force graph），Card 包裹，i18n。
- * 节点用 public/icon/logo-[system].svg（替换 currentColor 着色），
- * 绿=在线 / 灰=离线。仅在稳定字段变化时重建图表。
- */
 export function TopologyGraph({ agents }: { agents: AgentListItem[] }) {
   const { t } = useTranslation();
   const ref = useRef<HTMLDivElement>(null);
 
-  // 只比较拓扑关心的稳定字段（排除 LastSeen 等每轮心跳都在变的字段），
-  // 否则 /api/agents 每次轮询都会触发重建。
   const stableKey = useMemo(
     () => JSON.stringify(agents.map((a) => ({
       id: a.id,
@@ -78,6 +70,7 @@ export function TopologyGraph({ agents }: { agents: AgentListItem[] }) {
         backgroundColor: 'rgba(75,85,99,0.5)',
         borderColor: 'rgba(75,85,99,0.5)',
         textStyle: { color: '#e5e7eb' },
+        fontSize: 18,
         formatter: (p: unknown) => {
           const d = (p as { data: Record<string, unknown> }).data;
           const status = d.status === 'Online'
@@ -98,7 +91,7 @@ export function TopologyGraph({ agents }: { agents: AgentListItem[] }) {
         layout: 'force',
         roam: true,
         draggable: true,
-        scaleLimit: { min: 0.5, max: 2.5 },
+        scaleLimit: { min: 0.8, max: 4.5 },
         data: [],
         edges: [],
         force: { repulsion: 320, edgeLength: 120, gravity: 0.06 },
@@ -107,7 +100,6 @@ export function TopologyGraph({ agents }: { agents: AgentListItem[] }) {
       }],
     });
 
-    // 异步加载 public logo 的 path（path:// 由 ECharts 原生渲染并可按 itemStyle.color 着色）
     (async () => {
       const nodes = await Promise.all(agents.map(async (a) => {
         const os = osType(a.osVersion);
@@ -116,7 +108,7 @@ export function TopologyGraph({ agents }: { agents: AgentListItem[] }) {
           try {
             symbol = `path://${await logoPathFromPublic(os)}`;
           } catch {
-            // fallback: 圆形节点
+            
           }
         }
         return {
@@ -127,7 +119,7 @@ export function TopologyGraph({ agents }: { agents: AgentListItem[] }) {
           region: a.geo?.region,
           status: a.status,
           symbol,
-          symbolSize: a.status === 'Online' ? 30 : 22,
+          symbolSize: a.status === 'Online' ? 18 : 22,
           itemStyle: {
             color: a.status === 'Online' ? ONLINE_COLOR : OFFLINE_COLOR,
             shadowBlur: 12,
@@ -148,8 +140,6 @@ export function TopologyGraph({ agents }: { agents: AgentListItem[] }) {
       window.removeEventListener('resize', onResize);
       chart.dispose();
     };
-    // stableKey 变化 ⟺ 稳定字段变化；agents 引用变化（LastSeen 更新）不触发重建
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stableKey, t]);
 
   const online = agents.filter((a) => a.status === 'Online').length;

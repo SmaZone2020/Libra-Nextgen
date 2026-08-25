@@ -158,3 +158,6 @@ PLAN.local.md
 /examples
 /examples
 CHANGELOG.md
+/src/webapp/src/plugins
+src/webapp/pnpm-lock.yaml
+src/webapp/pnpm-workspace.yaml
