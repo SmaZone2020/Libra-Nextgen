@@ -3,7 +3,7 @@ import { Spinner } from '@heroui/react';
 import { DataGrid } from '../../components/data-grid';
 import { ContextMenu } from '@components/context-menu';
 import { StatusChip } from './StatusChip';
-import { PlugConnection, CircleXmark, Eye, TrashBin } from '@gravity-ui/icons';
+import { PlugConnection, CircleXmark, Eye, TrashBin, ArrowRotateRight, Flame } from '@gravity-ui/icons';
 import type { DataGridColumn } from '../../components/data-grid';
 import type { AgentListItem } from '../../types/models';
 
@@ -17,9 +17,11 @@ interface AgentTableProps {
   onDisconnect: () => void;
   onViewDetails: () => void;
   onRemove: () => void;
+  onRestart: () => void;
+  onDestroy: () => void;
 }
 
-export function AgentTable({ agents, loading, contextAgentId, connectedAgentId, onContextMenu, onConnect, onDisconnect, onViewDetails, onRemove }: AgentTableProps) {
+export function AgentTable({ agents, loading, contextAgentId, connectedAgentId, onContextMenu, onConnect, onDisconnect, onViewDetails, onRemove, onRestart, onDestroy }: AgentTableProps) {
   const { t } = useTranslation();
 
   const columns: DataGridColumn<AgentListItem>[] = [
@@ -51,6 +53,8 @@ export function AgentTable({ agents, loading, contextAgentId, connectedAgentId, 
   const isContextAgentConnected = contextAgentId === connectedAgentId && !!connectedAgentId;
   const contextAgent = agents.find(a => a.id === contextAgentId);
   const canConnect = contextAgent?.status === 'Online' && !isContextAgentConnected;
+  // 重启/销毁只对在线设备有意义（任务需由 Agent 心跳领取）
+  const canOperate = contextAgent?.status === 'Online';
 
   return (
     <ContextMenu>
@@ -91,6 +95,16 @@ export function AgentTable({ agents, loading, contextAgentId, connectedAgentId, 
           <ContextMenu.Item id="view-details" textValue={t('agents.viewDetails')} onAction={onViewDetails}>
             <Eye className="w-4 h-4" /> {t('agents.viewDetails')}
           </ContextMenu.Item>
+          {canOperate && (
+            <>
+              <ContextMenu.Item id="restart" textValue={t('agents.restart')} onAction={onRestart}>
+                <ArrowRotateRight className="w-4 h-4" /> {t('agents.restart')}
+              </ContextMenu.Item>
+              <ContextMenu.Item id="destroy" textValue={t('agents.destroy')} onAction={onDestroy} className="text-danger">
+                <Flame className="w-4 h-4" /> {t('agents.destroy')}
+              </ContextMenu.Item>
+            </>
+          )}
           <ContextMenu.Separator />
           <ContextMenu.Item id="remove" textValue={t('agents.remove')} onAction={onRemove}>
             <TrashBin className="w-4 h-4" /> {t('agents.remove')}

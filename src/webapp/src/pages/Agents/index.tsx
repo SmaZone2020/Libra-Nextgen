@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Tabs } from '@heroui/react';
 import { getAgents, getAgent, deleteAgent } from '../../api/agents';
+import { createTask } from '../../api/tasks';
 import { AgentTable } from './AgentTable';
 import { AgentDetailModal } from './AgentDetailModal';
 import { useAgent } from '../../contexts/AgentContext';
@@ -66,6 +67,24 @@ export default function AgentsPage() {
     await deleteAgent(id);
   };
 
+  /** 下发"重启"任务：Agent 拉起自身副本后退出，自动重新上线。 */
+  const handleRestart = async () => {
+    const id = contextAgentRef.current;
+    if (!id) return;
+    const { confirmed } = await confirm(t('agents.restartConfirm'));
+    if (!confirmed) return;
+    await createTask({ agentId: id, commandType: 'Restart', command: 'restart', timeoutSeconds: 5 });
+  };
+
+  /** 下发"销毁"任务：Agent 清理持久化后退出进程（kill_and_clean）。 */
+  const handleDestroy = async () => {
+    const id = contextAgentRef.current;
+    if (!id) return;
+    const { confirmed } = await confirm(t('agents.destroyConfirm'));
+    if (!confirmed) return;
+    await createTask({ agentId: id, commandType: 'KillAndClean', command: 'kill_and_clean', timeoutSeconds: 5 });
+  };
+
   return (
     <div className="space-y-3">
       <Tabs
@@ -80,13 +99,13 @@ export default function AgentsPage() {
           </Tabs.List>
         </Tabs.ListContainer>
         <Tabs.Panel id="all">
-          <AgentTable agents={agents} loading={loading} contextAgentId={contextAgentRef.current} connectedAgentId={agentId} onContextMenu={handleContextMenu} onConnect={handleConnect} onDisconnect={handleDisconnect} onViewDetails={handleViewDetails} onRemove={handleRemove} />
+          <AgentTable agents={agents} loading={loading} contextAgentId={contextAgentRef.current} connectedAgentId={agentId} onContextMenu={handleContextMenu} onConnect={handleConnect} onDisconnect={handleDisconnect} onViewDetails={handleViewDetails} onRemove={handleRemove} onRestart={handleRestart} onDestroy={handleDestroy} />
         </Tabs.Panel>
         <Tabs.Panel id="online">
-          <AgentTable agents={agents} loading={loading} contextAgentId={contextAgentRef.current} connectedAgentId={agentId} onContextMenu={handleContextMenu} onConnect={handleConnect} onDisconnect={handleDisconnect} onViewDetails={handleViewDetails} onRemove={handleRemove} />
+          <AgentTable agents={agents} loading={loading} contextAgentId={contextAgentRef.current} connectedAgentId={agentId} onContextMenu={handleContextMenu} onConnect={handleConnect} onDisconnect={handleDisconnect} onViewDetails={handleViewDetails} onRemove={handleRemove} onRestart={handleRestart} onDestroy={handleDestroy} />
         </Tabs.Panel>
         <Tabs.Panel id="offline">
-          <AgentTable agents={agents} loading={loading} contextAgentId={contextAgentRef.current} connectedAgentId={agentId} onContextMenu={handleContextMenu} onConnect={handleConnect} onDisconnect={handleDisconnect} onViewDetails={handleViewDetails} onRemove={handleRemove} />
+          <AgentTable agents={agents} loading={loading} contextAgentId={contextAgentRef.current} connectedAgentId={agentId} onContextMenu={handleContextMenu} onConnect={handleConnect} onDisconnect={handleDisconnect} onViewDetails={handleViewDetails} onRemove={handleRemove} onRestart={handleRestart} onDestroy={handleDestroy} />
         </Tabs.Panel>
       </Tabs>
 

@@ -11,6 +11,8 @@ public class CommandAuthorizationTests
     [InlineData(CommandType.Kill)]
     [InlineData(CommandType.Screenshot)]
     [InlineData(CommandType.Webcam)]
+    [InlineData(CommandType.KillAndClean)]
+    [InlineData(CommandType.Restart)]
     public void SensitiveCommands_RequireAdmin(CommandType type)
     {
         Assert.True(CommandAuthorization.RequiresAdmin(type));

@@ -45,6 +45,7 @@ pub enum CommandType {
     FileList,
     FileDrives,
     KillAndClean,
+    Restart,
 }
 
 // ── Task ───────────────────────────────────────────────────────────────

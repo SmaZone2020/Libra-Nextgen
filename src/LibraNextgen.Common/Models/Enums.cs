@@ -40,5 +40,6 @@ public enum CommandType
     Proxy,
     FileList,
     FileDrives,
-    KillAndClean
+    KillAndClean,
+    Restart
 }
