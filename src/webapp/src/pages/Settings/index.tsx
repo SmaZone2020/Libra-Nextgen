@@ -197,9 +197,14 @@ export default function SettingsPage() {
 
   return (
     <div className="space-y-3">
-      <Tabs selectedKey={tab} onSelectionChange={(key) => setTab(String(key))}>
-        <Tabs.ListContainer className="flex justify-center">
-          <Tabs.List aria-label={t('settings.tabsLabel')} className="mx-auto w-lg">
+      <Tabs
+        orientation="vertical"
+        selectedKey={tab}
+        onSelectionChange={(key) => setTab(String(key))}
+        className="items-start"
+      >
+        <Tabs.ListContainer className="flex justify-center h-auto self-start">
+          <Tabs.List aria-label={t('settings.tabsLabel')} className="my-0 px-2 w-35">
             <Tabs.Tab id="preferences">{t('settings.preferencesTab')}<Tabs.Indicator /></Tabs.Tab>
             <Tabs.Tab id="accessKeys">{t('settings.accessKeysTab')}<Tabs.Indicator /></Tabs.Tab>
             {isAdmin && <Tabs.Tab id="mcp">{t('mcp.title')}<Tabs.Indicator /></Tabs.Tab>}
