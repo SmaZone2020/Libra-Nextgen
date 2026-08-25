@@ -183,6 +183,7 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseWebSockets();
+app.UseMiddleware<ProfileFingerprintMiddleware>();
 app.UseCors("CorsSignalR");
 app.UseRateLimiter();
 app.UseAuthentication();
