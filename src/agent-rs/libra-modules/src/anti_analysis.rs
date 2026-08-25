@@ -196,3 +196,16 @@ fn check_linux_vm() -> bool {
     }
     false
 }
+
+/// Linux 辅助：执行命令取输出（仅 Linux 反沙盒探测使用；Windows 路径零子进程）。
+#[cfg(not(target_os = "windows"))]
+#[allow(dead_code)]
+fn exec(cmd: &str, args: &[&str]) -> Result<String, ()> {
+    let output = std::process::Command::new(cmd)
+        .args(args)
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::null())
+        .output()
+        .map_err(|_| ())?;
+    Ok(String::from_utf8_lossy(&output.stdout).to_string())
+}
