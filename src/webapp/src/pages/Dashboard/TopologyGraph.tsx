@@ -31,8 +31,16 @@ export function TopologyGraph({ agents }: { agents: AgentListItem[] }) {
   const prevKey = useRef<string>('');
 
   useEffect(() => {
-    // 内容没变（引用变了但数据相同）→ 跳过重建，避免轮询闪烁
-    const key = JSON.stringify(agents);
+    // 只比较拓扑关心的稳定字段（排除 LastSeen 等每轮心跳都在变的字段），
+    // 否则 /api/agents 每次轮询都会触发重建。
+    const key = JSON.stringify(agents.map((a) => ({
+      id: a.id,
+      hostname: a.hostname,
+      status: a.status,
+      ip: a.ipAddress,
+      os: a.osVersion,
+      region: a.geo?.region,
+    })));
     if (key === prevKey.current) return;
     prevKey.current = key;
 
@@ -102,7 +110,7 @@ export function TopologyGraph({ agents }: { agents: AgentListItem[] }) {
   return (
     <Card>
       <Card.Header className="flex items-center justify-between">
-        <Card.Title>{t('topology.title')}</Card.Title>
+        <Card.Title>{t('nav.topology.title')}</Card.Title>
         <div className="flex items-center gap-3 text-xs text-neutral-400">
           <span className="flex items-center gap-1.5">
             <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block" />
