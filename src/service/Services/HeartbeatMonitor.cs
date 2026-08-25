@@ -72,6 +72,7 @@ public class HeartbeatMonitor : BackgroundService
                     Data = JsonSerializer.SerializeToElement(new { agentId = agent.Id, status = "Offline" })
                 };
                 await wsManager.BroadcastToConsoleAsync(msg, ct);
+                wsManager.AppendEvent("agent", $"Agent {agent.Hostname} ({agent.IpAddress}) 离线");
             }
             catch (Exception ex)
             {

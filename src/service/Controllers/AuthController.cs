@@ -30,6 +30,14 @@ public class AuthController : ControllerBase
         if (response == null)
             return Unauthorized(new { error = "Invalid username or password" });
 
+        // 事件溯源：操作员登录。
+        try
+        {
+            var wsManager = HttpContext.RequestServices.GetRequiredService<ConnectionManager>();
+            wsManager.AppendEvent("operator", $"操作员 {request.Username} 登录（{ip}）");
+        }
+        catch { /* best-effort */ }
+
         return Ok(response);
     }
 

@@ -102,6 +102,22 @@ public static class WebSocketHandler
         var connId = Guid.NewGuid().ToString("N");
         wsManager.AddConnection(connId, ws, userId, role, "console");
 
+        // 事件溯源：回放最近事件，让新连接补齐状态。
+        try
+        {
+            foreach (var e in wsManager.GetRecentEvents(100))
+            {
+                var replay = new WebSocketMessage
+                {
+                    Type = "event.item",
+                    Channel = "global",
+                    Data = JsonSerializer.SerializeToElement(e)
+                };
+                await wsManager.SendToConnectionAsync(connId, replay);
+            }
+        }
+        catch { /* best-effort */ }
+
         try
         {
             await ConsoleReceiveLoop(ws, connId, wsManager, sessionLock, context);
@@ -163,6 +179,7 @@ public static class WebSocketHandler
                 if (agentId == null) break;
 
                 wsManager.BindToAgent(connId, agentId);
+                wsManager.AppendEvent("shell", $"操作员 {wsManager.GetUserId(connId)} 绑定 {agentId} 的 Shell");
 
                 var acquired = sessionLock.TryAcquireWriteLock(agentId, wsManager.GetUserId(connId), out var writerId);
                 var lockMsg = new WebSocketMessage

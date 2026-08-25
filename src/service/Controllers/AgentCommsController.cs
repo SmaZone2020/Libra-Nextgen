@@ -73,12 +73,12 @@ public class AgentCommsController : ControllerBase
         _traffic.Accumulate(agent.Id, agent.Hostname, bytesReceived, bytesSent);
 
         // Broadcast online status to console clients
-        _ = BroadcastAgentOnlineAsync(agent.Id);
+        _ = BroadcastAgentOnlineAsync(agent.Id, agent.Hostname, clientIp);
 
         return Ok(response);
     }
 
-    private async Task BroadcastAgentOnlineAsync(string agentId)
+    private async Task BroadcastAgentOnlineAsync(string agentId, string hostname, string ipAddress)
     {
         try
         {
@@ -89,6 +89,7 @@ public class AgentCommsController : ControllerBase
                 Data = JsonSerializer.SerializeToElement(new { agentId, status = AgentStatus.Online.ToString() })
             };
             await _wsManager.BroadcastToConsoleAsync(msg);
+            _wsManager.AppendEvent("agent", $"Agent {hostname} ({ipAddress}) 上线");
         }
         catch { /* best-effort */ }
     }

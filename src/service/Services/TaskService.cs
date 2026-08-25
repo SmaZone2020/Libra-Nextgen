@@ -9,10 +9,12 @@ namespace LibraNextgen.Service.Services;
 public class TaskService
 {
     private readonly Repository<AgentTask> _tasks;
+    private readonly ConnectionManager _wsManager;
 
-    public TaskService(Repository<AgentTask> tasks)
+    public TaskService(Repository<AgentTask> tasks, ConnectionManager wsManager)
     {
         _tasks = tasks;
+        _wsManager = wsManager;
     }
 
     public async Task<List<AgentTask>> GetAllAsync(
@@ -72,6 +74,7 @@ public class TaskService
             Status = TaskStatus.Pending
         };
         await _tasks.InsertAsync(task, ct);
+        _wsManager.AppendEvent("task", $"操作员 {createdBy} 向 Agent {request.AgentId} 下发任务 {request.CommandType}");
         return task;
     }
 

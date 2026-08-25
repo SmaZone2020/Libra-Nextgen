@@ -15,6 +15,35 @@ public class ConnectionManager
     private readonly ConcurrentDictionary<string, TaskCompletionSource<WebSocketMessage>> _pendingRequests = new();
     /// <summary>已下发、尚未回包的 requestId 集合 —— 用于校验 agent 回包的真实性。</summary>
     private readonly ConcurrentDictionary<string, byte> _issuedRequestIds = new();
+
+    // ── 事件溯源（Event sourcing）────────────────────────────────────────
+
+    /// <summary>一条全局事件（agent 上线/下线、任务、操作员、会话协作）。</summary>
+    public record EventEntry(string Id, string Kind, string Text, DateTime Ts);
+
+    private readonly ConcurrentQueue<EventEntry> _eventLog = new();
+    private const int MaxEventLog = 500;
+
+    /// <summary>追加一条事件：写入有序日志并实时广播给所有 console。</summary>
+    public void AppendEvent(string kind, string text)
+    {
+        var entry = new EventEntry(Guid.NewGuid().ToString("N"), kind, text, DateTime.UtcNow);
+        _eventLog.Enqueue(entry);
+        while (_eventLog.Count > MaxEventLog)
+            _eventLog.TryDequeue(out _);
+
+        var msg = new WebSocketMessage
+        {
+            Type = "event.item",
+            Channel = "global",
+            Data = JsonSerializer.SerializeToElement(entry)
+        };
+        _ = BroadcastToConsoleAsync(msg);
+    }
+
+    /// <summary>取最近 N 条事件（新 console 连接时回放补齐状态）。</summary>
+    public List<EventEntry> GetRecentEvents(int count = 100)
+        => _eventLog.Reverse().Take(count).Reverse().ToList();
     private readonly ISessionLock _sessionLock;
     private readonly AgentTrafficService _traffic;
     private readonly SessionKeyStore _sessionKeys;
