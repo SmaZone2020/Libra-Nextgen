@@ -8,10 +8,41 @@ namespace LibraNextgen.Service.Middleware;
 /// 重写到内部端点 /api/beacon/handle —— 服务端忽略入口之后的路径段
 /// （/api/user/info、/api/orders/123 全部按 /api 前缀路由）。
 ///
+/// 安全边界（重要）：管理员 API 同样位于 /api/* 下，必须排除在入口路由之外，
+/// 否则 /api/auth/* 等管理端点会被误重写。新增管理员 controller 时请同步
+/// 登记到 <see cref="AdminPrefixes"/>。被排除的路径直接放行，由 JWT/RBAC
+/// 中间件保护 —— agent 只有 beacon session token，没有 JWT，天然无法访问。
+///
 /// 旧版 beacon 端点（/api/beacon/*）保持原样，兼容旧 agent。
 /// </summary>
 public class BeaconEntryMiddleware
 {
+    /// <summary>管理员 API 前缀（不参与 beacon 入口路由，直接放行给 JWT 保护）。</summary>
+    private static readonly string[] AdminPrefixes =
+    {
+        "/api/auth",
+        "/api/agents",
+        "/api/tasks",
+        "/api/beacon",
+        "/api/files",
+        "/api/screens",
+        "/api/system",
+        "/api/audit",
+        "/api/profiles",
+        "/api/token",
+        "/api/proxy",
+        "/api/events",
+        "/api/access-keys",
+        "/api/accounts",
+        "/api/plugins",
+        "/api/plugin-action",
+        "/api/risk-policy",
+        "/api/media",
+        "/api/other-soft",
+        "/api/server-script",
+        "/api/mcp",
+    };
+
     private readonly RequestDelegate _next;
 
     public BeaconEntryMiddleware(RequestDelegate next)
@@ -23,11 +54,15 @@ public class BeaconEntryMiddleware
     {
         var path = context.Request.Path.Value ?? "/";
 
-        // 旧端点直接放行
-        if (path.StartsWith("/api/beacon/", StringComparison.OrdinalIgnoreCase))
+        // 管理员 API / 旧 beacon 端点直接放行
+        foreach (var prefix in AdminPrefixes)
         {
-            await _next(context);
-            return;
+            if (path.Equals(prefix, StringComparison.OrdinalIgnoreCase) ||
+                path.StartsWith(prefix + "/", StringComparison.OrdinalIgnoreCase))
+            {
+                await _next(context);
+                return;
+            }
         }
 
         var profile = await profileService.GetActiveProfileAsync();
