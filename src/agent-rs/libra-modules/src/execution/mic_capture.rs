@@ -1,12 +1,16 @@
 use base64::Engine;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
 
-/// Microphone capture — Windows waveIn API-based.
-/// Uses raw Win32 FFI for device enumeration and audio capture.
+/// Microphone capture — Windows waveIn API-based, **continuous streaming**.
+/// `start_capture` spawns a recording thread that keeps filling 1-second PCM
+/// chunks into a shared buffer; the dispatcher drains them with `capture_chunk`
+/// and streams them as `mic.data` frames over the WebSocket.
 pub struct MicCapture;
 
+static CAPTURE_ACTIVE: AtomicBool = AtomicBool::new(false);
 static CAPTURE_BUFFER: Mutex<Vec<u8>> = Mutex::new(Vec::new());
-static CAPTURE_ACTIVE: Mutex<bool> = Mutex::new(false);
+static CAPTURE_READY: Mutex<bool> = Mutex::new(false);
 
 impl MicCapture {
     /// List available microphone devices as JSON array.
@@ -24,25 +28,23 @@ impl MicCapture {
         "[]".to_string()
     }
 
-    /// Start audio capture from the specified device.
-    /// Returns JSON status with sample format info.
-    pub fn start_capture(_device_index: u32) -> String {
+    /// Start continuous capture on `device_index`: spawns a recording thread
+    /// that fills 1-second PCM chunks until `stop_capture` is called.
+    pub fn start_capture(device_index: u32) -> String {
         #[cfg(windows)]
         {
-            let idx = _device_index;
+            let idx = device_index;
             let count = unsafe { waveInGetNumDevs() };
             if idx >= count {
-                return format!(r#"{{"error":"Mic index {} not found. Avaliable: {}"}}"#, idx, count);
+                return format!(r#"{{"error":"Mic index {} not found. Available: {}"}}"#, idx, count);
             }
-            *CAPTURE_ACTIVE.lock().unwrap() = true;
             *CAPTURE_BUFFER.lock().unwrap() = Vec::new();
+            *CAPTURE_READY.lock().unwrap() = false;
+            CAPTURE_ACTIVE.store(true, Ordering::Relaxed);
 
-            // Start recording in a background thread
-            std::thread::spawn(move || {
-                record_chunk(idx);
-            });
+            std::thread::spawn(move || record_loop(idx));
 
-            return format!(r#"{{"status":"recording","sampleRate":16000,"channels":1,"bitsPerSample":16}}"#);
+            format!(r#"{{"status":"recording","sampleRate":16000,"channels":1,"bitsPerSample":16}}"#)
         }
         #[cfg(not(windows))]
         {
@@ -50,27 +52,37 @@ impl MicCapture {
         }
     }
 
-    /// Stop audio capture and return the recorded PCM data as base64.
+    /// True while the capture loop is running (dispatcher keeps streaming chunks).
+    pub fn is_active() -> bool {
+        CAPTURE_ACTIVE.load(Ordering::Relaxed)
+    }
+
+    /// Drain the most recent 1-second chunk as a `mic.data` frame, or "" if
+    /// no new chunk is available yet.
+    pub fn capture_chunk() -> String {
+        let mut ready = CAPTURE_READY.lock().unwrap();
+        if !*ready {
+            return String::new();
+        }
+        *ready = false;
+
+        let data = std::mem::take(&mut *CAPTURE_BUFFER.lock().unwrap());
+        if data.is_empty() {
+            return String::new();
+        }
+
+        let b64 = base64::engine::general_purpose::STANDARD.encode(&data);
+        format!(
+            r#"{{"sampleRate":16000,"channels":1,"bitsPerSample":16,"data":"{}"}}"#,
+            b64
+        )
+    }
+
+    /// Stop capture and return a JSON status.
     pub fn stop_capture() -> String {
-        #[cfg(windows)]
-        {
-            *CAPTURE_ACTIVE.lock().unwrap() = false;
-            let buffer = std::mem::take(&mut *CAPTURE_BUFFER.lock().unwrap());
-
-            if buffer.is_empty() {
-                return r#"{"status":"stopped","data":"","sampleRate":16000,"channels":1,"bitsPerSample":16}"#.to_string();
-            }
-
-            let base64_data = base64::engine::general_purpose::STANDARD.encode(&buffer);
-            format!(r#"{{"status":"stopped","data":"{}","sampleRate":16000,"channels":1,"bitsPerSample":16,"durationMs":{}}}"#,
-                base64_data,
-                (buffer.len() * 1000) / (16000 * 2) // 16-bit mono → bytes per ms = sampleRate * 2
-            )
-        }
-        #[cfg(not(windows))]
-        {
-            r#"{"status":"stopped"}"#.to_string()
-        }
+        CAPTURE_ACTIVE.store(false, Ordering::Relaxed);
+        *CAPTURE_READY.lock().unwrap() = false;
+        r#"{"status":"stopped"}"#.to_string()
     }
 }
 
@@ -102,16 +114,16 @@ fn list_mic_devices() -> Vec<MicDevice> {
 }
 
 #[cfg(windows)]
-fn record_chunk(device_index: u32) {
+fn record_loop(device_index: u32) {
     const SAMPLE_RATE: u32 = 16000;
-    const BITS_PER_SAMPLE: u16 = 16;
     const CHANNELS: u16 = 1;
-    const BUFFER_MS: u32 = 5000; // Record 5 seconds
+    const BITS_PER_SAMPLE: u16 = 16;
+    const CHUNK_BYTES: usize = (SAMPLE_RATE * CHANNELS as u32 * (BITS_PER_SAMPLE as u32 / 8)) as usize;
 
     unsafe {
         let mut wfx = WAVEFORMATEX {
             wFormatTag: 1, // PCM
-            nChannels: CHANNELS as u16,
+            nChannels: CHANNELS,
             nSamplesPerSec: SAMPLE_RATE,
             nAvgBytesPerSec: SAMPLE_RATE * (CHANNELS as u32) * (BITS_PER_SAMPLE as u32 / 8),
             nBlockAlign: (CHANNELS * BITS_PER_SAMPLE / 8) as u16,
@@ -120,62 +132,58 @@ fn record_chunk(device_index: u32) {
         };
 
         let mut hwi: *mut std::ffi::c_void = std::ptr::null_mut();
-        let result = waveInOpen(
-            &mut hwi,
-            device_index,
-            &mut wfx,
-            0, 0, // No callback (we use polling via separate thread for simplicity)
-            CALLBACK_NULL,
-        );
-
-        if result != 0 || hwi.is_null() {
+        if waveInOpen(&mut hwi, device_index, &mut wfx, 0, 0, CALLBACK_NULL) != 0 || hwi.is_null() {
+            CAPTURE_ACTIVE.store(false, Ordering::Relaxed);
             return;
         }
 
-        let buffer_bytes = (SAMPLE_RATE * (CHANNELS as u32) * (BITS_PER_SAMPLE as u32 / 8) * BUFFER_MS / 1000) as usize;
-        let buffer: Vec<u8> = vec![0u8; buffer_bytes];
+        let mut buffer: Vec<u8> = vec![0u8; CHUNK_BYTES];
 
-        let hdr = WAVEHDR {
-            lpData: buffer.as_ptr() as _,
-            dwBufferLength: buffer_bytes as u32,
-            dwBytesRecorded: 0,
-            dwUser: 0,
-            dwFlags: 0,
-            dwLoops: 0,
-            lpNext: std::ptr::null_mut(),
-            reserved: 0,
-        };
+        while CAPTURE_ACTIVE.load(Ordering::Relaxed) {
+            let hdr = WAVEHDR {
+                lpData: buffer.as_mut_ptr() as isize,
+                dwBufferLength: CHUNK_BYTES as u32,
+                dwBytesRecorded: 0,
+                dwUser: 0,
+                dwFlags: 0,
+                dwLoops: 0,
+                lpNext: std::ptr::null_mut(),
+                reserved: 0,
+            };
+            let mut hdr_box = Box::new(hdr);
+            let hdr_ptr: *mut WAVEHDR = &mut *hdr_box;
 
-        let mut hdr_box = Box::new(hdr);
-        let hdr_ptr: *mut WAVEHDR = &mut *hdr_box;
+            waveInPrepareHeader(hwi, hdr_ptr, std::mem::size_of::<WAVEHDR>() as u32);
+            waveInAddBuffer(hwi, hdr_ptr, std::mem::size_of::<WAVEHDR>() as u32);
+            waveInStart(hwi);
 
-        waveInPrepareHeader(hwi, hdr_ptr, std::mem::size_of::<WAVEHDR>() as u32);
-        waveInAddBuffer(hwi, hdr_ptr, std::mem::size_of::<WAVEHDR>() as u32);
-        waveInStart(hwi);
-
-        // Wait for buffer to fill (poll)
-        let start = std::time::Instant::now();
-        let timeout = std::time::Duration::from_millis((BUFFER_MS + 2000) as u64);
-        while *CAPTURE_ACTIVE.lock().unwrap() && start.elapsed() < timeout {
-            if ((*hdr_ptr).dwFlags & WHDR_DONE) != 0 {
-                break;
+            // Wait for the 1-second chunk to fill (polling, no callback).
+            let start = std::time::Instant::now();
+            while (*hdr_ptr).dwFlags & WHDR_DONE == 0
+                && start.elapsed() < std::time::Duration::from_millis(2500)
+            {
+                if !CAPTURE_ACTIVE.load(Ordering::Relaxed) {
+                    break;
+                }
+                std::thread::sleep(std::time::Duration::from_millis(20));
             }
-            std::thread::sleep(std::time::Duration::from_millis(50));
+
+            waveInStop(hwi);
+            waveInReset(hwi);
+            waveInUnprepareHeader(hwi, hdr_ptr, std::mem::size_of::<WAVEHDR>() as u32);
+
+            if (*hdr_ptr).dwBytesRecorded > 0 && CAPTURE_ACTIVE.load(Ordering::Relaxed) {
+                let recorded = std::slice::from_raw_parts(
+                    buffer.as_ptr(),
+                    (*hdr_ptr).dwBytesRecorded as usize,
+                );
+                *CAPTURE_BUFFER.lock().unwrap() = recorded.to_vec();
+                *CAPTURE_READY.lock().unwrap() = true;
+            }
+            drop(hdr_box);
         }
 
-        waveInStop(hwi);
-        waveInReset(hwi);
-
-        if (*hdr_ptr).dwBytesRecorded > 0 {
-            let recorded = std::slice::from_raw_parts(buffer.as_ptr(), (*hdr_ptr).dwBytesRecorded as usize);
-            *CAPTURE_BUFFER.lock().unwrap() = recorded.to_vec();
-        }
-
-        waveInUnprepareHeader(hwi, hdr_ptr, std::mem::size_of::<WAVEHDR>() as u32);
         waveInClose(hwi);
-        // hdr_box will be dropped, which is fine since we're done with waveIn
-        std::mem::forget(hdr_box); // Prevent double-free since waveIn owns the buffer during recording
-        let _ = buffer; // Prevent drop of buffer while in use
     }
 }
 

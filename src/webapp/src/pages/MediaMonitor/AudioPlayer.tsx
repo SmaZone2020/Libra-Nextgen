@@ -20,6 +20,8 @@ const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(
     useImperativeHandle(ref, () => ({
       playChunk(chunk: AudioChunk) {
         if (!active) return;
+        // 跳过无音频数据的控制帧（如 bind 的状态帧），否则 atob(undefined) 会卡死播放队列
+        if (!chunk?.data) return;
         queueRef.current.push(chunk);
         if (!playingRef.current) flushQueue();
       },
@@ -47,7 +49,15 @@ const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(
 
       const ctx = ctxRef.current;
       if (!ctx) return;
-      const raw = atob(chunk.data);
+
+      let raw: string;
+      try {
+        raw = atob(chunk.data);
+      } catch {
+        // 数据损坏：跳过该块，继续播放队列
+        flushQueue();
+        return;
+      }
       const len = raw.length;
       const pcm = new Int16Array(len / 2);
       for (let i = 0; i < pcm.length; i++) {
