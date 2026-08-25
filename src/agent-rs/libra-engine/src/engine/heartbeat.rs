@@ -147,7 +147,10 @@ async fn resolve_task(
             run("shell".to_string(), input).await
         }
         CommandType::PowerShell => {
-            let input = serde_json::json!({ "script": task.command.clone() });
+            let input = serde_json::json!({
+                "script": task.command.clone(),
+                "timeoutSeconds": if task.timeout_seconds > 0 { task.timeout_seconds } else { 60 },
+            });
             run("powershell".to_string(), input).await
         }
         CommandType::LocalAccounts => {

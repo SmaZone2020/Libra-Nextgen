@@ -32,6 +32,8 @@ const STUB_DLL: &[u8] = include_bytes!(concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/stub/psinline_stub.dll"
 ));
+#[cfg(not(target_os = "windows"))]
+const STUB_DLL: &[u8] = &[];
 
 // ── GUID ───────────────────────────────────────────────────────────────
 
