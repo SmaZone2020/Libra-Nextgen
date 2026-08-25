@@ -1,10 +1,10 @@
 import { useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Button, Card, Input, Spinner } from '@heroui/react';
+import { Button, Card, Input, Spinner, Switch } from '@heroui/react';
 import { ListView } from '@components/list-view';
 import { ArrowDownToLine, TrashBin } from '@gravity-ui/icons';
 import type { BuildRecord, TemplateInfo } from '../../types/models';
-import { PLATFORM_LABEL, STATUS_LABEL } from './constants';
+import { MODULE_OPTIONS, PLATFORM_LABEL, STATUS_LABEL } from './constants';
 
 interface BuilderHistoryPanelProps {
   building: boolean;
@@ -14,7 +14,11 @@ interface BuilderHistoryPanelProps {
   templates: TemplateInfo[];
   historyLoading: boolean;
   templateUploading: boolean;
+  enabledModules: Record<string, boolean>;
+  modulesBuilding: boolean;
   onBuild: () => void;
+  onBuildModules: () => void;
+  onToggleModule: (id: string, value: boolean) => void;
   onOpenInfo: (id: string) => void;
   onDownload: (id: string) => void;
   onDelete: (id: string) => void;
@@ -44,7 +48,11 @@ export function BuilderHistoryPanel({
   templates,
   historyLoading,
   templateUploading,
+  enabledModules,
+  modulesBuilding,
   onBuild,
+  onBuildModules,
+  onToggleModule,
   onOpenInfo,
   onDownload,
   onDelete,
@@ -206,6 +214,37 @@ export function BuilderHistoryPanel({
           </ListView>
         )}
       </Card>
+      {/* 模块管理：启用/禁用（构建选项子开关），Title 右侧"构建模块"按钮 */}
+      <Card className="p-4 mt-4">
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-lg font-semibold">{t('builder.modules')}</h2>
+          <Button
+            size="sm"
+            variant="primary"
+            isDisabled={modulesBuilding}
+            onPress={onBuildModules}
+          >
+            {modulesBuilding && <Spinner className="w-3 h-3 mr-1" />}
+            {t('builder.buildModules')}
+          </Button>
+        </div>
+        <div className="space-y-1.5">
+          {MODULE_OPTIONS.map((m) => (
+            <div key={m.id} className="flex items-center justify-between py-0.5">
+              <span className="text-sm text-neutral-700 dark:text-neutral-300">{t(m.labelKey)}</span>
+              <Switch
+                size="sm"
+                isSelected={enabledModules[m.id] ?? false}
+                onChange={(v) => onToggleModule(m.id, v)}
+              >
+                <Switch.Control><Switch.Thumb /></Switch.Control>
+              </Switch>
+            </div>
+          ))}
+        </div>
+        <p className="text-xs text-default-400 mt-2">{t('builder.moduleDisabledHint')}</p>
+      </Card>
+
       {historyLoading && <Spinner className="w-6 h-6 mx-auto mt-3" />}
     </>
   );

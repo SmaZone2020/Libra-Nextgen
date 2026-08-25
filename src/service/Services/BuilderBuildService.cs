@@ -41,15 +41,32 @@ public partial class BuilderBuildService
     };
 
     /// <summary>
+    /// 当前构建配置启用的云模块名列表（null/空配置 = 全部 CloudModules）。
+    /// 无效模块名静默忽略（防御脏数据）。
+    /// </summary>
+    internal static List<string> EnabledModuleList(BuildContext ctx)
+    {
+        var requested = ctx.Req.EnabledModules;
+        if (requested == null || requested.Count == 0)
+            return CloudModules.Select(m => m.Module).ToList();
+        var known = new HashSet<string>(CloudModules.Select(m => m.Module));
+        return requested.Where(known.Contains).Distinct().ToList();
+    }
+
+    /// <summary>
     /// 云模块是否可复用：产物齐全 且 模块源码没有比产物更新。
-    /// 任一模块缺失、或任一模块的 src/** 时间戳晚于对应产物 → false（需重建）。
+    /// 任一启用模块缺失、或任一启用模块的 src/** 时间戳晚于对应产物 → false（需重建）。
     /// </summary>
     private static bool ModulesUpToDate(BuildContext ctx)
     {
         if (!Directory.Exists(ctx.ModulesDir))
             return false;
+        var enabled = EnabledModuleList(ctx);
+        var enabledSet = new HashSet<string>(enabled);
         foreach (var (moduleName, _) in CloudModules)
         {
+            if (!enabledSet.Contains(moduleName))
+                continue;
             var artifact = Path.Combine(ctx.ModulesDir, $"{moduleName}.{ctx.ModuleExt}");
             if (!System.IO.File.Exists(artifact))
                 return false;
@@ -116,6 +133,52 @@ public partial class BuilderBuildService
     }
 
     // ── Build (async) ──────────────────────────────────────────────────
+
+    /// <summary>
+    /// 仅构建/部署云模块（不构建 agent core/loader）。供"构建模块"端点使用。
+    /// 按 EnabledModules 子集构建，并清理被禁用模块的旧产物。
+    /// </summary>
+    public async Task<bool> BuildModulesOnlyAsync(string platform, List<string>? enabledModules, BuildJob job)
+    {
+        var req = new BuildConfigRequest
+        {
+            Platform = platform,
+            EnabledModules = enabledModules,
+            StripSymbols = true,
+        };
+        var ctx = new BuildContext
+        {
+            BuildId = "modules-only",
+            Req = req,
+            TempDir = Path.Combine(OutputBase, "modules-only-tmp"),
+            TargetDir = SharedTargetDir,
+            FinalDir = Path.Combine(OutputBase, "modules-only-tmp"),
+            ForceRebuild = true,
+        };
+        try
+        {
+            var os = PlatformOs[platform];
+            var hostWindows = OperatingSystem.IsWindows();
+            ctx.TargetTriple = ResolveTriple(platform, hostWindows);
+            ctx.TargetOs = os;
+            ctx.IsCross = !(os == "windows" && hostWindows) && !(os == "linux" && !hostWindows);
+            var targetArg = $"--target {ctx.TargetTriple}";
+            ctx.IsWindows = os == "windows";
+            ctx.IsMacos = os == "macos";
+            ctx.ReleaseDir = Path.Combine(ctx.TargetDir, ctx.TargetTriple, "release");
+            ctx.ModuleExt = ctx.IsWindows ? "dll" : ctx.IsMacos ? "dylib" : "so";
+            ctx.ModulesDir = ModulesDirFor(platform);
+            ctx.EnvVars["RUSTFLAGS"] = "-C strip=symbols";
+
+            await Stage1_6_BuildModuleAsync(ctx, targetArg, job);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            job.Log($"[WARN] module build failed: {ex.Message}");
+            return false;
+        }
+    }
 
     public async Task RunBuildAsync(string buildId, BuildConfigRequest req, BuildJob job, bool forceRebuild = false)
     {

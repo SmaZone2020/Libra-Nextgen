@@ -126,3 +126,23 @@ export async function deleteTemplate(platform: string): Promise<void> {
     throw new Error(err.error || `Delete failed (HTTP ${response.status})`);
   }
 }
+
+/** 仅构建云模块（不构建 agent）。返回 buildId（历史/日志流用）。 */
+export async function buildModules(platform: string, enabledModules: string[]): Promise<string> {
+  const response = await fetch(`${API_BASE}/builder/modules`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${getToken()}`,
+    },
+    body: JSON.stringify({ platform, enabledModules }),
+  });
+
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({ error: 'Module build failed' }));
+    throw new Error(err.error || `Module build failed (HTTP ${response.status})`);
+  }
+
+  const data = await response.json();
+  return data.buildId;
+}

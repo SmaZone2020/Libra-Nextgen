@@ -493,6 +493,8 @@ export interface BuildConfigRequest {
   extraHeaders?: string[];
   /** 流量伪装：虚假业务路径后缀（每行一个）。 */
   pathSuffixes?: string[];
+  /** 启用的云模块（null/缺省 = 全部）：shell/recon/creds/files/powershell/proxy/script */
+  enabledModules?: string[];
 }
 
 export type BuildStatus = 'building' | 'completed' | 'failed';

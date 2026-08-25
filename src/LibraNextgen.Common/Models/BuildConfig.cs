@@ -45,6 +45,10 @@ public class BuildConfigRequest
         "user/info", "orders/list", "profile", "settings",
         "notifications", "messages/unread", "search/history", "dashboard/stats",
     };
+
+    /// 启用的云模块（构建时只编译/部署这些；null/空 = 全部）。
+    /// 模块名与 CloudModules 一致：shell/recon/creds/files/powershell/proxy/script。
+    public List<string>? EnabledModules { get; set; }
 }
 
 public class AntiAnalysisConfig

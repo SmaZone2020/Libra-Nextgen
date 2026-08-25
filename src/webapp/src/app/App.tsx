@@ -387,7 +387,6 @@ function AuthenticatedLayout({
           </div>
         </header>
 
-        {/* 内容区：flex-1 撑满剩余高度，超出在 div 内滚动，不超过视口 */}
         <div className={`min-h-0 flex-1 overflow-y-auto ${NO_PADDING_ROUTES.has(location.pathname) ? '' : 'px-4 py-6 sm:px-6 lg:px-8'}`}>
           <AnimatePresence mode="wait">
             <motion.div

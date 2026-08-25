@@ -103,6 +103,56 @@ public class BuilderController : ControllerBase
         return Ok(new { buildId });
     }
 
+    /// <summary>
+    /// 仅构建云模块（不构建 agent）：body { platform, enabledModules }。
+    /// 写入构建历史（FileName 带 modules- 前缀区分），日志走 stream/{buildId}。
+    /// </summary>
+    [HttpPost("modules")]
+    public IActionResult BuildModules([FromBody] BuildModulesRequest req)
+    {
+        if (!BuilderBuildService.PlatformOs.ContainsKey(req.Platform))
+            return BadRequest(new { error = $"Unsupported platform: {req.Platform}" });
+
+        var buildId = Guid.NewGuid().ToString("N")[..8];
+        var record = new Models.BuildRecord
+        {
+            Id = buildId,
+            Platform = req.Platform,
+            Config = new BuildConfigRequest
+            {
+                Platform = req.Platform,
+                EnabledModules = req.EnabledModules,
+            },
+            FileName = $"modules-{req.Platform}-{buildId}",
+            Status = "building",
+            CreatedAt = DateTime.UtcNow.ToString("o"),
+        };
+
+        var history = BuilderBuildService.LoadHistory();
+        history.Insert(0, record);
+        BuilderBuildService.SaveHistory(history);
+
+        var job = new Models.BuildJob { Record = record };
+        BuilderBuildService.ActiveJobs[buildId] = job;
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                var ok = await _buildService.BuildModulesOnlyAsync(req.Platform, req.EnabledModules, job);
+                if (ok) job.Complete(0);
+                else job.Fail("cloud module build failed");
+            }
+            catch (Exception ex)
+            {
+                job.Fail(ex.Message);
+            }
+            BuilderBuildService.UpdateHistory(job);
+        });
+
+        return Ok(new { buildId });
+    }
+
     // ── SSE stream ─────────────────────────────────────────────────────
 
     [HttpGet("stream/{buildId}")]
@@ -332,3 +382,6 @@ public class BuilderController : ControllerBase
         return File(bytes, "application/octet-stream", "core.bin");
     }
 }
+
+/// <summary>仅构建模块的请求体。</summary>
+public record BuildModulesRequest(string Platform, List<string>? EnabledModules);

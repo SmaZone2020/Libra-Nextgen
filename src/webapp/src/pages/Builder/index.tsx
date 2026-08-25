@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
+  buildModules,
   deleteBuild,
   deleteTemplate,
   getBuildDownloadUrl,
@@ -16,7 +17,7 @@ import { BuilderConfigCard } from './BuilderConfigCard';
 import { BuilderHistoryPanel } from './BuilderHistoryPanel';
 import { BuilderModals } from './BuilderModals';
 import { BuilderOptionsCard } from './BuilderOptionsCard';
-import { DEFAULT_CONFIG } from './constants';
+import { DEFAULT_CONFIG, MODULE_OPTIONS } from './constants';
 
 export default function BuilderPage() {
   const { t } = useTranslation();
@@ -42,6 +43,18 @@ export default function BuilderPage() {
   const [templates, setTemplates] = useState<TemplateInfo[]>([]);
   const [templateUploading, setTemplateUploading] = useState(false);
   const [templateToDelete, setTemplateToDelete] = useState<string | null>(null);
+
+  // Modules（构建选项子开关，默认全部启用）
+  const [enabledModules, setEnabledModules] = useState<Record<string, boolean>>(
+    () => Object.fromEntries(MODULE_OPTIONS.map(m => [m.id, true])),
+  );
+  const [modulesBuilding, setModulesBuilding] = useState(false);
+
+  const activeModules = () => MODULE_OPTIONS.filter(m => enabledModules[m.id]).map(m => m.id);
+
+  const toggleModule = useCallback((id: string, value: boolean) => {
+    setEnabledModules(prev => ({ ...prev, [id]: value }));
+  }, []);
 
   const loadHistory = useCallback(async () => {
     try {
@@ -79,64 +92,99 @@ export default function BuilderPage() {
     }, 200);
 
     try {
-      const id = await startBuild(config);
-      setBuildId(id);
-      setBuildStatus('builder.buildingStatus');
-
-      // Close any existing SSE connection
-      if (esRef.current) esRef.current.close();
-
-      const url = getBuildStreamUrl(id);
-      const es = new EventSource(url);
-      esRef.current = es;
-
-      es.onmessage = (event) => {
-        try {
-          const msg = JSON.parse(event.data);
-          switch (msg.type) {
-            case 'log':
-              setLogs((prev) => [...prev, msg.text]);
-              break;
-            case 'status':
-              lastBuildResultRef.current = msg.status;
-              setBuildStatus(msg.status === 'completed' ? 'builder.completed' : 'builder.failed');
-              if (msg.status === 'failed' && msg.error) {
-                setError(msg.error);
-              }
-              break;
-            case 'done':
-              es.close();
-              esRef.current = null;
-              if (lastBuildResultRef.current === 'completed') {
-                setBuildSucceeded(true);
-              }
-              setBuilding(false);
-              if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
-              loadHistory();
-              break;
-            case 'error':
-              setError(msg.message || 'Stream error');
-              es.close();
-              esRef.current = null;
-              setBuilding(false);
-              if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
-              break;
-          }
-        } catch { /* parse error */ }
-      };
-
-      es.onerror = () => {
-        es.close();
-        esRef.current = null;
-        setBuilding(false);
-        if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
-        if (logs.length === 0) {
-          setError('Failed to connect to build log stream.');
-        }
-      };
+      const id = await startBuild({ ...config, enabledModules: activeModules() });
+      streamBuild(id);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : String(err));
       setBuilding(false);
+      if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
+    }
+  };
+
+  /** 订阅构建日志流（agent 构建与"构建模块"共用）。 */
+  const streamBuild = (id: string) => {
+    setBuildId(id);
+    setBuildStatus('builder.buildingStatus');
+
+    // Close any existing SSE connection
+    if (esRef.current) esRef.current.close();
+
+    const url = getBuildStreamUrl(id);
+    const es = new EventSource(url);
+    esRef.current = es;
+
+    es.onmessage = (event) => {
+      try {
+        const msg = JSON.parse(event.data);
+        switch (msg.type) {
+          case 'log':
+            setLogs((prev) => [...prev, msg.text]);
+            break;
+          case 'status':
+            lastBuildResultRef.current = msg.status;
+            setBuildStatus(msg.status === 'completed' ? 'builder.completed' : 'builder.failed');
+            if (msg.status === 'failed' && msg.error) {
+              setError(msg.error);
+            }
+            break;
+          case 'done':
+            es.close();
+            esRef.current = null;
+            if (lastBuildResultRef.current === 'completed') {
+              setBuildSucceeded(true);
+            }
+            setBuilding(false);
+            setModulesBuilding(false);
+            if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
+            loadHistory();
+            break;
+          case 'error':
+            setError(msg.message || 'Stream error');
+            es.close();
+            esRef.current = null;
+            setBuilding(false);
+            setModulesBuilding(false);
+            if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
+            break;
+        }
+      } catch { /* parse error */ }
+    };
+
+    es.onerror = () => {
+      es.close();
+      esRef.current = null;
+      setBuilding(false);
+      setModulesBuilding(false);
+      if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
+      if (logs.length === 0) {
+        setError('Failed to connect to build log stream.');
+      }
+    };
+  };
+
+  /** 仅构建启用的云模块（不构建 agent）。 */
+  const handleBuildModules = async () => {
+    setModulesBuilding(true);
+    setBuilding(true);
+    setError(null);
+    setLogs([]);
+    setElapsed(0);
+    setBuildStatus('builder.preparing');
+    setBuildSucceeded(false);
+    lastBuildResultRef.current = null;
+
+    const startTime = Date.now();
+    timerRef.current = setInterval(() => {
+      setElapsed(Math.floor((Date.now() - startTime) / 1000));
+    }, 200);
+
+    try {
+      const id = await buildModules(config.platform, activeModules());
+      streamBuild(id);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : String(err));
+      setBuilding(false);
+      setModulesBuilding(false);
       if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
     }
   };
@@ -216,7 +264,11 @@ export default function BuilderPage() {
           templates={templates}
           historyLoading={historyLoading}
           templateUploading={templateUploading}
+          enabledModules={enabledModules}
+          modulesBuilding={modulesBuilding}
           onBuild={handleBuild}
+          onBuildModules={handleBuildModules}
+          onToggleModule={toggleModule}
           onOpenInfo={handleOpenInfo}
           onDownload={handleDownload}
           onDelete={handleDelete}

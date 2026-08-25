@@ -100,7 +100,29 @@ public partial class BuilderBuildService
     {
         job.Log($"=== Stage 1.6: Building cloud modules ({ctx.TargetTriple}) ===");
 
-        var packages = string.Join(" ", BuilderBuildService.CloudModules
+        // 按构建配置的启用列表过滤（null/空 = 全部）
+        var enabled = BuilderBuildService.EnabledModuleList(ctx);
+        var enabledSet = new HashSet<string>(enabled);
+        var targets = BuilderBuildService.CloudModules
+            .Where(m => enabledSet.Contains(m.Module))
+            .ToList();
+
+        // 清理被禁用模块的旧产物：禁用 = agent 不再能下载该模块
+        if (Directory.Exists(ctx.ModulesDir))
+        {
+            foreach (var (moduleName, _) in BuilderBuildService.CloudModules)
+            {
+                if (enabledSet.Contains(moduleName)) continue;
+                var stale = Path.Combine(ctx.ModulesDir, $"{moduleName}.{ctx.ModuleExt}");
+                if (System.IO.File.Exists(stale))
+                {
+                    System.IO.File.Delete(stale);
+                    job.Log($"Removed disabled module artifact {moduleName}.{ctx.ModuleExt}");
+                }
+            }
+        }
+
+        var packages = string.Join(" ", targets
             .Select(m => m.Lib.StartsWith("shell_") ? "-p shell-module" : $"-p {m.Module}-module")
             .Distinct());
 
@@ -114,7 +136,7 @@ public partial class BuilderBuildService
 
         Directory.CreateDirectory(ctx.ModulesDir);
         var deployed = 0;
-        foreach (var (moduleName, libName) in BuilderBuildService.CloudModules)
+        foreach (var (moduleName, libName) in targets)
         {
             var artifact = ctx.IsWindows
                 ? $"{libName}.dll"
@@ -139,7 +161,7 @@ public partial class BuilderBuildService
                 job.Log($"[WARN] {moduleName} module binary not found after build");
             }
         }
-        job.Log($"Cloud modules deployed: {deployed}/{BuilderBuildService.CloudModules.Length} -> {ctx.ModulesDir}");
+        job.Log($"Cloud modules deployed: {deployed}/{targets.Count} -> {ctx.ModulesDir}");
     }
 
     // ══════════════════════════════════════════════════════════════════
