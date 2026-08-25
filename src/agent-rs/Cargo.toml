@@ -19,6 +19,7 @@ members = [
     "modules/powershell",
     "modules/proxy",
     "modules/script",
+    "modules/token",
     "plugins/qqkey",
     "plugins/aitoken",
 ]

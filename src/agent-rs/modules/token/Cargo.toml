@@ -1,0 +1,12 @@
+[package]
+name = "token-module"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "token_module"
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+libra-syscalls = { path = "../../libra-syscalls" }
+serde_json = { workspace = true }
