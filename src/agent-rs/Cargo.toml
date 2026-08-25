@@ -8,6 +8,7 @@ members = [
     "libra-modules",
     "libra-engine",
     "libra-load",
+    "libra-psinline",
     "agent",
     "loader",
     "core",

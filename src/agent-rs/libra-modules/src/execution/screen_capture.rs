@@ -9,7 +9,7 @@
 use base64::Engine;
 
 #[cfg(target_os = "windows")]
-use self::gdi::{capture_raw, capture_single, enum_display_monitors, ps_list_screens};
+use self::gdi::{capture_raw, capture_single, enum_display_monitors};
 
 #[cfg(target_os = "windows")]
 mod dxgi;
@@ -253,13 +253,11 @@ impl ScreenStream {
 // ── ScreenCapture (one-shot screenshots) ────────────────────────────
 
 impl ScreenCapture {
-    /// List available screens via PowerShell (primary) or EnumDisplayMonitors (fallback).
+    /// List available screens via native EnumDisplayMonitors.
+    /// （旧实现优先 powershell.exe + WMI 枚举——已移除，PowerShell 进程清零专项）
     pub fn list_screens() -> String {
         #[cfg(windows)]
         {
-            if let Some(json) = ps_list_screens() {
-                return json;
-            }
             let monitors = enum_display_monitors();
             if !monitors.is_empty() {
                 let mut idx: u32 = 0;

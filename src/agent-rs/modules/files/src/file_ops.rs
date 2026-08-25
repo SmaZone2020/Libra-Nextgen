@@ -380,30 +380,13 @@ impl FileOps {
 
         #[cfg(target_os = "windows")]
         {
-            use std::os::windows::process::CommandExt;
             let lnk_path = format!("{}.lnk", target_path);
-            let script = format!(
-                "$ws = New-Object -ComObject WScript.Shell; $s = $ws.CreateShortcut('{}'); $s.TargetPath = '{}'; $s.Save()",
-                lnk_path.replace('\'', "''"),
-                target_path.replace('\'', "''")
-            );
-            let result = std::process::Command::new("powershell")
-                .args(["-NoProfile", "-Command", &script])
-                .creation_flags(0x08000000)
-                .stdout(std::process::Stdio::null())
-                .stderr(std::process::Stdio::null())
-                .status();
-
-            match result {
-                Ok(s) if s.success() => format!(
+            match create_shortcut_native(target_path, &lnk_path) {
+                Ok(()) => format!(
                     r#"{{"path":"{}","status":"shortcut_created"}}"#,
                     escape(&lnk_path)
                 ),
-                Ok(s) => format!(
-                    r#"{{"error":"PowerShell exited with code {}"}}"#, 
-                    s.code().unwrap_or(-1)
-                ),
-                Err(e) => format!(r#"{{"error":"{}"}}"#, escape(&e.to_string())),
+                Err(e) => format!(r#"{{"error":"{}"}}"#, escape(&e)),
             }
         }
         #[cfg(not(target_os = "windows"))]
@@ -651,4 +634,149 @@ fn escape(s: &str) -> String {
         .replace('\r', "\\r")
         .replace('\t', "\\t")
         .replace('\u{0}', "\\u0000")
+}
+
+// ── 原生 .lnk 创建（IShellLinkW COM）─────────────────────────────────
+// 替代旧的 powershell.exe + WScript.Shell 子进程方案（PowerShell 进程清零专项）。
+
+#[cfg(target_os = "windows")]
+mod shortcut_native {
+    use std::ffi::c_void;
+    use std::ptr;
+
+    #[repr(C)]
+    struct Guid {
+        data1: u32,
+        data2: u16,
+        data3: u16,
+        data4: [u8; 8],
+    }
+
+    impl Guid {
+        const fn new(d1: u32, d2: u16, d3: u16, d4: [u8; 8]) -> Self {
+            Self { data1: d1, data2: d2, data3: d3, data4: d4 }
+        }
+    }
+
+    const CLSID_ShellLink: Guid = Guid::new(
+        0x00021401, 0x0000, 0x0000, [0xC0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x46],
+    );
+    const IID_IShellLinkW: Guid = Guid::new(
+        0x000214F9, 0x0000, 0x0000, [0xC0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x46],
+    );
+    const IID_IPersistFile: Guid = Guid::new(
+        0x0000010B, 0x0000, 0x0000, [0xC0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x46],
+    );
+
+    const CLSCTX_INPROC_SERVER: u32 = 0x1;
+
+    #[link(name = "ole32")]
+    extern "system" {
+        fn CoCreateInstance(
+            clsid: *const Guid, outer: *mut c_void, ctx: u32,
+            iid: *const Guid, ppv: *mut *mut c_void,
+        ) -> i32;
+    }
+
+    #[link(name = "oleaut32")]
+    extern "system" {
+        fn SysAllocString(s: *const u16) -> *mut c_void;
+        fn SysFreeString(s: *mut c_void) -> ();
+    }
+
+    // IShellLinkW vtable：IUnknown(3) + 18 个方法，SetPath 是第 18 个。
+    #[repr(C)]
+    struct IShellLinkWVtbl {
+        query_interface: unsafe extern "system" fn(*mut c_void, *const Guid, *mut *mut c_void) -> i32,
+        add_ref: unsafe extern "system" fn(*mut c_void) -> u32,
+        release: unsafe extern "system" fn(*mut c_void) -> u32,
+        get_path: unsafe extern "system" fn(*mut c_void, *mut u16, i32, *mut c_void, u32) -> i32,
+        get_id_list: unsafe extern "system" fn(*mut c_void, *mut *mut c_void) -> i32,
+        set_id_list: unsafe extern "system" fn(*mut c_void, *mut c_void) -> i32,
+        get_description: unsafe extern "system" fn(*mut c_void, *mut u16, i32) -> i32,
+        set_description: unsafe extern "system" fn(*mut c_void, *const u16) -> i32,
+        get_working_directory: unsafe extern "system" fn(*mut c_void, *mut u16, i32) -> i32,
+        set_working_directory: unsafe extern "system" fn(*mut c_void, *const u16) -> i32,
+        get_arguments: unsafe extern "system" fn(*mut c_void, *mut u16, i32) -> i32,
+        set_arguments: unsafe extern "system" fn(*mut c_void, *const u16) -> i32,
+        get_hotkey: unsafe extern "system" fn(*mut c_void, *mut u16) -> i32,
+        set_hotkey: unsafe extern "system" fn(*mut c_void, u16) -> i32,
+        get_show_cmd: unsafe extern "system" fn(*mut c_void, *mut i32) -> i32,
+        set_show_cmd: unsafe extern "system" fn(*mut c_void, i32) -> i32,
+        get_icon_location: unsafe extern "system" fn(*mut c_void, *mut u16, i32, *mut i32) -> i32,
+        set_icon_location: unsafe extern "system" fn(*mut c_void, *const u16, i32) -> i32,
+        set_relative_path: unsafe extern "system" fn(*mut c_void, *const u16, u32) -> i32,
+        resolve: unsafe extern "system" fn(*mut c_void, *mut c_void, u32) -> i32,
+        set_path: unsafe extern "system" fn(*mut c_void, *const u16) -> i32,
+    }
+
+    // IPersistFile vtable：IUnknown(3) + GetClassID(1) + IsDirty/Load/Save/SaveCompleted/GetCurFile(5)，
+    // Save 是第 7 个方法（vtable index 6）。
+    #[repr(C)]
+    struct IPersistFileVtbl {
+        query_interface: unsafe extern "system" fn(*mut c_void, *const Guid, *mut *mut c_void) -> i32,
+        add_ref: unsafe extern "system" fn(*mut c_void) -> u32,
+        release: unsafe extern "system" fn(*mut c_void) -> u32,
+        get_class_id: unsafe extern "system" fn(*mut c_void, *mut Guid) -> i32,
+        is_dirty: unsafe extern "system" fn(*mut c_void) -> i32,
+        load: unsafe extern "system" fn(*mut c_void, *const u16, u32) -> i32,
+        save: unsafe extern "system" fn(*mut c_void, *const u16, i32) -> i32,
+        save_completed: unsafe extern "system" fn(*mut c_void, *const u16) -> i32,
+        get_cur_file: unsafe extern "system" fn(*mut c_void, *mut *mut u16) -> i32,
+    }
+
+    fn wide(s: &str) -> Vec<u16> {
+        s.encode_utf16().chain(std::iter::once(0)).collect()
+    }
+
+    /// 用 IShellLinkW + IPersistFile 创建 .lnk，全程无子进程。
+    pub unsafe fn create_shortcut(target: &str, lnk: &str) -> Result<(), String> {
+        let mut shell_link: *mut c_void = ptr::null_mut();
+        let hr = CoCreateInstance(
+            &CLSID_ShellLink,
+            ptr::null_mut(),
+            CLSCTX_INPROC_SERVER,
+            &IID_IShellLinkW,
+            &mut shell_link,
+        );
+        if hr != 0 || shell_link.is_null() {
+            return Err(format!("CoCreateInstance(ShellLink) failed: 0x{:08X}", hr as u32));
+        }
+
+        let vtbl = &*(*(shell_link as *const *const IShellLinkWVtbl));
+        let hr = (vtbl.set_path)(shell_link, wide(target).as_ptr());
+        if hr != 0 {
+            (vtbl.release)(shell_link);
+            return Err(format!("IShellLinkW::SetPath failed: 0x{:08X}", hr as u32));
+        }
+
+        // QI IPersistFile
+        let mut persist: *mut c_void = ptr::null_mut();
+        let hr = (vtbl.query_interface)(shell_link, &IID_IPersistFile, &mut persist);
+        if hr != 0 || persist.is_null() {
+            (vtbl.release)(shell_link);
+            return Err(format!("QI IPersistFile failed: 0x{:08X}", hr as u32));
+        }
+
+        let pvtbl = &*(*(persist as *const *const IPersistFileVtbl));
+        let lnk_wide = wide(lnk);
+        let hr = (pvtbl.save)(persist, lnk_wide.as_ptr(), 1); // fRemember = TRUE
+        (pvtbl.release)(persist);
+        (vtbl.release)(shell_link);
+
+        if hr != 0 {
+            return Err(format!("IPersistFile::Save failed: 0x{:08X}", hr as u32));
+        }
+        Ok(())
+    }
+}
+
+#[cfg(target_os = "windows")]
+fn create_shortcut_native(target: &str, lnk: &str) -> Result<(), String> {
+    unsafe { shortcut_native::create_shortcut(target, lnk) }
+}
+
+#[cfg(not(target_os = "windows"))]
+fn create_shortcut_native(_target: &str, _lnk: &str) -> Result<(), String> {
+    Err("not supported".into())
 }

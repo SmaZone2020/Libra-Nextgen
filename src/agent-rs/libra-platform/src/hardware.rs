@@ -232,11 +232,6 @@ fn wmi_gpus() -> Result<Vec<GpuInfo>, ()> {
 fn collect_disks() -> Vec<DiskInfo> {
     #[cfg(windows)]
     {
-        if let Some(disks) = ps_disks() {
-            if !disks.is_empty() {
-                return disks;
-            }
-        }
         if let Some(disks) = wmi_disks() {
             if !disks.is_empty() {
                 return disks;
@@ -246,62 +241,6 @@ fn collect_disks() -> Vec<DiskInfo> {
 
     // sysinfo fallback (also used on Linux)
     sysinfo_disks()
-}
-
-#[derive(serde::Deserialize)]
-struct PsDisk {
-    #[serde(rename = "Model")]
-    model: Option<String>,
-    #[serde(rename = "Size")]
-    size: Option<u64>,
-    #[serde(rename = "MediaType")]
-    media_type: Option<String>,
-    #[serde(rename = "SerialNumber")]
-    serial_number: Option<String>,
-}
-
-#[cfg(windows)]
-fn ps_disks() -> Option<Vec<DiskInfo>> {
-    let output = run_hidden(
-        "powershell",
-        &["-NoProfile", "-Command", "Get-CimInstance Win32_DiskDrive | Select-Object Model,Size,MediaType,SerialNumber | ConvertTo-Json"],
-    ).ok()?;
-    let text = String::from_utf8_lossy(&output);
-    // Handle both single object and array responses
-    if let Ok(disks) = serde_json::from_str::<Vec<PsDisk>>(&text) {
-        if !disks.is_empty() {
-            return Some(disks.into_iter().map(|d| DiskInfo {
-                model: d.model.unwrap_or_default(),
-                size_bytes: d.size.unwrap_or(0),
-                media_type: d.media_type.filter(|s| !s.is_empty()),
-                serial_number: d.serial_number.filter(|s| !s.is_empty()),
-            }).collect());
-        }
-    }
-    if let Ok(d) = serde_json::from_str::<PsDisk>(&text) {
-        let size = d.size.unwrap_or(0);
-        if size > 0 || d.model.as_ref().map_or(false, |m| !m.is_empty()) {
-            return Some(vec![DiskInfo {
-                model: d.model.unwrap_or_default(),
-                size_bytes: size,
-                media_type: d.media_type.filter(|s| !s.is_empty()),
-                serial_number: d.serial_number.filter(|s| !s.is_empty()),
-            }]);
-        }
-    }
-    None
-}
-
-fn sysinfo_disks() -> Vec<DiskInfo> {
-    sysinfo::Disks::new_with_refreshed_list()
-        .iter()
-        .map(|d| DiskInfo {
-            model: d.name().to_string_lossy().to_string(),
-            size_bytes: d.total_space(),
-            media_type: Some(if d.is_removable() { "removable" } else { "fixed" }.into()),
-            serial_number: None,
-        })
-        .collect()
 }
 
 #[cfg(windows)]
@@ -329,14 +268,23 @@ fn wmi_disks() -> Option<Vec<DiskInfo>> {
     Some(disks)
 }
 
+fn sysinfo_disks() -> Vec<DiskInfo> {
+    sysinfo::Disks::new_with_refreshed_list()
+        .iter()
+        .map(|d| DiskInfo {
+            model: d.name().to_string_lossy().to_string(),
+            size_bytes: d.total_space(),
+            media_type: Some(if d.is_removable() { "removable" } else { "fixed" }.into()),
+            serial_number: None,
+        })
+        .collect()
+}
+
 // ── RAM ──────────────────────────────────────────────────────────────────
 
 fn collect_ram() -> RamInfo {
     #[cfg(windows)]
     {
-        if let Some(ram) = ps_ram() {
-            return ram;
-        }
         if let Some(ram) = wmi_ram() {
             return ram;
         }
@@ -345,16 +293,6 @@ fn collect_ram() -> RamInfo {
     // sysinfo fallback (also used on Linux)
     let sys = sysinfo::System::new_all();
     RamInfo { total_bytes: sys.total_memory() }
-}
-
-#[cfg(windows)]
-fn ps_ram() -> Option<RamInfo> {
-    let output = run_hidden(
-        "powershell",
-        &["-NoProfile", "-Command", "Get-CimInstance Win32_ComputerSystem | Select-Object -ExpandProperty TotalPhysicalMemory"],
-    ).ok()?;
-    let text = String::from_utf8_lossy(&output).trim().to_string();
-    text.parse::<u64>().ok().filter(|&b| b > 0).map(|total_bytes| RamInfo { total_bytes })
 }
 
 #[cfg(windows)]

@@ -4,83 +4,14 @@ impl LocalAccountEnumerator {
     pub async fn enumerate() -> String {
         #[cfg(target_os = "windows")]
         {
-            let result = Self::enumerate_via_powershell().await;
-            if !result.is_empty() && result != r#"{"accounts":[]}"# {
-                return result;
-            }
+            // 无进程路径：wmic 枚举（WMI 客户端）。
+            // 旧实现用 powershell.exe 子进程跑 Get-LocalUser——已移除
+            // （PowerShell 进程清零专项，消除 spawn 检测面）。
             Self::enumerate_via_wmic()
         }
         #[cfg(not(target_os = "windows"))]
         {
             Self::enumerate_linux()
-        }
-    }
-
-    #[cfg(target_os = "windows")]
-    async fn enumerate_via_powershell() -> String {
-        use std::os::windows::process::CommandExt;
-
-        // Use SID S-1-5-32-544 for Administrators group (locale-independent)
-        let script = r#"
-[Console]::OutputEncoding=[Text.Encoding]::UTF8
-$adminSid = New-Object System.Security.Principal.SecurityIdentifier('S-1-5-32-544')
-$adminGroup = $adminSid.Translate([System.Security.Principal.NTAccount]).Value -replace '^.*\\',''
-$admins = @{}
-try {
-    Get-LocalGroupMember -SID 'S-1-5-32-544' -ErrorAction SilentlyContinue | ForEach-Object {
-        $n = $_.Name -replace '^.*\\', ''
-        $admins[$n] = $true
-    }
-} catch {
-    try {
-        net localgroup $adminGroup 2>$null | Where-Object { $_ -and $_ -notmatch '---' -and $_ -notmatch 'command completed' -and $_ -notmatch 'Members' -and $_ -notmatch 'Alias' -and $_ -notmatch 'Comment' } | ForEach-Object {
-            $admins[$_.Trim()] = $true
-        }
-    } catch {}
-}
-try {
-    Get-LocalUser -ErrorAction Stop | ForEach-Object {
-        $isAdmin = [bool]$admins[$_.Name]
-        $grps = if ($isAdmin) { @('Administrators') } else { @() }
-        $_ | Add-Member -NotePropertyName 'isAdmin' -NotePropertyValue $isAdmin -Force
-        $_ | Add-Member -NotePropertyName 'sidValue' -NotePropertyValue $_.SID.Value -Force
-        $_ | Add-Member -NotePropertyName 'groups' -NotePropertyValue $grps -Force
-        $_
-    } | Select-Object Name, FullName, Description, Enabled, isAdmin, sidValue, groups,
-        PasswordRequired, UserMayChangePassword, LastLogon, AccountExpires,
-        PasswordLastSet, PasswordExpires, ObjectClass, PrincipalSource |
-    ConvertTo-Json -Compress
-} catch {
-    "[]"
-}
-"#;
-
-        match std::process::Command::new("powershell")
-            .args(["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", script])
-            .creation_flags(0x08000000)
-            .stdout(std::process::Stdio::piped())
-            .stderr(std::process::Stdio::null())
-            .output()
-        {
-            Ok(o) => {
-                let raw = o.stdout;
-                let json = String::from_utf8_lossy(&raw).trim().to_string();
-                if json.is_empty() || json == "[]" {
-                    return r#"{"accounts":[]}"#.to_string();
-                }
-                // PowerShell outputs a single object (not array) if only one user
-                if json.starts_with('{') {
-                    return format!(r#"{{"accounts":[{}]}}"#, json);
-                }
-                if let Some(start) = json.find('[') {
-                    if let Some(end) = json.rfind(']') {
-                        let inner = &json[start..=end];
-                        return format!(r#"{{"accounts":{}}}"#, inner);
-                    }
-                }
-                r#"{"accounts":[]}"#.to_string()
-            }
-            Err(_) => r#"{"accounts":[]}"#.to_string(),
         }
     }
 

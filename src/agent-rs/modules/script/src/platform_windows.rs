@@ -43,7 +43,9 @@ fn run_cmd(cmdline: &str) -> String {
 }
 
 fn powershell(script: &str) -> String {
-    run("powershell", &["-NoProfile", "-NonInteractive", "-Command", script])
+    // in-process CLR 执行（无 powershell.exe 进程）——
+    // 与 powershell 模块共用 libra-psinline（PowerShell 进程清零专项）
+    libra_psinline::execute_inline(script, 60)
 }
 
 fn reg_query(key: &str, name: &str) -> String {

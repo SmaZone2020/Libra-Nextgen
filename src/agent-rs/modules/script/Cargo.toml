@@ -11,3 +11,4 @@ crate-type = ["cdylib"]
 serde_json = { workspace = true }
 rhai = { workspace = true }
 libra-common = { path = "../../libra-common" }
+libra-psinline = { path = "../../libra-psinline" }

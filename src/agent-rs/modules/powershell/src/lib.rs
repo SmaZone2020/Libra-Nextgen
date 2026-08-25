@@ -1,9 +1,9 @@
 //! PowerShell cloud module — in-process execution via hosted CLR 4
 //! (no powershell.exe process, no system-DLL memory patching).
+//! 执行实现位于共享库 libra-psinline。
 #![allow(non_snake_case)]
 #![allow(clippy::upper_case_acronyms)]
 
-mod clr_host;
 mod power_shell;
 
 use serde_json::Value;
