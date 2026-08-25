@@ -21,6 +21,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- 服务端插件脚本源（service/main.cs）：非编译单元，由 ServerScriptService 运行时解析执行 -->
+    <Compile Remove="plugins-service\**\*.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\LibraNextgen.Common\LibraNextgen.Common.csproj" />
   </ItemGroup>
 

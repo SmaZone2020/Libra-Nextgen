@@ -8,15 +8,16 @@ using Microsoft.CodeAnalysis.Scripting;
 namespace LibraNextgen.Service.Services;
 
 /// <summary>
-/// 服务端 C# 脚本执行器（基于 .NET 自带 Roslyn C# Scripting）。
-/// 脚本放 <c>src/service/server-scripts/&lt;name&gt;.csx</c>，编译结果按脚本名缓存，
-/// 统一入口 <c>POST /api/plugin/{name}/{fn}</c> 调用（改脚本无需重编译，重新实现时自动重编）。
+/// 服务端插件脚本驱动器（基于 .NET 自带 Roslyn C# Scripting）。
+/// 插件 zip 的 <c>service/main.cs</c>（解压到 <c>PluginsBaseDir/&lt;pluginId&gt;/service/main.cs</c>）
+/// 作为该插件的服务端逻辑：编译结果按插件缓存（文件变更自动失效），
+/// 统一入口 <c>POST /api/plugin/{pluginId}/{fn}</c> 驱动执行。
 ///
-/// 脚本约定：
+/// main.cs 约定：
 ///   - 可直接 <c>using System.Net.Http / System.Text.Json / System.Collections.Generic</c> 等引用库，
 ///     自己 new HttpClient 做网络请求（服务端发起，无 CORS）。
 ///   - 末尾 <c>return new Dictionary&lt;string, Func&lt;object, object&gt;&gt; { ["fn"] = p => …, … };</c>
-///     导出函数；<c>p</c> 为请求 body 反序列化后的 dynamic 对象（body 为空时 null）。
+///     导出函数；<c>p</c> 为请求 body 反序列化后的 dynamic 对象（body 为空时为 null）。
 ///   - 函数返回值作为 <c>data</c> 返回（对象自动 JSON 序列化）。
 /// </summary>
 public class ServerScriptService
@@ -32,48 +33,82 @@ public class ServerScriptService
             "System", "System.Net", "System.Net.Http", "System.Text", "System.Text.Json",
             "System.Threading.Tasks", "System.Collections.Generic", "System.Dynamic", "System.Linq");
 
-    private readonly string _scriptsDir;
-    private readonly ConcurrentDictionary<string, Lazy<Script<object>>> _scripts = new();
+    private sealed record CachedScript(string SourcePath, DateTime LastWriteUtc, Lazy<Script<object>> Script);
 
-    public ServerScriptService()
+    private readonly ConcurrentDictionary<string, CachedScript> _cache = new();
+
+    /// <summary>插件 service/main.cs 的路径（运行时解压目录优先，其次仓库内开发源）。</summary>
+    public static string? SourcePathFor(string pluginId)
     {
-        _scriptsDir = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "server-scripts"));
-        Directory.CreateDirectory(_scriptsDir);
+        var runPath = Path.Combine(PluginService.PluginsBaseDir, pluginId, "service", "main.cs");
+        if (File.Exists(runPath)) return runPath;
+        var devPath = Path.GetFullPath(
+            Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "plugins-service", pluginId, "main.cs"));
+        return File.Exists(devPath) ? devPath : null;
     }
 
-    public string ScriptsDir => _scriptsDir;
-
-    /// <summary>调用某脚本的某导出函数，返回其返回值（可 JSON 序列化）。</summary>
-    public async Task<object?> InvokeAsync(string name, string fn, string? jsonBody, CancellationToken ct)
+    /// <summary>调用某插件 service/main.cs 的某导出函数，返回其返回值（可 JSON 序列化）。</summary>
+    public async Task<object?> InvokeAsync(string pluginId, string fn, string? jsonBody, CancellationToken ct)
     {
-        if (!IsSafeName(name) || !IsSafeName(fn))
-            throw new ArgumentException("invalid script/function name");
+        if (!IsSafeName(pluginId) || !IsSafeName(fn))
+            throw new ArgumentException("invalid plugin/function name");
 
-        var path = Path.Combine(_scriptsDir, name + ".csx");
-        if (!File.Exists(path))
-            throw new FileNotFoundException($"server script '{name}.csx' not found");
+        var path = SourcePathFor(pluginId)
+            ?? throw new FileNotFoundException($"plugin '{pluginId}' has no service/main.cs");
 
-        var script = _scripts.GetOrAdd(name, _ =>
-            new Lazy<Script<object>>(() => CSharpScript.Create<object>(File.ReadAllText(path), Options)));
-
-        var body = ToDynamic(jsonBody);
-        var state = await script.Value.RunAsync(cancellationToken: ct).ConfigureAwait(false);
+        var script = EnsureScript(pluginId, path);
+        var state = await script.RunAsync(cancellationToken: ct).ConfigureAwait(false);
 
         if (state.ReturnValue is not IDictionary<string, Func<object?, object?>> funcs)
-            throw new InvalidDataException($"script '{name}' must return a Dictionary<string, Func<object, object>>");
+            throw new InvalidDataException($"plugin '{pluginId}' service/main.cs must return a Dictionary<string, Func<object, object>>");
 
         if (!funcs.TryGetValue(fn, out var handler))
-            throw new ArgumentException($"function '{fn}' not found in script '{name}'");
+            throw new ArgumentException($"function '{fn}' not found in plugin '{pluginId}' service");
 
-        return handler(body);
+        return handler(ToDynamic(jsonBody));
     }
 
-    public static IEnumerable<string> ListScripts()
+    /// <summary>列出已导入且含 service/main.cs 的插件及其导出函数。</summary>
+    public async Task<List<(string PluginId, IReadOnlyList<string> Functions)>> ListPluginScriptsAsync(CancellationToken ct)
     {
-        var dir = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "server-scripts"));
-        return Directory.Exists(dir)
-            ? Directory.EnumerateFiles(dir, "*.csx").Select(p => Path.GetFileNameWithoutExtension(p) ?? "")
-            : Array.Empty<string>();
+        var result = new List<(string, IReadOnlyList<string>)>();
+        if (!Directory.Exists(PluginService.PluginsBaseDir)) return result;
+
+        foreach (var dir in Directory.EnumerateDirectories(PluginService.PluginsBaseDir))
+        {
+            var pluginId = Path.GetFileName(dir);
+            if (!IsSafeName(pluginId)) continue;
+            var main = Path.Combine(dir, "service", "main.cs");
+            if (!File.Exists(main)) continue;
+
+            try
+            {
+                var script = EnsureScript(pluginId, main);
+                var state = await script.RunAsync(cancellationToken: ct).ConfigureAwait(false);
+                var funcs = state.ReturnValue as IDictionary<string, Func<object?, object?>>;
+                result.Add((pluginId, funcs?.Keys.ToList() ?? new List<string>()));
+            }
+            catch
+            {
+                // 脚本损坏不影响列表
+            }
+        }
+        return result;
+    }
+
+    /// <summary>获取编译缓存；main.cs 文件变更（导入覆盖/时间戳变化）时重新编译。</summary>
+    private Script<object> EnsureScript(string pluginId, string path)
+    {
+        var lastWrite = File.GetLastWriteTimeUtc(path);
+        var cached = _cache.GetValueOrDefault(pluginId);
+        if (cached is null || cached.LastWriteUtc != lastWrite)
+        {
+            var script = new CachedScript(path, lastWrite,
+                new Lazy<Script<object>>(() => CSharpScript.Create<object>(File.ReadAllText(path), Options)));
+            _cache[pluginId] = script;
+            cached = script;
+        }
+        return cached.Script.Value;
     }
 
     private static bool IsSafeName(string s) =>
