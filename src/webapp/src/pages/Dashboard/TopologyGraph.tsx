@@ -20,20 +20,21 @@ function osType(os?: string): string | null {
   return null;
 }
 
-// 缓存：`os:color` -> data URI（避免每次重建都 fetch）
-const logoDataUriCache = new Map<string, Promise<string>>();
+// 缓存：os -> SVG path（避免每次重建都 fetch）
+const logoPathCache = new Map<string, Promise<string>>();
 
-function coloredLogoDataUri(os: string, color: string): Promise<string> {
-  const key = `${os}:${color}`;
-  let p = logoDataUriCache.get(key);
+async function logoPathFromPublic(os: string): Promise<string> {
+  let p = logoPathCache.get(os);
   if (!p) {
     p = (async () => {
       const resp = await fetch(LOGO_URLS[os]!);
       if (!resp.ok) throw new Error(`logo fetch failed: ${LOGO_URLS[os]}`);
       const svg = await resp.text();
-      return `data:image/svg+xml;utf8,${encodeURIComponent(svg.replaceAll('currentColor', color))}`;
+      const m = svg.match(/d="([^"]+)"/);
+      if (!m) throw new Error('no path in logo svg');
+      return m[1]!;
     })();
-    logoDataUriCache.set(key, p);
+    logoPathCache.set(os, p);
   }
   return p;
 }
@@ -106,15 +107,14 @@ export function TopologyGraph({ agents }: { agents: AgentListItem[] }) {
       }],
     });
 
-    // 异步加载 public logo（替换 currentColor 着色），完成后填充节点
+    // 异步加载 public logo 的 path（path:// 由 ECharts 原生渲染并可按 itemStyle.color 着色）
     (async () => {
       const nodes = await Promise.all(agents.map(async (a) => {
         const os = osType(a.osVersion);
-        const color = a.status === 'Online' ? ONLINE_COLOR : OFFLINE_COLOR;
         let symbol: string = 'circle';
         if (os) {
           try {
-            symbol = await coloredLogoDataUri(os, color);
+            symbol = `path://${await logoPathFromPublic(os)}`;
           } catch {
             // fallback: 圆形节点
           }
@@ -129,6 +129,7 @@ export function TopologyGraph({ agents }: { agents: AgentListItem[] }) {
           symbol,
           symbolSize: a.status === 'Online' ? 30 : 22,
           itemStyle: {
+            color: a.status === 'Online' ? ONLINE_COLOR : OFFLINE_COLOR,
             shadowBlur: 12,
             shadowColor: a.status === 'Online'
               ? 'rgba(16,185,129,0.45)'
