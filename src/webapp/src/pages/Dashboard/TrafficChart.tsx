@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button, Card } from '@heroui/react';
 import { ComposedChart } from '../../components/composed-chart';
@@ -38,6 +38,24 @@ export function TrafficChart({ trafficData, agentIds, agentHosts, range, onRange
   const { t } = useTranslation();
   const [hidden, setHidden] = useState<Set<string>>(new Set());
 
+  // 当前区间内每个 agent 的总流量（用于过滤 0 流量设备）
+  const agentTotals = useMemo(() => {
+    const totals: Record<string, number> = {};
+    for (const point of trafficData) {
+      for (const id of agentIds) {
+        const v = Number(point[id] ?? 0);
+        if (v > 0) totals[id] = (totals[id] ?? 0) + v;
+      }
+    }
+    return totals;
+  }, [trafficData, agentIds]);
+
+  // 区间内流量为 0 的设备：底部图例不显示（Hover Tooltip 同样不出现）
+  const visibleAgentIds = useMemo(
+    () => agentIds.filter(id => (agentTotals[id] ?? 0) > 0),
+    [agentIds, agentTotals],
+  );
+
   const toggleAgent = useCallback((id: string) => {
     setHidden(prev => {
       const next = new Set(prev);
@@ -71,7 +89,7 @@ export function TrafficChart({ trafficData, agentIds, agentHosts, range, onRange
             tickFormatter={(v: number) => formatBytes(v, t)}
             width={60}
           />
-          {agentIds.map((id, i) => (
+          {visibleAgentIds.map((id, i) => (
             <ComposedChart.Line
               key={id}
               dataKey={id}
@@ -88,10 +106,14 @@ export function TrafficChart({ trafficData, agentIds, agentHosts, range, onRange
             content={({ active, label, payload }) => {
               if (!active || !payload?.length) return null;
 
+              // Hover 时只显示该时间点流量 > 0 的设备
+              const nonzero = payload.filter((p) => Number(p.value) > 0);
+              if (!nonzero.length) return null;
+
               return (
                 <ChartTooltip>
                   <ChartTooltip.Header>{label}</ChartTooltip.Header>
-                  {payload.map((entry) => (
+                  {nonzero.map((entry) => (
                     <ChartTooltip.Item key={String(entry.dataKey)}>
                       <ChartTooltip.Indicator
                         color={entry.color ?? entry.fill ?? entry.stroke}
@@ -108,9 +130,9 @@ export function TrafficChart({ trafficData, agentIds, agentHosts, range, onRange
           />
         </ComposedChart>
 
-        {/* Agent legend below chart */}
+        {/* Agent legend below chart：区间内流量为 0 的设备不显示 */}
         <div className="flex flex-wrap items-center gap-3 mt-3">
-          {agentIds.map((id, i) => {
+          {visibleAgentIds.map((id, i) => {
             const active = !hidden.has(id);
             return (
             <Button
