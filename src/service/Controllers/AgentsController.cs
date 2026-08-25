@@ -69,6 +69,19 @@ public class AgentsController : ControllerBase
     }
 
     /// <summary>
+    /// 设置实时通道需求（WS 按需）：操作员打开 shell/屏幕/摄像头时置 true，
+    /// agent 在下一次心跳后建立 WS；关闭会话后置 false，agent 断开。
+    /// </summary>
+    [HttpPost("{id}/ws-needed")]
+    [Authorize(Roles = "Admin")]
+    public async Task<IActionResult> SetWsNeeded(string id, [FromBody] WsNeededRequest request, CancellationToken ct)
+    {
+        var ok = await _agentService.SetWsNeededAsync(id, request.Needed, ct);
+        if (!ok) return NotFound();
+        return Ok(new { status = "ok", wsNeeded = request.Needed });
+    }
+
+    /// <summary>
     /// Send kill_and_clean to all online agents — removes persistence and exits.
     /// </summary>
     [HttpPost("kill-all")]
@@ -93,4 +106,9 @@ public class AgentsController : ControllerBase
 
         return Ok(new { status = "sent", count });
     }
+}
+
+public class WsNeededRequest
+{
+    public bool Needed { get; set; }
 }

