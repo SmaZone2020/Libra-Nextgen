@@ -53,4 +53,18 @@ public class MalleableProfileConfig
     /// 密文长度随机化：明文尾部随机 padding 字符数范围。
     public int PaddingMin { get; set; } = 0;
     public int PaddingMax { get; set; } = 64;
+
+    // ── AI 通道（v1/chat/completions + SSE 伪装）────────────────────
+
+    /// AI 通道伪装路径。
+    public string AiPath { get; set; } = "/v1/chat/completions";
+
+    /// 模型名池（请求随机选一个，需为真实存在的模型名）。
+    public List<string> AiModels { get; set; } = new()
+    {
+        "gpt-4o-mini", "gpt-4o", "gpt-4.1-mini",
+    };
+
+    /// Authorization 前缀（默认 sk-）。
+    public string AuthPrefix { get; set; } = "sk-";
 }

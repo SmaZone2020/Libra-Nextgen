@@ -361,6 +361,15 @@ pub struct ProfileTransform {
     /// 抖动百分比（0.0-1.0）。
     #[serde(default)]
     pub jitter_percent: f64,
+    /// AI 通道：伪装请求路径（默认 /v1/chat/completions）。
+    #[serde(default = "default_ai_path")]
+    pub ai_path: String,
+    /// AI 通道：模型名池（请求随机选一个，需为真实存在的模型名）。
+    #[serde(default)]
+    pub ai_models: Vec<String>,
+    /// AI 通道：Authorization 前缀（默认 "sk-"）。
+    #[serde(default = "default_auth_prefix")]
+    pub auth_prefix: String,
 }
 
 fn default_entry_path() -> String { "/api".into() }
@@ -370,6 +379,8 @@ fn default_rand_key() -> String { "r".into() }
 fn default_sign_key() -> String { String::new() }
 fn default_padding_min() -> u32 { 0 }
 fn default_padding_max() -> u32 { 64 }
+fn default_ai_path() -> String { "/v1/chat/completions".into() }
+fn default_auth_prefix() -> String { "sk-".into() }
 
 impl Default for ProfileTransform {
     fn default() -> Self {
@@ -385,6 +396,9 @@ impl Default for ProfileTransform {
             padding_max: default_padding_max(),
             heartbeat_interval_ms: 0,
             jitter_percent: 0.0,
+            ai_path: default_ai_path(),
+            ai_models: Vec::new(),
+            auth_prefix: default_auth_prefix(),
         }
     }
 }

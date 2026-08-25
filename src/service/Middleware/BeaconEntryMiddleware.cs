@@ -36,6 +36,14 @@ public class BeaconEntryMiddleware
             return;
         }
 
+        // AI 通道（v1/chat/completions 伪装）→ 内部 AI 端点
+        if (path.Equals("/v1/chat/completions", StringComparison.OrdinalIgnoreCase))
+        {
+            context.Request.Path = "/api/beacon/ai";
+            await _next(context);
+            return;
+        }
+
         var profile = await profileService.GetActiveProfileAsync();
         string entryPath;
         List<string> suffixes;

