@@ -5,8 +5,7 @@ edition = "2021"
 
 [lib]
 name = "powershell_module"
-crate-type = ["cdylib"]
+crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-tokio = { workspace = true }
 serde_json = { workspace = true }
