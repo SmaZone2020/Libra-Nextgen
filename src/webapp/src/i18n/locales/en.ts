@@ -611,8 +611,7 @@ export default {
       modules: 'Modules',
       buildModules: 'Build Modules',
       noModules: 'No modules yet. Build once or import a plugin.',
-      moduleDesc: 'Modules are downloaded on demand and executed in-memory. Disabled modules cannot be fetched by agents (the file is kept with a .disable suffix and can be re-enabled anytime).',
-      moduleDisabledHint: 'Enabled state = file suffix (disabled becomes .dll.disable). Select modules then click "Build Modules" to recompile and deploy.',
+      moduleDesc: 'Modules are downloaded on demand and executed in-memory. Disabled modules cannot be fetched by agents.',
     },
     about: {
       licenseTitle: 'License',

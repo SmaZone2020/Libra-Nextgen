@@ -20,6 +20,7 @@ import { BuilderConfigCard } from './BuilderConfigCard';
 import { BuilderHistoryPanel } from './BuilderHistoryPanel';
 import { BuilderModals } from './BuilderModals';
 import { BuilderOptionsCard } from './BuilderOptionsCard';
+import { BuilderTrafficCard } from './BuilderTrafficCard';
 import { DEFAULT_CONFIG } from './constants';
 
 export default function BuilderPage() {
@@ -273,6 +274,8 @@ export default function BuilderPage() {
       <div className="flex-1 space-y-4">
         <BuilderConfigCard config={config} set={set} />
         <BuilderOptionsCard config={config} set={set} />
+        {/* 流量伪装：独立卡片，置于最底部 */}
+        <BuilderTrafficCard config={config} set={set} />
       </div>
 
       {/* Right: Build History */}
