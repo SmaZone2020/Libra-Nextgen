@@ -1,14 +1,21 @@
 # Libra-Nextgen
 
-面向企业级红蓝对抗的现代化 **C2（Command & Control）框架**：Rust Agent + ASP.NET Core Server + React/HeroUI Console。
+面向企业级红蓝对抗的现代化 **C2（Command & Control）框架**
+
+![.NET](https://img.shields.io/badge/.NET-C172D7?style=flat-square&logo=.net&logoColor=black)
+![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=flat-square&logo=typescript&logoColor=white)
+![Rust](https://img.shields.io/badge/Rust-FFFFFF?style=flat-square&logo=rust&logoColor=black)
+![MongoDB](https://img.shields.io/badge/MongoDB-21BF3E?style=flat-square&logo=mongodb&logoColor=white)
+![React](https://img.shields.io/badge/React-61DAFB?style=flat-square&logo=react&logoColor=black)
+![HeroUI](https://img.shields.io/badge/HeroUI-000000?style=flat-square&logo=heroui&logoColor=white)
 
 ## 架构
 
 | 组件 | 目录 | 技术栈 |
 | --- | --- | --- |
-| **Libra-Agent** | `src/agent-rs/` | Rust · Tokio · Win32 FFI · 多任务并发 |
-| **Libra-Server** | `src/service/` | ASP.NET Core 10 · MongoDB · JWT |
-| **Libra-Console** | `src/webapp/` | React 19 · HeroUI 3 · Vite |
+| **Agent** | `src/agent-rs/` | Rust · Tokio · Win32 FFI · 多任务并发 |
+| **Server** | `src/service/` | ASP.NET Core 10 · MongoDB · JWT |
+| **Console** | `src/webapp/` | React 19 · HeroUI 3 · Vite |
 
 Agent 采用 **Bootstrapper + 云载模块**：内核只保留通信/加密/调度/流式，文件、凭据、侦查、Shell 等能力作为模块按需从 Server 下载、内存加载、零落盘；并用 **插件体系**（zip 包交付）覆盖自定义能力——Agent 端 Rhai 脚本（免编译）/ native `cdylib` 双通道，前端运行时注册页面。
 

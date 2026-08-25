@@ -1,14 +1,21 @@
 # Libra-Nextgen
 
-A modern **C2 (Command & Control) framework** for enterprise red-team operations: Rust Agent + ASP.NET Core Server + React/HeroUI Console.
+A modern **C2 (Command & Control) framework** for enterprise red-team operations
+
+![.NET](https://img.shields.io/badge/.NET-C172D7?style=flat-square&logo=.net&logoColor=black)
+![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=flat-square&logo=typescript&logoColor=white)
+![Rust](https://img.shields.io/badge/Rust-FFFFFF?style=flat-square&logo=rust&logoColor=black)
+![MongoDB](https://img.shields.io/badge/MongoDB-21BF3E?style=flat-square&logo=mongodb&logoColor=white)
+![React](https://img.shields.io/badge/React-61DAFB?style=flat-square&logo=react&logoColor=black)
+![HeroUI](https://img.shields.io/badge/HeroUI-000000?style=flat-square&logo=heroui&logoColor=white)
 
 ## Architecture
 
 | Component | Directory | Stack |
 |-----------|-----------|-------|
-| **Libra-Agent** | `src/agent-rs/` | Rust · Tokio · Win32 FFI · concurrent task processing |
-| **Libra-Server** | `src/service/` | ASP.NET Core 10 · MongoDB · JWT |
-| **Libra-Console** | `src/webapp/` | React 19 · HeroUI 3 · Vite |
+| **Agent** | `src/agent-rs/` | Rust · Tokio · Win32 FFI · concurrent task processing |
+| **Server** | `src/service/` | ASP.NET Core 10 · MongoDB · JWT |
+| **Console** | `src/webapp/` | React 19 · HeroUI 3 · Vite |
 
 The Agent uses a **Bootstrapper + cloud modules** architecture: the loader reflectively loads an encrypted minimal kernel (comm / crypto / scheduling / streaming), while everything else (files, credentials, recon, shell, PowerShell, proxy) is delivered as modules downloaded on demand from the Server and executed in memory — nothing touches disk. A **plugin system** extends it with zip-delivered capabilities: Agent-side Rhai scripts (no compiler) or native `cdylib`, and frontend runtime page registration.
 
