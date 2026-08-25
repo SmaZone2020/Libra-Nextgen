@@ -1,4 +1,4 @@
-import { ChartLine, Cpu, Display, DisplayPulse, Folder, Globe, ListTimeline, Camera, Terminal, PlugConnection, Code, CircleInfo, Gear, Puzzle, Layers } from "@gravity-ui/icons";
+import { ChartLine, Cpu, Display, DisplayPulse, Folder, Globe, Shield, Camera, Terminal, PlugConnection, Code, CircleInfo, Gear, Puzzle, Layers } from "@gravity-ui/icons";
 import type { NavItem } from "../shared/layout/Sidebar";
 
 export const siteConfig = {
@@ -28,21 +28,10 @@ const featuresGroup: NavItem = {
   ],
 };
 
-// "作战" 母项：团队作战能力。拓扑图在 Dashboard、事件流在页面 Header，
-// 这里收纳独立页面（Loot 战利品库）。
-const opsGroup: NavItem = {
-  icon: ListTimeline,
-  to: '',
-  label: 'nav.ops',
-  children: [
-    { icon: Folder, to: '/loot', label: 'nav.loot' },
-  ],
-};
-
 // More top-level leaves after the features group.
 const bottomTopItems: NavItem[] = [
   { icon: Code, to: '/builder', label: 'nav.builder' },
-  { icon: ListTimeline, to: '/audit', label: 'nav.auditLogs' },
+  { icon: Shield, to: '/audit', label: 'nav.auditLogs' },
 ];
 
 // "插件管理" 母项：单击跳转 /plugins，下拉展开 enabled 插件页面列表
@@ -57,7 +46,6 @@ const pluginManagerGroup: NavItem = {
 export const sidebarItems: NavItem[] = [
   ...topLevelItems,
   featuresGroup,
-  opsGroup,
   pluginManagerGroup,
   ...bottomTopItems,
 ];

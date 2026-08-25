@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react';
-import { Button, Chip, Input, Label, TextField } from '@heroui/react';
+import { Button, Card, Chip, Input, Label, TextField } from '@heroui/react';
 import {
   impersonateToken, listTokens, makeToken, revertToken, stealToken, type TokenItem,
 } from '../../api/token';
@@ -64,35 +64,37 @@ export function TokenTab({ agentId }: { agentId: string }) {
 
   return (
     <div className="space-y-3">
-      <div className="flex flex-wrap items-center gap-2">
-        <Action loading={busy === 'list'} onClick={doList}>枚举 Token</Action>
-        <Action loading={busy === 'revert'} onClick={doRevert}>还原身份</Action>
-      </div>
 
       <div className="flex flex-wrap items-center gap-2">
+        <Button variant='secondary' isPending={busy === 'list'} onClick={doList}>枚举 Token</Button>
+        <Button variant='secondary' isPending={busy === 'revert'} onClick={doRevert}>还原身份</Button>
+        <Label>PID</Label>
         <TextField variant="secondary" value={pid} onChange={setPid} className="w-36">
-          <Label>PID</Label>
           <Input placeholder="0" />
         </TextField>
-        <Action loading={busy === 'steal'} onClick={doSteal}>窃取</Action>
+        <Button variant='secondary' isPending={busy === 'steal'} onClick={doSteal}>窃取</Button>
       </div>
 
-      <div className="flex flex-wrap items-center gap-2">
-        <TextField variant="secondary" value={username} onChange={setUsername} className="w-40">
-          <Label>用户名</Label>
-          <Input placeholder="user" />
-        </TextField>
-        <TextField variant="secondary" type="password" value={password} onChange={setPassword} className="w-40">
-          <Label>密码</Label>
-          <Input type="password" placeholder="pass" />
-        </TextField>
-        <TextField variant="secondary" value={domain} onChange={setDomain} className="w-32">
-          <Label>域</Label>
-          <Input placeholder="." />
-        </TextField>
-        <Action loading={busy === 'make'} onClick={doMake}>伪造登录</Action>
-      </div>
+      <Card>
+        <div className="flex flex-wrap gap-2">
+          <TextField variant="secondary" value={username} onChange={setUsername} className="w-40">
+            <Label>用户名</Label>
+            <Input placeholder="user" />
+          </TextField>
+          <TextField variant="secondary" type="password" value={password} onChange={setPassword} className="w-40">
+            <Label>密码</Label>
+            <Input type="password" placeholder="pass" />
+          </TextField>
+          <TextField variant="secondary" value={domain} onChange={setDomain} className="w-32">
+            <Label>域</Label>
+            <Input placeholder="." />
+          </TextField>
+        </div>
 
+          <Button isPending={busy === 'make'} onClick={doMake}>
+            伪造登录
+          </Button>
+      </Card>
       {message && <div className="text-sm text-neutral-500">{message}</div>}
 
       <table className="w-full text-sm">

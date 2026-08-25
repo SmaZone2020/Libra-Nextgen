@@ -44,8 +44,6 @@ builder.Services.AddScoped<Repository<AccessKey>>(sp =>
     new Repository<AccessKey>(sp.GetRequiredService<MongoDbContext>(), "access_keys"));
 builder.Services.AddScoped<Repository<PluginRecord>>(sp =>
     new Repository<PluginRecord>(sp.GetRequiredService<MongoDbContext>(), "plugins"));
-builder.Services.AddScoped<Repository<LootItem>>(sp =>
-    new Repository<LootItem>(sp.GetRequiredService<MongoDbContext>(), "loot"));
 
 // JWT Settings (singleton, holds RSA key pair)
 var jwtSettings = new JwtSettings();
@@ -71,7 +69,6 @@ builder.Services.AddScoped<AuditService>();
 builder.Services.AddScoped<AccessKeyService>();
 builder.Services.AddSingleton<BuilderBuildService>();
 builder.Services.AddScoped<PluginService>();
-builder.Services.AddScoped<LootService>();
 builder.Services.AddHostedService<HeartbeatMonitor>();
 
 // MCP Server

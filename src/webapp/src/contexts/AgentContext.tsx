@@ -51,7 +51,11 @@ export function AgentProvider({ children }: { children: React.ReactNode }) {
         // Fetch all agents (not just online) to keep full list
         const res = await getAgents(1, 100);
         if (cancelled) return;
-        setAgents(res.agents);
+        // 信息没变则不更新状态（避免下游组件（拓扑图等）无谓重渲染）
+        setAgents((prev) => {
+          if (JSON.stringify(prev) === JSON.stringify(res.agents)) return prev;
+          return res.agents;
+        });
 
         if (!autoSelectedRef.current) {
           // 首次列表为空（后端未就绪）时先不决策，等下次轮询

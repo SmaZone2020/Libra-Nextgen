@@ -39,7 +39,7 @@ export default function SoftwareDataPage() {
   return (
     <div className="space-y-3">
       <Tabs selectedKey={activeTab} onSelectionChange={(key) => setTab(String(key))}>
-        <Tabs.ListContainer className="flex w-auto">
+        <Tabs.ListContainer className="w-xl">
           <Tabs.List aria-label={t('othersoft.tabsLabel')} className="mx-auto w-xl">
             {tabs.map((tb) => (
               <Tabs.Tab key={tb.id} id={tb.id}>{tb.label}<Tabs.Indicator /></Tabs.Tab>

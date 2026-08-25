@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { Accordion, Button, Card, Chip, ComboBox, Input, Label, ListBox, Spinner, Table, Tabs, TextArea, TextField } from '@heroui/react';
+import {
+  Accordion, Avatar, Button, Card, Chip, ComboBox, Description, Input, Label, ListBox,
+  Modal, Spinner, Surface, Table, Tabs, TextArea, TextField,
+} from '@heroui/react';
 import { usePluginHost } from '../../hooks/usePluginHost';
 import { qqBiz, type QQBizParams } from '../../api/qqbiz';
 
@@ -15,7 +18,14 @@ interface QQKeyResult {
   error?: string;
 }
 
+interface BizResult {
+  ok: boolean;
+  data?: unknown;
+  error?: string;
+}
+
 type TabKey = 'list' | 'biz';
+type ResultKind = 'friends' | 'groups' | 'files' | 'notices' | 'text';
 
 /** QQ 头像（qlogo 支持 https，避免 https 页面出现 mixed-content 拦截）。 */
 function avatarUrl(uin: string): string {
@@ -46,6 +56,45 @@ function mergeAccounts(scan: QQAccount[], ck: QQAccount[]): QQAccount[] {
   return Array.from(map.values()).sort((a, b) => a.uin.localeCompare(b.uin));
 }
 
+// ── QQ 业务结果解析 ───────────────────────────────────────────────────
+
+/** 剥掉 JSONP 外壳（_Callback(...) / xxx(...)）。 */
+function stripJsonp(raw: string): string {
+  const t = raw.trim();
+  const m = t.match(/^[\w$]+\s*\((.*)\)\s*;?\s*$/s);
+  return m ? m[1] : t;
+}
+
+function tryParse(raw: string): unknown | null {
+  try { return JSON.parse(stripJsonp(raw)); } catch { return null; }
+}
+
+/** 从任意嵌套响应里取第一个"像列表"的数组（items_list/gnamelist/file_list/feeds…）。 */
+function firstList(obj: unknown): unknown[] | null {
+  if (Array.isArray(obj)) return obj;
+  if (obj && typeof obj === 'object') {
+    const direct = (obj as Record<string, unknown>);
+    for (const k of ['items_list', 'gnamelist', 'file_list', 'feeds']) {
+      if (Array.isArray(direct[k])) return direct[k] as unknown[];
+    }
+    for (const key of ['data', 'returnData']) {
+      const nested = direct[key];
+      if (nested && typeof nested === 'object') {
+        for (const v of Object.values(nested as Record<string, unknown>))
+          if (Array.isArray(v)) return v as unknown[];
+      }
+    }
+  }
+  return null;
+}
+
+function fmtBytes(n: unknown): string {
+  const b = Number(n) || 0;
+  if (b >= 1024 * 1024) return (b / 1024 / 1024).toFixed(1) + ' MB';
+  if (b >= 1024) return (b / 1024).toFixed(1) + ' KB';
+  return b + ' B';
+}
+
 /** 探测本机 QQ / 抓取 ClientKey / QQ 业务。 */
 export default function QQKeyPage() {
   const { selectedAgent, dispatchTask } = usePluginHost();
@@ -55,7 +104,6 @@ export default function QQKeyPage() {
   const [err, setErr] = useState<string | null>(null);
   const autoRef = useRef<string | null>(null);
 
-  // 重新扫描：扫描账号 + 抓取 ClientKey，合并进同一张表。
   const rescan = useCallback(async () => {
     if (!selectedAgent) return;
     setRunning(true);
@@ -94,7 +142,6 @@ export default function QQKeyPage() {
       <Card className="p-6">
         <h1 className="text-xl font-semibold">QQ 业务</h1>
 
-        {/* Tab 栏 + 重新扫描（Tab 在左，按钮在右），每项 160px */}
         <div className="mt-4 flex items-center gap-3">
           <Tabs selectedKey={tab} onSelectionChange={(k) => setTab(String(k) as TabKey)}>
             <Tabs.ListContainer>
@@ -113,13 +160,8 @@ export default function QQKeyPage() {
 
       {err && <Card className="p-4 border border-danger"><p className="text-danger text-sm">{err}</p></Card>}
 
-      {tab === 'list' && (
-        <ListPanel rows={rows} running={running} onCopy={copyRow} />
-      )}
-
-      {tab === 'biz' && (
-        <BizPanel rows={rows} />
-      )}
+      {tab === 'list' && <ListPanel rows={rows} running={running} onCopy={copyRow} />}
+      {tab === 'biz' && <BizPanel rows={rows} />}
     </div>
   );
 }
@@ -131,9 +173,7 @@ function ListPanel({ rows, running, onCopy }: {
   const openQzone = (ptsigx: string) => {
     if (ptsigx) window.open(ptsigx, '_blank', 'noopener,noreferrer');
   };
-  if (running) {
-    return <Spinner size="lg" />;
-  }
+  if (running) return <Spinner size="lg" />;
   return (
     <Card className="p-4">
       <div className="flex items-center gap-2 mb-3">
@@ -169,12 +209,8 @@ function ListPanel({ rows, running, onCopy }: {
                     </Table.Cell>
                     <Table.Cell>
                       <div className="flex items-center gap-2">
-                        <Button size="sm" variant="ghost" isDisabled={!a.clientkey} onPress={() => onCopy(a)}>
-                          COPY
-                        </Button>
-                        <Button size="sm" variant="ghost" isDisabled={!a.ptsigx} onPress={() => a.ptsigx && openQzone(a.ptsigx)}>
-                          QQ 空间
-                        </Button>
+                        <Button size="sm" variant="ghost" isDisabled={!a.clientkey} onPress={() => onCopy(a)}>COPY</Button>
+                        <Button size="sm" variant="ghost" isDisabled={!a.ptsigx} onPress={() => a.ptsigx && openQzone(a.ptsigx)}>QQ 空间</Button>
                       </div>
                     </Table.Cell>
                   </Table.Row>
@@ -188,9 +224,8 @@ function ListPanel({ rows, running, onCopy }: {
   );
 }
 
-// ────────────────────────── QQ 业务（服务端执行） ──────────────────────────
+// ────────────────────────── QQ 业务（服务端脚本驱动） ──────────────────────────
 
-// 免登跳转域名（window.open 直接可用）
 const BIZ_JUMP: Record<string, string> = {
   'QQ 空间': 'https://user.qzone.qq.com/{uin}/infocenter',
   'QQ 邮箱': 'https://wx.mail.qq.com/list/readtemplate?name=login_page.html',
@@ -201,7 +236,6 @@ const BIZ_JUMP: Record<string, string> = {
   'ZBVIP': 'https://zb.vip.qq.com/kuikly/category/4350',
 };
 
-/** ptlogin2 jump（免登跳转 / 换取 QQ 业务 cookie）*/
 function jumpUrl(uin: string, key: string, u1: string): string {
   return `https://ssl.ptlogin2.qq.com/jump?ptlang=1033&clientuin=${uin}&clientkey=${key}&u1=${encodeURIComponent(u1)}&source=panelstar&keyindex=19`;
 }
@@ -209,7 +243,8 @@ function jumpUrl(uin: string, key: string, u1: string): string {
 function BizPanel({ rows }: { rows: QQAccount[] }) {
   const [uin, setUin] = useState('');
   const [key, setKey] = useState('');
-  const [log, setLog] = useState<string[]>([]);
+  const [err, setErr] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
   const [ssText, setSsText] = useState('');
   const [nick, setNick] = useState('');
   const [company, setCompany] = useState('');
@@ -218,26 +253,30 @@ function BizPanel({ rows }: { rows: QQAccount[] }) {
   const [busId, setBusId] = useState('');
   const [fileId, setFileId] = useState('');
   const [favorite, setFavorite] = useState('');
+  // 结果模态框
+  const [modal, setModal] = useState<{ title: string; kind: ResultKind; data: unknown; raw: string } | null>(null);
 
   const withKey = rows.find((r) => r.uin === uin)?.clientkey ?? '';
-  const push = (msg: string) => setLog((p) => [`[${new Date().toLocaleTimeString()}] ${msg}`, ...p.slice(0, 200)]);
-
   const bizUin = uin || rows[0]?.uin || '';
   const bizKey = key || withKey || rows.find((r) => r.uin === bizUin)?.clientkey || '';
 
-  const runBiz = async (action: string, params: Partial<QQBizParams> = {}) => {
-    if (!bizUin || !bizKey) { push('请先选择账号（需要 clientkey）'); return; }
+  const runBiz = async (action: string, kind: ResultKind, title: string, params: Partial<QQBizParams> = {}) => {
+    if (!bizUin || !bizKey) { setErr('请先选择账号（需要 clientkey）'); return; }
+    setErr(null);
+    setBusy(true);
     try {
-      const res = await qqBiz(action, { uin: bizUin, clientkey: bizKey, ...params });
-      if (res.ok) {
-        const raw = res.data;
-        const d = typeof raw === 'string' ? raw : JSON.stringify(raw ?? '(empty)');
-        push(d.length > 4000 ? `${d.slice(0, 4000)}\n…(已截断 ${d.length})` : d);
-      } else {
-        push(`失败: ${res.error ?? 'unknown'}`);
+      const res = await qqBiz(action, { uin: bizUin, clientkey: bizKey, ...params }) as BizResult;
+      if (!res.ok) {
+        setModal({ title, kind: 'text', data: null, raw: `执行失败：${res.error ?? 'unknown'}` });
+        return;
       }
+      const raw = typeof res.data === 'string' ? res.data : JSON.stringify(res.data ?? '(empty)');
+      const parsed = tryParse(raw);
+      setModal({ title, kind: parsed === null ? 'text' : kind, data: parsed, raw });
     } catch (e) {
-      push(`错误: ${e instanceof Error ? e.message : String(e)}`);
+      setModal({ title, kind: 'text', data: null, raw: `请求失败：${e instanceof Error ? e.message : String(e)}` });
+    } finally {
+      setBusy(false);
     }
   };
 
@@ -248,6 +287,8 @@ function BizPanel({ rows }: { rows: QQAccount[] }) {
 
   return (
     <div className="space-y-4">
+      {err && <Card className="p-4 border border-danger"><p className="text-danger text-sm">{err}</p></Card>}
+
       {/* 账号选择 */}
       <Card className="p-4">
         <h3 className="font-semibold mb-2">选择 QQ 账号（uin + clientkey，用于身份）</h3>
@@ -277,14 +318,15 @@ function BizPanel({ rows }: { rows: QQAccount[] }) {
             <Label className="sr-only">clientkey</Label>
             <Input value={key || bizKey} onChange={(e) => setKey((e.target as HTMLInputElement).value)} placeholder="clientkey（留空自动取该账号）" />
           </TextField>
+          {busy && <Spinner size="sm" />}
         </div>
         <p className="text-xs text-default-400 mt-2">
           {bizUin && bizKey ? `当前：${bizUin} / ${bizKey.slice(0, 8)}…` : '请先「重新扫描」并在列表中选取账号。'}
-          业务请求由服务端执行（规避浏览器 CORS），返回原始文本。
+          业务由插件 service/main.cs 服务端执行，结果以模态框展示。
         </p>
       </Card>
 
-      {/* 免登跳转（新窗口打开） */}
+      {/* 免登跳转 */}
       <Card className="p-4">
         <h3 className="font-semibold mb-2">免登跳转（新窗口打开）</h3>
         <div className="flex flex-wrap gap-2">
@@ -298,14 +340,14 @@ function BizPanel({ rows }: { rows: QQAccount[] }) {
         </div>
       </Card>
 
-      {/* 业务工具（服务端执行） */}
+      {/* 业务工具 */}
       <Accordion className="w-full">
         <Tool
           title="发 QQ 空间说说" desc="发布一条动态到该账号空间"
           fields={(
             <TextArea value={ssText} onChange={(e) => setSsText((e.target as HTMLTextAreaElement).value)} placeholder="说说内容" rows={2} />
           )}
-          run={() => runBiz('shuoshuo', { text: ssText })}
+          run={() => runBiz('shuoshuo', 'text', '发布说说', { text: ssText })}
         />
         <Tool
           title="修改 QQ 空间资料" desc="改昵称 / 公司"
@@ -315,31 +357,31 @@ function BizPanel({ rows }: { rows: QQAccount[] }) {
               <Input value={company} onChange={(e) => setCompany((e.target as HTMLInputElement).value)} placeholder="公司/签名" className="w-48" />
             </div>
           )}
-          run={() => runBiz('profile', { nickname: nick, company })}
+          run={() => runBiz('profile', 'text', '修改资料', { nickname: nick, company })}
         />
         <Tool
-          title="好友列表" desc="获取该账号 QQ 空间好友列表（原始返回）"
+          title="好友列表" desc="获取该账号 QQ 空间好友列表"
           fields={null}
-          run={() => runBiz('friends')}
+          run={() => runBiz('friends', 'friends', '好友列表')}
         />
         <Tool
           title="群组列表" desc="获取该账号加入的 QQ 群列表"
           fields={null}
-          run={() => runBiz('groups')}
+          run={() => runBiz('groups', 'groups', '群组列表')}
         />
         <Tool
           title="群公告列表" desc="获取指定群公告"
           fields={(
             <Input value={qunn} onChange={(e) => setQunn((e.target as HTMLInputElement).value)} placeholder="群号" className="w-48" />
           )}
-          run={() => runBiz('group_notice', { qunn })}
+          run={() => runBiz('group_notice', 'notices', `群公告 ${qunn}`, { qunn })}
         />
         <Tool
           title="群文件列表" desc="获取指定群文件"
           fields={(
             <Input value={qunn} onChange={(e) => setQunn((e.target as HTMLInputElement).value)} placeholder="群号" className="w-48" />
           )}
-          run={() => runBiz('group_files', { qunn })}
+          run={() => runBiz('group_files', 'files', `群文件 ${qunn}`, { qunn })}
         />
         <Tool
           title="删除群文件" desc="bus_id + file_id"
@@ -350,14 +392,14 @@ function BizPanel({ rows }: { rows: QQAccount[] }) {
               <Input value={fileId} onChange={(e) => setFileId((e.target as HTMLInputElement).value)} placeholder="file_id" className="w-40" />
             </div>
           )}
-          run={() => runBiz('delete_file', { qunn, busId, fileId })}
+          run={() => runBiz('delete_file', 'text', '删除群文件', { qunn, busId, fileId })}
         />
         <Tool
           title="查看好友亲密度" desc="target_uin"
           fields={(
             <Input value={targetUin} onChange={(e) => setTargetUin((e.target as HTMLInputElement).value)} placeholder="目标 uin" className="w-48" />
           )}
-          run={() => runBiz('friendship', { targetUin })}
+          run={() => runBiz('friendship', 'text', `亲密度 ${targetUin}`, { targetUin })}
         />
         <Tool
           title="设置/移除特别关心" desc="special: 1 设置 / 0 移除"
@@ -367,25 +409,160 @@ function BizPanel({ rows }: { rows: QQAccount[] }) {
               <Input value={favorite} onChange={(e) => setFavorite((e.target as HTMLInputElement).value)} placeholder="action 0/1" className="w-20" />
             </div>
           )}
-          run={() => runBiz('care', { targetUin, careAction: Number(favorite || 1) })}
+          run={() => runBiz('care', 'text', '特别关心', { targetUin, careAction: Number(favorite || 1) })}
         />
         <Tool
           title="获取绑定手机号" desc="读取账号绑定的手机号"
           fields={null}
-          run={() => runBiz('phone')}
+          run={() => runBiz('phone', 'text', '绑定手机号')}
         />
       </Accordion>
 
-      {/* 执行日志 */}
-      <Card className="p-4">
-        <h3 className="font-semibold mb-2">执行日志</h3>
-        <div className="bg-black rounded-lg p-3 max-h-72 overflow-auto font-mono text-xs text-green-400">
-          {log.length === 0 ? <span className="text-neutral-500">// 选择工具执行，返回显示在这里</span> : log.map((l, i) => (
-            <div key={i} className="whitespace-pre-wrap break-all leading-5">{l}</div>
-          ))}
-        </div>
-      </Card>
+      {/* 结果模态框 */}
+      <ResultModal
+        modal={modal}
+        onClose={() => setModal(null)}
+        onAction={runBiz}
+      />
     </div>
+  );
+}
+
+// ── 结果模态框：按类型渲染 ────────────────────────────────────────────
+
+function ResultModal({ modal, onClose, onAction }: {
+  modal: { title: string; kind: ResultKind; data: unknown; raw: string } | null;
+  onClose: () => void;
+  onAction: (action: string, kind: ResultKind, title: string, params?: Partial<QQBizParams>) => void;
+}) {
+  return (
+    <Modal.Backdrop isOpen={modal !== null} onOpenChange={(open) => { if (!open) onClose(); }}>
+      <Modal.Container size="xl">
+        <Modal.Dialog>
+          <Modal.CloseTrigger />
+          <Modal.Header>
+            <Modal.Heading>{modal?.title ?? ''}</Modal.Heading>
+          </Modal.Header>
+          <Modal.Body>
+            {modal && renderResult(modal.kind, modal.data, modal.raw, onAction)}
+          </Modal.Body>
+        </Modal.Dialog>
+      </Modal.Container>
+    </Modal.Backdrop>
+  );
+}
+
+function renderResult(kind: ResultKind, data: unknown, raw: string, onAction: (a: string, k: ResultKind, t: string, p?: Partial<QQBizParams>) => void): ReactNode {
+  if (data === null) {
+    return <pre className="font-mono text-xs whitespace-pre-wrap break-all bg-default-50 dark:bg-default-900 p-3 rounded max-h-[60vh] overflow-auto">{raw}</pre>;
+  }
+
+  const list = firstList(data);
+
+  if (kind === 'friends' && list) {
+    return (
+      <Surface className="rounded-2xl">
+        <ListBox aria-label="friends">
+          {list.map((it, i) => {
+            const o = it as Record<string, unknown>;
+            const uin = String(o.uin ?? '');
+            const name = String(o.name ?? uin);
+            const img = typeof o.img === 'string' ? o.img : avatarUrl(uin);
+            return (
+              <ListBox.Item key={uin || i} id={uin || String(i)} textValue={name}>
+                <Avatar size="sm">
+                  <Avatar.Image alt={name} src={img} />
+                  <Avatar.Fallback>{name[0] ?? '?'}</Avatar.Fallback>
+                </Avatar>
+                <div className="flex flex-col">
+                  <Label>{name}</Label>
+                  <Description>{uin}{o.score !== undefined ? ` · 亲密度 ${o.score}` : ''}</Description>
+                </div>
+                <ListBox.ItemIndicator />
+              </ListBox.Item>
+            );
+          })}
+        </ListBox>
+      </Surface>
+    );
+  }
+
+  if (kind === 'groups' && list) {
+    return (
+      <Surface className="rounded-2xl">
+        <ListBox aria-label="groups">
+          {list.map((it, i) => {
+            const o = it as Record<string, unknown>;
+            const gc = String(o.gc ?? o.gcode ?? o.qid ?? '');
+            const gname = String(o.gname ?? o.name ?? gc);
+            return (
+              <ListBox.Item key={gc || i} id={gc || String(i)} textValue={gname}>
+                <Avatar size="sm">
+                  <Avatar.Image alt={gname} src={`https://p.qlogo.cn/gh/${gc}/${gc}/100`} />
+                  <Avatar.Fallback>{gname[0] ?? '群'}</Avatar.Fallback>
+                </Avatar>
+                <div className="flex flex-col">
+                  <Label>{gname}</Label>
+                  <Description>{gc || '未知群号'}</Description>
+                </div>
+                <ListBox.ItemIndicator />
+              </ListBox.Item>
+            );
+          })}
+        </ListBox>
+      </Surface>
+    );
+  }
+
+  if (kind === 'files' && list) {
+    return (
+      <div className="space-y-2 max-h-[60vh] overflow-auto">
+        {list.map((it, i) => {
+          const o = it as Record<string, unknown>;
+          return (
+            <div key={i} className="flex items-center gap-3 rounded-lg border border-default-100 p-3">
+              <div className="min-w-0 flex-1">
+                <div className="font-medium text-sm truncate">{String(o.file_name ?? o.name ?? '-')}</div>
+                <div className="text-xs text-default-500 mt-0.5">
+                  {fmtBytes(o.file_size ?? o.size)}
+                  {o.uploader_name ? ` · ${o.uploader_name}` : ''}
+                  {o.bus_id !== undefined ? ` · bus=${o.bus_id}` : ''}
+                </div>
+              </div>
+              {o.btn_text && <Chip size="sm" variant="soft" color="warning">{String(o.btn_text)}</Chip>}
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
+
+  if (kind === 'notices' && list) {
+    return (
+      <div className="space-y-2 max-h-[60vh] overflow-auto">
+        {list.map((it, i) => {
+          const o = it as Record<string, unknown>;
+          const title = String(o.title ?? o.text_info ?? '公告');
+          return (
+            <Card key={i} className="p-3">
+              <div className="font-medium text-sm">{title}</div>
+              {o.text_info !== undefined && String(o.text_info) !== title && (
+                <p className="text-xs text-default-500 mt-1 whitespace-pre-wrap break-all">{String(o.text_info)}</p>
+              )}
+              {o.time_str !== undefined && <div className="text-[11px] text-default-400 mt-1">{String(o.time_str)}</div>}
+            </Card>
+          );
+        })}
+      </div>
+    );
+  }
+
+  // 其余（说说/资料/删除/亲密/特别关心/手机号）：格式化 JSON
+  const obj = tryParse(raw);
+  return (
+    <pre className="font-mono text-xs whitespace-pre-wrap break-all bg-default-50 dark:bg-default-900 p-3 rounded max-h-[60vh] overflow-auto">
+      {obj !== null ? JSON.stringify(obj, null, 2) : raw}
+    </pre>
   );
 }
 
