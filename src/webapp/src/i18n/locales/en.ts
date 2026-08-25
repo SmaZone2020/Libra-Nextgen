@@ -659,6 +659,10 @@ export default {
       trafficUaLabel: 'UA (full browser User-Agent)',
       trafficHeadersLabel: 'Header ("Name: value")',
       trafficSuffixesLabel: 'Path suffix (e.g. user/info)',
+      downloadTitle: 'Download / One-click Execute',
+      downloadLnk: 'Download LNK shortcut',
+      oneClickCmd: 'One-click command (run in a terminal on the target, downloads & executes the payload)',
+      anonUrlHint: 'Anonymous download URL (no auth; invalid after the build record is deleted): {{url}}',
     },
     about: {
       licenseTitle: 'License',

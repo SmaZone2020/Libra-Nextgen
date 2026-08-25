@@ -6,7 +6,6 @@ import {
   deleteBuild,
   deleteBuildListItem,
   deleteTemplate,
-  getBuildDownloadUrl,
   getBuildInfo,
   getBuildLists,
   getBuildStreamUrl,
@@ -23,6 +22,7 @@ import type { BuildTrafficLists } from '../../api/build';
 import type { BuildConfigRequest, BuildRecord, BuildRecordDetail, TemplateInfo } from '../../types/models';
 import type { ModuleEntry } from '../../api/build';
 import { BuilderConfigCard } from './BuilderConfigCard';
+import { BuilderDownloadModal } from './BuilderDownloadModal';
 import { BuilderHistoryPanel } from './BuilderHistoryPanel';
 import { BuilderModals } from './BuilderModals';
 import { BuilderOptionsCard } from './BuilderOptionsCard';
@@ -48,6 +48,8 @@ export default function BuilderPage() {
   const [historyLoading, setHistoryLoading] = useState(false);
   const [selectedRecord, setSelectedRecord] = useState<BuildRecordDetail | null>(null);
   const [infoLoading, setInfoLoading] = useState(false);
+  // 下载/一键命令模态框
+  const [downloadRecord, setDownloadRecord] = useState<BuildRecordDetail | null>(null);
 
   // Templates
   const [templates, setTemplates] = useState<TemplateInfo[]>([]);
@@ -277,8 +279,12 @@ export default function BuilderPage() {
     }
   };
 
-  const handleDownload = (id: string) => {
-    window.open(getBuildDownloadUrl(id), '_blank');
+  /** 下载按钮统一走模态框：一键命令（PowerShell/Cmd/Bash）+ 格式打包（ISO/IMG/VHD/LNK）+ exe 下载。 */
+  const handleDownload = async (id: string) => {
+    try {
+      const detail = await getBuildInfo(id);
+      setDownloadRecord(detail);
+    } catch { /* ignore */ }
   };
 
   const handleDelete = async (id: string) => {
@@ -371,6 +377,12 @@ export default function BuilderPage() {
         onConfirmDeleteTemplate={confirmDeleteTemplate}
         onCancelDeleteTemplate={() => setTemplateToDelete(null)}
         onCloseInfo={() => setSelectedRecord(null)}
+      />
+
+      {/* 下载/一键命令模态框（构建成功弹窗与历史列表共用） */}
+      <BuilderDownloadModal
+        record={downloadRecord}
+        onClose={() => setDownloadRecord(null)}
       />
     </div>
   );

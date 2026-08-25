@@ -1,4 +1,4 @@
-﻿# E2E 回归：起服务端 + agent，跑协议/模块/列表测试，自动清理。
+# E2E 回归：起服务端 + agent，跑协议/模块/列表测试，自动清理。
 # 前置：Mongo 运行中、src/service 已构建（dotnet build）、agent 已构建（cargo build -p agent -p loader）。
 param(
   [int]$Port = 5270,
@@ -67,7 +67,7 @@ try {
 
   # 3) 顺序跑测试
   $failed = $false
-  foreach ($t in @('01-agent-protocol.mjs', '02-module-management.mjs', '03-traffic-lists.mjs')) {
+  foreach ($t in @('01-agent-protocol.mjs', '02-module-management.mjs', '03-traffic-lists.mjs', '04-download-formats.mjs')) {
     Write-Host "`n[e2e] === $t ==="
     node "$PSScriptRoot\$t"
     if ($LASTEXITCODE -ne 0) { $failed = $true }

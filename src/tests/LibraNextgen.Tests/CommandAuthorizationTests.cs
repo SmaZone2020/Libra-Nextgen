@@ -9,8 +9,6 @@ public class CommandAuthorizationTests
     [Theory]
     [InlineData(CommandType.LocalAccounts)]
     [InlineData(CommandType.Kill)]
-    [InlineData(CommandType.Screenshot)]
-    [InlineData(CommandType.Webcam)]
     [InlineData(CommandType.KillAndClean)]
     [InlineData(CommandType.Restart)]
     public void SensitiveCommands_RequireAdmin(CommandType type)

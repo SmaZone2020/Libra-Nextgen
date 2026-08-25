@@ -659,6 +659,10 @@ export default {
       trafficUaLabel: 'UA（完整浏览器 User-Agent）',
       trafficHeadersLabel: '请求头（"Name: value"）',
       trafficSuffixesLabel: '路径后缀（如 user/info）',
+      downloadTitle: '下载 / 一键执行',
+      downloadLnk: '下载 LNK 快捷方式',
+      oneClickCmd: '一键命令（在目标机终端执行，自动下载并运行 payload）',
+      anonUrlHint: '匿名下载地址（无需鉴权，删除构建记录即失效）：{{url}}',
     },
     about: {
       licenseTitle: '开源协议',
