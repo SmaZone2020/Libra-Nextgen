@@ -14,6 +14,15 @@ extern "system" {
 
     /// 按名字解析导出地址（名字为 ASCII，NUL 结尾）。
     pub fn GetProcAddress(h_module: *mut c_void, lp_proc_name: *const u8) -> *mut c_void;
+
+    /// 当前线程 ID。
+    pub fn GetCurrentThreadId() -> u32;
+}
+
+#[link(name = "ntdll")]
+extern "system" {
+    /// 注册向量化异常处理器（first=1 表示最高优先级）。返回处理器句柄。
+    pub fn RtlAddVectoredExceptionHandler(first: u32, handler: usize) -> *mut c_void;
 }
 
 /// 把 `&str` 编码为以 NUL 结尾的 UTF-16，用于 Win32 宽字符 API。

@@ -31,9 +31,13 @@ mod invoke;
 mod spoof;
 #[cfg(windows)]
 mod sleepobf;
+#[cfg(windows)]
+mod hwbp;
 
 #[cfg(windows)]
 pub use extract::{probe_stub, StubProbe};
+#[cfg(windows)]
+pub use hwbp::install_amsi_etw_bypass;
 #[cfg(windows)]
 pub use invoke::*;
 #[cfg(windows)]
