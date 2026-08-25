@@ -1,14 +1,14 @@
-use serde_json::Value;
+﻿use serde_json::Value;
 
-use libra_comm::ws::WsSender;
+use crate::ws::WsSender;
 
-use super::EngineShared;
-use super::utils::{data_str, data_u64, ws_send};
+use crate::SharedState;
+use crate::utils::{data_str, data_u64, ws_send};
 
-// ── Screen stream ────────────────────────────────────────────────────
+// 鈹€鈹€ Screen stream 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 
 pub(crate) async fn start_screen_stream(
-    shared: &std::sync::Arc<EngineShared>,
+    shared: &std::sync::Arc<SharedState>,
     data: Option<Value>,
     agent_id: String,
     tx: WsSender,
@@ -25,21 +25,21 @@ pub(crate) async fn start_screen_stream(
     shared.screen_session.lock().unwrap().replace(cancel_tx);
 
     tokio::spawn(async move {
-        let mut stream = libra_modules::execution::ScreenStream::new();
+        let mut stream = crate::capture::ScreenStream::new();
         loop {
             if *cancel_rx.borrow() { break; }
             match stream.capture(&quality, screen_index) {
-                libra_modules::execution::ScreenFrame::Keyframe { width, height, jpeg } => {
+                crate::capture::ScreenFrame::Keyframe { width, height, jpeg } => {
                     let data = format!(
                         r#"{{"width":{},"height":{},"jpeg":"{}"}}"#, width, height, jpeg
                     );
                     ws_send(&tx, &agent_id, "screen.frame", &data, None).await;
                 }
-                libra_modules::execution::ScreenFrame::Diff { blocks_json } => {
+                crate::capture::ScreenFrame::Diff { blocks_json } => {
                     let data = format!(r#"{{"blocks":{}}}"#, blocks_json);
                     ws_send(&tx, &agent_id, "screen.diff", &data, None).await;
                 }
-                libra_modules::execution::ScreenFrame::Empty => {}
+                crate::capture::ScreenFrame::Empty => {}
             }
             tokio::select! {
                 _ = cancel_rx.changed() => break,
@@ -49,10 +49,10 @@ pub(crate) async fn start_screen_stream(
     });
 }
 
-// ── Camera stream ────────────────────────────────────────────────────
+// 鈹€鈹€ Camera stream 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 
 pub(crate) async fn start_camera_stream(
-    shared: &std::sync::Arc<EngineShared>,
+    shared: &std::sync::Arc<SharedState>,
     data: Option<Value>,
     agent_id: String,
     tx: WsSender,
@@ -74,9 +74,9 @@ pub(crate) async fn start_camera_stream(
 
     let (frame_tx, mut frame_rx) = tokio::sync::mpsc::channel::<String>(4);
 
-    // Dedicated blocking thread — CameraStream stays on the same thread for COM
+    // Dedicated blocking thread 鈥?CameraStream stays on the same thread for COM
     tokio::task::spawn_blocking(move || {
-        let mut stream = match libra_modules::execution::CameraStream::new(idx) {
+        let mut stream = match crate::capture::CameraStream::new(idx) {
             Ok(s) => s,
             Err(e) => {
                 let _ = frame_tx.blocking_send(format!(r#"{{"error":"{}"}}"#, e));
@@ -87,13 +87,13 @@ pub(crate) async fn start_camera_stream(
             if cancel2.load(std::sync::atomic::Ordering::Relaxed) { break; }
             let frame = match stream.capture_frame() {
                 Ok(cf) => match cf {
-                    libra_modules::execution::CameraFrame::Keyframe { width, height, jpeg } => {
+                    crate::capture::CameraFrame::Keyframe { width, height, jpeg } => {
                         format!(r#"{{"type":"keyframe","width":{},"height":{},"data":"{}"}}"#, width, height, jpeg)
                     }
-                    libra_modules::execution::CameraFrame::Diff { blocks_json } => {
+                    crate::capture::CameraFrame::Diff { blocks_json } => {
                         format!(r#"{{"type":"diff","blocks":{}}}"#, blocks_json)
                     }
-                    libra_modules::execution::CameraFrame::Empty => {
+                    crate::capture::CameraFrame::Empty => {
                         String::new()
                     }
                 },

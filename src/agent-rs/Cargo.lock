@@ -1734,6 +1734,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "realtime-module"
+version = "0.1.0"
+dependencies = [
+ "base64",
+ "futures-util",
+ "image",
+ "libra-comm",
+ "libra-common",
+ "libra-crypto",
+ "libra-load",
+ "libra-modules",
+ "libra-platform",
+ "portable-pty",
+ "serde_json",
+ "tokio",
+ "tokio-tungstenite",
+ "windows 0.58.0",
+]
+
+[[package]]
 name = "recon-module"
 version = "0.1.0"
 dependencies = [

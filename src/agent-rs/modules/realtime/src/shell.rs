@@ -4,10 +4,10 @@ use portable_pty::{Child, MasterPty, PtySize};
 use serde_json::Value;
 
 use libra_common::protocol::WebSocketMessage;
-use libra_comm::ws::WsSender;
+use crate::ws::WsSender;
 use libra_platform::get_executor;
 
-use super::utils::{send_via_channel, ws_send};
+use crate::utils::{send_via_channel, ws_send};
 
 pub(crate) struct ShellSession {
     child: Box<dyn Child + Send + Sync>,
