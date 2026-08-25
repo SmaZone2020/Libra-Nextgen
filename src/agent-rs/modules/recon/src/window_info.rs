@@ -158,25 +158,7 @@ unsafe extern "system" fn enum_windows_callback(hwnd: isize, lparam: isize) -> i
 
 #[cfg(target_os = "windows")]
 fn get_process_name(pid: u32) -> String {
-    use std::os::windows::process::CommandExt;
-    if let Ok(output) = std::process::Command::new("wmic")
-        .args(["process", "where", &format!("ProcessId={}", pid), "get", "Name", "/format:csv"])
-        .creation_flags(0x08000000)
-        .output()
-    {
-        let text = String::from_utf8_lossy(&output.stdout);
-        for line in text.lines().skip(2) {
-            let parts: Vec<&str> = line.split(',').collect();
-            if parts.len() >= 2 {
-                let name = parts[1].trim();
-                if !name.is_empty() {
-                    return name.to_string();
-                }
-            }
-        }
-    }
-
-    // Fallback to sysinfo
+    // sysinfo 原生进程枚举——无子进程（进程面收敛二期，原 wmic 已移除）
     use sysinfo::{Pid, System};
     let sys = System::new_all();
     if let Some(proc) = sys.process(Pid::from_u32(pid)) {

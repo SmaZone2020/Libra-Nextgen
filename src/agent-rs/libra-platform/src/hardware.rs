@@ -2,16 +2,15 @@ use libra_common::models::{CpuInfo, DiskInfo, DisplayInfo, GpuInfo, HardwareInfo
 use sha2::{Digest, Sha256};
 
 /// Collect hardware information from the current machine.
-/// Primary: sysinfo (CPU/RAM/disk sizes) + Win32 FFI (GPU/displays).
-/// Falls back to wmic when in-process APIs return invalid data.
+/// 全部走进程内 API（sysinfo / 注册表 / Win32），无任何子进程调用
+/// （进程面收敛二期：wmic/powershell 已全部移除）。
 pub fn collect() -> HardwareInfo {
     let cpu = collect_cpu();
     let gpus = collect_gpus();
     let disks = collect_disks();
     let ram = collect_ram();
     let displays = collect_displays();
-    let motherboard_vendor = wmi_single("Win32_BaseBoard", "Manufacturer");
-    let bios_version = wmi_single("Win32_BIOS", "SMBIOSBIOSVersion");
+    let (motherboard_vendor, bios_version) = board_info();
 
     let mut info = HardwareInfo {
         hwid: None,
@@ -57,13 +56,13 @@ pub fn serialize(info: &HardwareInfo) -> String {
 fn collect_cpu() -> CpuInfo {
     let info = sysinfo_cpu();
 
-    // If sysinfo returned garbage (can happen on some Windows builds),
-    // fall back to wmic which is more reliable on Windows.
-    if info.logical_cores == 0 {
+    // sysinfo 在部分 Windows 构建上返回空型号/0 核心，用注册表兜底
+    // （HKLM\HARDWARE\DESCRIPTION\System\CentralProcessor\0，Win2000+ 稳定存在）。
+    if info.name.is_empty() || info.logical_cores == 0 {
         #[cfg(windows)]
         {
-            if let Ok(wmi) = wmi_cpu() {
-                return wmi;
+            if let Some(cpu) = registry_cpu() {
+                return cpu;
             }
         }
     }
@@ -89,31 +88,59 @@ fn sysinfo_cpu() -> CpuInfo {
     CpuInfo { name, physical_cores: physical, logical_cores: logical, max_clock_mhz: max_clock }
 }
 
+/// 注册表读取 CPU 型号与核心数（HKLM\HARDWARE\DESCRIPTION\System\CentralProcessor\0）。
 #[cfg(windows)]
-fn wmi_cpu() -> Result<CpuInfo, ()> {
-    let output = run_hidden(
-        "wmic",
-        &["cpu", "get", "Name,NumberOfCores,NumberOfLogicalProcessors,MaxClockSpeed", "/format:csv"],
-    )?;
-    let text = String::from_utf8_lossy(&output);
-    for line in text.lines().skip(2) {
-        let parts: Vec<&str> = line.split(',').collect();
-        if parts.len() >= 5 {
-            let name = parts[1].trim().to_string();
-            let cores: usize = parts[2].trim().parse().unwrap_or(0);
-            let threads: usize = parts[3].trim().parse().unwrap_or(0);
-            let clock: u64 = parts[4].trim().parse().unwrap_or(0);
-            if !name.is_empty() {
-                return Ok(CpuInfo {
-                    name,
-                    physical_cores: cores,
-                    logical_cores: threads,
-                    max_clock_mhz: clock,
-                });
-            }
+fn registry_cpu() -> Option<CpuInfo> {
+    use windows::Win32::System::Registry::*;
+    use windows_core::PCWSTR;
+
+    unsafe {
+        let mut key = HKEY::default();
+        let path = PCWSTR(wide("HARDWARE\\DESCRIPTION\\System\\CentralProcessor\\0").as_ptr());
+        let status = RegOpenKeyExW(
+            HKEY_LOCAL_MACHINE,
+            path,
+            0,
+            KEY_QUERY_VALUE,
+            &mut key,
+        );
+        if status.is_err() {
+            return None;
         }
+
+        let mut name = String::new();
+        // ProcessorNameString (REG_SZ)
+        let name_pcw = PCWSTR(wide("ProcessorNameString").as_ptr());
+        let mut buf = [0u16; 512];
+        let mut size = (buf.len() * 2) as u32;
+        let mut kind: REG_VALUE_TYPE = Default::default();
+        if RegQueryValueExW(key, name_pcw, None, Some(&mut kind), Some(buf.as_mut_ptr() as *mut u8), Some(&mut size)).is_ok() {
+            name = String::from_utf16_lossy(&buf[..size as usize / 2])
+                .trim_end_matches('\0')
+                .to_string();
+        }
+
+        // ~MHz (REG_DWORD)
+        let mut clock_mhz: u32 = 0;
+        let clock_pcw = PCWSTR(wide("~MHz").as_ptr());
+        let mut csize = 4u32;
+        let _ = RegQueryValueExW(key, clock_pcw, None, None, Some(&mut clock_mhz as *mut u32 as *mut u8), Some(&mut csize));
+
+        let _ = RegCloseKey(key);
+
+        if name.is_empty() {
+            return None;
+        }
+        // 核心数用 sysinfo/available_parallelism 兜底
+        let logical = std::thread::available_parallelism().map(|n| n.get()).unwrap_or(1);
+        let physical = sysinfo::System::new_all().physical_core_count().unwrap_or(logical);
+        Some(CpuInfo {
+            name,
+            physical_cores: physical,
+            logical_cores: logical,
+            max_clock_mhz: clock_mhz as u64,
+        })
     }
-    Err(())
 }
 
 // ── GPU ──────────────────────────────────────────────────────────────────
@@ -122,9 +149,6 @@ fn collect_gpus() -> Vec<GpuInfo> {
     #[cfg(windows)]
     {
         if let Ok(gpus) = dxgi_gpus() {
-            if !gpus.is_empty() { return gpus; }
-        }
-        if let Ok(gpus) = wmi_gpus() {
             if !gpus.is_empty() { return gpus; }
         }
     }
@@ -188,84 +212,18 @@ fn dxgi_gpus() -> Result<Vec<GpuInfo>, String> {
             });
         }
 
-        // If DXGI returned GPUs but all VRAM is 0, try wmic for VRAM
-        if !gpus.is_empty() && gpus.iter().all(|g| g.vram_bytes.is_none()) {
-            if let Ok(wmi) = wmi_gpus() {
-                for g in &mut gpus {
-                    if let Some(wg) = wmi.iter().find(|w| w.name == g.name) {
-                        g.vram_bytes = wg.vram_bytes;
-                        g.driver_version = wg.driver_version.clone();
-                    }
-                }
-            }
-        }
+        // If DXGI returned GPUs but all VRAM is 0, leave VRAM unknown —
+        // 不再用 wmic 补 VRAM（进程面收敛二期，缺失可接受）。
 
         Ok(gpus)
     }
 }
 
-#[cfg(windows)]
-fn wmi_gpus() -> Result<Vec<GpuInfo>, ()> {
-    let output = run_hidden(
-        "wmic",
-        &["path", "Win32_VideoController", "get", "Name,DriverVersion,AdapterRAM", "/format:csv"],
-    )?;
-    let text = String::from_utf8_lossy(&output);
-    let mut gpus = Vec::new();
-    for line in text.lines().skip(2) {
-        let parts: Vec<&str> = line.split(',').collect();
-        if parts.len() >= 4 {
-            let name = parts[1].trim().to_string();
-            if name.is_empty() { continue; }
-            gpus.push(GpuInfo {
-                name,
-                driver_version: opt_str(parts.get(2).map(|s| s.trim())),
-                vram_bytes: parts.get(3).and_then(|s| s.trim().parse().ok()).filter(|&v| v > 0),
-            });
-        }
-    }
-    Ok(gpus)
-}
-
 // ── Disks ────────────────────────────────────────────────────────────────
 
 fn collect_disks() -> Vec<DiskInfo> {
-    #[cfg(windows)]
-    {
-        if let Some(disks) = wmi_disks() {
-            if !disks.is_empty() {
-                return disks;
-            }
-        }
-    }
-
-    // sysinfo fallback (also used on Linux)
+    // sysinfo（跨平台；Windows 上无子进程）
     sysinfo_disks()
-}
-
-#[cfg(windows)]
-fn wmi_disks() -> Option<Vec<DiskInfo>> {
-    let output = run_hidden(
-        "wmic",
-        &["path", "Win32_DiskDrive", "get", "Model,Size,MediaType,SerialNumber", "/format:csv"],
-    ).ok()?;
-    let text = String::from_utf8_lossy(&output);
-    let mut disks = Vec::new();
-    for line in text.lines().skip(2) {
-        let parts: Vec<&str> = line.split(',').collect();
-        if parts.len() >= 5 {
-            let model = parts[1].trim().to_string();
-            if model.is_empty() { continue; }
-            let size_bytes: u64 = parts[2].trim().parse().unwrap_or(0);
-            disks.push(DiskInfo {
-                model,
-                size_bytes,
-                media_type: opt_str(parts.get(3).map(|s| s.trim())),
-                serial_number: opt_str(parts.get(4).map(|s| s.trim())),
-            });
-        }
-    }
-    Some(disks)
 }
 
 fn sysinfo_disks() -> Vec<DiskInfo> {
@@ -285,7 +243,7 @@ fn sysinfo_disks() -> Vec<DiskInfo> {
 fn collect_ram() -> RamInfo {
     #[cfg(windows)]
     {
-        if let Some(ram) = wmi_ram() {
+        if let Some(ram) = native_ram() {
             return ram;
         }
     }
@@ -295,25 +253,20 @@ fn collect_ram() -> RamInfo {
     RamInfo { total_bytes: sys.total_memory() }
 }
 
+/// GlobalMemoryStatusEx（kernel32，Vista+ 通用，无子进程）。
 #[cfg(windows)]
-fn wmi_ram() -> Option<RamInfo> {
-    let output = run_hidden(
-        "wmic",
-        &["path", "Win32_ComputerSystem", "get", "TotalPhysicalMemory", "/format:csv"],
-    )
-    .ok()?;
-    let text = String::from_utf8_lossy(&output);
-    for line in text.lines().skip(2) {
-        let parts: Vec<&str> = line.split(',').collect();
-        if parts.len() >= 2 {
-            if let Ok(bytes) = parts[1].trim().parse::<u64>() {
-                if bytes > 0 {
-                    return Some(RamInfo { total_bytes: bytes });
-                }
-            }
+fn native_ram() -> Option<RamInfo> {
+    use windows::Win32::System::SystemInformation::*;
+    unsafe {
+        let mut status = MEMORYSTATUSEX {
+            dwLength: std::mem::size_of::<MEMORYSTATUSEX>() as u32,
+            ..Default::default()
+        };
+        if GlobalMemoryStatusEx(&mut status).is_ok() && status.ullTotalPhys > 0 {
+            return Some(RamInfo { total_bytes: status.ullTotalPhys });
         }
+        None
     }
-    None
 }
 
 // ── Displays ─────────────────────────────────────────────────────────────
@@ -322,9 +275,6 @@ fn collect_displays() -> Vec<DisplayInfo> {
     #[cfg(windows)]
     {
         if let Ok(displays) = gdi_displays() {
-            if !displays.is_empty() { return displays; }
-        }
-        if let Ok(displays) = wmi_displays() {
             if !displays.is_empty() { return displays; }
         }
     }
@@ -399,70 +349,102 @@ fn gdi_displays() -> Result<Vec<DisplayInfo>, ()> {
     }
 }
 
+// ── 主板 / BIOS（注册表，Win2000+ 稳定存在）───────────────────────────
+
+/// 读取主板厂商与 BIOS 版本。
+/// - Win32_BaseBoard.Manufacturer ≈ HKLM\HARDWARE\DESCRIPTION\System\BIOS 的
+///   BaseBoardManufacturer（部分系统缺失），缺失时回退 SystemManufacturer（整机厂商）
+/// - Win32_BIOS.SMBIOSBIOSVersion ≈ BIOSVersion
 #[cfg(windows)]
-fn wmi_displays() -> Result<Vec<DisplayInfo>, ()> {
-    let output = run_hidden(
-        "wmic",
-        &["path", "Win32_DesktopMonitor", "get", "Name,ScreenWidth,ScreenHeight", "/format:csv"],
-    )?;
-    let text = String::from_utf8_lossy(&output);
-    let mut displays = Vec::new();
-    let mut idx = 0;
-    for line in text.lines().skip(2) {
-        let parts: Vec<&str> = line.split(',').collect();
-        if parts.len() >= 4 {
-            let name = parts[1].trim().to_string();
-            let width: u32 = parts[2].trim().parse().unwrap_or(0);
-            let height: u32 = parts[3].trim().parse().unwrap_or(0);
-            if width > 0 && height > 0 {
-                let display_name = if name.is_empty() {
-                    format!("Monitor {}", idx + 1)
-                } else {
-                    name
-                };
-                displays.push(DisplayInfo { name: display_name, width, height });
-                idx += 1;
-            }
+fn board_info() -> (Option<String>, Option<String>) {
+    use windows::Win32::System::Registry::*;
+    use windows_core::PCWSTR;
+
+    unsafe {
+        let mut key = HKEY::default();
+        let path = PCWSTR(wide("HARDWARE\\DESCRIPTION\\System\\BIOS").as_ptr());
+        if RegOpenKeyExW(HKEY_LOCAL_MACHINE, path, 0, KEY_QUERY_VALUE, &mut key).is_err() {
+            return (None, None);
         }
-    }
-    Ok(displays)
-}
 
-// ── Helpers ──────────────────────────────────────────────────────────────
-
-#[cfg(windows)]
-fn run_hidden(cmd: &str, args: &[&str]) -> Result<Vec<u8>, ()> {
-    use std::os::windows::process::CommandExt;
-    std::process::Command::new(cmd)
-        .args(args)
-        .creation_flags(0x08000000)
-        .output()
-        .map(|o| o.stdout)
-        .map_err(|_| ())
-}
-
-fn wmi_single(class: &str, property: &str) -> Option<String> {
-    #[cfg(windows)]
-    {
-        if let Ok(output) = run_hidden("wmic", &["path", class, "get", property, "/format:csv"]) {
-            let text = String::from_utf8_lossy(&output);
-            for line in text.lines().skip(2) {
-                let parts: Vec<&str> = line.split(',').collect();
-                if parts.len() >= 2 {
-                    let val = parts[1].trim();
-                    if !val.is_empty() { return Some(val.to_string()); }
-                }
+        let mut read_sz = |name: &str| -> Option<String> {
+            let mut buf = [0u16; 512];
+            let mut size = (buf.len() * 2) as u32;
+            let mut kind: REG_VALUE_TYPE = Default::default();
+            let name_pcw = PCWSTR(wide(name).as_ptr());
+            let status = RegQueryValueExW(
+                key,
+                name_pcw,
+                None,
+                Some(&mut kind),
+                Some(buf.as_mut_ptr() as *mut u8),
+                Some(&mut size),
+            );
+            if status.is_err() {
+                return None;
             }
+            let s = String::from_utf16_lossy(&buf[..size as usize / 2])
+                .trim_end_matches('\0')
+                .trim()
+                .to_string();
+            if s.is_empty() { None } else { Some(s) }
+        };
+
+        let mut motherboard = read_sz("BaseBoardManufacturer");
+        if motherboard.is_none() {
+            motherboard = read_sz("SystemManufacturer");
         }
-        None
-    }
-    #[cfg(not(windows))]
-    {
-        let _ = (class, property);
-        None
+        let bios = read_sz("BIOSVersion").or_else(|| read_sz("BIOSVendor"));
+
+        let _ = RegCloseKey(key);
+        (motherboard, bios)
     }
 }
 
-fn opt_str(s: Option<&str>) -> Option<String> {
-    s.filter(|s| !s.is_empty()).map(|s| s.to_string())
+#[cfg(not(windows))]
+fn board_info() -> (Option<String>, Option<String>) {
+    (None, None)
+}
+
+fn wide(s: &str) -> Vec<u16> {
+    s.encode_utf16().chain(std::iter::once(0)).collect()
+}
+
+#[cfg(all(test, target_os = "windows"))]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn collect_returns_sane_hardware() {
+        let info = collect();
+        // CPU 名称不应为空（sysinfo 或注册表兜底）
+        assert!(
+            info.cpu.as_ref().map(|c| !c.name.is_empty()).unwrap_or(false),
+            "cpu name empty: {:?}",
+            info.cpu
+        );
+        // 内存必须 > 0（GlobalMemoryStatusEx 或 sysinfo）
+        assert!(info.ram.as_ref().map(|r| r.total_bytes > 0).unwrap_or(false));
+        // 主板/BIOS 至少一个可读（注册表）
+        assert!(
+            info.motherboard_vendor.is_some() || info.bios_version.is_some(),
+            "board info missing"
+        );
+        // HWID 可计算
+        assert!(info.hwid.as_deref().map(|h| h.len() == 64).unwrap_or(false));
+    }
+
+    #[test]
+    fn registry_cpu_fallback_works() {
+        // 注册表路径（HKLM\HARDWARE\DESCRIPTION\System\CentralProcessor\0）在
+        // 所有 Windows 上应可读；失败时返回 None 但不应 panic。
+        let cpu = registry_cpu();
+        assert!(cpu.is_some(), "registry CPU read failed");
+    }
+
+    #[test]
+    fn native_ram_works() {
+        let ram = native_ram();
+        assert!(ram.map(|r| r.total_bytes > 0).unwrap_or(false));
+    }
 }

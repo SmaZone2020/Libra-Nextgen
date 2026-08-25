@@ -69,8 +69,16 @@ windows = { version = "0.58", features = [
     "Devices_Radios",
     "Win32_Security_Cryptography",
     "Win32_Security",
+    "Win32_Security_Authorization",
     "Win32_System_Threading",
     "Win32_System_Diagnostics_ToolHelp",
+    "Win32_System_Registry",
+    "Win32_System_SystemInformation",
+    "Win32_System_Services",
+    "Win32_NetworkManagement_IpHelper",
+    "Win32_NetworkManagement_Ndis",
+    "Win32_NetworkManagement_NetManagement",
+    "Win32_Networking_WinSock",
 ] }
 portable-pty = "0.9"
 rhai = { version = "1", features = ["sync", "serde"] }

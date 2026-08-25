@@ -25,6 +25,8 @@ pub fn register_platform_api(engine: &mut Engine, features: &[String]) {
         run("ipconfig", &["/all"])
     });
 
+    // wmic()：脚本执行通道（操作员在 rhai 脚本中显式调用，等同 cmd()）。
+    // 注意：Win11 24H2 已移除 wmic，脚本需自行处理空返回。
     engine.register_fn("wmic", |query: &str| -> String {
         run("wmic", &[query])
     });

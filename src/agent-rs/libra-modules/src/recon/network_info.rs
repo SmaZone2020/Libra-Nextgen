@@ -106,25 +106,8 @@ impl NetworkInfo {
     fn get_default_gateway() -> Option<String> {
         #[cfg(target_os = "windows")]
         {
-            use std::os::windows::process::CommandExt;
-            let output = std::process::Command::new("wmic")
-                .args(["path", "Win32_NetworkAdapterConfiguration", "where", "IPEnabled=TRUE", "get", "DefaultIPGateway", "/format:csv"])
-                .creation_flags(0x08000000)
-                .output()
-                .ok()?;
-            let text = String::from_utf8_lossy(&output.stdout);
-            for line in text.lines().skip(2) {
-                let parts: Vec<&str> = line.split(',').collect();
-                if parts.len() >= 2 {
-                    let gw = parts[1].trim();
-                    if !gw.is_empty() && gw != "0.0.0.0" {
-                        let first = gw.split(';').next().unwrap_or("").trim();
-                        if !first.is_empty() {
-                            return Some(first.to_string());
-                        }
-                    }
-                }
-            }
+            // GetAdaptersAddresses（iphlpapi，Vista+）——无子进程（进程面收敛二期）
+            return windows_default_gateway();
         }
         #[cfg(not(target_os = "windows"))]
         {
@@ -170,4 +153,53 @@ pub(super) fn escape(s: &str) -> String {
         .replace('"', "\\\"")
         .replace('\n', "\\n")
         .replace('\r', "\\r")
+}
+
+/// GetAdaptersAddresses 拿第一个可用的默认网关（iphlpapi，Vista+）。
+#[cfg(target_os = "windows")]
+fn windows_default_gateway() -> Option<String> {
+    use windows::Win32::NetworkManagement::IpHelper::*;
+    use windows::Win32::NetworkManagement::Ndis::IfOperStatusUp;
+    use windows::Win32::Networking::WinSock::{AF_INET, SOCKADDR_IN};
+
+    unsafe {
+        let mut size: u32 = 16 * 1024;
+        let mut buf = vec![0u8; size as usize];
+        // family: u32（0 = AF_UNSPEC）
+        let status = GetAdaptersAddresses(
+            0,
+            GET_ADAPTERS_ADDRESSES_FLAGS(0),
+            None,
+            Some(buf.as_mut_ptr() as *mut IP_ADAPTER_ADDRESSES_LH),
+            &mut size,
+        );
+        if status != 0 {
+            return None;
+        }
+
+        let mut cur = buf.as_ptr() as *const IP_ADAPTER_ADDRESSES_LH;
+        while !cur.is_null() {
+            let a = &*cur;
+            if a.OperStatus == IfOperStatusUp {
+                let gw = a.FirstGatewayAddress;
+                if !gw.is_null() {
+                    let addr = &*gw;
+                    if !addr.Address.lpSockaddr.is_null() {
+                        let sa = addr.Address.lpSockaddr as *const SOCKADDR_IN;
+                        if (*sa).sin_family == AF_INET {
+                            // IN_ADDR 布局为 4 字节 IPv4 地址
+                            let raw = &(*sa).sin_addr as *const _ as *const u32;
+                            let bytes = (*raw).to_ne_bytes();
+                            let ip = format!("{}.{}.{}.{}", bytes[0], bytes[1], bytes[2], bytes[3]);
+                            if ip != "0.0.0.0" {
+                                return Some(ip);
+                            }
+                        }
+                    }
+                }
+            }
+            cur = a.Next;
+        }
+        None
+    }
 }

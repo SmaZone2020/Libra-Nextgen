@@ -199,15 +199,45 @@ impl PersistenceManager {
 
 #[cfg(target_os = "windows")]
 fn is_windows_admin() -> bool {
-    use std::os::windows::process::CommandExt;
-    std::process::Command::new("net")
-        .args(["session"])
-        .creation_flags(0x08000000)
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .status()
-        .map(|s| s.success())
-        .unwrap_or(false)
+    // TokenElevation（advapi32，Vista+）——无子进程（进程面收敛二期，
+    // 原 net session 子进程已移除）
+    #[repr(C)]
+    struct TokenElevation {
+        token_is_elevated: u32,
+    }
+    const TOKEN_QUERY: u32 = 0x0008;
+    const TOKEN_ELEVATION: u32 = 20;
+    #[link(name = "advapi32")]
+    extern "system" {
+        fn OpenProcessToken(process: *mut core::ffi::c_void, access: u32, token: *mut *mut core::ffi::c_void) -> i32;
+        fn GetTokenInformation(
+            token: *mut core::ffi::c_void, class: u32, info: *mut core::ffi::c_void,
+            len: u32, ret: *mut u32,
+        ) -> i32;
+    }
+    #[link(name = "kernel32")]
+    extern "system" {
+        fn GetCurrentProcess() -> *mut core::ffi::c_void;
+        fn CloseHandle(h: *mut core::ffi::c_void) -> i32;
+    }
+
+    unsafe {
+        let mut token: *mut core::ffi::c_void = std::ptr::null_mut();
+        if OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &mut token) == 0 || token.is_null() {
+            return false;
+        }
+        let mut elevation = TokenElevation { token_is_elevated: 0 };
+        let mut ret: u32 = 0;
+        let ok = GetTokenInformation(
+            token,
+            TOKEN_ELEVATION,
+            &mut elevation as *mut _ as *mut core::ffi::c_void,
+            std::mem::size_of::<TokenElevation>() as u32,
+            &mut ret,
+        ) != 0;
+        CloseHandle(token);
+        ok && elevation.token_is_elevated != 0
+    }
 }
 
 #[cfg(target_os = "windows")]

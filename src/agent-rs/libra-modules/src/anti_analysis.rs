@@ -94,22 +94,19 @@ fn get_system_uptime_secs() -> u64 {
     }
     #[cfg(windows)]
     {
-        // Use wmic to get system uptime on Windows
-        if let Ok(output) = exec("wmic", &["os", "get", "lastbootuptime", "/format:csv"]) {
-            // Parse the timestamp and compute diff
-            if let Some(line) = output.lines().nth(2) {
-                let parts: Vec<&str> = line.split(',').collect();
-                if parts.len() >= 2 {
-                    let boot_time = parts[1].trim();
-                    if let Ok(bt) = parse_wmi_datetime(boot_time) {
-                        let now = std::time::SystemTime::now()
-                            .duration_since(std::time::UNIX_EPOCH)
-                            .unwrap_or_default()
-                            .as_secs();
-                        return now.saturating_sub(bt);
-                    }
-                }
-            }
+        // GetTickCount64（kernel32，Vista+）——无子进程（进程面收敛二期）
+        #[link(name = "kernel32")]
+        extern "system" {
+            fn GetTickCount64() -> u64;
+        }
+        let ms = unsafe { GetTickCount64() };
+        if ms > 0 {
+            return ms / 1000;
+        }
+        // 兜底：sysinfo（关联函数）
+        let uptime = sysinfo::System::uptime();
+        if uptime > 0 {
+            return uptime;
         }
         3600
     }
@@ -117,32 +114,6 @@ fn get_system_uptime_secs() -> u64 {
     {
         3600
     }
-}
-
-#[cfg(windows)]
-fn parse_wmi_datetime(s: &str) -> Result<u64, ()> {
-    // WMI datetime format: 20250612093015.500000+480
-    if s.len() < 14 { return Err(()); }
-    let year: i32 = s[0..4].parse().map_err(|_| ())?;
-    let month: u32 = s[4..6].parse().map_err(|_| ())?;
-    let day: u32 = s[6..8].parse().map_err(|_| ())?;
-    let hour: u32 = s[8..10].parse().map_err(|_| ())?;
-    let min: u32 = s[10..12].parse().map_err(|_| ())?;
-    let sec: u32 = s[12..14].parse().map_err(|_| ())?;
-
-    // Simple date-to-timestamp calculation
-    let days_before_month: [u32; 12] = [0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334];
-    let is_leap = |y: i32| y % 4 == 0 && (y % 100 != 0 || y % 400 == 0);
-    let days_since_epoch = (year as u64 - 1970) * 365
-        + (year as u64 - 1969) / 4
-        - (year as u64 - 1901) / 100
-        + (year as u64 - 1601) / 400
-        + days_before_month[(month - 1) as usize] as u64
-        + if month > 2 && is_leap(year) { 1 } else { 0 }
-        + (day - 1) as u64;
-    let secs_since_epoch = days_since_epoch * 86400 + hour as u64 * 3600 + min as u64 * 60 + sec as u64;
-
-    Ok(secs_since_epoch)
 }
 
 // ── VM Detection ───────────────────────────────────────────────────────
@@ -160,28 +131,58 @@ pub fn is_virtual_machine() -> bool {
 
 #[cfg(target_os = "windows")]
 fn check_windows_vm() -> bool {
-    // Check for VM MAC address prefixes via wmic
-    if let Ok(output) = exec("wmic", &["nicconfig", "get", "macaddress"]) {
-        let upper = output.to_uppercase();
-        let vm_macs = ["00:05:69", "00:0C:29", "00:1C:42", "00:50:56", "08:00:27"];
-        if vm_macs.iter().any(|m| upper.contains(m)) {
-            return true;
+    // VM MAC 前缀检测（sysinfo::Networks，无子进程——进程面收敛二期）
+    {
+        let networks = sysinfo::Networks::new_with_refreshed_list();
+        let vm_macs = ["00:05:69", "00:0c:29", "00:1c:42", "00:50:56", "08:00:27"];
+        for (_name, iface) in networks.iter() {
+            let mac = iface.mac_address().to_string().to_lowercase();
+            if vm_macs.iter().any(|m| mac.starts_with(m)) {
+                return true;
+            }
         }
     }
 
-    // Check for VM services
-    if let Ok(svc) = exec("sc", &["query", "vmtools"]) {
-        if svc.contains("RUNNING") {
-            return true;
-        }
-    }
-    if let Ok(svc) = exec("sc", &["query", "vboxservice"]) {
-        if svc.contains("RUNNING") {
-            return true;
-        }
+    // VM 服务检测（SCM 原生 API，无子进程）
+    if vm_service_running("vmtools") || vm_service_running("vboxservice") {
+        return true;
     }
 
     false
+}
+
+/// 用 SCM 查询服务是否 RUNNING（OpenSCManager/OpenService/QueryServiceStatus）。
+#[cfg(target_os = "windows")]
+fn vm_service_running(name: &str) -> bool {
+    use windows::Win32::System::Services::*;
+    use windows::Win32::System::Threading::*;
+    use windows_core::PCWSTR;
+
+    unsafe {
+        let scm = OpenSCManagerW(None, None, SC_MANAGER_CONNECT);
+        if scm.is_err() {
+            return false;
+        }
+        let scm = scm.unwrap();
+        let svc_name = PCWSTR(wide(name).as_ptr());
+        let svc = OpenServiceW(scm, svc_name, SERVICE_QUERY_STATUS);
+        if svc.is_err() {
+            let _ = CloseServiceHandle(scm);
+            return false;
+        }
+        let svc = svc.unwrap();
+        let mut status = SERVICE_STATUS::default();
+        let ok = QueryServiceStatus(svc, &mut status).is_ok();
+        let running = ok && status.dwCurrentState == SERVICE_RUNNING;
+        let _ = CloseServiceHandle(svc);
+        let _ = CloseServiceHandle(scm);
+        running
+    }
+}
+
+#[cfg(target_os = "windows")]
+fn wide(s: &str) -> Vec<u16> {
+    s.encode_utf16().chain(std::iter::once(0)).collect()
 }
 
 #[cfg(not(target_os = "windows"))]
