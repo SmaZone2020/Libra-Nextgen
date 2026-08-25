@@ -1,4 +1,5 @@
 using LibraNextgen.Common.Models;
+using LibraNextgen.Common.Profiles;
 using LibraNextgen.Common.Protocol;
 using LibraNextgen.Service.Data;
 using LibraNextgen.Service.Profiles;
@@ -32,8 +33,8 @@ public class AgentCommsService
         _sessionKeys = sessionKeys;
     }
 
-    public DefaultProfile GetActiveProfile() =>
-        (DefaultProfile)_profileService.GetActiveProfile();
+    public async Task<IMalleableProfile> GetActiveProfileAsync() =>
+        await _profileService.GetActiveProfileAsync();
 
     public async Task<Agent?> GetAgentAsync(string agentId) =>
         await _agents.GetByIdAsync(agentId);
@@ -46,6 +47,11 @@ public class AgentCommsService
     public string? EstablishSessionKey(string agentId, string? publicKeyBase64)
     {
         if (string.IsNullOrWhiteSpace(publicKeyBase64))
+            return null;
+
+        // 已有会话密钥（agent 重连或服务重启后从 Mongo 恢复）——直接复用，
+        // 返回 null 表示不下发新 key，agent 继续用旧 key，无需重新 RSA 协商。
+        if (_sessionKeys.TryGet(agentId, out var existing) && existing is not null)
             return null;
 
         var key = CryptoHelper.GenerateAesKey();

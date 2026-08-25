@@ -56,7 +56,7 @@ public class AgentCommsController : ControllerBase
         // Establish AES-256 session key (RSA-OAEP encrypted with the agent's public key).
         var sessionKey = _commsService.EstablishSessionKey(agent.Id, request.PublicKey);
 
-        var profile = _commsService.GetActiveProfile();
+        var profile = await _commsService.GetActiveProfileAsync();
         var response = new
         {
             agent_id = agent.Id,

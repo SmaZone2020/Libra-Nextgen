@@ -19,6 +19,16 @@ public class ProfileService
         return new DefaultProfile();
     }
 
+    /// <summary>
+    /// Load the active persisted profile from Mongo, falling back to the default
+    /// when none is activated.
+    /// </summary>
+    public async Task<IMalleableProfile> GetActiveProfileAsync(CancellationToken ct = default)
+    {
+        var active = await _profiles.FirstOrDefaultAsync(p => p.IsActive, ct);
+        return active != null ? new ConfigurableProfile(active) : new DefaultProfile();
+    }
+
     public async Task<List<MalleableProfileConfig>> GetAllAsync(CancellationToken ct = default)
     {
         return await _profiles.FindAsync(p => true, ct);

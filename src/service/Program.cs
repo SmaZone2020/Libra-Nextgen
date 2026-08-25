@@ -207,6 +207,8 @@ try
         mcp.LoadAsync().GetAwaiter().GetResult();
         var plugins = scope.ServiceProvider.GetRequiredService<PluginService>();
         plugins.PreloadScriptsAsync().GetAwaiter().GetResult();
+        var sessionKeys = scope.ServiceProvider.GetRequiredService<SessionKeyStore>();
+        sessionKeys.LoadAsync().GetAwaiter().GetResult();
     }
 }
 catch (Exception ex)
