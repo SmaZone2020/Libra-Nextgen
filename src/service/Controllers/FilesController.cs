@@ -20,7 +20,9 @@ public class FilesController : ControllerBase
 
     private async Task<IActionResult> RelayAndWaitAsync(string agentId, string messageType, object? data, CancellationToken ct)
     {
-        var response = await _relay.RelayAndWaitAsync(agentId, messageType, data, ct);
+        // 60s：零 WS 架构下首次操作要拉起 realtime 模块（下载 ~4.4MB）+
+        // files 模块下载，30s 默认值不够。
+        var response = await _relay.RelayAndWaitAsync(agentId, messageType, data, ct, TimeSpan.FromSeconds(60));
         if (response == null)
             return StatusCode(504, new { error = "Agent did not respond in time." });
         return response.Data != null

@@ -57,9 +57,9 @@ export default function FileManagerPage() {
     setError(null);
     try {
       const result = await listFiles(targetId, dirPath, 0, PAGE_SIZE);
-      setPath(result.path);
-      setEntries(result.entries);
-      setTotal(result.total ?? result.entries.length);
+      setPath(result.path ?? dirPath);
+      setEntries(result.entries ?? []);
+      setTotal(result.total ?? result.entries?.length ?? 0);
     } catch (e) {
       setError(e instanceof Error ? e.message : t('fileManager.listFailed'));
     } finally { setLoading(false); }
@@ -71,8 +71,9 @@ export default function FileManagerPage() {
     setLoadingMore(true);
     try {
       const result = await listFiles(agentId, path, entries.length, PAGE_SIZE);
-      setEntries(prev => [...prev, ...result.entries]);
-      setTotal(result.total ?? (entries.length + result.entries.length));
+      const more = result.entries ?? [];
+      setEntries(prev => [...prev, ...more]);
+      setTotal(result.total ?? (entries.length + more.length));
     } catch (e) {
       setError(e instanceof Error ? e.message : t('fileManager.listFailed'));
     } finally { setLoadingMore(false); }
@@ -104,9 +105,9 @@ export default function FileManagerPage() {
       setDrives(driveList);
       const firstDrive = driveList[0] ?? 'C:\\';
       return listFiles(agentId, firstDrive, 0, PAGE_SIZE).then((fileResult) => {
-        setPath(fileResult.path);
-        setEntries(fileResult.entries);
-        setTotal(fileResult.total ?? fileResult.entries.length);
+        setPath(fileResult.path ?? firstDrive);
+        setEntries(fileResult.entries ?? []);
+        setTotal(fileResult.total ?? fileResult.entries?.length ?? 0);
       });
     }).catch((e) => {
       setError(e instanceof Error ? e.message : t('fileManager.connectFailed'));
@@ -139,9 +140,9 @@ export default function FileManagerPage() {
     try {
       const result = await listArchive(agentId, archivePath);
       setInArchive(true);
-      setPath(result.path);
-      setEntries(result.entries);
-      setTotal(result.total ?? result.entries.length);
+      setPath(result.path ?? archivePath);
+      setEntries(result.entries ?? []);
+      setTotal(result.total ?? result.entries?.length ?? 0);
     } catch (e) {
       setError(e instanceof Error ? e.message : t('fileManager.listFailed'));
     } finally {
