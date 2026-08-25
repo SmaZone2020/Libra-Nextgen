@@ -44,9 +44,9 @@ export default function ShellPage() {
           print('\r\n');
         }
       }
-      if (!done) print('\r\n[timeout] task did not finish in time\r\n');
+      if (!done) print(`\r\n${t('shell.timeout')}\r\n`);
     } catch (e) {
-      print(`\r\n[error] ${e instanceof Error ? e.message : String(e)}\r\n`);
+      print(`\r\n${t('shell.error', { msg: e instanceof Error ? e.message : String(e) })}\r\n`);
     } finally {
       setRunning(false);
       termRef.current?.focus();
@@ -84,9 +84,9 @@ export default function ShellPage() {
   useEffect(() => {
     if (agentId) {
       termRef.current?.clear();
-      print(`Libra-Nextgen 命令式 Shell（任务模式）\r\n输入命令后回车执行，Ctrl+C 清空输入。\r\n\r\n`);
+      print(`${t('shell.banner')}\r\n`);
     }
-  }, [agentId, print]);
+  }, [agentId, print, t]);
 
   return (
     <div className="space-y-3">

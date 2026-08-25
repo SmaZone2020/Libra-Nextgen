@@ -574,7 +574,7 @@ unsafe fn invoke_method(
     args: &mut [Variant],
 ) -> Result<Variant, String> {
     let vtbl = &*(*(obj as *const *const IDispatchVtbl));
-    let mut params = DispParams {
+    let params = DispParams {
         rgvarg: if args.is_empty() { ptr::null_mut() } else { args.as_mut_ptr() },
         rgdispid_named_args: ptr::null_mut(),
         c_args: args.len() as u32,
@@ -602,7 +602,7 @@ unsafe fn invoke_method(
 /// CreateInstanceAndUnwrap → IDispatch Invoke("Run")。
 unsafe fn execute_via_legacy_idispatch(domain: *mut c_void, args: &str) -> Result<i32, String> {
     // 1) Load_2(byte[]) 内存加载
-    let mut sa = SafeArrayCreateVector(VT_UI1, 0, STUB_DLL.len() as u32);
+    let sa = SafeArrayCreateVector(VT_UI1, 0, STUB_DLL.len() as u32);
     if sa.is_null() {
         return Err("SafeArrayCreateVector failed".into());
     }

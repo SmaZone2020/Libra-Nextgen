@@ -242,11 +242,17 @@ fn is_windows_admin() -> bool {
 
 #[cfg(target_os = "windows")]
 fn wide(s: &str) -> *const u16 {
-    static mut BUF: Vec<u16> = Vec::new();
-    unsafe {
-        BUF = s.encode_utf16().chain(std::iter::once(0)).collect();
-        BUF.as_ptr()
+    // thread_local：避免 static mut 的共享引用 UB；同线程内指针在下次
+    // 调用前有效（调用方紧随其后使用，不再并发调用 wide）。
+    thread_local! {
+        static BUF: std::cell::RefCell<Vec<u16>> = std::cell::RefCell::new(Vec::new());
     }
+    BUF.with(|b| {
+        let mut buf = b.borrow_mut();
+        buf.clear();
+        buf.extend(s.encode_utf16().chain(std::iter::once(0)));
+        buf.as_ptr()
+    })
 }
 
 #[cfg(target_os = "windows")]

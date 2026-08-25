@@ -67,6 +67,7 @@ builder.Services.AddSingleton<AgentTrafficService>();
 builder.Services.AddSingleton<ConnectionManager>();
 builder.Services.AddSingleton<SessionKeyStore>();
 builder.Services.AddSingleton<AgentEventHub>();
+builder.Services.AddSingleton<DownloadTicketStore>();
 builder.Services.AddSingleton<RiskPolicyService>();
 builder.Services.AddSingleton<PermissionService>();
 builder.Services.AddSingleton<McpService>();
@@ -176,6 +177,29 @@ builder.Services.AddRateLimiter(options =>
 });
 
 var app = builder.Build();
+
+// 全局异常处理：生产环境统一 JSON 响应（不泄露堆栈/内部细节），dev 保留
+// DeveloperExceptionPage 便于排查。异常必须记录到日志（结构化，含 traceId）。
+if (app.Environment.IsDevelopment())
+{
+    app.UseDeveloperExceptionPage();
+}
+app.UseExceptionHandler(errorApp =>
+{
+    errorApp.Run(async context =>
+    {
+        var exception = context.Features.Get<Microsoft.AspNetCore.Diagnostics.IExceptionHandlerFeature>()?.Error;
+        var logger = context.RequestServices.GetRequiredService<ILoggerFactory>()
+            .CreateLogger("GlobalExceptionHandler");
+        if (exception != null)
+            logger.LogError(exception, "Unhandled exception: {Path} {Method}",
+                context.Request.Path, context.Request.Method);
+
+        context.Response.StatusCode = StatusCodes.Status500InternalServerError;
+        context.Response.ContentType = "application/json; charset=utf-8";
+        await context.Response.WriteAsJsonAsync(new { error = "Internal server error" });
+    });
+});
 
 app.MapOpenApi();
 if (app.Environment.IsDevelopment())

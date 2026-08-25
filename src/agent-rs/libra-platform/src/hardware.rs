@@ -367,7 +367,7 @@ fn board_info() -> (Option<String>, Option<String>) {
             return (None, None);
         }
 
-        let mut read_sz = |name: &str| -> Option<String> {
+        let read_sz = |name: &str| -> Option<String> {
             let mut buf = [0u16; 512];
             let mut size = (buf.len() * 2) as u32;
             let mut kind: REG_VALUE_TYPE = Default::default();

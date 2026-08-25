@@ -19,15 +19,15 @@ interface BuilderTrafficCardProps {
 
 interface GroupDef {
   list: TrafficListName;
-  title: string;
+  titleKey: string;
   placeholder: string;
-  inputLabel: string;
+  inputLabelKey: string;
 }
 
 const GROUPS: GroupDef[] = [
-  { list: 'userAgents', title: 'UA 轮换列表', placeholder: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) …', inputLabel: 'UA（完整浏览器 User-Agent）' },
-  { list: 'extraHeaders', title: '附加请求头', placeholder: 'X-Requested-With: XMLHttpRequest', inputLabel: '请求头（"Name: value"）' },
-  { list: 'pathSuffixes', title: '虚假业务路径后缀', placeholder: 'user/info', inputLabel: '路径后缀（如 user/info）' },
+  { list: 'userAgents', titleKey: 'builder.trafficUa', placeholder: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) …', inputLabelKey: 'builder.trafficUaLabel' },
+  { list: 'extraHeaders', titleKey: 'builder.trafficHeaders', placeholder: 'X-Requested-With: XMLHttpRequest', inputLabelKey: 'builder.trafficHeadersLabel' },
+  { list: 'pathSuffixes', titleKey: 'builder.trafficSuffixes', placeholder: 'user/info', inputLabelKey: 'builder.trafficSuffixesLabel' },
 ];
 
 /** 流量伪装配置：持久化列表（服务端存储），ListView 多选=启用，右侧删除按钮。 */
@@ -74,19 +74,19 @@ export function BuilderTrafficCard({ lists, onAddItem, onToggleItem, onDeleteIte
 
   return (
     <Card className="p-4">
-      <h2 className="text-lg font-semibold mb-3">流量伪装</h2>
+      <h2 className="text-lg font-semibold mb-3">{t('builder.trafficTitle')}</h2>
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {GROUPS.map((g) => {
           const items = lists?.[g.list] ?? [];
           return (
             <div key={g.list}>
               <div className="flex items-center justify-between mb-2">
-                <Label className="text-sm font-medium">{g.title}</Label>
+                <Label className="text-sm font-medium">{t(g.titleKey)}</Label>
                 <Button
                   size="sm"
                   variant="ghost"
                   isIconOnly
-                  aria-label={`${t('builder.addTrafficItem')}: ${g.title}`}
+                  aria-label={`${t('builder.addTrafficItem')}: ${t(g.titleKey)}`}
                   onPress={() => openAdd(g)}
                 >
                   <Plus className="h-4 w-4" />
@@ -96,7 +96,7 @@ export function BuilderTrafficCard({ lists, onAddItem, onToggleItem, onDeleteIte
                 <p className="text-xs text-default-500 py-2">{t('builder.noTrafficItems')}</p>
               ) : (
                 <ListView
-                  aria-label={g.title}
+                  aria-label={t(g.titleKey)}
                   className="max-h-56 overflow-y-auto"
                   items={items}
                   selectedKeys={new Set(items.filter(i => i.enabled).map(i => i.id))}
@@ -135,7 +135,7 @@ export function BuilderTrafficCard({ lists, onAddItem, onToggleItem, onDeleteIte
           <Modal.Container>
             <Modal.Dialog className="sm:max-w-md">
               <Modal.Header>
-                <Modal.Heading>{activeGroup?.title}</Modal.Heading>
+                <Modal.Heading>{activeGroup ? t(activeGroup.titleKey) : ''}</Modal.Heading>
               </Modal.Header>
               <Modal.Body>
                 {error && (
@@ -147,7 +147,7 @@ export function BuilderTrafficCard({ lists, onAddItem, onToggleItem, onDeleteIte
                   onChange={setNewValue}
                   autoFocus
                 >
-                  <Label>{activeGroup?.inputLabel}</Label>
+                  <Label>{activeGroup ? t(activeGroup.inputLabelKey) : ''}</Label>
                   <Input
                     variant="secondary"
                     placeholder={activeGroup?.placeholder}

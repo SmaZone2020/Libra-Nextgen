@@ -1,4 +1,5 @@
 import { useState, type ReactNode } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Button, Chip, Input, Label, TextField } from '@heroui/react';
 import { dumpLsass, klist, saveSam, type KlistTicket } from '../../api/othersoft';
 
@@ -16,6 +17,7 @@ function Action({ loading, onClick, children, variant = 'ghost' }: {
 }
 
 export function CredsTab({ agentId }: { agentId: string }) {
+  const { t } = useTranslation();
   const [dumpPath, setDumpPath] = useState('C:\\Users\\Public\\lsass.dmp');
   const [samDir, setSamDir] = useState('C:\\Users\\Public');
   const [tickets, setTickets] = useState<KlistTicket[]>([]);
@@ -39,7 +41,7 @@ export function CredsTab({ agentId }: { agentId: string }) {
 
   const doLsass = () => run('lsass', async () => {
     const r = await dumpLsass(agentId, dumpPath);
-    if (r?.success && r.path) setMessage(`已转储到 ${r.path}`);
+    if (r?.success && r.path) setMessage(t('othersoft.dumpedTo', { path: r.path }));
     return r;
   });
 
@@ -51,41 +53,41 @@ export function CredsTab({ agentId }: { agentId: string }) {
 
   const doSam = () => run('sam', async () => {
     const r = await saveSam(agentId, samDir);
-    if (r?.success) setMessage(`已导出到 ${samDir}`);
+    if (r?.success) setMessage(t('othersoft.exportedTo', { path: samDir }));
     return r;
   });
 
   return (
     <div className="space-y-4">
       <div className="space-y-2">
-        <div className="text-sm text-neutral-400">LSASS 转储（需 SYSTEM/SeDebugPrivilege）</div>
+        <div className="text-sm text-neutral-400">{t('othersoft.lsassDesc')}</div>
         <div className="flex flex-wrap items-center gap-2">
           <TextField variant="secondary" value={dumpPath} onChange={setDumpPath} className="w-72">
-            <Label>转储路径</Label>
+            <Label>{t('othersoft.dumpPath')}</Label>
             <Input />
           </TextField>
-          <Action loading={busy === 'lsass'} onClick={doLsass} variant="primary">转储 LSASS</Action>
+          <Action loading={busy === 'lsass'} onClick={doLsass} variant="primary">{t('othersoft.dumpLsass')}</Action>
         </div>
       </div>
 
       <div className="space-y-2">
         <div className="flex items-center gap-2">
-          <div className="text-sm text-neutral-400">Kerberos 票据（klist）</div>
-          <Action loading={busy === 'klist'} onClick={doKlist}>查询票据</Action>
+          <div className="text-sm text-neutral-400">{t('othersoft.klistDesc')}</div>
+          <Action loading={busy === 'klist'} onClick={doKlist}>{t('othersoft.queryTickets')}</Action>
         </div>
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-neutral-800 text-neutral-400">
               <th className="text-left py-1.5 px-2">SPN</th>
-              <th className="text-left py-1.5 px-2">域</th>
-              <th className="text-left py-1.5 px-2">过期</th>
-              <th className="text-left py-1.5 px-2">加密</th>
+              <th className="text-left py-1.5 px-2">{t('othersoft.domain')}</th>
+              <th className="text-left py-1.5 px-2">{t('othersoft.expires')}</th>
+              <th className="text-left py-1.5 px-2">{t('othersoft.encryption')}</th>
             </tr>
           </thead>
           <tbody>
             {tickets.length === 0 ? (
               <tr>
-                <td colSpan={4} className="text-center text-neutral-500 py-6">暂无票据</td>
+                <td colSpan={4} className="text-center text-neutral-500 py-6">{t('othersoft.noTickets')}</td>
               </tr>
             ) : tickets.map((t, i) => (
               <tr key={i} className="border-b border-neutral-900">
@@ -100,13 +102,13 @@ export function CredsTab({ agentId }: { agentId: string }) {
       </div>
 
       <div className="space-y-2">
-        <div className="text-sm text-neutral-400">SAM/SYSTEM 导出（需 SYSTEM，供离线解密）</div>
+        <div className="text-sm text-neutral-400">{t('othersoft.samDesc')}</div>
         <div className="flex flex-wrap items-center gap-2">
           <TextField variant="secondary" value={samDir} onChange={setSamDir} className="w-64">
-            <Label>导出目录</Label>
+            <Label>{t('othersoft.exportDir')}</Label>
             <Input />
           </TextField>
-          <Action loading={busy === 'sam'} onClick={doSam}>导出 SAM</Action>
+          <Action loading={busy === 'sam'} onClick={doSam}>{t('othersoft.exportSam')}</Action>
         </div>
       </div>
 

@@ -3,8 +3,6 @@
 
 #![allow(non_snake_case)]
 
-use std::ffi::c_void;
-
 const KERB_QUERY_TKT_CACHE_MESSAGE: u32 = 0x22;
 
 #[link(name = "secur32")]

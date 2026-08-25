@@ -384,8 +384,7 @@ public class AgentCommsController : ControllerBase
                 var (valid, task, hostname) = await _commsService.HandleHeartbeatAsync(agentId);
                 if (!valid)
                     return NotFound(new { error = "agent not found" });
-                var wsNeeded = await _agentService.GetWsNeededAsync(agentId);
-                responsePlain = J(new HeartbeatResponse { PendingTask = task, WsNeeded = wsNeeded });
+                responsePlain = J(new HeartbeatResponse { PendingTask = task });
                 _commsService.RecordTraffic(agentId, hostname, bytesReceived, 0);
                 break;
             }
@@ -487,9 +486,9 @@ public class AgentCommsController : ControllerBase
 
     /// <summary>
     /// SSE 任务事件流（伪装为模型事件流：GET /api/v1/models/events?channel=，
-    /// 由 BeaconEntryMiddleware 重写到本端点）。服务端挂起连接，任务/wsNeeded
-    /// 变化时主动推送（AES-GCM 加密信封：data: &lt;b64(nonce||tag||ct)&gt;），
-    /// 30s 注释 keepalive。连接建立时先补发一次 pending 任务 + wsNeeded。
+    /// 由 BeaconEntryMiddleware 重写到本端点）。服务端挂起连接，任务到达时
+    /// 主动推送（AES-GCM 加密信封：data: &lt;b64(nonce||tag||ct)&gt;），
+    /// 30s 注释 keepalive。连接建立时先补发一次 pending 任务。
     /// agent 以此替代心跳轮询；心跳降为低频兜底。
     /// </summary>
     [HttpGet("/api/beacon/events")]
@@ -510,22 +509,25 @@ public class AgentCommsController : ControllerBase
 
         var queue = _eventHub.Subscribe(agentId);
         var abort = HttpContext.RequestAborted;
+        // SSE 通道流量计入统计（下行字节，连接结束时 flush）
+        long sseBytesSent = 0;
+        var hostname = (await _agentService.GetByIdAsync(agentId, abort))?.Hostname ?? "unknown";
 
         async Task WriteEvent(string op, object data)
         {
             var plain = J(new { op, data });
             var encrypted = CryptoHelper.EncryptPayload(plain, key);
-            await Response.WriteAsync($"data: {encrypted}\n\n", abort);
+            var line = $"data: {encrypted}\n\n";
+            await Response.WriteAsync(line, abort);
+            sseBytesSent += Encoding.UTF8.GetByteCount(line);
         }
 
-        // 连接即同步：pending 任务 + wsNeeded（避免竞态，心跳兜底）
+        // 连接即同步：pending 任务（避免竞态，心跳兜底）
         try
         {
             var pending = await _taskService.GetNextPendingForAgentAsync(agentId, abort);
             if (pending != null)
                 await WriteEvent("task", pending);
-            var wsNeeded = await _agentService.GetWsNeededAsync(agentId, abort);
-            await WriteEvent("ws", new { wsNeeded });
             await Response.Body.FlushAsync(abort);
         }
         catch
@@ -551,8 +553,10 @@ public class AgentCommsController : ControllerBase
                 else
                 {
                     // keepalive 注释行：刷新代理（nginx proxy_read_timeout）空闲超时
-                    await Response.WriteAsync(": ping\n\n", abort);
+                    const string ping = ": ping\n\n";
+                    await Response.WriteAsync(ping, abort);
                     await Response.Body.FlushAsync(abort);
+                    sseBytesSent += ping.Length;
                 }
             }
         }
@@ -562,6 +566,8 @@ public class AgentCommsController : ControllerBase
         finally
         {
             _eventHub.Unsubscribe(agentId);
+            if (sseBytesSent > 0)
+                _commsService.RecordTraffic(agentId, hostname, 0, sseBytesSent);
         }
     }
 
@@ -828,8 +834,7 @@ public class AgentCommsController : ControllerBase
         if (!valid)
             return NotFound(new { error = "agent not found" });
 
-        var wsNeeded = await _agentService.GetWsNeededAsync(agentId);
-        var response = new HeartbeatResponse { PendingTask = task, WsNeeded = wsNeeded };
+        var response = new HeartbeatResponse { PendingTask = task };
         var responseJson = J(response);
 
         // Encrypt the response with the session key.

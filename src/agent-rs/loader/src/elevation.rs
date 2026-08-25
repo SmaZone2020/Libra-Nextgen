@@ -62,13 +62,14 @@ pub fn is_admin() -> bool {
     }
     #[link(name = "kernel32")]
     extern "system" {
-        fn GetCurrentProcess() -> *mut core::ffi::c_void;
-        fn CloseHandle(h: *mut core::ffi::c_void) -> i32;
+        // 签名与 pe_loader.rs 保持一致（*mut u8），避免 clashing extern 声明
+        fn GetCurrentProcess() -> *mut u8;
+        fn CloseHandle(h: *mut u8) -> i32;
     }
 
     unsafe {
         let mut token: *mut core::ffi::c_void = std::ptr::null_mut();
-        if OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &mut token) == 0 || token.is_null() {
+        if OpenProcessToken(GetCurrentProcess() as *mut core::ffi::c_void, TOKEN_QUERY, &mut token) == 0 || token.is_null() {
             return false;
         }
         let mut elevation = TokenElevation { token_is_elevated: 0 };
@@ -80,7 +81,7 @@ pub fn is_admin() -> bool {
             std::mem::size_of::<TokenElevation>() as u32,
             &mut ret,
         ) != 0;
-        CloseHandle(token);
+        CloseHandle(token as *mut u8);
         ok && elevation.token_is_elevated != 0
     }
 }
@@ -115,7 +116,7 @@ pub fn check_elevated_instance_running(exe_path: &str) -> bool {
                     let name_len = pe.szExeFile.iter().position(|&c| c == 0).unwrap_or(pe.szExeFile.len());
                     let proc_name = String::from_utf16_lossy(&pe.szExeFile[..name_len]).to_lowercase();
                     if proc_name == our_name {
-                        CloseHandle(snapshot);
+                        CloseHandle(snapshot as *mut u8);
                         return true;
                     }
                 }
@@ -124,7 +125,7 @@ pub fn check_elevated_instance_running(exe_path: &str) -> bool {
                 }
             }
         }
-        CloseHandle(snapshot);
+        CloseHandle(snapshot as *mut u8);
     }
     false
 }
@@ -219,6 +220,7 @@ fn to_wide(s: &str) -> Vec<u16> {
 // ── Windows Types & Constants ───────────────────────────────────────
 
 #[cfg(target_os = "windows")]
+#[allow(dead_code)]
 const CREATE_NO_WINDOW: u32 = 0x08000000;
 #[cfg(target_os = "windows")]
 const SW_SHOWNORMAL: i32 = 1;
@@ -276,7 +278,8 @@ extern "system" {
         nShowCmd: i32,
     ) -> usize;
 
-    fn CloseHandle(hObject: *mut std::ffi::c_void) -> i32;
+    // 签名与 pe_loader.rs/main.rs 对齐（*mut u8），避免 clashing extern 声明
+    fn CloseHandle(hObject: *mut u8) -> i32;
     fn CreateToolhelp32Snapshot(dwFlags: u32, th32ProcessID: u32) -> *mut std::ffi::c_void;
     fn Process32First(hSnapshot: *mut std::ffi::c_void, lppe: *mut PROCESSENTRY32) -> i32;
     fn Process32Next(hSnapshot: *mut std::ffi::c_void, lppe: *mut PROCESSENTRY32) -> i32;

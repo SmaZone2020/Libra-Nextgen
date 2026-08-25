@@ -1,5 +1,4 @@
 use libra_common::models::InjectedConfig;
-use rand::Rng;
 
 pub struct ConfigManager {
     pub server_url: String,

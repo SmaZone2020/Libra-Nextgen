@@ -11,6 +11,9 @@
 //! 安全边界：CLR 宿主崩溃会影响宿主进程，因此所有托管调用串行化执行；
 //! 脚本超时由 stub 内 Task.Wait(timeout) 控制，超时后 ps.Stop()。
 
+// CLSID/IID 常量沿用 Windows SDK 命名（非 Rust 命名规范，属外部 ABI 标识）
+#![allow(non_upper_case_globals)]
+
 pub mod clr_host;
 pub mod etw;
 

@@ -4,6 +4,7 @@ use base64::Engine;
 pub struct FileOps;
 
 impl FileOps {
+    #[allow(dead_code)]
     pub fn list_directory(path: &str) -> String {
         Self::list_directory_paged(path, 0, usize::MAX)
     }
@@ -640,6 +641,9 @@ fn escape(s: &str) -> String {
 // 替代旧的 powershell.exe + WScript.Shell 子进程方案（PowerShell 进程清零专项）。
 
 #[cfg(target_os = "windows")]
+// shortcut 原生实现（IShellLinkW COM）——保留但当前入口未全部启用，抑制死代码告警
+#[allow(dead_code)]
+#[allow(non_upper_case_globals)]
 mod shortcut_native {
     use std::ffi::c_void;
     use std::ptr;

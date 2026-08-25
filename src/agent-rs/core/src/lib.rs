@@ -55,6 +55,7 @@ mod winlog {
         }
     }
 
+    #[allow(dead_code)]
     pub fn append_log(path: &str, msg: &str) {
         // For append, we use a simple approach: read existing + write new
         // But since we're using raw API, just use CREATE_ALWAYS for simplicity

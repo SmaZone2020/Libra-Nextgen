@@ -12,6 +12,7 @@ pub struct PowerShellRunner;
 
 impl PowerShellRunner {
     /// Execute PowerShell script in-process via the hosted CLR.
+    #[allow(dead_code)]
     pub fn execute(script: &str, timeout_secs: u64) -> String {
         Self::execute_opts(script, timeout_secs, false)
     }

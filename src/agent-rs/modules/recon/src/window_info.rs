@@ -1,3 +1,6 @@
+// 窗口操作函数（close/minimize/maximize 等）为后续版本保留，当前入口未启用
+#![allow(dead_code)]
+
 pub struct WindowInfo;
 
 impl WindowInfo {

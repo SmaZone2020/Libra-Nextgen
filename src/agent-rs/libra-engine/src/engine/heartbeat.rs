@@ -1,7 +1,6 @@
 use libra_comm::http::HttpCommunicator;
 use libra_load::ModuleMainFn;
 
-use super::utils::blocking_string;
 use super::utils::blocking_val;
 
 // ── Heartbeat ────────────────────────────────────────────────────────────
@@ -30,16 +29,22 @@ enum ExitAction {
 }
 
 pub(crate) async fn heartbeat_tick(
-    http: &HttpCommunicator,
+    http: &std::sync::Arc<HttpCommunicator>,
     agent_id: &str,
     session_key: Option<&[u8; 32]>,
     module_manager: &std::sync::Arc<tokio::sync::Mutex<crate::module_manager::ModuleManager>>,
 ) -> Result<(), String> {
     // 心跳兜底：刷新在线状态 + 拉取可能错过的任务（SSE 为主通道）。
-    // 心跳响应里的 wsNeeded 已废弃（零 WS 架构）。
-    let (task, _ws_needed) = http.heartbeat(agent_id, session_key).await?;
+    let task = http.heartbeat(agent_id, session_key).await?;
     if let Some(task) = task {
-        handle_task(http, &task, agent_id, session_key, module_manager).await;
+        // 并发执行：不阻塞心跳循环
+        let h = http.clone();
+        let mm = module_manager.clone();
+        let aid = agent_id.to_string();
+        let key = session_key.copied();
+        tokio::spawn(async move {
+            handle_task(&h, &task, &aid, key.as_ref(), &mm).await;
+        });
     }
     Ok(())
 }

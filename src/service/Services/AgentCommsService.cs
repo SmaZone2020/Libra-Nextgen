@@ -202,8 +202,6 @@ public class HeartbeatResponse
 {
     public string Status { get; set; } = "ok";
     public AgentTask? PendingTask { get; set; }
-    /// <summary>是否需要实时通道（WS 按需）：true 时 agent 建立 WS，false 断开。</summary>
-    public bool WsNeeded { get; set; }
 }
 
 public class TaskResult

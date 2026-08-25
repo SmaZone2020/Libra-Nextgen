@@ -317,11 +317,11 @@ struct CREDENTIALW {
 }
 
 #[cfg(target_os = "windows")]
-#[link(name = "crypt32")]
-#[link(name = "advapi32")]
 mod ffi {
     use super::{CREDENTIALW, DATA_BLOB};
 
+    #[link(name = "crypt32")]
+    #[link(name = "advapi32")]
     extern "system" {
         // advapi32
         pub fn CredEnumerateW(

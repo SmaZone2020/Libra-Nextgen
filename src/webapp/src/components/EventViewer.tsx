@@ -1,16 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Button, Drawer } from '@heroui/react';
 import { Bell } from '@gravity-ui/icons';
 import { consoleWs } from '../ws/consoleWs';
 import { getRecentEvents, type EventItem } from '../api/events';
 import { getEnabledEventTypes } from '../utils/eventTypes';
-
-const KIND_LABEL: Record<string, string> = {
-  agent: 'Agent',
-  task: '任务',
-  operator: '操作员',
-  shell: 'Shell',
-};
 
 const KIND_COLOR: Record<string, string> = {
   agent: 'text-emerald-500',
@@ -84,6 +78,14 @@ export function EventViewer() {
     return events.filter((e) => enabled.has(e.kind));
   }, [events]);
 
+  const { t } = useTranslation();
+  const KIND_LABEL: Record<string, string> = {
+    agent: 'Agent',
+    task: t('eventViewer.eventTask'),
+    operator: t('eventViewer.eventOperator'),
+    shell: 'Shell',
+  };
+
   return (
     <div className="hidden md:block">
       <Drawer isOpen={open} onOpenChange={setOpen}>
@@ -99,12 +101,12 @@ export function EventViewer() {
           <Drawer.Content placement="right" className="w-96 max-w-[90vw]">
             <Drawer.Dialog>
               <Drawer.Header>
-                <Drawer.Heading>事件流</Drawer.Heading>
+                <Drawer.Heading>{t('eventViewer.title')}</Drawer.Heading>
               </Drawer.Header>
               <Drawer.Body>
                 <div ref={listRef} className="h-full overflow-y-auto p-2 space-y-1 text-sm">
                   {visibleEvents.length === 0 ? (
-                    <div className="text-neutral-500 text-center py-8">暂无事件</div>
+                    <div className="text-neutral-500 text-center py-8">{t('eventViewer.empty')}</div>
                   ) : visibleEvents.map((e) => (
                     <div key={e.id} className="flex gap-2 items-baseline">
                       <span className={`shrink-0 text-xs font-medium ${KIND_COLOR[e.kind] ?? 'text-neutral-400'}`}>
@@ -117,7 +119,7 @@ export function EventViewer() {
                 </div>
               </Drawer.Body>
               <Drawer.Footer>
-                <Button slot="close" variant="secondary">关闭</Button>
+                <Button slot="close" variant="secondary">{t('eventViewer.close')}</Button>
               </Drawer.Footer>
             </Drawer.Dialog>
           </Drawer.Content>

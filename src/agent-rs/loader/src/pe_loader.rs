@@ -9,8 +9,11 @@
 use std::ptr;
 
 // ── Win32/NT API ──────────────────────────────────────────────────────
+// 手动映射 fallback 路径暂未启用：FFI 声明与常量保留，统一 allow 避免噪音。
+// GetCurrentProcess/CloseHandle 签名与 elevation.rs 对齐（c_void）消除 clashing。
 
 #[cfg(target_os = "windows")]
+#[allow(dead_code)]
 extern "system" {
     fn VirtualAlloc(addr: *mut u8, size: usize, alloc_type: u32, protect: u32) -> *mut u8;
     fn VirtualProtect(addr: *mut u8, size: usize, new_protect: u32, old_protect: *mut u32) -> i32;
@@ -23,17 +26,23 @@ extern "system" {
     fn CloseHandle(handle: *mut u8) -> i32;
 }
 
+#[allow(dead_code)]
 type NtStatus = i32;
+#[allow(dead_code)]
 const STATUS_SUCCESS: NtStatus = 0;
 const MEM_COMMIT: u32 = 0x1000;
 const MEM_RESERVE: u32 = 0x2000;
+#[allow(dead_code)]
 const MEM_RELEASE: u32 = 0x8000;
 const PAGE_READWRITE: u32 = 0x04;
 const PAGE_READONLY: u32 = 0x02;
 const PAGE_EXECUTE_READ: u32 = 0x20;
+#[allow(dead_code)]
 const SEC_IMAGE: u32 = 0x1000000;
+#[allow(dead_code)]
 const SECTION_ALL_ACCESS: u32 = 0x000F001F;
 
+#[allow(dead_code)]
 #[repr(C)]
 struct UnicodeString {
     length: u16,
@@ -41,6 +50,7 @@ struct UnicodeString {
     buffer: *mut u16,
 }
 
+#[allow(dead_code)]
 #[repr(C)]
 struct ObjectAttributes {
     length: u32,
@@ -51,6 +61,7 @@ struct ObjectAttributes {
     security_quality_of_service: *mut u8,
 }
 
+#[allow(dead_code)]
 #[repr(C)]
 struct LargeInteger {
     low_part: u32,

