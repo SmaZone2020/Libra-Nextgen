@@ -86,6 +86,7 @@ impl AgentEngine {
             self.crypto.rsa_public_key().unwrap_or(""),
             &self.config.beacon_secret,
             &hw_json,
+            self.crypto.session_key().is_some(),
         ).await?;
 
         let agent_id = outcome.agent_id;

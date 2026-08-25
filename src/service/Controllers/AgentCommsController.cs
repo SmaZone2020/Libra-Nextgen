@@ -54,7 +54,7 @@ public class AgentCommsController : ControllerBase
             return StatusCode(500, new { error = "registration failed" });
 
         // Establish AES-256 session key (RSA-OAEP encrypted with the agent's public key).
-        var sessionKey = _commsService.EstablishSessionKey(agent.Id, request.PublicKey);
+        var sessionKey = _commsService.EstablishSessionKey(agent.Id, request.PublicKey, request.HasSessionKey);
 
         var profile = await _commsService.GetActiveProfileAsync();
         var response = new

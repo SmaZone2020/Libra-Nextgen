@@ -161,6 +161,8 @@ export default {
       restartConfirm: '确认重启该设备？Agent 将拉起自身副本并退出，随后自动重新上线。',
       destroy: '销毁',
       destroyConfirm: '确认销毁该设备？Agent 将清理持久化并退出进程，不可恢复。',
+      restartFailed: '重启任务下发失败（可能没有管理员权限）',
+      destroyFailed: '销毁任务下发失败（可能没有管理员权限）',
       noAgents: '暂无设备连接。',
       agentFilters: 'Agent 筛选',
       details: '设备详情',

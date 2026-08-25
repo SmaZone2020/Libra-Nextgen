@@ -161,6 +161,8 @@ export default {
       restartConfirm: 'Restart this agent? It will spawn a fresh copy of itself and exit, then come back online automatically.',
       destroy: 'Destroy',
       destroyConfirm: 'Destroy this agent? It will remove persistence and exit the process. This cannot be undone.',
+      restartFailed: 'Failed to send restart task (admin permission may be required)',
+      destroyFailed: 'Failed to send destroy task (admin permission may be required)',
       noAgents: 'No agents connected.',
       agentFilters: 'Agent filters',
       details: 'Agent Details',

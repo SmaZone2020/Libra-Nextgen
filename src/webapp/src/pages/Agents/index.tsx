@@ -73,7 +73,11 @@ export default function AgentsPage() {
     if (!id) return;
     const { confirmed } = await confirm(t('agents.restartConfirm'));
     if (!confirmed) return;
-    await createTask({ agentId: id, commandType: 'Restart', command: 'restart', timeoutSeconds: 5 });
+    try {
+      await createTask({ agentId: id, commandType: 'Restart', command: 'restart', timeoutSeconds: 5 });
+    } catch (e) {
+      window.alert(`${t('agents.restartFailed')}\n${e instanceof Error ? e.message : String(e)}`);
+    }
   };
 
   /** 下发"销毁"任务：Agent 清理持久化后退出进程（kill_and_clean）。 */
@@ -82,7 +86,11 @@ export default function AgentsPage() {
     if (!id) return;
     const { confirmed } = await confirm(t('agents.destroyConfirm'));
     if (!confirmed) return;
-    await createTask({ agentId: id, commandType: 'KillAndClean', command: 'kill_and_clean', timeoutSeconds: 5 });
+    try {
+      await createTask({ agentId: id, commandType: 'KillAndClean', command: 'kill_and_clean', timeoutSeconds: 5 });
+    } catch (e) {
+      window.alert(`${t('agents.destroyFailed')}\n${e instanceof Error ? e.message : String(e)}`);
+    }
   };
 
   return (

@@ -76,6 +76,7 @@ impl HttpCommunicator {
         public_key: &str,
         beacon_secret: &str,
         hardware_json: &str,
+        has_session_key: bool,
     ) -> Result<RegisterOutcome, String> {
         let pid = std::process::id();
         let hw = if hardware_json.is_empty() || hardware_json == "null" {
@@ -85,7 +86,7 @@ impl HttpCommunicator {
         };
 
         let json = format!(
-            r#"{{"hostname":"{}","userName":"{}","osVersion":"{}","arch":"{}","processName":"agent","pid":{},"isElevated":false,"publicKey":"{}","beaconSecret":"{}","hardware":{}}}"#,
+            r#"{{"hostname":"{}","userName":"{}","osVersion":"{}","arch":"{}","processName":"agent","pid":{},"isElevated":false,"publicKey":"{}","beaconSecret":"{}","hardware":{},"hasSessionKey":{}}}"#,
             escape(hostname),
             escape(user_name),
             escape(os_version),
@@ -93,7 +94,8 @@ impl HttpCommunicator {
             pid,
             escape(public_key),
             escape(beacon_secret),
-            hw
+            hw,
+            if has_session_key { "true" } else { "false" }
         );
 
         let resp = self

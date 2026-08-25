@@ -44,14 +44,14 @@ public class AgentCommsService
     /// key (SPKI + OAEP-SHA256) and store it keyed by agent id.
     /// Returns the base64-encoded RSA ciphertext to send back to the agent.
     /// </summary>
-    public string? EstablishSessionKey(string agentId, string? publicKeyBase64)
+    public string? EstablishSessionKey(string agentId, string? publicKeyBase64, bool hasSessionKey)
     {
         if (string.IsNullOrWhiteSpace(publicKeyBase64))
             return null;
 
-        // 已有会话密钥（agent 重连或服务重启后从 Mongo 恢复）——直接复用，
-        // 返回 null 表示不下发新 key，agent 继续用旧 key，无需重新 RSA 协商。
-        if (_sessionKeys.TryGet(agentId, out var existing) && existing is not null)
+        // Agent 已持有会话密钥（重连，进程未重启）——直接复用，不下发新 key。
+        // 新进程（Restart 后）会带 hasSessionKey=false，这里会重新协商下发。
+        if (hasSessionKey && _sessionKeys.TryGet(agentId, out var existing) && existing is not null)
             return null;
 
         var key = CryptoHelper.GenerateAesKey();
@@ -187,6 +187,8 @@ public class RegisterRequest
     public string? PublicKey { get; set; }
     public string? BeaconSecret { get; set; }
     public HardwareInfo? Hardware { get; set; }
+    /// <summary>Agent 进程内是否已持有会话密钥（重连 vs 新进程）。</summary>
+    public bool HasSessionKey { get; set; }
 }
 
 public class HeartbeatResponse
