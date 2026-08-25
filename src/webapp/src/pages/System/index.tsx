@@ -48,11 +48,13 @@ export default function SystemPage() {
   return (
     <div className="space-y-3">
       <Tabs
+        orientation="vertical"
         selectedKey={activeTab}
         onSelectionChange={(key) => setTab(String(key))}
+        className="items-start"
       >
-        <Tabs.ListContainer className="flex justify-center">
-          <Tabs.List aria-label={t('system.infoTabs')} className="mx-auto w-lg">
+        <Tabs.ListContainer className="flex justify-center h-auto self-start">
+          <Tabs.List aria-label={t('system.infoTabs')} className="my-0 px-2 w-35">
             {tabs.map((tb) => (
               <Tabs.Tab key={tb.id} id={tb.id}>{tb.label}<Tabs.Indicator /></Tabs.Tab>
             ))}
