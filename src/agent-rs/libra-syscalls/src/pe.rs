@@ -50,6 +50,42 @@ impl PeImage {
         Some(PeImage { base })
     }
 
+    /// 按名字定位某个 section 的 `(VA, 大小)`。
+    ///
+    /// # Safety
+    /// 模块必须仍映射在当前进程中。
+    pub unsafe fn section_range(&self, name: &[u8; 8]) -> Option<(usize, usize)> {
+        let nt = self.base + rd_i32(self.base + 0x3C) as usize;
+        let file_header = nt + 4;
+        let num_sections = rd_u16(file_header + 2) as usize;
+        let size_opt = rd_u16(file_header + 16) as usize;
+        let opt = nt + 24;
+        let section_start = opt + size_opt;
+
+        for i in 0..num_sections {
+            let sec = section_start + i * 40;
+            let sec_name = core::slice::from_raw_parts(sec as *const u8, 8);
+            if sec_name == name.as_slice() {
+                let virtual_size = rd_u32(sec + 8) as usize;
+                let virtual_addr = rd_u32(sec + 12) as usize;
+                let raw_size = rd_u32(sec + 16) as usize;
+                let size = virtual_size.max(raw_size);
+                return Some((self.base + virtual_addr, size));
+            }
+        }
+        None
+    }
+
+    /// 读 PE `SizeOfImage`（镜像整体映射大小）。
+    ///
+    /// # Safety
+    /// 模块必须仍映射在当前进程中。
+    pub unsafe fn size_of_image(&self) -> usize {
+        let nt = self.base + rd_i32(self.base + 0x3C) as usize;
+        let opt = nt + 24;
+        rd_u32(opt + 0x38) as usize
+    }
+
     /// 在模块的可执行 section 内扫描字节模式，返回第一个命中地址。
     ///
     /// # Safety

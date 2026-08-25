@@ -29,11 +29,15 @@ mod stub;
 mod invoke;
 #[cfg(windows)]
 mod spoof;
+#[cfg(windows)]
+mod sleepobf;
 
 #[cfg(windows)]
 pub use extract::{probe_stub, StubProbe};
 #[cfg(windows)]
 pub use invoke::*;
+#[cfg(windows)]
+pub use sleepobf::{obfuscated_sleep, Context};
 #[cfg(windows)]
 pub use spoof::{init_spoof, spoof_call, SpoofFrame};
 #[cfg(windows)]
