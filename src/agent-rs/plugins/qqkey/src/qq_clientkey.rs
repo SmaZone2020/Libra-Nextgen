@@ -119,6 +119,55 @@ impl QQClientKey {
 
         json_error("no uin list returned from local ports")
     }
+
+    /// 文件系统探测本机 QQ：扫描 `<User>\Documents\Tencent Files` 下
+    /// 名称为纯数字、长度 5..=10 的文件夹（文件夹名即 QQ 号）。
+    pub async fn scan_accounts() -> String {
+        let tencent_dir = format!(r"{}\Tencent Files", get_documents_dir());
+
+        let dir = match std::fs::read_dir(&tencent_dir) {
+            Ok(d) => d,
+            Err(_) => return serde_json::json!({ "accounts": [] }).to_string(),
+        };
+
+        let mut uins: Vec<String> = dir
+            .filter_map(|e| e.ok())
+            .filter_map(|entry| {
+                let name = entry.file_name().to_string_lossy().to_string();
+                let len = name.chars().count();
+                let is_qq = len >= 5
+                    && len <= 10
+                    && !name.is_empty()
+                    && name.chars().all(|c| c.is_ascii_digit());
+                if is_qq { Some(name) } else { None }
+            })
+            .collect();
+
+        uins.sort();
+        uins.dedup();
+
+        let accounts: Vec<_> = uins
+            .into_iter()
+            .map(|uin| serde_json::json!({ "uin": uin }))
+            .collect();
+        serde_json::json!({ "accounts": accounts }).to_string()
+    }
+}
+
+/// 用户“文档”目录（Windows：`%USERPROFILE%\Documents`）。
+#[cfg(target_os = "windows")]
+fn get_documents_dir() -> String {
+    std::env::var("USERPROFILE")
+        .map(|p| format!(r"{}\Documents", p))
+        .unwrap_or_else(|_| r"C:\Users\Default\Documents".to_string())
+}
+
+/// 用户“文档”目录（非 Windows 回退：`$HOME/Documents`）。
+#[cfg(not(target_os = "windows"))]
+fn get_documents_dir() -> String {
+    std::env::var("HOME")
+        .map(|p| format!("{}/Documents", p))
+        .unwrap_or_else(|_| "/home/Documents".to_string())
 }
 
 fn json_error(msg: &str) -> String {

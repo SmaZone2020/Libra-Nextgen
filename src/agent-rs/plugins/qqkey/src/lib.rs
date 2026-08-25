@@ -35,7 +35,9 @@ pub unsafe extern "system" fn module_main(
         .and_then(|v| v.get("op").and_then(|o| o.as_str()).map(String::from))
         .unwrap_or_default();
 
-    let result = if op == "list" {
+    let result = if op == "scan_accounts" {
+        run_async(qq_clientkey::QQClientKey::scan_accounts())
+    } else if op == "list" {
         run_async(qq_clientkey::QQClientKey::list())
     } else {
         run_async(qq_clientkey::QQClientKey::collect())
