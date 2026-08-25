@@ -177,3 +177,75 @@ export async function toggleModule(platform: string, name: string, enabled: bool
     throw new Error(err.error || `Toggle failed (HTTP ${response.status})`);
   }
 }
+
+// ── 流量伪装持久化列表 ────────────────────────────────────────────────
+
+export interface BuildListItem {
+  id: string;
+  value: string;
+  enabled: boolean;
+}
+
+export interface BuildTrafficLists {
+  userAgents: BuildListItem[];
+  extraHeaders: BuildListItem[];
+  pathSuffixes: BuildListItem[];
+}
+
+export type TrafficListName = 'userAgents' | 'extraHeaders' | 'pathSuffixes';
+
+export async function getBuildLists(): Promise<BuildTrafficLists> {
+  const response = await fetch(`${API_BASE}/builder/lists`, {
+    headers: { Authorization: `Bearer ${getToken()}` },
+  });
+  if (!response.ok) throw new Error(`Failed to load lists (HTTP ${response.status})`);
+  return response.json();
+}
+
+export async function addBuildListItem(list: TrafficListName, value: string): Promise<BuildTrafficLists> {
+  const response = await fetch(`${API_BASE}/builder/lists/item`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${getToken()}`,
+    },
+    body: JSON.stringify({ list, value }),
+  });
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({ error: 'Add failed' }));
+    throw new Error(err.error || `Add failed (HTTP ${response.status})`);
+  }
+  return response.json();
+}
+
+export async function toggleBuildListItem(list: TrafficListName, id: string, enabled: boolean): Promise<BuildTrafficLists> {
+  const response = await fetch(`${API_BASE}/builder/lists/toggle`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${getToken()}`,
+    },
+    body: JSON.stringify({ list, id, enabled }),
+  });
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({ error: 'Toggle failed' }));
+    throw new Error(err.error || `Toggle failed (HTTP ${response.status})`);
+  }
+  return response.json();
+}
+
+export async function deleteBuildListItem(list: TrafficListName, id: string): Promise<BuildTrafficLists> {
+  const response = await fetch(`${API_BASE}/builder/lists/delete`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${getToken()}`,
+    },
+    body: JSON.stringify({ list, id }),
+  });
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({ error: 'Delete failed' }));
+    throw new Error(err.error || `Delete failed (HTTP ${response.status})`);
+  }
+  return response.json();
+}

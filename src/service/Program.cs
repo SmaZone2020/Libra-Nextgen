@@ -45,6 +45,9 @@ builder.Services.AddScoped<Repository<AccessKey>>(sp =>
     new Repository<AccessKey>(sp.GetRequiredService<MongoDbContext>(), "access_keys"));
 builder.Services.AddScoped<Repository<PluginRecord>>(sp =>
     new Repository<PluginRecord>(sp.GetRequiredService<MongoDbContext>(), "plugins"));
+builder.Services.AddScoped<Repository<BuildTrafficLists>>(sp =>
+    new Repository<BuildTrafficLists>(sp.GetRequiredService<MongoDbContext>(), "build_lists"));
+builder.Services.AddScoped<BuildListService>();
 
 // JWT Settings (singleton, holds RSA key pair)
 var jwtSettings = new JwtSettings();

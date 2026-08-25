@@ -3,6 +3,7 @@ using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using LibraNextgen.Common.Models;
+using LibraNextgen.Service.Models;
 using LibraNextgen.Service.Services;
 
 namespace LibraNextgen.Service.Controllers;
@@ -13,10 +14,12 @@ namespace LibraNextgen.Service.Controllers;
 public class BuilderController : ControllerBase
 {
     private readonly BuilderBuildService _buildService;
+    private readonly BuildListService _lists;
 
-    public BuilderController(BuilderBuildService buildService)
+    public BuilderController(BuilderBuildService buildService, BuildListService lists)
     {
         _buildService = buildService;
+        _lists = lists;
     }
 
     // ── Icon upload ────────────────────────────────────────────────────
@@ -162,6 +165,75 @@ public class BuilderController : ControllerBase
         }
         return Ok(new { status = "ok", name = req.Name, enabled = req.Enabled });
     }
+
+    // ── 流量伪装持久化列表 ──────────────────────────────────────────────
+
+    /// <summary>读取流量伪装三组列表（UA/附加头/路径后缀，含启用状态）。</summary>
+    [HttpGet("lists")]
+    public async Task<IActionResult> GetLists(CancellationToken ct)
+    {
+        var doc = await _lists.GetAsync(ct);
+        return Ok(new
+        {
+            userAgents = doc.UserAgents,
+            extraHeaders = doc.ExtraHeaders,
+            pathSuffixes = doc.PathSuffixes,
+        });
+    }
+
+    /// <summary>增加一项（enabled=true），返回完整列表。</summary>
+    [HttpPost("lists/item")]
+    public async Task<IActionResult> AddListItem([FromBody] AddBuildListItemRequest req, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(req.Value))
+            return BadRequest(new { error = "value is required" });
+        if (req.List is not ("userAgents" or "extraHeaders" or "pathSuffixes"))
+            return BadRequest(new { error = "invalid list name" });
+
+        var doc = await _lists.AddItemAsync(req.List, req.Value.Trim(), ct);
+        return Ok(ToDto(doc));
+    }
+
+    /// <summary>切换某项启用状态，返回完整列表。</summary>
+    [HttpPost("lists/toggle")]
+    public async Task<IActionResult> ToggleListItem([FromBody] ToggleBuildListItemRequest req, CancellationToken ct)
+    {
+        if (req.List is not ("userAgents" or "extraHeaders" or "pathSuffixes"))
+            return BadRequest(new { error = "invalid list name" });
+        try
+        {
+            var doc = await _lists.ToggleItemAsync(req.List, req.Id, req.Enabled, ct);
+            return Ok(ToDto(doc));
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new { error = ex.Message });
+        }
+    }
+
+    /// <summary>删除某项，返回完整列表。</summary>
+    [HttpPost("lists/delete")]
+    public async Task<IActionResult> DeleteListItem([FromBody] DeleteBuildListItemRequest req, CancellationToken ct)
+    {
+        if (req.List is not ("userAgents" or "extraHeaders" or "pathSuffixes"))
+            return BadRequest(new { error = "invalid list name" });
+        try
+        {
+            var doc = await _lists.DeleteItemAsync(req.List, req.Id, ct);
+            return Ok(ToDto(doc));
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new { error = ex.Message });
+        }
+    }
+
+    private static object ToDto(BuildTrafficLists doc) => new
+    {
+        userAgents = doc.UserAgents,
+        extraHeaders = doc.ExtraHeaders,
+        pathSuffixes = doc.PathSuffixes,
+    };
 
     /// <summary>
     /// 仅构建云模块（不构建 agent）：body { platform, enabledModules }。

@@ -60,4 +60,31 @@ public static class BuildPlatforms
     public const string LinuxX64 = "linux-x64";
 }
 
+// ── 流量伪装持久化列表（服务端存储，构建时取启用项）─────────────────────
+
+public class BuildListItem
+{
+    public string Id { get; set; } = Guid.NewGuid().ToString("N");
+    public string Value { get; set; } = "";
+    public bool Enabled { get; set; } = true;
+}
+
+/// <summary>流量伪装三组列表（单文档持久化，Id 固定 "traffic"）。</summary>
+public class BuildTrafficLists
+{
+    public string Id { get; set; } = "traffic";
+    public List<BuildListItem> UserAgents { get; set; } = new();
+    public List<BuildListItem> ExtraHeaders { get; set; } = new();
+    public List<BuildListItem> PathSuffixes { get; set; } = new();
+}
+
+/// <summary>增加流量伪装项请求体。</summary>
+public record AddBuildListItemRequest(string List, string Value);
+
+/// <summary>切换流量伪装项启用状态请求体。</summary>
+public record ToggleBuildListItemRequest(string List, string Id, bool Enabled);
+
+/// <summary>删除流量伪装项请求体。</summary>
+public record DeleteBuildListItemRequest(string List, string Id);
+
 internal record struct ProcessResult(int ExitCode, string Stdout, string Stderr);

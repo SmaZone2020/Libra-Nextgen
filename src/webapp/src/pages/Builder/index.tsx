@@ -1,19 +1,25 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
+  addBuildListItem,
   buildModules,
   deleteBuild,
+  deleteBuildListItem,
   deleteTemplate,
   getBuildDownloadUrl,
   getBuildInfo,
+  getBuildLists,
   getBuildStreamUrl,
   listBuilds,
   listModules,
   listTemplates,
   startBuild,
+  toggleBuildListItem,
   toggleModule,
   uploadTemplate,
 } from '../../api/build';
+import type { TrafficListName } from '../../api/build';
+import type { BuildTrafficLists } from '../../api/build';
 import type { BuildConfigRequest, BuildRecord, BuildRecordDetail, TemplateInfo } from '../../types/models';
 import type { ModuleEntry } from '../../api/build';
 import { BuilderConfigCard } from './BuilderConfigCard';
@@ -78,6 +84,40 @@ export default function BuilderPage() {
     }
   };
 
+  // 流量伪装持久化列表（服务端存储，构建时取启用项）
+  const [trafficLists, setTrafficLists] = useState<BuildTrafficLists | null>(null);
+
+  const loadTrafficLists = useCallback(async () => {
+    try {
+      const items = await getBuildLists();
+      setTrafficLists(items);
+    } catch { /* ignore */ }
+  }, []);
+
+  useEffect(() => { loadTrafficLists(); }, [loadTrafficLists]);
+
+  const handleAddTrafficItem = async (list: TrafficListName, value: string) => {
+    const updated = await addBuildListItem(list, value);
+    setTrafficLists(updated);
+  };
+
+  const handleToggleTrafficItem = async (list: TrafficListName, id: string, enabled: boolean) => {
+    // 乐观更新
+    setTrafficLists(prev => prev ? ({
+      ...prev,
+      [list]: prev[list].map(i => (i.id === id ? { ...i, enabled } : i)),
+    }) : prev);
+    try {
+      const updated = await toggleBuildListItem(list, id, enabled);
+      setTrafficLists(updated);
+    } catch { /* 回滚由服务端返回为准，忽略 */ }
+  };
+
+  const handleDeleteTrafficItem = async (list: TrafficListName, id: string) => {
+    const updated = await deleteBuildListItem(list, id);
+    setTrafficLists(updated);
+  };
+
   const loadHistory = useCallback(async () => {
     try {
       const items = await listBuilds();
@@ -114,7 +154,15 @@ export default function BuilderPage() {
     }, 200);
 
     try {
-      const id = await startBuild({ ...config, enabledModules: activeModules() });
+      // 流量伪装：构建时取启用的持久化项合成配置
+      const finalConfig: BuildConfigRequest = {
+        ...config,
+        userAgents: (trafficLists?.userAgents ?? []).filter(i => i.enabled).map(i => i.value),
+        extraHeaders: (trafficLists?.extraHeaders ?? []).filter(i => i.enabled).map(i => i.value),
+        pathSuffixes: (trafficLists?.pathSuffixes ?? []).filter(i => i.enabled).map(i => i.value),
+        enabledModules: activeModules(),
+      };
+      const id = await startBuild(finalConfig);
       streamBuild(id);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : String(err));
@@ -275,7 +323,12 @@ export default function BuilderPage() {
         <BuilderConfigCard config={config} set={set} />
         <BuilderOptionsCard config={config} set={set} />
         {/* 流量伪装：独立卡片，置于最底部 */}
-        <BuilderTrafficCard config={config} set={set} />
+        <BuilderTrafficCard
+          lists={trafficLists}
+          onAddItem={handleAddTrafficItem}
+          onToggleItem={handleToggleTrafficItem}
+          onDeleteItem={handleDeleteTrafficItem}
+        />
       </div>
 
       {/* Right: Build History */}

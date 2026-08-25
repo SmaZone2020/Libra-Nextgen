@@ -612,6 +612,10 @@ export default {
       buildModules: 'Build Modules',
       noModules: 'No modules yet. Build once or import a plugin.',
       moduleDesc: 'Modules are downloaded on demand and executed in-memory. Disabled modules cannot be fetched by agents.',
+      addTrafficItem: 'Add',
+      addingTrafficItem: 'Adding…',
+      deleteTrafficItem: 'Delete',
+      noTrafficItems: 'No items yet. Click + to add.',
     },
     about: {
       licenseTitle: 'License',

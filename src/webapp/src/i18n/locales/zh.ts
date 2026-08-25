@@ -612,6 +612,10 @@ export default {
       buildModules: '构建模块',
       noModules: '暂无模块。先构建一次或导入插件。',
       moduleDesc: '模块按需下载到 agent 内存执行。禁用后该模块不可被 agent 下载',
+      addTrafficItem: '增加',
+      addingTrafficItem: '增加中…',
+      deleteTrafficItem: '删除',
+      noTrafficItems: '暂无项目，点击 + 增加。',
     },
     about: {
       licenseTitle: '开源协议',
