@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Button, Skeleton, Tabs, Chip, Accordion, Input, TextField } from '@heroui/react';
+import { Button, Skeleton, Tabs, Chip, Accordion, Input, TextField, Dropdown, Label } from '@heroui/react';
 import { Eye, EyeSlash, ArrowRotateLeft, ChevronDown, Globe, Magnifier, ArrowDownToLine } from '@gravity-ui/icons';
 import { getBrowser, searchBrowser } from '../../api/othersoft';
 import type { BrowserPassword, BrowserHistory, BrowserDataType } from '../../types/models';
@@ -108,8 +108,7 @@ export function BrowserTab({ agentId }: BrowserTabProps) {
   const [searchTotal, setSearchTotal] = useState(0);
   const [searchError, setSearchError] = useState<string | null>(null);
 
-  // Export dialog state
-  const [showExportMenu, setShowExportMenu] = useState(false);
+  // Export dialog state（菜单开合由 HeroUI Dropdown 自管理）
 
   const pw = usePagedData<BrowserPassword>(agentId, 'passwords');
   const hs = usePagedData<BrowserHistory>(agentId, 'history');
@@ -165,7 +164,7 @@ export function BrowserTab({ agentId }: BrowserTabProps) {
   }, [agentId, subTab, searchKeyword]);
 
   const handleExport = useCallback((exportAll: boolean) => {
-    setShowExportMenu(false);
+    // 菜单开合由 HeroUI Dropdown 自管理
 
     if (subTab === 'passwords') {
       const data = exportAll ? pw.items : filteredPasswords;
@@ -240,29 +239,28 @@ export function BrowserTab({ agentId }: BrowserTabProps) {
           <Button size="sm" variant="ghost" onPress={handleRefresh}>
             <ArrowRotateLeft className="w-4 h-4" />
           </Button>
-          <div className="relative">
-            <Button size="sm" variant="ghost" onPress={() => setShowExportMenu(v => !v)}>
-              <ArrowDownToLine className="w-4 h-4" />
-            </Button>
-            {showExportMenu && (
-              <div className="absolute right-0 top-full mt-1 z-50 bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-700 rounded-lg shadow-lg py-1 min-w-[160px]">
-                <button
-                  className="w-full text-left px-3 py-1.5 text-sm hover:bg-neutral-100 dark:hover:bg-neutral-800"
-                  onClick={() => handleExport(true)}
-                >
-                  {t('othersoft.browser.exportAll')} ({currentTotal})
-                </button>
+          <Dropdown>
+            <Dropdown.Trigger>
+              <Button size="sm" variant="ghost" isIconOnly>
+                <ArrowDownToLine className="w-4 h-4" />
+              </Button>
+            </Dropdown.Trigger>
+            <Dropdown.Popover>
+              <Dropdown.Menu onAction={(key) => {
+                if (key === 'exportAll') handleExport(true);
+                else if (key === 'exportSearch') handleExport(false);
+              }}>
+                <Dropdown.Item id="exportAll" textValue={t('othersoft.browser.exportAll')}>
+                  <Label>{t('othersoft.browser.exportAll')} ({currentTotal})</Label>
+                </Dropdown.Item>
                 {isSearching && (
-                  <button
-                    className="w-full text-left px-3 py-1.5 text-sm hover:bg-neutral-100 dark:hover:bg-neutral-800"
-                    onClick={() => handleExport(false)}
-                  >
-                    {t('othersoft.browser.exportSearch')} ({searchTotal})
-                  </button>
+                  <Dropdown.Item id="exportSearch" textValue={t('othersoft.browser.exportSearch')}>
+                    <Label>{t('othersoft.browser.exportSearch')} ({searchTotal})</Label>
+                  </Dropdown.Item>
                 )}
-              </div>
-            )}
-          </div>
+              </Dropdown.Menu>
+            </Dropdown.Popover>
+          </Dropdown>
         </div>
       </div>
 

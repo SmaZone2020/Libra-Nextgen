@@ -113,21 +113,21 @@ export function TrafficChart({ trafficData, agentIds, agentHosts, range, onRange
           {agentIds.map((id, i) => {
             const active = !hidden.has(id);
             return (
-              <button
-                key={id}
-                onClick={() => toggleAgent(id)}
-                className={`flex items-center gap-1.5 text-xs transition-opacity cursor-pointer ${
-                  active ? 'opacity-100' : 'opacity-30'
-                }`}
-              >
+            <Button
+              key={id}
+              size="sm"
+              variant="ghost"
+              className={`gap-1.5 px-1.5 text-xs ${active ? 'opacity-100' : 'opacity-30'}`}
+              onPress={() => toggleAgent(id)}
+            >
                 <span
                   className="size-3 rounded-full shrink-0"
                   style={{ backgroundColor: AGENT_COLORS[i % AGENT_COLORS.length] }}
                 />
-                <span className={active ? 'text-neutral-600' : 'text-neutral-400 line-through'}>
-                  {agentHosts[id] ?? id.slice(0, 8)}
-                </span>
-              </button>
+              <span className={active ? 'text-neutral-600' : 'text-neutral-400 line-through'}>
+                {agentHosts[id] ?? id.slice(0, 8)}
+              </span>
+            </Button>
             );
           })}
         </div>

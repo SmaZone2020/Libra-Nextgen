@@ -104,11 +104,11 @@ export function WeChatTab({ agentId }: WeChatTabProps) {
                               {files.map(f => {
                                 const Icon = fileIcon(f);
                                 return (
-                                  <button
+                                  <Button
                                     key={f.name}
-                                    type="button"
-                                    className="flex items-center gap-2 px-2 py-1.5 rounded-medium hover:bg-neutral-100 transition-colors text-left"
-                                    onClick={() => handleFileClick(f, dirPath)}
+                                    variant="ghost"
+                                    className="w-full flex items-center gap-2 px-2 py-1.5 rounded-medium text-left"
+                                    onPress={() => handleFileClick(f, dirPath)}
                                   >
                                     <Icon className="w-4 h-4 shrink-0 text-default-500" />
                                     <span className="text-sm truncate flex-1 min-w-0">{f.name}</span>
@@ -117,7 +117,7 @@ export function WeChatTab({ agentId }: WeChatTabProps) {
                                         {formatSize(f.size)}
                                       </span>
                                     )}
-                                  </button>
+                                  </Button>
                                 );
                               })}
                             </div>

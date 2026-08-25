@@ -66,13 +66,13 @@ export function TokenTab({ agentId }: { agentId: string }) {
     <div className="space-y-3">
 
       <div className="flex flex-wrap items-center gap-2">
-        <Button variant='secondary' isPending={busy === 'list'} onClick={doList}>枚举 Token</Button>
-        <Button variant='secondary' isPending={busy === 'revert'} onClick={doRevert}>还原身份</Button>
+        <Button variant='secondary' isPending={busy === 'list'} onPress={doList}>枚举 Token</Button>
+        <Button variant='secondary' isPending={busy === 'revert'} onPress={doRevert}>还原身份</Button>
         <Label>PID</Label>
         <TextField variant="secondary" value={pid} onChange={setPid} className="w-36">
           <Input placeholder="0" />
         </TextField>
-        <Button variant='secondary' isPending={busy === 'steal'} onClick={doSteal}>窃取</Button>
+        <Button variant='secondary' isPending={busy === 'steal'} onPress={doSteal}>窃取</Button>
       </div>
 
       <Card>
@@ -91,7 +91,7 @@ export function TokenTab({ agentId }: { agentId: string }) {
           </TextField>
         </div>
 
-          <Button isPending={busy === 'make'} onClick={doMake}>
+          <Button isPending={busy === 'make'} onPress={doMake}>
             伪造登录
           </Button>
       </Card>
