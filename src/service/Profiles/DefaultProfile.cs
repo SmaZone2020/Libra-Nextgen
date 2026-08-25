@@ -11,7 +11,7 @@ public class DefaultProfile : IMalleableProfile
     public string Name => "Default";
     public string Description => "Standard REST API traffic pattern for initial deployment";
 
-    public int HeartbeatIntervalSeconds => 30;
+    public int HeartbeatIntervalSeconds => 10;
     public double JitterPercent => 0.2;
 
     public string GetRegisterUrl(string baseUrl) => $"{baseUrl}/register";

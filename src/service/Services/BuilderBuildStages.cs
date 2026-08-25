@@ -321,6 +321,10 @@ public partial class BuilderBuildService
             core_key_path = "/api/beacon/core-key",
             beacon_secret = _beaconSettings.Secret,
             anti_analysis = req.AntiAnalysis,
+            // 流量伪装（构建页面编辑注入；注册后服务端 profile 可覆盖）
+            user_agents = req.UserAgents ?? new(),
+            extra_headers = req.ExtraHeaders ?? new(),
+            path_suffixes = req.PathSuffixes ?? new(),
         };
 
         var configJson = JsonSerializer.Serialize(injectedConfig);

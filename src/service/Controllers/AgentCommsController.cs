@@ -15,8 +15,20 @@ namespace LibraNextgen.Service.Controllers;
 [Route("api/beacon")]
 public class AgentCommsController : ControllerBase
 {
-    private static readonly string BuildsDir = Path.GetFullPath(
-        Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "build-output"));
+    private static readonly string BuildsDir = ResolveBuildsDir();
+
+    /// <summary>
+    /// 构建产物目录：优先 LIBRA_BUILDS_DIR 环境变量（公网发布部署用绝对路径），
+    /// 否则回退 dev 相对路径（bin/Debug/net10.0 上跳四级到仓库根 build-output）。
+    /// </summary>
+    private static string ResolveBuildsDir()
+    {
+        var env = Environment.GetEnvironmentVariable("LIBRA_BUILDS_DIR");
+        if (!string.IsNullOrWhiteSpace(env))
+            return Path.GetFullPath(env);
+        return Path.GetFullPath(
+            Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "build-output"));
+    }
 
     private readonly AgentCommsService _commsService;
     private readonly AgentTrafficService _traffic;
@@ -658,7 +670,7 @@ public class AgentCommsController : ControllerBase
             userAgents = Array.Empty<string>(),
             paddingMin = 0,
             paddingMax = 64,
-            heartbeatIntervalMs = 30000,
+            heartbeatIntervalMs = 10000,
             jitterPercent = 0.2,
             aiPath = "/v1/chat/completions",
             aiModels = new[] { "gpt-4o-mini", "gpt-4o", "gpt-4.1-mini" },

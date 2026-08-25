@@ -172,6 +172,25 @@ public static class WebSocketHandler
         WebSocketMessage message, string connId, ConnectionManager wsManager,
         ISessionLock sessionLock, HttpContext context)
     {
+        // WS 按需：交互会话（bind/list）要求 agent 拉起实时通道，unbind 释放。
+        var agentService = context.RequestServices.GetRequiredService<AgentService>();
+        var needWs = message.Type switch
+        {
+            "shell.bind" or "screen.bind" or "camera.bind" or "mic.bind" or "screen.list" => true,
+            "shell.unbind" or "screen.unbind" or "camera.unbind" or "mic.unbind" => false,
+            _ => (bool?)null,
+        };
+        if (needWs is not null && message.Channel is { Length: > 0 } wsAgent)
+        {
+            await agentService.SetWsNeededAsync(wsAgent, needWs.Value);
+        }
+        else if (needWs is not null && message.Data?.TryGetProperty("agentId", out var aId) == true)
+        {
+            var wsAgent2 = aId.GetString();
+            if (!string.IsNullOrEmpty(wsAgent2))
+                await agentService.SetWsNeededAsync(wsAgent2, needWs.Value);
+        }
+
         switch (message.Type)
         {
             case "shell.bind":

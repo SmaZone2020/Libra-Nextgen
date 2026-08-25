@@ -84,6 +84,37 @@ impl HttpCommunicator {
         self.profile = Some(profile);
     }
 
+    /// 构建时注入的请求样式（UA 列表/附加头/路径后缀）。
+    /// 在注册**前**生效（注册请求本身也带伪装），不改变入口路径；
+    /// 注册后服务端 profile 会整体覆盖。
+    pub fn set_build_style(&mut self, user_agents: Vec<String>, extra_headers: Vec<String>, path_suffixes: Vec<String>) {
+        let p = self.profile.get_or_insert_with(Default::default);
+        if !user_agents.is_empty() {
+            p.user_agents = user_agents;
+        }
+        if !path_suffixes.is_empty() {
+            p.path_suffixes = path_suffixes;
+        }
+        p.extra_headers = extra_headers;
+    }
+
+    /// 应用 profile 附加头到请求（格式 "Name: value"）。
+    fn apply_extra_headers(&self, req: reqwest::RequestBuilder) -> reqwest::RequestBuilder {
+        let mut req = req;
+        if let Some(p) = self.profile.as_ref() {
+            for h in &p.extra_headers {
+                if let Some((name, value)) = h.split_once(':') {
+                    let name = name.trim();
+                    let value = value.trim();
+                    if !name.is_empty() && !value.is_empty() {
+                        req = req.header(name, value);
+                    }
+                }
+            }
+        }
+        req
+    }
+
     /// 注册端点（注册时 entry_path 尚未切换为 profile 入口，即构建时 register_path）。
     fn register_url(&self) -> String {
         format!("{}{}", self.server_url, self.entry_path)
@@ -148,7 +179,7 @@ impl HttpCommunicator {
                 p.ts_key.as_str(),
                 p.rand_key.as_str(),
                 p.sign_key.as_str(),
-                "sid", // token 字段名（当前固定，与服务端默认一致）
+                p.token_key.as_str(),
             ))
             .unwrap_or(("d", "ts", "r", "", "sid"));
 
@@ -261,6 +292,7 @@ impl HttpCommunicator {
         if let Some(ua) = self.pick_user_agent() {
             req = req.header(reqwest::header::USER_AGENT, ua);
         }
+        req = self.apply_extra_headers(req);
 
         let resp = req.send().await.map_err(|e| e.to_string())?;
         let status = resp.status().as_u16();

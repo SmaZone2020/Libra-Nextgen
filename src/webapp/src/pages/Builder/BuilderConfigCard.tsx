@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Button, Card, Input, Label, NumberField, Spinner, TextField } from '@heroui/react';
+import { Button, Card, Input, Label, NumberField, Spinner, TextArea, TextField } from '@heroui/react';
 import { NumberField as NumberFieldPrimitive } from '@heroui/react/number-field';
 import { Picture } from '@gravity-ui/icons';
 import { uploadIcon } from '../../api/build';
@@ -150,6 +150,34 @@ export function BuilderConfigCard({ config, set }: BuilderConfigCardProps) {
       </div>
       </>
       )}
+      <hr className="my-4 border-default-200" />
+      <h2 className="text-lg font-semibold mb-3">流量伪装（构建时注入，注册后服务端 Profile 可覆盖）</h2>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <TextField
+          value={(config.userAgents ?? []).join('\n')}
+          variant="secondary"
+          onChange={(v) => set('userAgents', v.split('\n').map((s) => s.trim()).filter(Boolean))}
+        >
+          <Label>UA 轮换列表（每行一个完整 UA）</Label>
+          <TextArea rows={5} variant="secondary" />
+        </TextField>
+        <TextField
+          value={(config.extraHeaders ?? []).join('\n')}
+          variant="secondary"
+          onChange={(v) => set('extraHeaders', v.split('\n').map((s) => s.trim()).filter(Boolean))}
+        >
+          <Label>附加请求头（每行 "Name: value"）</Label>
+          <TextArea rows={5} variant="secondary" />
+        </TextField>
+        <TextField
+          value={(config.pathSuffixes ?? []).join('\n')}
+          variant="secondary"
+          onChange={(v) => set('pathSuffixes', v.split('\n').map((s) => s.trim()).filter(Boolean))}
+        >
+          <Label>虚假业务路径后缀（每行一个）</Label>
+          <TextArea rows={5} variant="secondary" />
+        </TextField>
+      </div>
     </Card>
   );
 }

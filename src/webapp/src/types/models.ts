@@ -487,6 +487,12 @@ export interface BuildConfigRequest {
   copyToAppData: boolean;
   enablePersistence: boolean;
   antiAnalysis: AntiAnalysisConfig;
+  /** 流量伪装：UA 轮换列表（每行一个）。 */
+  userAgents?: string[];
+  /** 流量伪装：附加请求头（每行 "Name: value"）。 */
+  extraHeaders?: string[];
+  /** 流量伪装：虚假业务路径后缀（每行一个）。 */
+  pathSuffixes?: string[];
 }
 
 export type BuildStatus = 'building' | 'completed' | 'failed';

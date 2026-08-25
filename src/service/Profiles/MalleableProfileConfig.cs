@@ -21,7 +21,7 @@ public class MalleableProfileConfig
     public string UserAgent { get; set; } = "Mozilla/5.0 (Windows NT 10.0; Win64; x64)";
     public Dictionary<string, string> CustomHeaders { get; set; } = new();
 
-    public int HeartbeatIntervalSeconds { get; set; } = 30;
+    public int HeartbeatIntervalSeconds { get; set; } = 10;
     public double JitterPercent { get; set; } = 0.2;
 
     // ── 流量伪装（单入口内部路由）────────────────────────────────────

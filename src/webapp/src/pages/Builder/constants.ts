@@ -33,6 +33,20 @@ export const DEFAULT_CONFIG: BuildConfigRequest = {
     checkTestSigning: true,
     checkAvProcesses: true,
   },
+  userAgents: [
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36 Edg/126.0.0.0',
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:127.0) Gecko/20100101 Firefox/127.0',
+  ],
+  extraHeaders: [
+    'Accept: application/json, text/plain, */*',
+    'Accept-Language: zh-CN,zh;q=0.9,en;q=0.8',
+    'X-Requested-With: XMLHttpRequest',
+  ],
+  pathSuffixes: [
+    'user/info', 'orders/list', 'profile', 'settings',
+    'notifications', 'messages/unread', 'search/history', 'dashboard/stats',
+  ],
 };
 
 export const STATUS_LABEL: Record<string, string> = {
