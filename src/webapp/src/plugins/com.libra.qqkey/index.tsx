@@ -230,8 +230,9 @@ function BizPanel({ rows }: { rows: QQAccount[] }) {
     try {
       const res = await qqBiz(action, { uin: bizUin, clientkey: bizKey, ...params });
       if (res.ok) {
-        const d = res.data ?? '';
-        push(d.length > 4000 ? `${d.slice(0, 4000)}\n…(已截断 ${d.length})` : (d || '(empty)'));
+        const raw = res.data;
+        const d = typeof raw === 'string' ? raw : JSON.stringify(raw ?? '(empty)');
+        push(d.length > 4000 ? `${d.slice(0, 4000)}\n…(已截断 ${d.length})` : d);
       } else {
         push(`失败: ${res.error ?? 'unknown'}`);
       }

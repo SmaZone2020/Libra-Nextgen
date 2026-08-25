@@ -55,7 +55,7 @@ builder.Services.AddScoped<AgentService>();
 builder.Services.AddScoped<TaskService>();
 builder.Services.AddScoped<AgentCommsService>();
 builder.Services.AddScoped<RelayService>();
-builder.Services.AddScoped<QQBizService>();
+builder.Services.AddSingleton<ServerScriptService>();
 
 // WebSocket
 builder.Services.AddSingleton<ISessionLock, ShellSessionLock>();
