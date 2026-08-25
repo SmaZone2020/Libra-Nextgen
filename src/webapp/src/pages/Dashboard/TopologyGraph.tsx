@@ -75,6 +75,7 @@ export function TopologyGraph({ agents }: { agents: AgentListItem[] }) {
         layout: 'force',
         roam: true,
         draggable: true,
+        scaleLimit: { min: 0.5, max: 2.5 },
         data: agents.map((a) => ({
           id: a.id,
           name: a.hostname,
