@@ -78,7 +78,7 @@ impl PersistenceManager {
                     1, // SW_SHOWNORMAL
                 );
                 if result as isize <= 32 {
-                    eprintln!("[!] Failed to request admin elevation (code: {})", result as isize);
+                    libra_common::dlog!("[!] Failed to request admin elevation (code: {})", result as isize);
                 }
             }
             std::process::exit(0);
@@ -87,7 +87,7 @@ impl PersistenceManager {
         {
             let uid = unsafe { libc::getuid() };
             if uid == 0 { return; }
-            eprintln!("[!] Must run as root. Exiting.");
+            libra_common::dlog!("[!] Must run as root. Exiting.");
             std::process::exit(1);
         }
     }

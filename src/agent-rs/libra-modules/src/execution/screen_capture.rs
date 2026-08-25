@@ -134,7 +134,7 @@ impl ScreenStream {
                         self.dxgi.insert(d)
                     }
                     Err(e) => {
-                        eprintln!("[screen] DXGI init failed, falling back to GDI: {e}");
+                        libra_common::dlog!("[screen] DXGI init failed, falling back to GDI: {e}");
                         self.dxgi_failed = true;
                         return ScreenFrame::Keyframe {
                             width: 0,
@@ -156,7 +156,7 @@ impl ScreenStream {
                     // Screen static — send empty diff to keep SSE stream alive
                     return ScreenFrame::Diff { blocks_json: "[]".to_string() };
                 }
-                eprintln!("[screen] DXGI capture error, falling back to GDI: {e}");
+                libra_common::dlog!("[screen] DXGI capture error, falling back to GDI: {e}");
                 self.dxgi = None;
                 self.dxgi_failed = true;
                 ScreenFrame::Keyframe { width: 0, height: 0, jpeg: String::new() }

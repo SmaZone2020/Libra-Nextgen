@@ -40,7 +40,7 @@ pub(crate) fn data_u64(data: &Option<Value>, key: &str, default: u64) -> u64 {
 }
 
 pub(crate) async fn ws_send(tx: &WsSender, agent_id: &str, msg_type: &str, data_str: &str, rid: Option<&str>) {
-    eprintln!("[SEND] {} | rid={} | data={}",
+    libra_common::dlog!("[SEND] {} | rid={} | data={}",
         msg_type,
         rid.unwrap_or("-"),
         data_str

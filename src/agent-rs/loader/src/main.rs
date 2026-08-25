@@ -10,8 +10,11 @@ use std::env;
 
 macro_rules! log {
     ($($arg:tt)*) => {
-        eprintln!($($arg)*);
-        let _ = std::io::Write::flush(&mut std::io::stderr());
+        // Debug builds only — a shipped loader must stay silent on stderr.
+        if cfg!(debug_assertions) {
+            eprintln!($($arg)*);
+            let _ = std::io::Write::flush(&mut std::io::stderr());
+        }
     };
 }
 

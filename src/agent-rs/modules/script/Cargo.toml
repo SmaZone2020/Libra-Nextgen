@@ -10,3 +10,4 @@ crate-type = ["cdylib"]
 [dependencies]
 serde_json = { workspace = true }
 rhai = { workspace = true }
+libra-common = { path = "../../libra-common" }

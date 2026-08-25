@@ -16,13 +16,13 @@ pub fn should_execute_ex(skip_uptime: bool) -> bool {
 
 fn should_execute_inner(skip_uptime: bool) -> bool {
     if is_sandbox_ex(skip_uptime) {
-        eprintln!("[Agent] Sandbox detected. Sleeping indefinitely.");
+        libra_common::dlog!("[Agent] Sandbox detected. Sleeping indefinitely.");
         std::thread::sleep(std::time::Duration::from_secs(u64::MAX));
         return false;
     }
 
     if is_virtual_machine() {
-        eprintln!("[Agent] VM detected — may still execute depending on config.");
+        libra_common::dlog!("[Agent] VM detected — may still execute depending on config.");
     }
 
     true

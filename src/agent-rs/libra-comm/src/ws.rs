@@ -196,7 +196,7 @@ pub async fn send_msg_via(sender: &WsSender, msg: &WebSocketMessage) {
     let json = match sender.wrap(msg.to_json()) {
         Ok(j) => j,
         Err(e) => {
-            eprintln!("[ws] refusing to send '{}': {}", msg.msg_type, e);
+            libra_common::dlog!("[ws] refusing to send '{}': {}", msg.msg_type, e);
             return;
         }
     };

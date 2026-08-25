@@ -152,7 +152,7 @@ fn dxgi_gpus() -> Result<Vec<GpuInfo>, String> {
                 Ok(a) => a,
                 Err(e) => {
                     if e.code() != DXGI_ERROR_NOT_FOUND {
-                        eprintln!("[hw] EnumAdapters1({idx}): {e:?}");
+                        libra_common::dlog!("[hw] EnumAdapters1({idx}): {e:?}");
                     }
                     break;
                 }

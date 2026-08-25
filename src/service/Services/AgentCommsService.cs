@@ -70,6 +70,13 @@ public class AgentCommsService
     public bool TryGetSessionKey(string agentId, out byte[]? key) =>
         _sessionKeys.TryGet(agentId, out key);
 
+    /// <summary>Issue a fresh opaque per-session channel token for an agent.</summary>
+    public string IssueSessionToken(string agentId) => _sessionKeys.IssueToken(agentId);
+
+    /// <summary>Resolve an opaque channel token to its agent id.</summary>
+    public bool TryResolveSessionToken(string token, out string? agentId) =>
+        _sessionKeys.TryResolveToken(token, out agentId);
+
     public async Task<Agent?> HandleRegisterAsync(RegisterRequest request, string clientIp)
     {
         var hwid = request.Hardware?.Hwid;

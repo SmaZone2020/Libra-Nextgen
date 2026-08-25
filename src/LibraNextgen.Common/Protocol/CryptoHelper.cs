@@ -106,6 +106,17 @@ public static class CryptoHelper
         return (pub, priv);
     }
 
+    /// <summary>
+    /// Derive the pre-session AES-256 key from the shared beacon secret
+    /// (SHA-256). Both the server and the agent know the secret, so the
+    /// registration handshake can be encrypted without any key exchange.
+    /// Must match the Rust agent's `libra_crypto::derive_pre_session_key`.
+    /// </summary>
+    public static byte[] DerivePreSessionKey(string beaconSecret)
+    {
+        return SHA256.HashData(Encoding.UTF8.GetBytes(beaconSecret));
+    }
+
     public static byte[] RsaEncrypt(byte[] data, string publicKeyBase64)
     {
         using var rsa = RSA.Create();

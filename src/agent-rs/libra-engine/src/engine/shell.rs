@@ -74,7 +74,7 @@ pub(crate) async fn resize_shell(
                 pixel_width: 0,
                 pixel_height: 0,
             })
-            .map_err(|e| eprintln!("[shell] resize failed: {e}"));
+            .map_err(|e| libra_common::dlog!("[shell] resize failed: {e}"));
     }
 }
 

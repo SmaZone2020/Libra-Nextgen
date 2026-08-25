@@ -10,11 +10,27 @@ use rand::RngCore;
 use rsa::{RsaPrivateKey, RsaPublicKey, pkcs8::DecodePrivateKey};
 use rsa::pkcs1v15::SigningKey;
 use rsa::signature::{Signer, SignatureEncoding};
-use sha2::Sha256;
+use sha2::{Digest, Sha256};
 
 const AES_KEY_SIZE: usize = 32; // 256 bits
 const AES_NONCE_SIZE: usize = 12;
 const AES_TAG_SIZE: usize = 16;
+
+/// Derive the pre-session AES-256 key from the shared beacon secret.
+///
+/// The beacon secret is embedded in the agent at build time and configured on
+/// the server, so both sides can derive this key without any key exchange.
+/// It is used to encrypt the registration handshake (which would otherwise
+/// leak the agent's ephemeral RSA public key, host info and the secret's
+/// presence in plaintext on the wire). After registration the server issues a
+/// fresh random AES session key via RSA-OAEP and the pre-session key is never
+/// used again.
+pub fn derive_pre_session_key(beacon_secret: &str) -> [u8; AES_KEY_SIZE] {
+    let mut key = [0u8; AES_KEY_SIZE];
+    let digest = Sha256::digest(beacon_secret.as_bytes());
+    key.copy_from_slice(&digest[..AES_KEY_SIZE]);
+    key
+}
 
 /// RSA + AES-GCM crypto state for one agent session.
 pub struct AgentCrypto {
@@ -46,7 +62,7 @@ impl AgentCrypto {
         let private_key = match RsaPrivateKey::new(&mut rng, 2048) {
             Ok(k) => k,
             Err(e) => {
-                eprintln!("[crypto] RSA key generation failed: {}", e);
+                libra_common::dlog!("[crypto] RSA key generation failed: {}", e);
                 return;
             }
         };
@@ -129,7 +145,7 @@ pub fn encrypt_bytes(plaintext: &[u8], key: &[u8; AES_KEY_SIZE]) -> Vec<u8> {
     let ciphertext = match cipher.encrypt(nonce, plaintext) {
         Ok(c) => c,
         Err(e) => {
-            eprintln!("[crypto] AES-GCM encryption failed: {}", e);
+            libra_common::dlog!("[crypto] AES-GCM encryption failed: {}", e);
             return Vec::new();
         }
     };
@@ -281,6 +297,29 @@ mod tests {
         let encrypted = rsa_encrypt(&session_key, &pub_key).unwrap();
         let decrypted = rsa_decrypt(&encrypted, &priv_key).unwrap();
         assert_eq!(session_key.to_vec(), decrypted);
+    }
+
+    #[test]
+    fn test_derive_pre_session_key_deterministic() {
+        let k1 = derive_pre_session_key("topsecret");
+        let k2 = derive_pre_session_key("topsecret");
+        assert_eq!(k1, k2);
+        assert_eq!(k1.len(), 32);
+
+        let k3 = derive_pre_session_key("other");
+        assert_ne!(k1, k3);
+    }
+
+    #[test]
+    fn test_pre_session_key_roundtrip() {
+        // Simulates the registration handshake: both sides derive the same key
+        // from the shared beacon secret, encrypt/decrypt with it.
+        let secret = "libra-beacon-secret";
+        let key = derive_pre_session_key(secret);
+        let msg = r#"{"hostname":"host1","beaconSecret":"libra-beacon-secret","publicKey":"..."}"#;
+        let enc = encrypt_payload(msg, &key);
+        let dec = decrypt_payload(&enc, &key).unwrap();
+        assert_eq!(msg, dec);
     }
 
     #[test]

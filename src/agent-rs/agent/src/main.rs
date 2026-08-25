@@ -29,7 +29,7 @@ fn main() {
     let rt = match tokio::runtime::Runtime::new() {
         Ok(rt) => rt,
         Err(_) => {
-            eprintln!("[!] Failed to create tokio runtime");
+            libra_common::dlog!("[!] Failed to create tokio runtime");
             std::process::exit(1);
         }
     };
@@ -38,7 +38,7 @@ fn main() {
         let mut engine = libra_engine::engine::AgentEngine::new(cfg);
         match engine.run().await {
             Ok(()) => {}
-            Err(e) => eprintln!("[!] Agent error: {}", e),
+            Err(e) => libra_common::dlog!("[!] Agent error: {}", e),
         }
     });
 }

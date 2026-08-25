@@ -32,7 +32,7 @@ impl CameraCapture {
             match mf_list_cameras() {
                 Ok(json) => return json,
                 Err(e) => {
-                    eprintln!("[camera] list failed: {e}");
+                    libra_common::dlog!("[camera] list failed: {e}");
                 }
             }
         }

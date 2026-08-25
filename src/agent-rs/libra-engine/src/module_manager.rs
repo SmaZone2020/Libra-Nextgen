@@ -22,9 +22,14 @@ impl ModuleManager {
         result_path: &str,
         agent_id: String,
         session_key: Option<[u8; 32]>,
+        session_token: Option<String>,
     ) -> Self {
+        let mut http = HttpCommunicator::new(server_url, register_path, heartbeat_path, result_path);
+        if let Some(t) = session_token {
+            http.set_session_token(t);
+        }
         Self {
-            http: HttpCommunicator::new(server_url, register_path, heartbeat_path, result_path),
+            http,
             agent_id,
             session_key,
             loaded: HashMap::new(),
@@ -55,7 +60,7 @@ impl ModuleManager {
         // the requested module, otherwise a corrupted/mismatched download
         // would execute under the wrong name.
         if !module.name.is_empty() && module.name != name {
-            eprintln!("[module] MISMATCH: requested '{name}', downloaded '{0}'", module.name);
+            libra_common::dlog!("[module] MISMATCH: requested '{name}', downloaded '{0}'", module.name);
             return Err(format!(
                 "module content mismatch: requested '{name}', downloaded '{}'",
                 module.name
@@ -117,6 +122,7 @@ mod tests {
             "/heartbeat",
             "/result",
             "agent-1".to_string(),
+            None,
             None,
         );
         assert!(!mgr.is_loaded("shell"));

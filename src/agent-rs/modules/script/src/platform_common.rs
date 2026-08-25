@@ -31,7 +31,7 @@ pub fn register_common_api(engine: &mut Engine) {
     // ── top-level helpers ─────────────────────────────────────────────
     engine.register_fn("whoami", whoami);
     engine.register_fn("log", |msg: &str| {
-        eprintln!("[script] {}", msg);
+        libra_common::dlog!("[script] {}", msg);
     });
 }
 
