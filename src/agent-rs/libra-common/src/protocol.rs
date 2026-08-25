@@ -137,6 +137,9 @@ pub mod ws_type {
     pub const OTHERSOFT_AI: &str = "othersoft.ai";
     pub const OTHERSOFT_SSH: &str = "othersoft.ssh";
     pub const OTHERSOFT_RDP: &str = "othersoft.rdp";
+    pub const OTHERSOFT_LSASS: &str = "othersoft.lsass";
+    pub const OTHERSOFT_KLIST: &str = "othersoft.klist";
+    pub const OTHERSOFT_SAM: &str = "othersoft.sam";
 
     // Proxy
     pub const PROXY_FETCH: &str = "proxy.fetch";

