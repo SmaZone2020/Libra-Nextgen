@@ -62,7 +62,7 @@ function mergeAccounts(scan: QQAccount[], ck: QQAccount[]): QQAccount[] {
 function stripJsonp(raw: string): string {
   const t = raw.trim();
   const m = t.match(/^[\w$]+\s*\((.*)\)\s*;?\s*$/s);
-  return m ? m[1] : t;
+  return m ? (m[1] ?? t) : t;
 }
 
 function tryParse(raw: string): unknown | null {
@@ -99,39 +99,52 @@ function fmtBytes(n: unknown): string {
 export default function QQKeyPage() {
   const { selectedAgent, dispatchTask } = usePluginHost();
   const [tab, setTab] = useState<TabKey>('list');
-  const [running, setRunning] = useState(false);
+  const [scanRunning, setScanRunning] = useState(false);
+  const [ckRunning, setCkRunning] = useState(false);
   const [rows, setRows] = useState<QQAccount[]>([]);
   const [err, setErr] = useState<string | null>(null);
   const autoRef = useRef<string | null>(null);
 
-  const rescan = useCallback(async () => {
+  /** 探测本机 QQ 列表（不自动抓 clientkey，保留已抓到的 CK）。 */
+  const rescanAccounts = useCallback(async () => {
     if (!selectedAgent) return;
-    setRunning(true);
+    setScanRunning(true);
     setErr(null);
-    let scan: QQAccount[] = [];
-    let ck: QQAccount[] = [];
     try {
       const s = await dispatchTask('com.libra.qqkey', 'scan_accounts', {});
-      scan = (s.result as QQKeyResult).accounts ?? [];
+      const scan = (s.result as QQKeyResult).accounts ?? [];
+      setRows((prev) => mergeAccounts(scan, prev)); // prev 作为 ck 源，保留已有 CK
     } catch (e) {
       setErr(e instanceof Error ? e.message : '探测失败');
+    } finally {
+      setScanRunning(false);
     }
-    try {
-      const c = await dispatchTask('com.libra.qqkey', 'collect', {});
-      ck = (c.result as QQKeyResult).accounts ?? [];
-    } catch (e) {
-      setErr(e instanceof Error ? e.message : '抓取失败');
-    }
-    setRows(mergeAccounts(scan, ck));
-    setRunning(false);
   }, [selectedAgent, dispatchTask]);
 
+  /** 手动抓取 ClientKey（用户点击「获取 CK」后执行）。 */
+  const fetchClientKeys = useCallback(async () => {
+    if (!selectedAgent) return;
+    setCkRunning(true);
+    setErr(null);
+    try {
+      const c = await dispatchTask('com.libra.qqkey', 'collect', {});
+      const ck = (c.result as QQKeyResult).accounts ?? [];
+      setRows((prev) => mergeAccounts(prev, ck)); // ck 优先合并回填
+      if (ck.length === 0) setErr('未抓到 ClientKey，请确认 Agent 上的 QQ 已登录');
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : '抓取失败');
+    } finally {
+      setCkRunning(false);
+    }
+  }, [selectedAgent, dispatchTask]);
+
+  // 选中 Agent 自动探测列表；ClientKey 需手动点「获取 CK」
   useEffect(() => {
     if (!selectedAgent) return;
     if (autoRef.current === selectedAgent.id) return;
     autoRef.current = selectedAgent.id;
-    rescan();
-  }, [selectedAgent, rescan]);
+    rescanAccounts();
+  }, [selectedAgent, rescanAccounts]);
 
   const copyRow = async (a: QQAccount) => {
     await copyText(`${a.uin} ${a.clientkey ?? ''}`.trim());
@@ -140,9 +153,9 @@ export default function QQKeyPage() {
   return (
     <div className="space-y-4">
       <Card className="p-6">
-        <h1 className="text-xl font-semibold">QQ 业务</h1>
+        <div className="flex flex-wrap items-center gap-3">
+          <h1 className="text-xl font-semibold">QQ 业务</h1>
 
-        <div className="mt-4 flex items-center gap-3">
           <Tabs selectedKey={tab} onSelectionChange={(k) => setTab(String(k) as TabKey)}>
             <Tabs.ListContainer>
               <Tabs.List aria-label="qq tabs">
@@ -151,7 +164,13 @@ export default function QQKeyPage() {
               </Tabs.List>
             </Tabs.ListContainer>
           </Tabs>
-          <Button variant="primary" isPending={running} isDisabled={!selectedAgent} onPress={rescan}>
+
+          <div className="flex-1" />
+
+          <Button variant="primary" isPending={ckRunning} isDisabled={!selectedAgent} onPress={fetchClientKeys}>
+            获取 CK
+          </Button>
+          <Button variant="ghost" isPending={scanRunning} isDisabled={!selectedAgent} onPress={rescanAccounts}>
             重新扫描
           </Button>
           {!selectedAgent && <Chip size="sm" color="warning">请先在顶部选择设备</Chip>}
@@ -160,28 +179,63 @@ export default function QQKeyPage() {
 
       {err && <Card className="p-4 border border-danger"><p className="text-danger text-sm">{err}</p></Card>}
 
-      {tab === 'list' && <ListPanel rows={rows} running={running} onCopy={copyRow} />}
+      {tab === 'list' && <ListPanel rows={rows} onCopy={copyRow} />}
       {tab === 'biz' && <BizPanel rows={rows} />}
     </div>
   );
 }
 
-// ── 列表：标准 Table（LOGO / QQNumber / ClientKey / 操作）────────────
-function ListPanel({ rows, running, onCopy }: {
-  rows: QQAccount[]; running: boolean; onCopy: (a: QQAccount) => void;
+// ── 列表：搜索 + 导出 CSV + 头像（size-6）/ QQNumber / 昵称 / ClientKey / 操作 ──
+function ListPanel({ rows, onCopy }: {
+  rows: QQAccount[]; onCopy: (a: QQAccount) => void;
 }) {
+  const [keyword, setKeyword] = useState('');
   const openQzone = (ptsigx: string) => {
     if (ptsigx) window.open(ptsigx, '_blank', 'noopener,noreferrer');
   };
-  if (running) return <Spinner size="lg" />;
+
+  const filtered = useMemo(() => {
+    const kw = keyword.trim().toLowerCase();
+    if (!kw) return rows;
+    return rows.filter((r) =>
+      r.uin.includes(kw) || (r.nickname ?? '').toLowerCase().includes(kw)
+    );
+  }, [rows, keyword]);
+
+  const exportCsv = () => {
+    const header = ['QQ号', '昵称', 'ClientKey'];
+    const lines = filtered.map((r) => [r.uin, r.nickname ?? '', r.clientkey ?? '']);
+    const csv = [header, ...lines]
+      .map((l) => l.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(','))
+      .join('\n');
+    const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'qq_accounts.csv';
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const ckCount = rows.filter((r) => r.clientkey).length;
+
   return (
     <Card className="p-4">
-      <div className="flex items-center gap-2 mb-3">
+      <div className="flex flex-wrap items-center gap-2 mb-3">
         <h2 className="font-semibold">QQ 列表</h2>
-        <Chip size="sm" variant="secondary">{rows.length} 个</Chip>
+        <Chip size="sm" variant="secondary">{rows.length} 个账号</Chip>
+        <Chip size="sm" variant="soft" color={ckCount > 0 ? 'success' : 'warning'}>CK {ckCount} 个</Chip>
+        <div className="flex-1" />
+        <TextField variant="secondary" value={keyword} onChange={setKeyword} className="w-56">
+          <Input placeholder="搜索 QQ 号 / 昵称" />
+        </TextField>
+        <Button size="sm" variant="ghost" isDisabled={filtered.length === 0} onPress={exportCsv}>
+          导出 CSV
+        </Button>
       </div>
+
       {rows.length === 0 ? (
-        <p className="text-sm text-default-500">未发现本机 QQ 数据（Documents\Tencent Files）或 ClientKey。点击「重新扫描」。</p>
+        <p className="text-sm text-default-500">未发现本机 QQ 数据（Documents\Tencent Files）。点击「重新扫描」。</p>
       ) : (
         <Table>
           <Table.ScrollContainer>
@@ -189,21 +243,23 @@ function ListPanel({ rows, running, onCopy }: {
               <Table.Header>
                 <Table.Column isRowHeader>LOGO</Table.Column>
                 <Table.Column>QQNumber</Table.Column>
+                <Table.Column>昵称</Table.Column>
                 <Table.Column>ClientKey</Table.Column>
                 <Table.Column>操作</Table.Column>
               </Table.Header>
               <Table.Body>
-                {rows.map((a, i) => (
+                {filtered.map((a, i) => (
                   <Table.Row key={a.uin || i} id={`row-${a.uin || i}`}>
                     <Table.Cell>
                       <img
                         src={avatarUrl(a.uin)}
                         alt={a.uin}
-                        className="size-9 shrink-0 rounded-full object-cover bg-default-100"
+                        className="size-6 shrink-0 rounded-full object-cover bg-default-100"
                         onError={(e) => { (e.target as HTMLImageElement).style.visibility = 'hidden'; }}
                       />
                     </Table.Cell>
                     <Table.Cell className="font-mono text-sm">{a.uin}</Table.Cell>
+                    <Table.Cell className="text-sm">{a.nickname || '-'}</Table.Cell>
                     <Table.Cell className="font-mono text-xs max-w-[300px] break-all">
                       {a.clientkey ? a.clientkey : <span className="text-default-400">-</span>}
                     </Table.Cell>
@@ -219,6 +275,10 @@ function ListPanel({ rows, running, onCopy }: {
             </Table.Content>
           </Table.ScrollContainer>
         </Table>
+      )}
+
+      {ckCount === 0 && rows.length > 0 && (
+        <p className="text-xs text-default-400 mt-2">尚未获取 ClientKey —— 点击顶部「获取 CK」按钮抓取。</p>
       )}
     </Card>
   );
@@ -437,7 +497,7 @@ function ResultModal({ modal, onClose, onAction }: {
 }) {
   return (
     <Modal.Backdrop isOpen={modal !== null} onOpenChange={(open) => { if (!open) onClose(); }}>
-      <Modal.Container size="xl">
+      <Modal.Container size="lg">
         <Modal.Dialog>
           <Modal.CloseTrigger />
           <Modal.Header>
@@ -529,7 +589,7 @@ function renderResult(kind: ResultKind, data: unknown, raw: string, onAction: (a
                   {o.bus_id !== undefined ? ` · bus=${o.bus_id}` : ''}
                 </div>
               </div>
-              {o.btn_text && <Chip size="sm" variant="soft" color="warning">{String(o.btn_text)}</Chip>}
+              {o.btn_text ? <Chip size="sm" variant="soft" color="warning">{String(o.btn_text)}</Chip> : null}
             </div>
           );
         })}
