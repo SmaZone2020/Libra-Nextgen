@@ -313,7 +313,7 @@ function AuthenticatedLayout({
   const pluginLabels = new Map(registeredPlugins.map((p) => [p.route, p.manifest.name || p.pluginId]));
 
   return (
-    <div className="min-h-screen bg-neutral-50 dark:bg-neutral-950">
+    <div className="h-screen overflow-hidden bg-neutral-50 dark:bg-neutral-950">
       <NetworkOverlay />
       <Sidebar
         brand="Libra Next"
@@ -326,10 +326,10 @@ function AuthenticatedLayout({
       />
 
       <main
-        className="sm:pl-[var(--sidebar-w)] transition-all duration-300"
+        className="sm:pl-[var(--sidebar-w)] flex h-full min-w-0 flex-col transition-all duration-300"
         style={{ '--sidebar-w': `${sidebarWidth}px` } as React.CSSProperties}
       >
-        <header className="border-b border-neutral-200 bg-white dark:bg-neutral-900 dark:border-neutral-800 px-4 py-3 sm:px-6 lg:px-8">
+        <header className="shrink-0 border-b border-neutral-200 bg-white dark:bg-neutral-900 dark:border-neutral-800 px-4 py-3 sm:px-6 lg:px-8">
           {/* Mobile: hamburger + title row */}
           <div className="flex items-center gap-3 sm:hidden">
             <Button
@@ -387,7 +387,8 @@ function AuthenticatedLayout({
           </div>
         </header>
 
-        <div className={NO_PADDING_ROUTES.has(location.pathname) ? '' : 'px-4 py-6 sm:px-6 lg:px-8'}>
+        {/* 内容区：flex-1 撑满剩余高度，超出在 div 内滚动，不超过视口 */}
+        <div className={`min-h-0 flex-1 overflow-y-auto ${NO_PADDING_ROUTES.has(location.pathname) ? '' : 'px-4 py-6 sm:px-6 lg:px-8'}`}>
           <AnimatePresence mode="wait">
             <motion.div
               key={location.pathname}
