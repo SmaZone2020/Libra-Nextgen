@@ -114,9 +114,14 @@ export function AgentProvider({ children }: { children: React.ReactNode }) {
 
       if (data.status === 'Offline') {
         const wasOnline = onlineIdsRef.current.has(data.agentId);
-        setAgents((prev) => prev.map(a =>
-          a.id === data.agentId ? { ...a, status: 'Offline' as const } : a
-        ));
+        setAgents((prev) => {
+          // 状态没变（已离线）或 agent 不在列表 → 不建新数组，避免下游重渲染
+          const target = prev.find((a) => a.id === data.agentId);
+          if (!target || target.status === 'Offline') return prev;
+          return prev.map((a) =>
+            a.id === data.agentId ? { ...a, status: 'Offline' as const } : a
+          );
+        });
         setAgentId((prev) => {
           if (prev === data.agentId) {
             try { localStorage.removeItem(SELECTED_AGENT_KEY); } catch { /* ignore */ }
@@ -135,11 +140,13 @@ export function AgentProvider({ children }: { children: React.ReactNode }) {
       } else if (data.status === 'Online') {
         const isNew = !onlineIdsRef.current.has(data.agentId);
         onlineIdsRef.current.add(data.agentId);
-        setAgents((prev) =>
-          prev.some(a => a.id === data.agentId)
-            ? prev.map(a => a.id === data.agentId ? { ...a, status: 'Online' as const } : a)
-            : prev
-        );
+        setAgents((prev) => {
+          // 已在线 → 不建新数组，避免下游重渲染
+          if (prev.some((a) => a.id === data.agentId && a.status === 'Online')) return prev;
+          return prev.some((a) => a.id === data.agentId)
+            ? prev.map((a) => a.id === data.agentId ? { ...a, status: 'Online' as const } : a)
+            : prev;
+        });
         if (isNew) {
           if (isNoticeSoundEnabled()) getNotice().play().catch(() => {});
           toast.success(t('agents.toastOnline'), {

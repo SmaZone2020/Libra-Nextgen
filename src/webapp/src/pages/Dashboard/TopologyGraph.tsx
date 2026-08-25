@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import * as echarts from 'echarts';
 import { Card } from '@heroui/react';
+import { useTranslation } from 'react-i18next';
 import type { AgentListItem } from '../../types/models';
 
 // @gravity-ui/icons logo-windows / logo-linux / logo-macos 的 SVG path（16x16 viewBox）
@@ -25,9 +26,16 @@ function osSymbol(os?: string): string {
  * pivot 边在 Phase 6 引入后添加（紫=pivot 链路）。
  */
 export function TopologyGraph({ agents }: { agents: AgentListItem[] }) {
+  const { t } = useTranslation();
   const ref = useRef<HTMLDivElement>(null);
+  const prevKey = useRef<string>('');
 
   useEffect(() => {
+    // 内容没变（引用变了但数据相同）→ 跳过重建，避免轮询闪烁
+    const key = JSON.stringify(agents);
+    if (key === prevKey.current) return;
+    prevKey.current = key;
+
     if (!ref.current || agents.length === 0) return;
     const chart = echarts.init(ref.current);
 
@@ -35,19 +43,22 @@ export function TopologyGraph({ agents }: { agents: AgentListItem[] }) {
       backgroundColor: 'transparent',
       tooltip: {
         trigger: 'item',
-        backgroundColor: 'rgba(0, 1, 2, 0.86)',
+        borderRadius: 15,
+        backgroundColor: 'rgba(75,85,99,0.5)',
         borderColor: 'rgba(75,85,99,0.5)',
         textStyle: { color: '#e5e7eb' },
         formatter: (p: unknown) => {
           const d = (p as { data: Record<string, unknown> }).data;
-          const status = d.status === 'Online' ? '在线' : '离线';
+          const status = d.status === 'Online'
+            ? t('topology.statusOnline')
+            : t('topology.statusOffline');
           const region = (d.region as string) || '—';
           return [
             `<b>${d.name ?? 'unknown'}</b>`,
-            `IP：${d.ip ?? '—'}`,
-            `系统：${d.os ?? '—'}`,
-            `地域：${region}`,
-            `状态：${status}`,
+            `${t('topology.ip')}：${d.ip ?? '—'}`,
+            `${t('topology.os')}：${d.os ?? '—'}`,
+            `${t('topology.region')}：${region}`,
+            `${t('topology.status')}：${status}`,
           ].join('<br/>');
         },
       },
@@ -84,29 +95,29 @@ export function TopologyGraph({ agents }: { agents: AgentListItem[] }) {
       window.removeEventListener('resize', onResize);
       chart.dispose();
     };
-  }, [agents]);
+  }, [agents, t]);
 
   const online = agents.filter((a) => a.status === 'Online').length;
 
   return (
     <Card>
       <Card.Header className="flex items-center justify-between">
-        <Card.Title>会话拓扑</Card.Title>
+        <Card.Title>{t('topology.title')}</Card.Title>
         <div className="flex items-center gap-3 text-xs text-neutral-400">
           <span className="flex items-center gap-1.5">
             <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block" />
-            在线 {online}
+            {t('topology.online')} {online}
           </span>
           <span className="flex items-center gap-1.5">
             <span className="w-2.5 h-2.5 rounded-full bg-neutral-500 inline-block" />
-            离线 {agents.length - online}
+            {t('topology.offline')} {agents.length - online}
           </span>
         </div>
       </Card.Header>
       <Card.Content className="pt-0">
         {agents.length === 0 ? (
           <div className="flex items-center justify-center h-[440px] text-neutral-500">
-            暂无 Agent
+            {t('topology.noAgents')}
           </div>
         ) : (
           <div ref={ref} className="w-full h-[440px]" />
