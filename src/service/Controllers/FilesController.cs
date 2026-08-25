@@ -150,6 +150,14 @@ public class FilesController : ControllerBase
         Response.Headers.ContentDisposition =
             $"attachment; filename*=UTF-8''{Uri.EscapeDataString(fileName)}";
 
+        // Loot：登记一次下载（best-effort）
+        try
+        {
+            var loot = HttpContext.RequestServices.GetRequiredService<LootService>();
+            _ = loot.RecordDownloadAsync(agentId, fileName, 0, agentPath);
+        }
+        catch { /* best-effort */ }
+
         offset += await WriteChunkAsync(firstDoc, Response.Body, ct);
 
         while (!done)

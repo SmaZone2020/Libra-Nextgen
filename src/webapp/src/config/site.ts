@@ -28,6 +28,17 @@ const featuresGroup: NavItem = {
   ],
 };
 
+// "作战" 母项：团队作战能力。拓扑图在 Dashboard、事件流在页面 Header，
+// 这里收纳独立页面（Loot 战利品库）。
+const opsGroup: NavItem = {
+  icon: ListTimeline,
+  to: '',
+  label: 'nav.ops',
+  children: [
+    { icon: Folder, to: '/loot', label: 'nav.loot' },
+  ],
+};
+
 // More top-level leaves after the features group.
 const bottomTopItems: NavItem[] = [
   { icon: Code, to: '/builder', label: 'nav.builder' },
@@ -46,6 +57,7 @@ const pluginManagerGroup: NavItem = {
 export const sidebarItems: NavItem[] = [
   ...topLevelItems,
   featuresGroup,
+  opsGroup,
   pluginManagerGroup,
   ...bottomTopItems,
 ];

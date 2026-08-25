@@ -16,6 +16,8 @@ export default {
       settings: 'Settings',
       plugins: 'Plugins',
       features: 'Features',
+      ops: 'Ops',
+      loot: 'Loot',
       pluginPages: 'Plugin Pages',
       pluginManager: 'Plugin Manager',
       toggleGroup: 'Toggle group',

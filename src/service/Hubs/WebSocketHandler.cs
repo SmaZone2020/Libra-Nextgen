@@ -363,7 +363,21 @@ public static class WebSocketHandler
                         continue;
                     }
 
-                    if (message.Type is "screen.frame" or "screen.diff" or "screen.error")
+                    if (message.Type == "screen.frame")
+                    {
+                        ScreenStreamManager.TryPushFrame(agentId, json);
+
+                        // Loot：完整帧落库（LootService 内部节流，best-effort）
+                        try
+                        {
+                            var loot = context.RequestServices.GetRequiredService<LootService>();
+                            var jpeg = message.Data?.GetProperty("jpeg").GetString();
+                            if (!string.IsNullOrEmpty(jpeg))
+                                _ = loot.SaveScreenshotAsync(agentId, jpeg);
+                        }
+                        catch { /* best-effort */ }
+                    }
+                    else if (message.Type is "screen.diff" or "screen.error")
                     {
                         ScreenStreamManager.TryPushFrame(agentId, json);
                     }

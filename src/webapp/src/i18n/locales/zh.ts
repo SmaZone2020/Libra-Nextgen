@@ -16,6 +16,8 @@ export default {
       settings: '设置',
       plugins: '插件',
       features: '功能',
+      ops: '作战',
+      loot: 'Loot 战利品',
       pluginPages: '插件页面',
       pluginManager: '插件管理',
       toggleGroup: '展开/收起分组',
