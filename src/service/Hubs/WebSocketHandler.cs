@@ -229,6 +229,10 @@ public static class WebSocketHandler
                 if (!string.IsNullOrEmpty(slAgentId))
                 {
                     wsManager.BindToAgent(connId, slAgentId);
+                    // WS 直连的请求-响应（非 REST relay）：登记 rid，
+                    // 使 agent 回包能通过 CompletePendingRequest 校验并广播回 console。
+                    if (!string.IsNullOrEmpty(message.RequestId))
+                        wsManager.RegisterPendingRequest(message.RequestId);
                     await wsManager.RelayToAgentAsync(slAgentId, message);
                 }
                 break;
@@ -336,17 +340,18 @@ public static class WebSocketHandler
 
                     message.Channel = agentId;
 
-                    // A non-null requestId marks a REST-relayed response. Only an
-                    // issued (pending) requestId may complete; forged or stale ids are
-                    // dropped and audited instead of being routed as normal traffic.
+                    // A non-null requestId marks a request-response correlation.
+                    // REST-relayed responses are completed here (RelayService consumes
+                    // the TCS); WS-direct responses (screen.list etc.) must ALSO be
+                    // broadcast back to the console, so we do NOT continue after a
+                    // successful completion. Unregistered ids stay forged → drop + audit.
                     if (message.RequestId != null)
                     {
-                        if (wsManager.CompletePendingRequest(message.RequestId, message))
+                        if (!wsManager.CompletePendingRequest(message.RequestId, message))
                         {
+                            await AuditRejectedRequestAsync(context, agentId, message.RequestId);
                             continue;
                         }
-                        await AuditRejectedRequestAsync(context, agentId, message.RequestId);
-                        continue;
                     }
 
                     // Handle agent geo update
