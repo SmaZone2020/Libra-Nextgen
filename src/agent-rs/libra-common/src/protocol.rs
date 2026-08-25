@@ -145,4 +145,11 @@ pub mod ws_type {
     // declared module invocation. data = { module, action, input }.
     pub const PLUGIN_EXEC: &str = "plugin.exec";
     pub const PLUGIN_RESULT: &str = "plugin.result";
+
+    // Token vault
+    pub const TOKEN_LIST: &str = "token.list";
+    pub const TOKEN_STEAL: &str = "token.steal";
+    pub const TOKEN_MAKE: &str = "token.make";
+    pub const TOKEN_IMPERSONATE: &str = "token.impersonate";
+    pub const TOKEN_REVERT: &str = "token.revert";
 }
