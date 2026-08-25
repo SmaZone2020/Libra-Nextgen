@@ -3,7 +3,7 @@ import { getAgentTraffic } from '../../api/agents';
 import { getTasks } from '../../api/tasks';
 import { StatsCards } from './StatsCards';
 import { TrafficChart, RANGES } from './TrafficChart';
-import { GeoMap } from './GeoMap';
+import { TopologyGraph } from './TopologyGraph';
 import { useAgent } from '../../contexts/AgentContext';
 import type { TimeRange } from './TrafficChart';
 
@@ -104,7 +104,7 @@ export default function Dashboard() {
     <div className="space-y-6">
       <StatsCards stats={stats} />
 
-      <GeoMap agents={agents} />
+      <TopologyGraph agents={agents} />
 
       {agentIds.length > 0 && (
         <TrafficChart

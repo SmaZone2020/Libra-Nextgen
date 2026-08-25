@@ -29,6 +29,7 @@ import { setOnAuthFailed } from '../api/client';
 import { consoleWs } from '../ws/consoleWs';
 import { NetworkOverlay } from '../components/NetworkOverlay';
 import { AgreementModal } from '../components/AgreementModal';
+import { EventViewer } from '../components/EventViewer';
 import { AgentProvider, useAgent } from '../contexts/AgentContext';
 import { useAgentPlatform } from '../hooks/useAgentPlatform';
 import type { AgentListItem, UserPermissions } from '../types/models';
@@ -380,6 +381,7 @@ function AuthenticatedLayout({
           <div className="hidden sm:flex justify-between items-center">
             <PageHeader pluginLabels={pluginLabels} />
             <div className="flex items-center gap-3">
+              <EventViewer />
               <AgentSelector />
               <Dropdown>
                 <Button variant="ghost">
