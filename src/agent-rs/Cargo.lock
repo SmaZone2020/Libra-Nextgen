@@ -567,6 +567,7 @@ name = "files-module"
 version = "0.1.0"
 dependencies = [
  "base64",
+ "libra-platform",
  "serde_json",
 ]
 
@@ -617,6 +618,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7e3450815272ef58cec6d564423f6e755e25379b217b0bc688e295ba24df6b1d"
 
 [[package]]
+name = "futures-io"
+version = "0.3.33"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4577ecaa3c4f96589d473f679a71b596316f6641bc350038b962a5daf0085d7a"
+
+[[package]]
 name = "futures-macro"
 version = "0.3.32"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -646,9 +653,11 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "389ca41296e6190b48053de0321d02a77f32f8a5d2461dd38762c0593805c6d6"
 dependencies = [
  "futures-core",
+ "futures-io",
  "futures-macro",
  "futures-sink",
  "futures-task",
+ "memchr",
  "pin-project-lite",
  "slab",
 ]
@@ -1102,6 +1111,7 @@ name = "libra-engine"
 version = "0.1.0"
 dependencies = [
  "base64",
+ "futures-util",
  "libc",
  "libra-comm",
  "libra-common",
@@ -1734,30 +1744,11 @@ dependencies = [
 ]
 
 [[package]]
-name = "realtime-module"
-version = "0.1.0"
-dependencies = [
- "base64",
- "futures-util",
- "image",
- "libra-comm",
- "libra-common",
- "libra-crypto",
- "libra-load",
- "libra-modules",
- "libra-platform",
- "portable-pty",
- "serde_json",
- "tokio",
- "tokio-tungstenite",
- "windows 0.58.0",
-]
-
-[[package]]
 name = "recon-module"
 version = "0.1.0"
 dependencies = [
  "futures-util",
+ "libra-modules",
  "serde_json",
  "sysinfo",
  "tokio",
@@ -1815,6 +1806,7 @@ dependencies = [
  "cookie",
  "cookie_store",
  "futures-core",
+ "futures-util",
  "http",
  "http-body",
  "http-body-util",
@@ -1834,12 +1826,14 @@ dependencies = [
  "sync_wrapper",
  "tokio",
  "tokio-rustls",
+ "tokio-util",
  "tower",
  "tower-http",
  "tower-service",
  "url",
  "wasm-bindgen",
  "wasm-bindgen-futures",
+ "wasm-streams",
  "web-sys",
  "webpki-roots",
 ]
@@ -2738,6 +2732,19 @@ dependencies = [
  "indexmap",
  "wasm-encoder",
  "wasmparser",
+]
+
+[[package]]
+name = "wasm-streams"
+version = "0.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "15053d8d85c7eccdbefef60f06769760a563c7f0a9d6902a13d35c7800b0ad65"
+dependencies = [
+ "futures-util",
+ "js-sys",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "web-sys",
 ]
 
 [[package]]

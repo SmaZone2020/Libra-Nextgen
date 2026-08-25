@@ -8,7 +8,9 @@ using LibraNextgen.Service.Services;
 namespace LibraNextgen.Service.Hubs;
 
 /// <summary>
-/// Handles WebSocket upgrade for /ws/console and /ws/agent endpoints.
+/// Handles WebSocket upgrade for /ws/console only（管理端 UI 事件通道）。
+/// 零 WS 架构：agent 不再有任何 WebSocket 连接；一切 agent 交互走
+/// SSE 任务推送 + HTTP 结果上报。
 /// </summary>
 public static class WebSocketHandler
 {
@@ -17,72 +19,6 @@ public static class WebSocketHandler
     public static void Map(IEndpointRouteBuilder app)
     {
         app.Map("/ws/console", HandleConsoleWs).RequireAuthorization();
-        // 实时通道伪装：/ws/realtime?channel=<token>（无 agent 字样）；旧 /ws/agent 兼容
-        app.Map("/ws/realtime", HandleAgentWs);
-        app.Map("/ws/agent", HandleAgentWs);
-    }
-
-    /// <summary>
-    /// Broadcast an agent status change to all console clients.
-    /// </summary>
-    private static async Task BroadcastAgentStatus(ConnectionManager wsManager, string agentId, AgentStatus status, IServiceProvider sp)
-    {
-        try
-        {
-            var agentService = sp.GetRequiredService<AgentService>();
-            await agentService.UpdateStatusAsync(agentId, status);
-
-            var msg = new WebSocketMessage
-            {
-                Type = "agent.status",
-                Channel = agentId,
-                Data = JsonSerializer.SerializeToElement(new { agentId, status = status.ToString() })
-            };
-            await wsManager.BroadcastToConsoleAsync(msg);
-        }
-        catch { /* best-effort */ }
-    }
-
-    /// <summary>
-    /// Record a rejected agent response (unissued/expired requestId) to the audit log.
-    /// Best-effort: a failure here must not disturb the receive loop.
-    /// </summary>
-    private static async Task AuditRejectedRequestAsync(HttpContext context, string agentId, string requestId)
-    {
-        try
-        {
-            var audit = context.RequestServices.GetRequiredService<AuditService>();
-            await audit.LogAsync(
-                userId: "system",
-                userName: "system",
-                action: "ws.request_id.rejected",
-                actionKey: null,
-                targetAgentId: agentId,
-                details: $"rejected agent response with unissued requestId={requestId}",
-                ipAddress: context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
-                success: false);
-        }
-        catch
-        {
-            // audit is best-effort
-        }
-    }
-
-    private static string UnwrapAgentMessage(string agentId, string json, SessionKeyStore sessionKeys)
-    {
-        try
-        {
-            using var doc = JsonDocument.Parse(json);
-            if (doc.RootElement.ValueKind == JsonValueKind.Object &&
-                doc.RootElement.TryGetProperty("e", out var e) &&
-                e.ValueKind == JsonValueKind.String)
-            {
-                if (sessionKeys.TryGet(agentId, out var key) && key is not null)
-                    return CryptoHelper.DecryptPayload(e.GetString()!, key);
-            }
-        }
-        catch { /* fall through to plaintext */ }
-        return json;
     }
 
     private static async Task HandleConsoleWs(HttpContext context)
@@ -99,7 +35,6 @@ public static class WebSocketHandler
 
         var ws = await context.WebSockets.AcceptWebSocketAsync();
         var wsManager = context.RequestServices.GetRequiredService<ConnectionManager>();
-        var sessionLock = context.RequestServices.GetRequiredService<ISessionLock>();
 
         var connId = Guid.NewGuid().ToString("N");
         wsManager.AddConnection(connId, ws, userId, role, "console");
@@ -122,7 +57,7 @@ public static class WebSocketHandler
 
         try
         {
-            await ConsoleReceiveLoop(ws, connId, wsManager, sessionLock, context);
+            await ConsoleReceiveLoop(ws, connId, wsManager);
         }
         finally
         {
@@ -131,8 +66,7 @@ public static class WebSocketHandler
     }
 
     private static async Task ConsoleReceiveLoop(
-        WebSocket ws, string connId, ConnectionManager wsManager,
-        ISessionLock sessionLock, HttpContext context)
+        WebSocket ws, string connId, ConnectionManager wsManager)
     {
         var buffer = new byte[8192];
 
@@ -165,281 +99,10 @@ public static class WebSocketHandler
                 var message = WebSocketMessage.FromJson(json);
                 if (message == null) continue;
 
-                await HandleConsoleMessage(message, connId, wsManager, sessionLock, context);
-            }
-        }
-    }
-
-    private static async Task HandleConsoleMessage(
-        WebSocketMessage message, string connId, ConnectionManager wsManager,
-        ISessionLock sessionLock, HttpContext context)
-    {
-        // WS 按需：交互会话（bind/list）要求 agent 拉起实时通道，unbind 释放。
-        var agentService = context.RequestServices.GetRequiredService<AgentService>();
-        var needWs = message.Type switch
-        {
-            "shell.bind" or "screen.bind" or "camera.bind" or "mic.bind" or "screen.list" => true,
-            "shell.unbind" or "screen.unbind" or "camera.unbind" or "mic.unbind" => false,
-            _ => (bool?)null,
-        };
-        if (needWs is not null && message.Channel is { Length: > 0 } wsAgent)
-        {
-            await agentService.SetWsNeededAsync(wsAgent, needWs.Value);
-        }
-        else if (needWs is not null && message.Data?.TryGetProperty("agentId", out var aId) == true)
-        {
-            var wsAgent2 = aId.GetString();
-            if (!string.IsNullOrEmpty(wsAgent2))
-                await agentService.SetWsNeededAsync(wsAgent2, needWs.Value);
-        }
-
-        switch (message.Type)
-        {
-            case "shell.bind":
-                var agentId = message.Data?.GetProperty("agentId").GetString();
-                if (agentId == null) break;
-
-                wsManager.BindToAgent(connId, agentId);
-                wsManager.AppendEvent("shell", $"操作员 {wsManager.GetUserId(connId)} 绑定 {agentId} 的 Shell");
-
-                var acquired = sessionLock.TryAcquireWriteLock(agentId, wsManager.GetUserId(connId), out var writerId);
-                var lockMsg = new WebSocketMessage
-                {
-                    Type = acquired ? WsMessageType.ShellLockAcquired : WsMessageType.ShellObserverJoined,
-                    Channel = agentId,
-                    Data = JsonSerializer.SerializeToElement(new
-                    {
-                        writerId = writerId,
-                        mode = acquired ? "write" : "readonly"
-                    })
-                };
-                await wsManager.SendToConnectionAsync(connId, lockMsg);
-
-                // Forward to agent so it starts a PTY shell
-                await wsManager.RelayToAgentAsync(agentId, message);
-                break;
-
-            case "shell.unbind":
-                var unbindAgentId = message.Data?.GetProperty("agentId").GetString();
-                if (unbindAgentId != null)
-                {
-                    var unbindUserId = wsManager.GetUserId(connId);
-                    sessionLock.ReleaseWriteLock(unbindAgentId, unbindUserId);
-                    sessionLock.RemoveObserver(unbindAgentId, unbindUserId);
-                    wsManager.BindToAgent(connId, null!);
-
-                    // Forward to agent so it kills the PTY
-                    await wsManager.RelayToAgentAsync(unbindAgentId, message);
-                }
-                break;
-
-            case "shell.input":
-                var inputAgentId = message.Channel;
-                if (!string.IsNullOrEmpty(inputAgentId))
-                {
-                    await wsManager.RelayToAgentShellAsync(inputAgentId, connId, message);
-                }
-                break;
-
-            case "screen.list":
-                var slAgentId = message.Channel;
-                if (string.IsNullOrEmpty(slAgentId))
-                {
-                    try { slAgentId = message.Data?.GetProperty("agentId").GetString(); } catch { }
-                }
-                if (!string.IsNullOrEmpty(slAgentId))
-                {
-                    wsManager.BindToAgent(connId, slAgentId);
-                    // WS 直连的请求-响应（非 REST relay）：登记 rid，
-                    // 使 agent 回包能通过 CompletePendingRequest 校验并广播回 console。
-                    if (!string.IsNullOrEmpty(message.RequestId))
-                        wsManager.RegisterPendingRequest(message.RequestId);
-                    await wsManager.RelayToAgentAsync(slAgentId, message);
-                }
-                break;
-
-            case "screen.bind":
-            case "camera.bind":
-            case "mic.bind":
-                var bindAgentId = message.Channel;
-                if (string.IsNullOrEmpty(bindAgentId))
-                {
-                    try { bindAgentId = message.Data?.GetProperty("agentId").GetString(); } catch { }
-                }
-                if (!string.IsNullOrEmpty(bindAgentId))
-                {
-                    wsManager.BindToAgent(connId, bindAgentId);
-                    await wsManager.RelayToAgentAsync(bindAgentId, message);
-                }
-                break;
-
-            case "screen.unbind":
-            case "camera.unbind":
-            case "mic.unbind":
-                var ubAgentId = message.Channel;
-                if (string.IsNullOrEmpty(ubAgentId))
-                {
-                    try { ubAgentId = message.Data?.GetProperty("agentId").GetString(); } catch { }
-                }
-                if (!string.IsNullOrEmpty(ubAgentId))
-                {
-                    wsManager.BindToAgent(connId, null!);
-                    await wsManager.RelayToAgentAsync(ubAgentId, message);
-                }
-                break;
-
-            case "screen.config":
-            case "camera.config":
-                var cfgAgentId = message.Channel;
-                if (string.IsNullOrEmpty(cfgAgentId))
-                {
-                    try { cfgAgentId = message.Data?.GetProperty("agentId").GetString(); } catch { }
-                }
-                if (!string.IsNullOrEmpty(cfgAgentId))
-                {
-                    await wsManager.RelayToAgentAsync(cfgAgentId, message);
-                }
-                break;
-
-            default:
+                // 零 WS 架构：agent 交互全部走任务制（REST + SSE）。
+                // 控制台消息仅做事件广播。
                 await wsManager.BroadcastToConsoleAsync(message);
-                break;
-        }
-    }
-
-    private static async Task HandleAgentWs(HttpContext context)
-    {
-        if (!context.WebSockets.IsWebSocketRequest)
-        {
-            context.Response.StatusCode = 400;
-            return;
-        }
-
-        // 实时通道伪装：channel 参数承载会话标识（旧 agentId 参数兼容）
-        var agentId = context.Request.Query["channel"].FirstOrDefault();
-        if (string.IsNullOrEmpty(agentId))
-            agentId = context.Request.Query["agentId"].FirstOrDefault();
-        agentId ??= "unknown";
-        var ws = await context.WebSockets.AcceptWebSocketAsync();
-        var wsManager = context.RequestServices.GetRequiredService<ConnectionManager>();
-        var traffic = context.RequestServices.GetRequiredService<AgentTrafficService>();
-        var sessionKeys = context.RequestServices.GetRequiredService<SessionKeyStore>();
-        var connId = Guid.NewGuid().ToString("N");
-        wsManager.AddConnection(connId, ws, agentId, "agent", "agent");
-        wsManager.BindToAgent(connId, agentId);
-
-        var buffer = new byte[8192];
-        try
-        {
-            while (ws.State == WebSocketState.Open)
-            {
-                var ms = new MemoryStream();
-                WebSocketReceiveResult result;
-                do
-                {
-                    result = await ws.ReceiveAsync(new ArraySegment<byte>(buffer), CancellationToken.None);
-                    if (result.MessageType == WebSocketMessageType.Close) break;
-                    ms.Write(buffer, 0, result.Count);
-                } while (!result.EndOfMessage);
-
-                if (ms.Length > MaxMessageSize)
-                {
-                    await TryCloseAsync(ws, WebSocketCloseStatus.MessageTooBig, "message too big");
-                    break;
-                }
-
-                if (result.MessageType == WebSocketMessageType.Close)
-                {
-                    await TryCloseAsync(ws, WebSocketCloseStatus.NormalClosure, "closed");
-                    break;
-                }
-
-                if (result.MessageType == WebSocketMessageType.Text)
-                {
-                    traffic.Accumulate(agentId, "unknown", ms.Length, 0);
-
-                    var json = Encoding.UTF8.GetString(ms.GetBuffer(), 0, (int)ms.Length);
-                    json = UnwrapAgentMessage(agentId, json, sessionKeys);
-                    var message = WebSocketMessage.FromJson(json);
-                    if (message == null) continue;
-
-                    message.Channel = agentId;
-
-                    // A non-null requestId marks a request-response correlation.
-                    // REST-relayed responses are completed here (RelayService consumes
-                    // the TCS); WS-direct responses (screen.list etc.) must ALSO be
-                    // broadcast back to the console, so we do NOT continue after a
-                    // successful completion. Unregistered ids stay forged → drop + audit.
-                    if (message.RequestId != null)
-                    {
-                        if (!wsManager.CompletePendingRequest(message.RequestId, message))
-                        {
-                            await AuditRejectedRequestAsync(context, agentId, message.RequestId);
-                            continue;
-                        }
-                    }
-
-                    // Handle agent geo update
-                    if (message.Type == "agent.geo.update")
-                    {
-                        try
-                        {
-                            var agentService = context.RequestServices.GetRequiredService<AgentService>();
-                            var geo = message.Data?.Deserialize<LibraNextgen.Common.Models.GeoInfo>();
-                            if (geo != null)
-                                await agentService.UpdateGeoAsync(agentId, geo);
-                        }
-                        catch { /* best-effort */ }
-                        continue;
-                    }
-
-                    if (message.Type is "screen.frame" or "screen.diff" or "screen.error")
-                    {
-                        ScreenStreamManager.TryPushFrame(agentId, json);
-                    }
-                    else if (message.Type is "camera.frame" or "camera.error")
-                    {
-                        ScreenStreamManager.TryPushFrame($"camera:{agentId}", json);
-                    }
-                    else if (message.Type is "mic.data" or "mic.error")
-                    {
-                        ScreenStreamManager.TryPushFrame($"mic:{agentId}", json);
-                    }
-                    else
-                    {
-                        await wsManager.BroadcastShellOutputAsync(agentId, message);
-                    }
-                }
             }
-        }
-        finally
-        {
-            wsManager.RemoveConnection(connId);
-            _ = traffic.FlushAsync();
-            // Mark agent offline if no WS connection remains (only the agent has reconnection, not the server)
-            if (!wsManager.IsAgentConnected(agentId))
-            {
-                _ = BroadcastAgentStatus(wsManager, agentId, AgentStatus.Offline, context.RequestServices);
-            }
-        }
-    }
-
-    /// Close the agent WebSocket tolerantly: the peer may already be gone
-    /// (abrupt TCP drop) which makes CloseAsync throw a WebSocketException.
-    private static async Task TryCloseAsync(System.Net.WebSockets.WebSocket ws, WebSocketCloseStatus status, string reason)
-    {
-        try
-        {
-            if (ws.State == WebSocketState.Open || ws.State == WebSocketState.CloseReceived)
-                await ws.CloseAsync(status, reason, CancellationToken.None);
-        }
-        catch (System.Net.WebSockets.WebSocketException)
-        {
-            // Peer vanished without completing the close handshake — ignore.
-        }
-        catch (ObjectDisposedException)
-        {
-            // Socket already torn down — ignore.
         }
     }
 }

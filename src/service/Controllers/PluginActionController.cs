@@ -72,40 +72,31 @@ public class PluginActionController : ControllerBase
         var kind = string.Equals(def.Module.Kind, "script", StringComparison.OrdinalIgnoreCase)
             ? "script" : "native";
 
-        object relayPayload;
+        string? result;
         if (kind == "script")
         {
             var script = LoadScriptSource(plugin.PluginId, def.Module.Name);
             if (script == null)
                 return NotFound(new { error = $"script module '{def.Module.Name}.rhai' not found" });
-            relayPayload = new
+            // 任务化 relay：script 模块（Rhai 沙箱）
+            result = await _relay.RelayAndWaitAsync(agentId, "script", new
             {
-                kind = "script",
-                module = def.Module.Name,
-                action = actionName,
-                entry = def.Module.Entry ?? "main",
                 script,
+                entry = def.Module.Entry ?? "main",
+                args = input,
                 features = new string[0],
-                input,
-            };
+            }, ct);
         }
         else
         {
-            relayPayload = new
-            {
-                kind = "native",
-                module = def.Module.Name,
-                action = actionName,
-                input,
-            };
+            // 任务化 relay：native 模块（files/recon/creds/proxy/token/…）
+            result = await _relay.RelayAndWaitAsync(agentId, def.Module.Name, input, ct);
         }
-
-        var result = await _relay.RelayAndWaitAsync(agentId, "plugin.exec", relayPayload, ct);
 
         if (result == null)
             return StatusCode(504, new { error = "Agent did not respond in time." });
 
-        return Ok(new { pluginId, action = actionName, result = result.Data });
+        return Ok(new { pluginId, action = actionName, result });
     }
 
     /// <summary>

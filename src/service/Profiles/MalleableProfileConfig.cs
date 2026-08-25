@@ -21,7 +21,9 @@ public class MalleableProfileConfig
     public string UserAgent { get; set; } = "Mozilla/5.0 (Windows NT 10.0; Win64; x64)";
     public Dictionary<string, string> CustomHeaders { get; set; } = new();
 
-    public int HeartbeatIntervalSeconds { get; set; } = 10;
+    /// 心跳间隔（秒）。SSE 事件流是主任务通道（即时推送），心跳降为低频兜底：
+    /// 刷新 LastSeen / 检测半开连接 / 会话丢失重注册。
+    public int HeartbeatIntervalSeconds { get; set; } = 60;
     public double JitterPercent { get; set; } = 0.2;
 
     // ── 流量伪装（单入口内部路由）────────────────────────────────────

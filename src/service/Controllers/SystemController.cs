@@ -1,7 +1,6 @@
 using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using LibraNextgen.Common.Protocol;
 using LibraNextgen.Service.Services;
 
 namespace LibraNextgen.Service.Controllers;
@@ -18,134 +17,117 @@ public class SystemController : ControllerBase
         _relay = relay;
     }
 
-    private async Task<IActionResult> RelayAndWaitAsync(string agentId, string messageType, object? data, CancellationToken ct, int timeoutSeconds = 30)
+    private async Task<IActionResult> RelayAndWaitAsync(string agentId, object data, CancellationToken ct, int timeoutSeconds = 30)
     {
-        var response = await _relay.RelayAndWaitAsync(agentId, messageType, data, ct, TimeSpan.FromSeconds(timeoutSeconds));
+        // 任务化 relay：recon 模块 + op。
+        var response = await _relay.RelayAndWaitAsync(agentId, "recon", data, ct, TimeSpan.FromSeconds(timeoutSeconds));
         if (response == null)
             return StatusCode(504, new { error = "Agent did not respond in time." });
-        return response.Data != null
-            ? Content(response.Data.Value.GetRawText(), "application/json")
-            : Ok(new { status = "ok" });
+        return Content(response, "application/json");
     }
 
     [HttpPost("{agentId}/processes")]
     public async Task<IActionResult> GetProcesses(string agentId, [FromBody] ProcessesRequest? req, CancellationToken ct)
     {
-        return await RelayAndWaitAsync(agentId, "system.processes", new { lastHash = req?.LastHash }, ct);
+        return await RelayAndWaitAsync(agentId, new { op = "processes" }, ct);
     }
 
     [HttpPost("{agentId}/processes/kill")]
     public async Task<IActionResult> KillProcess(string agentId, [FromBody] KillProcessRequest req, CancellationToken ct)
     {
-        return await RelayAndWaitAsync(agentId, "system.processes.kill", new { pid = req.Pid }, ct);
+        return await RelayAndWaitAsync(agentId, new { op = "kill", pid = req.Pid }, ct);
     }
 
     [HttpPost("{agentId}/windows")]
     public async Task<IActionResult> GetWindows(string agentId, CancellationToken ct)
     {
-        return await RelayAndWaitAsync(agentId, "system.windows", null, ct);
+        return await RelayAndWaitAsync(agentId, new { op = "windows" }, ct);
     }
 
     [HttpPost("{agentId}/windows/close")]
     public async Task<IActionResult> CloseWindow(string agentId, [FromBody] WindowHwndRequest req, CancellationToken ct)
-    {
-        return await RelayAndWaitAsync(agentId, "system.windows.close", new { hwnd = req.Hwnd }, ct);
-    }
+        => StatusCode(501, new { error = "not supported" });
 
     [HttpPost("{agentId}/windows/minimize")]
     public async Task<IActionResult> MinimizeWindow(string agentId, [FromBody] WindowHwndRequest req, CancellationToken ct)
-    {
-        return await RelayAndWaitAsync(agentId, "system.windows.minimize", new { hwnd = req.Hwnd }, ct);
-    }
+        => StatusCode(501, new { error = "not supported" });
 
     [HttpPost("{agentId}/windows/maximize")]
     public async Task<IActionResult> MaximizeWindow(string agentId, [FromBody] WindowHwndRequest req, CancellationToken ct)
-    {
-        return await RelayAndWaitAsync(agentId, "system.windows.maximize", new { hwnd = req.Hwnd }, ct);
-    }
+        => StatusCode(501, new { error = "not supported" });
 
     [HttpPost("{agentId}/windows/topmost")]
     public async Task<IActionResult> SetTopmost(string agentId, [FromBody] WindowHwndRequest req, CancellationToken ct)
-    {
-        return await RelayAndWaitAsync(agentId, "system.windows.topmost", new { hwnd = req.Hwnd }, ct);
-    }
+        => StatusCode(501, new { error = "not supported" });
 
     [HttpPost("{agentId}/windows/bottom")]
     public async Task<IActionResult> SetBottom(string agentId, [FromBody] WindowHwndRequest req, CancellationToken ct)
-    {
-        return await RelayAndWaitAsync(agentId, "system.windows.bottom", new { hwnd = req.Hwnd }, ct);
-    }
+        => StatusCode(501, new { error = "not supported" });
 
     [HttpPost("{agentId}/windows/settitle")]
     public async Task<IActionResult> SetWindowTitle(string agentId, [FromBody] WindowSetTitleRequest req, CancellationToken ct)
-    {
-        return await RelayAndWaitAsync(agentId, "system.windows.settitle", new { hwnd = req.Hwnd, title = req.Title }, ct);
-    }
+        => StatusCode(501, new { error = "not supported" });
 
     [HttpPost("{agentId}/env")]
     public async Task<IActionResult> GetEnvVars(string agentId, CancellationToken ct)
     {
-        return await RelayAndWaitAsync(agentId, "system.env", null, ct);
+        return await RelayAndWaitAsync(agentId, new { op = "env" }, ct);
     }
 
     [HttpPost("{agentId}/env/set")]
     public async Task<IActionResult> SetEnvVar(string agentId, [FromBody] SetEnvRequest req, CancellationToken ct)
-    {
-        return await RelayAndWaitAsync(agentId, "system.env.set", new { name = req.Name, value = req.Value, scope = req.Scope }, ct);
-    }
+        => StatusCode(501, new { error = "not supported" });
 
     [HttpPost("{agentId}/env/delete")]
     public async Task<IActionResult> DeleteEnvVar(string agentId, [FromBody] DeleteEnvRequest req, CancellationToken ct)
-    {
-        return await RelayAndWaitAsync(agentId, "system.env.delete", new { name = req.Name, scope = req.Scope }, ct);
-    }
+        => StatusCode(501, new { error = "not supported" });
 
     [HttpPost("{agentId}/network")]
     public async Task<IActionResult> GetNetwork(string agentId, CancellationToken ct)
     {
-        return await RelayAndWaitAsync(agentId, "system.network", null, ct);
+        return await RelayAndWaitAsync(agentId, new { op = "network" }, ct);
     }
 
     [HttpPost("{agentId}/network/wan")]
     public async Task<IActionResult> GetNetworkWan(string agentId, CancellationToken ct)
     {
-        return await RelayAndWaitAsync(agentId, "system.network.wan", null, ct, timeoutSeconds: 15);
+        return await RelayAndWaitAsync(agentId, new { op = "network.wan" }, ct, timeoutSeconds: 15);
     }
 
     [HttpPost("{agentId}/network/wifi")]
     public async Task<IActionResult> GetNetworkWifi(string agentId, CancellationToken ct)
     {
-        return await RelayAndWaitAsync(agentId, "system.network.wifi", null, ct, timeoutSeconds: 30);
+        return await RelayAndWaitAsync(agentId, new { op = "network.wifi" }, ct, timeoutSeconds: 30);
     }
 
     [HttpPost("{agentId}/network/nearby")]
     public async Task<IActionResult> GetNetworkNearby(string agentId, CancellationToken ct)
     {
-        return await RelayAndWaitAsync(agentId, "system.network.nearby", null, ct, timeoutSeconds: 30);
+        return await RelayAndWaitAsync(agentId, new { op = "network.nearby" }, ct, timeoutSeconds: 30);
     }
 
     [HttpPost("{agentId}/network/proxy")]
     public async Task<IActionResult> GetNetworkProxy(string agentId, CancellationToken ct)
     {
-        return await RelayAndWaitAsync(agentId, "system.network.proxy", null, ct, timeoutSeconds: 10);
+        return await RelayAndWaitAsync(agentId, new { op = "network.proxy" }, ct, timeoutSeconds: 10);
     }
 
     [HttpPost("{agentId}/lanscan")]
     public async Task<IActionResult> LanScan(string agentId, CancellationToken ct)
     {
-        return await RelayAndWaitAsync(agentId, "system.lanscan", null, ct);
+        return await RelayAndWaitAsync(agentId, new { op = "lanscan" }, ct);
     }
 
     [HttpPost("{agentId}/packages")]
     public async Task<IActionResult> Packages(string agentId, CancellationToken ct)
     {
-        return await RelayAndWaitAsync(agentId, "system.packages", null, ct, timeoutSeconds: 60);
+        return await RelayAndWaitAsync(agentId, new { op = "packages" }, ct, timeoutSeconds: 60);
     }
 
     [HttpPost("{agentId}/docker")]
     public async Task<IActionResult> Docker(string agentId, CancellationToken ct)
     {
-        return await RelayAndWaitAsync(agentId, "system.docker", null, ct, timeoutSeconds: 30);
+        return await RelayAndWaitAsync(agentId, new { op = "docker" }, ct, timeoutSeconds: 30);
     }
 }
 

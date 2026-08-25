@@ -13,8 +13,6 @@ import AuditLogsPage from '../pages/AuditLogs';
 import ShellPage from '../pages/Shell';
 import FileManager from '../pages/FileManager';
 import SystemPage from '../pages/System';
-import ScreenMonitorPage from '../pages/ScreenMonitor';
-import MediaMonitorPage from '../pages/MediaMonitor';
 import SoftwareDataPage from '../pages/SoftwareData';
 import ProxyBrowserPage from '../pages/ProxyBrowser';
 import BuilderPage from '../pages/Builder';
@@ -31,7 +29,6 @@ import { NetworkOverlay } from '../components/NetworkOverlay';
 import { AgreementModal } from '../components/AgreementModal';
 import { EventViewer } from '../components/EventViewer';
 import { AgentProvider, useAgent } from '../contexts/AgentContext';
-import { useAgentPlatform } from '../hooks/useAgentPlatform';
 import type { AgentListItem, UserPermissions } from '../types/models';
 import { sidebarItems, sidebarBottomItems } from '../config/site';
 import '../i18n';
@@ -44,7 +41,7 @@ const pageTransition = {
 const SIDEBAR_W = { collapsed: 72, expanded: 256 };
 
 
-const AGENT_ROUTES = new Set(['/agents', '/shell', '/files', '/system', '/screen', '/media', '/othersoft', '/proxy']);
+const AGENT_ROUTES = new Set(['/agents', '/shell', '/files', '/system', '/othersoft', '/proxy']);
 
 // A plugin route is any path under /plugins/ except the management page itself.
 const isPluginRoute = (pathname: string) =>
@@ -53,8 +50,6 @@ const isPluginRoute = (pathname: string) =>
 const PAGE_META_KEYS: Record<string, [string, string]> = {
   '/': ['pageMeta.dashboard.label', 'pageMeta.dashboard.subtitle'],
   '/agents': ['pageMeta.agents.label', 'pageMeta.agents.subtitle'],
-  '/screen': ['pageMeta.screen.label', 'pageMeta.screen.subtitle'],
-  '/media': ['pageMeta.media.label', 'pageMeta.media.subtitle'],
   '/shell': ['pageMeta.shell.label', 'pageMeta.shell.subtitle'],
   '/files': ['pageMeta.explorer.label', 'pageMeta.explorer.subtitle'],
   '/system': ['pageMeta.system.label', 'pageMeta.system.subtitle'],
@@ -267,9 +262,6 @@ function AuthenticatedLayout({
   const sidebarWidth = collapsed ? SIDEBAR_W.collapsed : SIDEBAR_W.expanded;
   const registeredPlugins = useRegisteredPlugins();
 
-  // Windows-only pages (screen/media streaming) are hidden for Linux agents.
-  const platform = useAgentPlatform();
-
   useEffect(() => {
     getAccountMe()
       .then((me) => setPermissions(me.permissions))
@@ -289,11 +281,7 @@ function AuthenticatedLayout({
   const visibleItems = sidebarItems
     .map((item): NavItem | null => {
       if (item.children && item.children.length > 0) {
-        const children = item.children.filter((c) => {
-          if (!canSee(c.to)) return false;
-          if (platform === 'linux' && (c.to === '/screen' || c.to === '/media')) return false;
-          return true;
-        });
+        const children = item.children.filter((c) => canSee(c.to));
         if (children.length === 0) return null;
         return { ...item, children };
       }
@@ -415,8 +403,6 @@ function AuthenticatedLayout({
                 <Route path="/files" element={<FileManager />} />
                 <Route path="/audit" element={<AuditLogsPage />} />
                 <Route path="/system" element={<SystemPage />} />
-                <Route path="/screen" element={<ScreenMonitorPage />} />
-                <Route path="/media" element={<MediaMonitorPage />} />
                 <Route path="/othersoft" element={<SoftwareDataPage />} />
                 <Route path="/proxy" element={<ProxyBrowserPage />} />
                 <Route path="/builder" element={<BuilderPage />} />

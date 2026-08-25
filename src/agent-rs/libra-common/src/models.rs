@@ -30,20 +30,22 @@ pub enum UserRole {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub enum CommandType {
     Shell,
     PowerShell,
     LocalAccounts,
     Upload,
     Download,
-    Screenshot,
-    Webcam,
     WifiScan,
     Kill,
     Sleep,
     Proxy,
     FileList,
     FileDrives,
+    /// 通用模块执行：command = 模块名（files/recon/creds/proxy/token/script…），
+    /// arguments[0] = 模块输入 JSON。服务端 relay 任务化的基础。
+    Generic,
     KillAndClean,
     Restart,
 }

@@ -179,7 +179,7 @@ export function ProcessTab({ agentId }: ProcessTabProps) {
         />
         <span className="text-sm text-default-500">{t('system.processesCount', { count: processes.length })}</span>
       </div>
-      <Card className="max-h-[calc(100vh-330px)] overflow-y-auto">
+      <Card className="max-h-[calc(100vh-190px)] overflow-y-auto">
         {loading ? (
           <div className="flex justify-center py-8 text-default-500 text-sm">
             {t('system.loadingProcesses')}

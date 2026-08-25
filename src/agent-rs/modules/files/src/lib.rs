@@ -39,6 +39,13 @@ fn dispatch(input: &str) -> String {
             let limit = v.get("limit").and_then(|l| l.as_u64()).unwrap_or(200) as usize;
             file_ops::FileOps::list_directory_paged(path, offset, limit)
         }
+        "drives" => {
+            let drives = libra_platform::get_executor().get_drives();
+            let escaped: Vec<String> = drives.iter()
+                .map(|d| format!(r#""{}""#, d.replace('\\', "\\\\")))
+                .collect();
+            format!(r#"{{"drives":[{}]}}"#, escaped.join(","))
+        }
         "read" => file_ops::FileOps::read_file(path),
         "download" => {
             let offset = v.get("offset").and_then(|o| o.as_u64()).unwrap_or(0);

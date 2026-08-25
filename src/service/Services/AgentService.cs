@@ -7,10 +7,12 @@ namespace LibraNextgen.Service.Services;
 public class AgentService
 {
     private readonly Repository<Agent> _agents;
+    private readonly AgentEventHub _eventHub;
 
-    public AgentService(Repository<Agent> agents)
+    public AgentService(Repository<Agent> agents, AgentEventHub eventHub)
     {
         _agents = agents;
+        _eventHub = eventHub;
     }
 
     public async Task<List<AgentListItem>> GetAllAsync(int page = 1, int pageSize = 50, AgentStatus? status = null, CancellationToken ct = default)
@@ -61,6 +63,8 @@ public class AgentService
         if (agent == null) return false;
         var update = Builders<Agent>.Update.Set(a => a.WsNeeded, needed);
         await _agents.UpdateAsync(id, update, ct);
+        // SSE 即时推送（agent 在线时秒级拉起 realtime 模块，不等下个心跳）
+        _eventHub.Push(id, "ws", new { wsNeeded = needed });
         return true;
     }
 

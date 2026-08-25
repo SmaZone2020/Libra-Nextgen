@@ -10,11 +10,13 @@ public class TaskService
 {
     private readonly Repository<AgentTask> _tasks;
     private readonly ConnectionManager _wsManager;
+    private readonly AgentEventHub _eventHub;
 
-    public TaskService(Repository<AgentTask> tasks, ConnectionManager wsManager)
+    public TaskService(Repository<AgentTask> tasks, ConnectionManager wsManager, AgentEventHub eventHub)
     {
         _tasks = tasks;
         _wsManager = wsManager;
+        _eventHub = eventHub;
     }
 
     public async Task<List<AgentTask>> GetAllAsync(
@@ -75,6 +77,8 @@ public class TaskService
         };
         await _tasks.InsertAsync(task, ct);
         _wsManager.AppendEvent("task", $"操作员 {createdBy} 向 Agent {request.AgentId} 下发任务 {request.CommandType}");
+        // SSE 即时推送（agent 在线且订阅时；否则下个心跳兜底拉取）
+        _eventHub.Push(request.AgentId, "task", task);
         return task;
     }
 

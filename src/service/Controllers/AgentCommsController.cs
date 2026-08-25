@@ -34,23 +34,35 @@ public class AgentCommsController : ControllerBase
     private readonly AgentTrafficService _traffic;
     private readonly ConnectionManager _wsManager;
     private readonly BeaconSettings _beaconSettings;
-    private static readonly System.Text.Json.JsonSerializerOptions JsonOpts = new(System.Text.Json.JsonSerializerDefaults.Web);
+    private static readonly System.Text.Json.JsonSerializerOptions JsonOpts = new(System.Text.Json.JsonSerializerDefaults.Web)
+    {
+        // 枚举必须输出 camelCase 字符串（agent 协议与 Rust serde 对齐）：
+        // Rust 侧枚举带 rename_all="camelCase"（pending/completed/generic…），
+        // 数字或 PascalCase 都会导致 AgentTask 反序列化失败。
+        Converters = { new System.Text.Json.Serialization.JsonStringEnumConverter(System.Text.Json.JsonNamingPolicy.CamelCase) }
+    };
     private static string J(object v) => System.Text.Json.JsonSerializer.Serialize(v, JsonOpts);
     private static T? D<T>(string s) => System.Text.Json.JsonSerializer.Deserialize<T>(s, JsonOpts);
     private readonly AgentService _agentService;
+    private readonly AgentEventHub _eventHub;
+    private readonly TaskService _taskService;
 
     public AgentCommsController(
         AgentCommsService commsService,
         AgentTrafficService traffic,
         ConnectionManager wsManager,
         IOptions<BeaconSettings> beaconSettings,
-        AgentService agentService)
+        AgentService agentService,
+        AgentEventHub eventHub,
+        TaskService taskService)
     {
         _commsService = commsService;
         _traffic = traffic;
         _wsManager = wsManager;
         _beaconSettings = beaconSettings.Value;
         _agentService = agentService;
+        _eventHub = eventHub;
+        _taskService = taskService;
     }
 
     [HttpPost("register")]
@@ -471,6 +483,86 @@ public class AgentCommsController : ControllerBase
         }
         sb.Append("data: [DONE]\n\n");
         return Content(sb.ToString(), "text/event-stream");
+    }
+
+    /// <summary>
+    /// SSE 任务事件流（伪装为模型事件流：GET /api/v1/models/events?channel=，
+    /// 由 BeaconEntryMiddleware 重写到本端点）。服务端挂起连接，任务/wsNeeded
+    /// 变化时主动推送（AES-GCM 加密信封：data: &lt;b64(nonce||tag||ct)&gt;），
+    /// 30s 注释 keepalive。连接建立时先补发一次 pending 任务 + wsNeeded。
+    /// agent 以此替代心跳轮询；心跳降为低频兜底。
+    /// </summary>
+    [HttpGet("/api/beacon/events")]
+    public async Task Events(string? channel, CancellationToken ct)
+    {
+        if (string.IsNullOrEmpty(channel)
+            || !_commsService.TryResolveSessionToken(channel, out var agentId)
+            || string.IsNullOrEmpty(agentId)
+            || !_commsService.TryGetSessionKey(agentId, out var key) || key is null)
+        {
+            Response.StatusCode = StatusCodes.Status401Unauthorized;
+            return;
+        }
+
+        Response.Headers.ContentType = "text/event-stream";
+        Response.Headers.CacheControl = "no-cache";
+        Response.Headers.Connection = "keep-alive";
+
+        var queue = _eventHub.Subscribe(agentId);
+        var abort = HttpContext.RequestAborted;
+
+        async Task WriteEvent(string op, object data)
+        {
+            var plain = J(new { op, data });
+            var encrypted = CryptoHelper.EncryptPayload(plain, key);
+            await Response.WriteAsync($"data: {encrypted}\n\n", abort);
+        }
+
+        // 连接即同步：pending 任务 + wsNeeded（避免竞态，心跳兜底）
+        try
+        {
+            var pending = await _taskService.GetNextPendingForAgentAsync(agentId, abort);
+            if (pending != null)
+                await WriteEvent("task", pending);
+            var wsNeeded = await _agentService.GetWsNeededAsync(agentId, abort);
+            await WriteEvent("ws", new { wsNeeded });
+            await Response.Body.FlushAsync(abort);
+        }
+        catch
+        {
+            _eventHub.Unsubscribe(agentId);
+            return;
+        }
+
+        try
+        {
+            while (!abort.IsCancellationRequested)
+            {
+                var readTask = queue.Reader.WaitToReadAsync(abort).AsTask();
+                var pingTask = Task.Delay(TimeSpan.FromSeconds(30), abort);
+                var done = await Task.WhenAny(readTask, pingTask);
+                if (done == readTask)
+                {
+                    if (!queue.Reader.TryRead(out var ev))
+                        break; // channel completed
+                    await WriteEvent(ev.Op, ev.Data ?? new { });
+                    await Response.Body.FlushAsync(abort);
+                }
+                else
+                {
+                    // keepalive 注释行：刷新代理（nginx proxy_read_timeout）空闲超时
+                    await Response.WriteAsync(": ping\n\n", abort);
+                    await Response.Body.FlushAsync(abort);
+                }
+            }
+        }
+        catch (OperationCanceledException) { }
+        catch (IOException) { }
+        catch (ObjectDisposedException) { }
+        finally
+        {
+            _eventHub.Unsubscribe(agentId);
+        }
     }
 
     private static IEnumerable<string> ChunkString(string s, int size)

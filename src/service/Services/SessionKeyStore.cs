@@ -56,12 +56,22 @@ public class SessionKeyStore
     {
         _cache[agentId] = key;
 
-        // Best-effort durable write; the in-memory cache is authoritative.
+        // 同步持久化：fire-and-forget 在进程被杀/快速重启时会丢写，导致
+        // 服务端重启后 key 失配（agent 用新 key、服务端加载旧 key）→
+        // 心跳/SSE 永久解密失败死循环。注册路径可接受一次同步等待。
         var doc = new SessionKey { AgentId = agentId, Key = Convert.ToBase64String(key) };
-        _ = _collection.ReplaceOneAsync(
-            Builders<SessionKey>.Filter.Eq(s => s.AgentId, agentId),
-            doc,
-            new ReplaceOptions { IsUpsert = true });
+        try
+        {
+            _collection.ReplaceOneAsync(
+                Builders<SessionKey>.Filter.Eq(s => s.AgentId, agentId),
+                doc,
+                new ReplaceOptions { IsUpsert = true }).GetAwaiter().GetResult();
+        }
+        catch
+        {
+            // 持久化失败不阻断注册（内存 key 仍是权威），但下个服务端
+            // 重启会失配并触发 agent 自愈重注册。
+        }
     }
 
     public bool TryGet(string agentId, out byte[]? key) => _cache.TryGetValue(agentId, out key);
@@ -71,10 +81,17 @@ public class SessionKeyStore
     {
         var token = Convert.ToHexString(RandomNumberGenerator.GetBytes(16)).ToLowerInvariant();
         _tokens[token] = agentId;
-        _ = _tokenCollection.ReplaceOneAsync(
-            Builders<SessionTokenDoc>.Filter.Eq(t => t.Token, token),
-            new SessionTokenDoc { Token = token, AgentId = agentId },
-            new ReplaceOptions { IsUpsert = true });
+        try
+        {
+            _tokenCollection.ReplaceOneAsync(
+                Builders<SessionTokenDoc>.Filter.Eq(t => t.Token, token),
+                new SessionTokenDoc { Token = token, AgentId = agentId },
+                new ReplaceOptions { IsUpsert = true }).GetAwaiter().GetResult();
+        }
+        catch
+        {
+            // 同上：持久化失败不阻断，重启后 agent 自愈重注册。
+        }
         return token;
     }
 

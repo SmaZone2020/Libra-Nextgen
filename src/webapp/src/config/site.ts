@@ -1,4 +1,4 @@
-import { ChartLine, Cpu, Display, DisplayPulse, Folder, Globe, Shield, Camera, Terminal, PlugConnection, Code, CircleInfo, Gear, Puzzle, Layers } from "@gravity-ui/icons";
+import { ChartLine, Cpu, Display, Folder, Globe, Shield, Terminal, PlugConnection, Code, CircleInfo, Gear, Puzzle, Layers } from "@gravity-ui/icons";
 import type { NavItem } from "../shared/layout/Sidebar";
 
 export const siteConfig = {
@@ -12,14 +12,12 @@ const topLevelItems: NavItem[] = [
   { icon: Display, to: '/agents', label: 'nav.agents' },
 ];
 
-// "功能" 母项：收纳所有功能类页面（文件/摄像头/软件数据等）。
+// "功能" 母项：收纳所有功能类页面（文件/软件数据等）。
 const featuresGroup: NavItem = {
   icon: Layers,
   to: '',
   label: 'nav.features',
   children: [
-    { icon: DisplayPulse, to: '/screen', label: 'nav.screen' },
-    { icon: Camera, to: '/media', label: 'nav.media' },
     { icon: Terminal, to: '/shell', label: 'nav.shell' },
     { icon: Folder, to: '/files', label: 'nav.explorer' },
     { icon: PlugConnection, to: '/othersoft', label: 'nav.softwareData' },

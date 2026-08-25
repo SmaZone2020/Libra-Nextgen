@@ -12,8 +12,6 @@ public static class CommandAuthorization
     {
         CommandType.LocalAccounts or
         CommandType.Kill or
-        CommandType.Screenshot or
-        CommandType.Webcam or
         CommandType.KillAndClean or
         CommandType.Restart => true,
         _ => false,

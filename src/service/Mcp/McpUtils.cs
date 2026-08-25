@@ -32,14 +32,15 @@ public static class McpUtils
     }
 
     /// <summary>
-    /// Relay a request to an agent with a sane default timeout, checking the
+    /// Relay a task to an agent with a sane default timeout, checking the
     /// agent is online up front and normalizing failures into structured JSON.
+    /// `module` 为云模块名（files/recon/creds/proxy/token/script），data 含 op。
     /// </summary>
     public static async Task<string> RelayOrError(
         RelayService relay,
         AgentService agents,
         string agentId,
-        string messageType,
+        string module,
         object? data,
         TimeSpan? timeout = null)
     {
@@ -50,13 +51,13 @@ public static class McpUtils
             return Error($"agent '{agentId}' is offline or not found");
 
         var result = await relay.RelayAndWaitAsync(
-            agentId, messageType, data, CancellationToken.None,
+            agentId, module, data, CancellationToken.None,
             timeout ?? TimeSpan.FromSeconds(30));
 
-        if (result?.Data == null)
+        if (result == null)
             return Error("agent did not respond in time");
 
-        return Limit(result.Data.Value.GetRawText());
+        return Limit(result);
     }
 
     /// <summary>

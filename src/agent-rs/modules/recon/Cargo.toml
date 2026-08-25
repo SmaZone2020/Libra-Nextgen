@@ -14,6 +14,7 @@ sysinfo = { workspace = true }
 futures-util = { workspace = true }
 windows = { workspace = true }
 windows-core = "0.58"
+libra-modules = { path = "../../libra-modules" }
 
 [target.'cfg(windows)'.dependencies]
 winreg = "0.52"

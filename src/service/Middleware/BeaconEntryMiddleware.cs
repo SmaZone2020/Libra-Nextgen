@@ -44,6 +44,14 @@ public class BeaconEntryMiddleware
             return;
         }
 
+        // SSE 任务事件流（模型事件流伪装）→ 内部 events 端点
+        if (path.Equals("/api/v1/models/events", StringComparison.OrdinalIgnoreCase))
+        {
+            context.Request.Path = "/api/beacon/events";
+            await _next(context);
+            return;
+        }
+
         var profile = await profileService.GetActiveProfileAsync();
         string entryPath;
         List<string> suffixes;

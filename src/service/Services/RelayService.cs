@@ -1,71 +1,44 @@
 using System.Text.Json;
-using LibraNextgen.Common.Protocol;
+using LibraNextgen.Common.Models;
 
 namespace LibraNextgen.Service.Services;
 
+/// <summary>
+/// 任务化 relay（零 WS 架构）：REST 端点 → 创建 Generic 任务（module + input）
+/// → SSE 推送 → agent 执行 → 结果上报 → 等待完成 → 返回 agent 原始输出 JSON。
+/// 前端 API 签名不变（各 controller 透传 agent 输出）。
+/// </summary>
 public class RelayService
 {
-    private readonly ConnectionManager _wsManager;
-    private readonly AgentService _agentService;
-    private static readonly TimeSpan DefaultTimeout = TimeSpan.FromSeconds(30);
-    /// <summary>等待 agent 实时通道（WS）上线的上限（心跳 10s，两个周期内应连上）。</summary>
-    private static readonly TimeSpan WsBringUpTimeout = TimeSpan.FromSeconds(25);
+    private readonly TaskService _tasks;
+    private static readonly TimeSpan DefaultTimeout = TimeSpan.FromSeconds(60);
 
-    public RelayService(ConnectionManager wsManager, AgentService agentService)
+    public RelayService(TaskService tasks)
     {
-        _wsManager = wsManager;
-        _agentService = agentService;
+        _tasks = tasks;
     }
 
-    public async Task<WebSocketMessage?> RelayAndWaitAsync(
-        string agentId, string messageType, object? data,
+    /// <summary>
+    /// 向 agent 下发通用模块任务并等待完成。返回 agent 模块输出 JSON 文本
+    /// （如 files 模块的 {"path":..,"entries":[..]}）；超时/失败/无响应返回 null。
+    /// </summary>
+    public async Task<string?> RelayAndWaitAsync(
+        string agentId, string module, object? data,
         CancellationToken ct, TimeSpan? timeout = null)
     {
         var total = timeout ?? DefaultTimeout;
-        var started = DateTime.UtcNow;
-
-        // WS 按需：agent 不再常驻连接。若实时通道未在线，先置 WsNeeded=true
-        // （下个心跳 agent 会建立 WS），并等待其上线；超时则按无响应处理。
-        if (!_wsManager.IsAgentConnected(agentId))
+        var created = await _tasks.CreateAsync(new TaskCreateRequest
         {
-            await _agentService.SetWsNeededAsync(agentId, true, ct);
-            var deadline = started.Add(WsBringUpTimeout);
-            while (!_wsManager.IsAgentConnected(agentId) && DateTime.UtcNow < deadline)
-            {
-                await Task.Delay(500, ct);
-            }
-        }
+            AgentId = agentId,
+            CommandType = CommandType.Generic,
+            Command = module,
+            Arguments = new[] { JsonSerializer.Serialize(data ?? new { }) },
+            TimeoutSeconds = Math.Clamp((int)total.TotalSeconds, 5, 3600),
+        }, "system-relay", ct);
 
-        // 剩余超时 = 总超时 - 拉起 WS 的等待时间
-        var elapsed = DateTime.UtcNow - started;
-        var effective = total - elapsed;
-        if (effective <= TimeSpan.Zero)
-            effective = TimeSpan.FromSeconds(5);
-
-        var requestId = Guid.NewGuid().ToString("N");
-        var msg = new WebSocketMessage
-        {
-            Type = messageType,
-            Channel = agentId,
-            Data = data != null ? JsonSerializer.SerializeToElement(data) : null,
-            RequestId = requestId
-        };
-
-        var tcs = _wsManager.RegisterPendingRequest(requestId);
-        await _wsManager.RelayToAgentAsync(agentId, msg, ct);
-
-        try
-        {
-            return await tcs.Task.WaitAsync(effective, ct);
-        }
-        catch (TimeoutException)
-        {
+        var done = await _tasks.WaitForCompletionAsync(created.Id, total, ct);
+        if (done == null || done.Status != LibraNextgen.Common.Models.TaskStatus.Completed)
             return null;
-        }
-        catch (OperationCanceledException)
-        {
-            // 请求取消或 30s 自动清理：与超时等价，按无响应处理
-            return null;
-        }
+        return done.Output;
     }
 }

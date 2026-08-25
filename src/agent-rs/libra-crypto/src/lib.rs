@@ -56,6 +56,12 @@ impl AgentCrypto {
         self.session_key
     }
 
+    /// 清除会话密钥：SESSION_LOST 重注册时调用，强制服务端协商下发新 key
+    /// （hasSessionKey=false），避免服务端重启后 key 失配导致重注册死循环。
+    pub fn clear_session_key(&mut self) {
+        self.session_key = None;
+    }
+
     /// Generate an RSA-2048 keypair.
     pub fn generate_key_pair(&mut self) {
         let mut rng = rand::thread_rng();

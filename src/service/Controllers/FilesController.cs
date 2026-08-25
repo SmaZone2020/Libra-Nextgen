@@ -1,7 +1,6 @@
 using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using LibraNextgen.Common.Protocol;
 using LibraNextgen.Service.Services;
 
 namespace LibraNextgen.Service.Controllers;
@@ -18,106 +17,102 @@ public class FilesController : ControllerBase
         _relay = relay;
     }
 
-    private async Task<IActionResult> RelayAndWaitAsync(string agentId, string messageType, object? data, CancellationToken ct)
+    private async Task<IActionResult> RelayAndWaitAsync(string agentId, object data, CancellationToken ct, int timeoutSeconds = 60)
     {
-        // 60s：零 WS 架构下首次操作要拉起 realtime 模块（下载 ~4.4MB）+
-        // files 模块下载，30s 默认值不够。
-        var response = await _relay.RelayAndWaitAsync(agentId, messageType, data, ct, TimeSpan.FromSeconds(60));
+        // 任务化 relay：创建 Generic 任务（files 模块 + op）→ SSE 推送 → 结果上报。
+        var response = await _relay.RelayAndWaitAsync(agentId, "files", data, ct, TimeSpan.FromSeconds(timeoutSeconds));
         if (response == null)
             return StatusCode(504, new { error = "Agent did not respond in time." });
-        return response.Data != null
-            ? Content(response.Data.Value.GetRawText(), "application/json")
-            : Ok(new { status = "ok" });
+        return Content(response, "application/json");
     }
 
     [HttpPost("{agentId}/list")]
     public async Task<IActionResult> ListDirectory(string agentId, [FromBody] ListRequest req, CancellationToken ct)
     {
-        return await RelayAndWaitAsync(agentId, "file.list", new { path = req.Path, offset = req.Offset, limit = req.Limit }, ct);
+        return await RelayAndWaitAsync(agentId, new { op = "list", path = req.Path, offset = req.Offset, limit = req.Limit }, ct);
     }
 
     [HttpPost("{agentId}/drives")]
     public async Task<IActionResult> GetDrives(string agentId, CancellationToken ct)
     {
-        return await RelayAndWaitAsync(agentId, "file.drives", null, ct);
+        return await RelayAndWaitAsync(agentId, new { op = "drives" }, ct, 30);
     }
 
     [HttpPost("{agentId}/read")]
     public async Task<IActionResult> ReadFile(string agentId, [FromBody] ReadRequest req, CancellationToken ct)
     {
-        return await RelayAndWaitAsync(agentId, "file.read", new { path = req.Path }, ct);
+        return await RelayAndWaitAsync(agentId, new { op = "read", path = req.Path }, ct);
     }
 
     [HttpPost("{agentId}/open")]
     public async Task<IActionResult> OpenFile(string agentId, [FromBody] ReadRequest req, CancellationToken ct)
     {
-        return await RelayAndWaitAsync(agentId, "file.open", new { path = req.Path }, ct);
+        return await RelayAndWaitAsync(agentId, new { op = "open", path = req.Path }, ct);
     }
 
     [HttpPost("{agentId}/write")]
     public async Task<IActionResult> WriteFile(string agentId, [FromBody] WriteRequest req, CancellationToken ct)
     {
-        return await RelayAndWaitAsync(agentId, "file.write", new { path = req.Path, content = req.Content }, ct);
+        return await RelayAndWaitAsync(agentId, new { op = "write", path = req.Path, content = req.Content }, ct);
     }
 
     [HttpDelete("{agentId}")]
     public async Task<IActionResult> DeleteFile(string agentId, [FromBody] DeleteRequest req, CancellationToken ct)
     {
-        return await RelayAndWaitAsync(agentId, "file.delete", new { path = req.Path }, ct);
+        return await RelayAndWaitAsync(agentId, new { op = "delete", path = req.Path }, ct);
     }
 
     [HttpPost("{agentId}/mkdir")]
     public async Task<IActionResult> CreateDirectory(string agentId, [FromBody] MkdirRequest req, CancellationToken ct)
     {
-        return await RelayAndWaitAsync(agentId, "file.mkdir", new { path = req.Path }, ct);
+        return await RelayAndWaitAsync(agentId, new { op = "mkdir", path = req.Path }, ct);
     }
 
     [HttpPost("{agentId}/rename")]
     public async Task<IActionResult> Rename(string agentId, [FromBody] RenameRequest req, CancellationToken ct)
     {
-        return await RelayAndWaitAsync(agentId, "file.rename", new { path = req.Path, newName = req.NewName }, ct);
+        return await RelayAndWaitAsync(agentId, new { op = "rename", path = req.Path, newName = req.NewName }, ct);
     }
 
     [HttpPost("{agentId}/move")]
     public async Task<IActionResult> Move(string agentId, [FromBody] MoveRequest req, CancellationToken ct)
     {
-        return await RelayAndWaitAsync(agentId, "file.move", new { source = req.Source, destination = req.Destination }, ct);
+        return await RelayAndWaitAsync(agentId, new { op = "move", path = req.Source, destination = req.Destination }, ct);
     }
 
     [HttpPost("{agentId}/copy")]
     public async Task<IActionResult> Copy(string agentId, [FromBody] CopyRequest req, CancellationToken ct)
     {
-        return await RelayAndWaitAsync(agentId, "file.copy", new { source = req.Source, destination = req.Destination }, ct);
+        return await RelayAndWaitAsync(agentId, new { op = "copy", path = req.Source, destination = req.Destination }, ct);
     }
 
     [HttpPost("{agentId}/compress")]
     public async Task<IActionResult> Compress(string agentId, [FromBody] CompressRequest req, CancellationToken ct)
     {
-        return await RelayAndWaitAsync(agentId, "file.compress", new { path = req.Path }, ct);
+        return await RelayAndWaitAsync(agentId, new { op = "compress", path = req.Path }, ct);
     }
 
     [HttpPost("{agentId}/decompress")]
     public async Task<IActionResult> Decompress(string agentId, [FromBody] DecompressRequest req, CancellationToken ct)
     {
-        return await RelayAndWaitAsync(agentId, "file.decompress", new { path = req.Path, destination = req.Destination }, ct);
+        return await RelayAndWaitAsync(agentId, new { op = "decompress", path = req.Path, destination = req.Destination }, ct);
     }
 
     [HttpPost("{agentId}/shortcut")]
     public async Task<IActionResult> CreateShortcut(string agentId, [FromBody] ShortcutRequest req, CancellationToken ct)
     {
-        return await RelayAndWaitAsync(agentId, "file.shortcut", new { path = req.Path }, ct);
+        return await RelayAndWaitAsync(agentId, new { op = "shortcut", path = req.Path }, ct);
     }
 
     [HttpPost("{agentId}/archive/list")]
     public async Task<IActionResult> ListArchive(string agentId, [FromBody] ReadRequest req, CancellationToken ct)
     {
-        return await RelayAndWaitAsync(agentId, "file.archive_list", new { path = req.Path }, ct);
+        return await RelayAndWaitAsync(agentId, new { op = "archive_list", path = req.Path }, ct);
     }
 
-    // Streaming download: the file is fetched from the agent in chunks
-    // (default 2 MB per relay round-trip) and written straight to the HTTP
-    // response body — neither the server nor the agent ever holds the whole
-    // file in memory, and each WS frame stays well under the 4 MB cap.
+    // Streaming download: fetched from the agent in chunks via task relay
+    // (default 2 MB per round-trip) and written straight to the HTTP response
+    // body — neither the server nor the agent ever holds the whole file.
     private const int DownloadChunkSize = 2 * 1024 * 1024;
     private const int DownloadTimeoutSeconds = 30;
 
@@ -129,17 +124,13 @@ public class FilesController : ControllerBase
 
         // First chunk doubles as a probe: errors surface as a normal 4xx.
         var first = await _relay.RelayAndWaitAsync(
-            agentId, "file.download",
-            new { path = agentPath, offset = 0L, chunkSize = DownloadChunkSize },
+            agentId, "files",
+            new { op = "download", path = agentPath, offset = 0L, chunkSize = DownloadChunkSize },
             ct, TimeSpan.FromSeconds(DownloadTimeoutSeconds));
         if (first == null)
             return StatusCode(504, new { error = "Agent did not respond in time." });
 
-        var firstJson = first.Data != null ? first.Data.Value.GetRawText() : null;
-        if (firstJson == null)
-            return StatusCode(502, new { error = "Empty agent response." });
-
-        using var firstDoc = JsonDocument.Parse(firstJson);
+        using var firstDoc = JsonDocument.Parse(first);
         if (firstDoc.RootElement.TryGetProperty("error", out var errProp))
             return BadRequest(new { error = errProp.GetString() ?? "unknown error" });
 
@@ -157,13 +148,13 @@ public class FilesController : ControllerBase
         while (!done)
         {
             var next = await _relay.RelayAndWaitAsync(
-                agentId, "file.download",
-                new { path = agentPath, offset, chunkSize = DownloadChunkSize },
+                agentId, "files",
+                new { op = "download", path = agentPath, offset, chunkSize = DownloadChunkSize },
                 ct, TimeSpan.FromSeconds(DownloadTimeoutSeconds));
-            if (next?.Data == null)
+            if (next == null)
                 break; // stream already started — nothing else we can do
 
-            using var doc = JsonDocument.Parse(next.Data.Value.GetRawText());
+            using var doc = JsonDocument.Parse(next);
             if (doc.RootElement.TryGetProperty("error", out _))
                 break;
 
@@ -186,8 +177,6 @@ public class FilesController : ControllerBase
     }
 }
 
-// ── Request DTOs ─────────────────────────────────────────────────────────────
-
 public record ListRequest(string Path, int Offset = 0, int Limit = 200);
 public record ReadRequest(string Path);
 public record WriteRequest(string Path, string Content);
@@ -197,5 +186,5 @@ public record RenameRequest(string Path, string NewName);
 public record MoveRequest(string Source, string Destination);
 public record CopyRequest(string Source, string Destination);
 public record CompressRequest(string Path);
-public record DecompressRequest(string Path, string? Destination = null);
+public record DecompressRequest(string Path, string? Destination);
 public record ShortcutRequest(string Path);

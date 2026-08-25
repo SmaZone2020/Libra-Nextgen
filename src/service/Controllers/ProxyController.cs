@@ -2,7 +2,6 @@ using System.Text;
 using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using LibraNextgen.Common.Protocol;
 using LibraNextgen.Service.Services;
 
 namespace LibraNextgen.Service.Controllers;
@@ -19,26 +18,25 @@ public class ProxyController : ControllerBase
         _relay = relay;
     }
 
-    private async Task<IActionResult> RelayAndWaitAsync(string agentId, string messageType, object? data, CancellationToken ct)
+    /// <summary>任务化 relay：返回 agent 输出 JSON 文本（字符串）。</summary>
+    private async Task<string?> RelayAsync(string agentId, object data, CancellationToken ct)
     {
-        var response = await _relay.RelayAndWaitAsync(agentId, messageType, data, ct);
-        if (response == null)
-            return StatusCode(504, new { error = "Agent did not respond in time." });
-        return response.Data != null
-            ? Content(response.Data.Value.GetRawText(), "application/json")
-            : Ok(new { status = "ok" });
+        return await _relay.RelayAndWaitAsync(agentId, "proxy", data, ct);
     }
 
     [HttpPost("{agentId}/fetch")]
     public async Task<IActionResult> Fetch(string agentId, [FromBody] ProxyFetchRequest req, CancellationToken ct)
     {
-        return await RelayAndWaitAsync(agentId, "proxy.fetch", new
+        var response = await RelayAsync(agentId, new
         {
             url = req.Url,
             method = req.Method ?? "GET",
             headers = req.Headers,
             body = req.Body
         }, ct);
+        if (response == null)
+            return StatusCode(504, new { error = "Agent did not respond in time." });
+        return Content(response, "application/json");
     }
 
     [HttpGet("{agentId}/resource")]
@@ -50,31 +48,28 @@ public class ProxyController : ControllerBase
         [FromQuery] string? headers = null,
         CancellationToken ct = default)
     {
-        var result = await RelayAndWaitAsync(agentId, "proxy.fetch", new
+        var result = await RelayAsync(agentId, new
         {
             url,
             method = method ?? "GET",
             headers,
             body
         }, ct);
+        if (result == null)
+            return StatusCode(504, new { error = "Agent did not respond in time." });
 
-        if (result is ContentResult content)
-        {
-            var doc = JsonDocument.Parse(content.Content!);
-            if (doc.RootElement.TryGetProperty("error", out var errProp))
-                return BadRequest(new { error = errProp.GetString() });
+        using var doc = JsonDocument.Parse(result);
+        if (doc.RootElement.TryGetProperty("error", out var errProp))
+            return BadRequest(new { error = errProp.GetString() });
 
-            var bodyBase64 = doc.RootElement.GetProperty("body").GetString();
-            if (string.IsNullOrEmpty(bodyBase64))
-                return StatusCode(doc.RootElement.GetProperty("status").GetInt32());
+        var bodyBase64 = doc.RootElement.GetProperty("body").GetString();
+        if (string.IsNullOrEmpty(bodyBase64))
+            return StatusCode(doc.RootElement.GetProperty("status").GetInt32());
 
-            var contentType = "application/octet-stream";
-            try { contentType = doc.RootElement.GetProperty("contentType").GetString() ?? contentType; } catch { }
+        var contentType = "application/octet-stream";
+        try { contentType = doc.RootElement.GetProperty("contentType").GetString() ?? contentType; } catch { }
 
-            return File(Convert.FromBase64String(bodyBase64), contentType);
-        }
-
-        return result;
+        return File(Convert.FromBase64String(bodyBase64), contentType);
     }
 
     // Reverse proxy: /api/proxy/{agentId}/{token}/p/{scheme}/{host}/{**path}
@@ -108,7 +103,7 @@ public class ProxyController : ControllerBase
             if (ms.Length > 0) bodyB64 = Convert.ToBase64String(ms.ToArray());
         }
 
-        var response = await _relay.RelayAndWaitAsync(agentId, "proxy.fetch", new
+        var response = await RelayAsync(agentId, new
         {
             url = targetUrl,
             method = Request.Method,
@@ -117,16 +112,16 @@ public class ProxyController : ControllerBase
         }, ct);
 
         if (response == null) return StatusCode(504, new { error = "Agent did not respond in time." });
-        if (response.Data == null) return Ok(new { status = "ok" });
 
-        var data = response.Data.Value;
-        if (data.TryGetProperty("error", out var errProp))
+        using var doc = JsonDocument.Parse(response);
+        var root = doc.RootElement;
+        if (root.TryGetProperty("error", out var errProp))
             return StatusCode(502, errProp.GetString());
 
-        var status = data.GetProperty("status").GetInt32();
-        var contentType = data.TryGetProperty("contentType", out var ctProp) ? ctProp.GetString() ?? "application/octet-stream" : "application/octet-stream";
-        var bodyStr = data.GetProperty("body").GetString() ?? string.Empty;
-        var finalUrl = data.TryGetProperty("url", out var urlProp) ? urlProp.GetString() ?? targetUrl : targetUrl;
+        var status = root.GetProperty("status").GetInt32();
+        var contentType = root.TryGetProperty("contentType", out var ctProp) ? ctProp.GetString() ?? "application/octet-stream" : "application/octet-stream";
+        var bodyStr = root.GetProperty("body").GetString() ?? string.Empty;
+        var finalUrl = root.TryGetProperty("url", out var urlProp) ? urlProp.GetString() ?? targetUrl : targetUrl;
         var bodyBytes = Convert.FromBase64String(bodyStr);
 
         if (contentType.StartsWith("text/html", StringComparison.OrdinalIgnoreCase))

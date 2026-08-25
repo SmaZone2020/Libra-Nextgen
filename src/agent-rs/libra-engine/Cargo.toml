@@ -17,3 +17,4 @@ rand = { workspace = true }
 base64 = { workspace = true }
 libc = { workspace = true }
 portable-pty = { workspace = true }
+futures-util = { workspace = true }

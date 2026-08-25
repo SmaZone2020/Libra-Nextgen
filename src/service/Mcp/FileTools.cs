@@ -14,7 +14,7 @@ public sealed class FileTools
         [Description("Target agent ID")] string agentId,
         [Description("Directory path to list")] string path)
     {
-        return await McpUtils.RelayOrError(relay, agents, agentId, "file.list", new { path }, TimeSpan.FromSeconds(30));
+        return await McpUtils.RelayOrError(relay, agents, agentId, "files", new { op = "list", path }, TimeSpan.FromSeconds(30));
     }
 
     [McpServerTool, Description("List available disk drives on an agent")]
@@ -23,7 +23,7 @@ public sealed class FileTools
         AgentService agents,
         [Description("Target agent ID")] string agentId)
     {
-        return await McpUtils.RelayOrError(relay, agents, agentId, "file.drives", null, TimeSpan.FromSeconds(30));
+        return await McpUtils.RelayOrError(relay, agents, agentId, "files", new { op = "drives" }, TimeSpan.FromSeconds(30));
     }
 
     [McpServerTool, Description("Delete a file or directory on an agent")]
@@ -33,7 +33,7 @@ public sealed class FileTools
         [Description("Target agent ID")] string agentId,
         [Description("Path to the file or directory to delete")] string path)
     {
-        return await McpUtils.RelayOrError(relay, agents, agentId, "file.delete", new { path }, TimeSpan.FromSeconds(30));
+        return await McpUtils.RelayOrError(relay, agents, agentId, "files", new { op = "delete", path }, TimeSpan.FromSeconds(30));
     }
 
     [McpServerTool, Description("Rename a file or directory on an agent")]
@@ -44,7 +44,7 @@ public sealed class FileTools
         [Description("Current path")] string path,
         [Description("New name")] string newName)
     {
-        return await McpUtils.RelayOrError(relay, agents, agentId, "file.rename", new { path, newName }, TimeSpan.FromSeconds(30));
+        return await McpUtils.RelayOrError(relay, agents, agentId, "files", new { op = "rename", path, newName }, TimeSpan.FromSeconds(30));
     }
 
     [McpServerTool, Description("Move a file or directory on an agent")]
@@ -55,7 +55,7 @@ public sealed class FileTools
         [Description("Source path")] string source,
         [Description("Destination path")] string destination)
     {
-        return await McpUtils.RelayOrError(relay, agents, agentId, "file.move", new { source, destination }, TimeSpan.FromSeconds(30));
+        return await McpUtils.RelayOrError(relay, agents, agentId, "files", new { op = "move", path = source, destination }, TimeSpan.FromSeconds(30));
     }
 
     [McpServerTool, Description("Copy a file or directory on an agent")]
@@ -66,6 +66,6 @@ public sealed class FileTools
         [Description("Source path")] string source,
         [Description("Destination path")] string destination)
     {
-        return await McpUtils.RelayOrError(relay, agents, agentId, "file.copy", new { source, destination }, TimeSpan.FromSeconds(30));
+        return await McpUtils.RelayOrError(relay, agents, agentId, "files", new { op = "copy", path = source, destination }, TimeSpan.FromSeconds(30));
     }
 }
