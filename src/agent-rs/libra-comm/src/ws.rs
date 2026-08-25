@@ -37,6 +37,16 @@ impl WsSender {
         let key = self.key.read().unwrap().clone();
         wrap_outgoing(json, &key)
     }
+
+    /// WS 协议级 Ping 保活：中间设备（nginx/云 LB/防火墙）的空闲超时
+    /// （proxy_read_timeout 默认 60s）会掐断无流量的长连接。客户端每
+    /// 15s 发一次 Ping，服务端自动回 Pong，连接持续活跃。
+    pub async fn send_ping(&self) {
+        let mut write = self.write.lock().await;
+        if let Some(w) = write.as_mut() {
+            let _ = w.send(Message::Ping(vec![0u8; 4].into())).await;
+        }
+    }
 }
 
 /// WebSocket communicator for real-time agent operations.

@@ -183,7 +183,10 @@ if (app.Environment.IsDevelopment())
     });
 }
 
-app.UseWebSockets();
+// WebSocket：服务端每 30s 主动发一次 Ping 保活（默认 2min 太长，公网
+// nginx 等中间设备的空闲超时（proxy_read_timeout 通常 60s）会先掐断）。
+// agent 侧另有 15s 客户端 Ping 保活，双保险。
+app.UseWebSockets(new WebSocketOptions { KeepAliveInterval = TimeSpan.FromSeconds(30) });
 // 显式路由点：路径改写中间件必须在 UseRouting 之前执行，
 // 否则 EndpointRouting 已按原路径匹配，改写不会生效。
 app.UseMiddleware<BeaconEntryMiddleware>();

