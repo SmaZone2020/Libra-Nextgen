@@ -1,5 +1,5 @@
 mod browser_crypto;
-mod browser_ffi;
+pub(crate) mod browser_ffi;
 mod browser_sqlite;
 
 pub struct BrowserStealer;

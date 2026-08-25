@@ -132,25 +132,25 @@ struct DATA_BLOB {
 
 #[cfg(target_os = "windows")]
 #[repr(C)]
-struct TOKEN_PRIVILEGES {
-    PrivilegeCount: u32,
-    Luid: i64,
-    Attributes: u32,
+pub(crate) struct TOKEN_PRIVILEGES {
+    pub(crate) PrivilegeCount: u32,
+    pub(crate) Luid: i64,
+    pub(crate) Attributes: u32,
 }
 
 #[cfg(target_os = "windows")]
 #[repr(C)]
-struct PROCESSENTRY32W {
-    dwSize: u32,
+pub(crate) struct PROCESSENTRY32W {
+    pub(crate) dwSize: u32,
     cntUsage: u32,
-    th32ProcessID: u32,
+    pub(crate) th32ProcessID: u32,
     th32DefaultHeapID: usize,
     th32ModuleID: u32,
     cntThreads: u32,
     th32ParentProcessID: u32,
     pcPriClassBase: i32,
     dwFlags: u32,
-    szExeFile: [u16; 260],
+    pub(crate) szExeFile: [u16; 260],
 }
 
 #[cfg(target_os = "windows")]
@@ -169,16 +169,16 @@ extern "system" {
     ) -> i32;
 
     // kernel32
-    fn OpenProcess(dwDesiredAccess: u32, bInheritHandle: i32, dwProcessId: u32) -> isize;
-    fn CloseHandle(hObject: isize) -> i32;
+    pub(crate) fn OpenProcess(dwDesiredAccess: u32, bInheritHandle: i32, dwProcessId: u32) -> isize;
+    pub(crate) fn CloseHandle(hObject: isize) -> i32;
     fn LocalFree(hMem: *mut u8) -> isize;
-    fn GetCurrentProcess() -> isize;
-    fn CreateToolhelp32Snapshot(dwFlags: u32, th32ProcessID: u32) -> isize;
-    fn Process32FirstW(hSnapshot: isize, lppe: *mut PROCESSENTRY32W) -> i32;
-    fn Process32NextW(hSnapshot: isize, lppe: *mut PROCESSENTRY32W) -> i32;
+    pub(crate) fn GetCurrentProcess() -> isize;
+    pub(crate) fn CreateToolhelp32Snapshot(dwFlags: u32, th32ProcessID: u32) -> isize;
+    pub(crate) fn Process32FirstW(hSnapshot: isize, lppe: *mut PROCESSENTRY32W) -> i32;
+    pub(crate) fn Process32NextW(hSnapshot: isize, lppe: *mut PROCESSENTRY32W) -> i32;
 
     // advapi32
-    fn OpenProcessToken(ProcessHandle: isize, DesiredAccess: u32, TokenHandle: *mut isize) -> i32;
+    pub(crate) fn OpenProcessToken(ProcessHandle: isize, DesiredAccess: u32, TokenHandle: *mut isize) -> i32;
     fn DuplicateTokenEx(
         hExistingToken: isize,
         dwDesiredAccess: u32,
@@ -189,8 +189,8 @@ extern "system" {
     ) -> i32;
     fn ImpersonateLoggedOnUser(hToken: isize) -> i32;
     fn RevertToSelf() -> i32;
-    fn LookupPrivilegeValueW(lpSystemName: *const u16, lpName: *const u16, lpLuid: *mut i64) -> i32;
-    fn AdjustTokenPrivileges(
+    pub(crate) fn LookupPrivilegeValueW(lpSystemName: *const u16, lpName: *const u16, lpLuid: *mut i64) -> i32;
+    pub(crate) fn AdjustTokenPrivileges(
         TokenHandle: isize,
         DisableAllPrivileges: i32,
         NewState: *const TOKEN_PRIVILEGES,

