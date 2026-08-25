@@ -213,6 +213,16 @@ pub fn rsa_decrypt(data: &[u8], private_key_b64: &str) -> Result<Vec<u8>, String
         .map_err(|e| e.to_string())
 }
 
+/// 混合加密：随机 AES-256 key → RSA-OAEP 加密；明文 → AES-GCM。
+/// 返回 (RSA 加密的 AES key b64, AES 密文 b64)。
+/// 服务端用部署 RSA 私钥解出 AES key 再解密（注册/密钥协商 bootstrap 用）。
+pub fn hybrid_encrypt(plaintext: &str, public_key_b64: &str) -> Result<(String, String), String> {
+    let aes_key = generate_aes_key();
+    let enc_key = rsa_encrypt(&aes_key, public_key_b64)?;
+    let cipher = encrypt_payload(plaintext, &aes_key);
+    Ok((B64.encode(enc_key), cipher))
+}
+
 /// Generate RSA keypair, returns (public_key_b64, private_key_b64).
 pub fn generate_rsa_keypair() -> Result<(String, String), String> {
     use rsa::pkcs8::{EncodePublicKey, EncodePrivateKey};

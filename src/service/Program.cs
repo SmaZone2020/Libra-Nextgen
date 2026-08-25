@@ -20,6 +20,7 @@ var builder = WebApplication.CreateBuilder(args);
 // MongoDB
 builder.Services.Configure<MongoSettings>(builder.Configuration.GetSection(MongoSettings.SectionName));
 builder.Services.AddSingleton<MongoDbContext>();
+builder.Services.AddSingleton<ServerKeyService>();
 builder.Services.AddSingleton<MongoIndexBuilder>();
 
 // Beacon authentication (shared secret injected at build time)

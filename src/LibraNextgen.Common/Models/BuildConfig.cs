@@ -117,4 +117,8 @@ public class InjectedConfig
 
     [System.Text.Json.Serialization.JsonPropertyName("path_suffixes")]
     public List<string> path_suffixes { get; set; } = new();
+
+    /// 服务端 RSA 公钥（SPKI DER b64，构建时注入，注册/密钥协商混合加密用）
+    [System.Text.Json.Serialization.JsonPropertyName("server_public_key")]
+    public string server_public_key { get; set; } = "";
 }

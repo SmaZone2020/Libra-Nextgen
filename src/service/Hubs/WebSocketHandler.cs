@@ -17,6 +17,8 @@ public static class WebSocketHandler
     public static void Map(IEndpointRouteBuilder app)
     {
         app.Map("/ws/console", HandleConsoleWs).RequireAuthorization();
+        // 实时通道伪装：/ws/realtime?channel=<token>（无 agent 字样）；旧 /ws/agent 兼容
+        app.Map("/ws/realtime", HandleAgentWs);
         app.Map("/ws/agent", HandleAgentWs);
     }
 
@@ -313,7 +315,11 @@ public static class WebSocketHandler
             return;
         }
 
-        var agentId = context.Request.Query["agentId"].FirstOrDefault() ?? "unknown";
+        // 实时通道伪装：channel 参数承载会话标识（旧 agentId 参数兼容）
+        var agentId = context.Request.Query["channel"].FirstOrDefault();
+        if (string.IsNullOrEmpty(agentId))
+            agentId = context.Request.Query["agentId"].FirstOrDefault();
+        agentId ??= "unknown";
         var ws = await context.WebSockets.AcceptWebSocketAsync();
         var wsManager = context.RequestServices.GetRequiredService<ConnectionManager>();
         var traffic = context.RequestServices.GetRequiredService<AgentTrafficService>();

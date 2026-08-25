@@ -314,6 +314,9 @@ pub struct InjectedConfig {
     /// 虚假业务路径后缀列表（构建页面编辑注入）。
     #[serde(default, alias = "path_suffixes")]
     pub path_suffixes: Vec<String>,
+    /// 服务端 RSA 公钥（SPKI DER b64，构建时注入）：注册/密钥协商混合加密用。
+    #[serde(default, alias = "server_public_key")]
+    pub server_public_key: String,
 }
 
 fn default_core_key_path() -> String {

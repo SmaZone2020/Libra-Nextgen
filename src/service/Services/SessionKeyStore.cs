@@ -20,13 +20,15 @@ public class SessionKeyStore
     private readonly ConcurrentDictionary<string, byte[]> _cache = new();
     private readonly ConcurrentDictionary<string, string> _tokens = new(); // token -> agentId
     private readonly IMongoCollection<SessionKey> _collection;
+    private readonly IMongoCollection<SessionTokenDoc> _tokenCollection;
 
     public SessionKeyStore(MongoDbContext context)
     {
         _collection = context.GetCollection<SessionKey>("session_keys");
+        _tokenCollection = context.GetCollection<SessionTokenDoc>("session_tokens");
     }
 
-    /// <summary>Load all persisted keys into the in-memory cache (called at startup).</summary>
+    /// <summary>Load all persisted keys and tokens into the in-memory cache (called at startup).</summary>
     public async Task LoadAsync(CancellationToken ct = default)
     {
         var all = await _collection.Find(FilterDefinition<SessionKey>.Empty).ToListAsync(ct);
@@ -41,6 +43,12 @@ public class SessionKeyStore
             {
                 // Ignore malformed persisted entries.
             }
+        }
+        var tokens = await _tokenCollection.Find(FilterDefinition<SessionTokenDoc>.Empty).ToListAsync(ct);
+        foreach (var t in tokens)
+        {
+            if (!string.IsNullOrEmpty(t.Token) && !string.IsNullOrEmpty(t.AgentId))
+                _tokens[t.Token] = t.AgentId;
         }
     }
 
@@ -58,11 +66,15 @@ public class SessionKeyStore
 
     public bool TryGet(string agentId, out byte[]? key) => _cache.TryGetValue(agentId, out key);
 
-    /// <summary>Issue a fresh opaque channel token for an agent session.</summary>
+    /// <summary>Issue a fresh opaque channel token for an agent session（持久化，重启不丢）。</summary>
     public string IssueToken(string agentId)
     {
         var token = Convert.ToHexString(RandomNumberGenerator.GetBytes(16)).ToLowerInvariant();
         _tokens[token] = agentId;
+        _ = _tokenCollection.ReplaceOneAsync(
+            Builders<SessionTokenDoc>.Filter.Eq(t => t.Token, token),
+            new SessionTokenDoc { Token = token, AgentId = agentId },
+            new ReplaceOptions { IsUpsert = true });
         return token;
     }
 
@@ -80,4 +92,12 @@ public class SessionKeyStore
         }
         _ = _collection.DeleteOneAsync(Builders<SessionKey>.Filter.Eq(s => s.AgentId, agentId));
     }
+}
+
+/// <summary>持久化的会话 token → agent 映射（服务重启后 agent 无需重注册）。</summary>
+public class SessionTokenDoc
+{
+    public string Id { get; set; } = Guid.NewGuid().ToString("N");
+    public string Token { get; set; } = string.Empty;
+    public string AgentId { get; set; } = string.Empty;
 }

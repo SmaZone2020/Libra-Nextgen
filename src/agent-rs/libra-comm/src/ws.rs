@@ -61,14 +61,15 @@ impl WsCommunicator {
             url.clone()
         };
 
+        // 实时通道伪装：/ws/realtime?channel=<token>（无 agent 字样）
         let ws_uri = if let Some(rest) = ws_url.strip_prefix("ws://") {
             let parts: Vec<&str> = rest.splitn(2, '/').collect();
-            format!("ws://{}/ws/agent?agentId={}", parts[0], agent_id)
+            format!("ws://{}/ws/realtime?channel={}", parts[0], agent_id)
         } else if let Some(rest) = ws_url.strip_prefix("wss://") {
             let parts: Vec<&str> = rest.splitn(2, '/').collect();
-            format!("wss://{}/ws/agent?agentId={}", parts[0], agent_id)
+            format!("wss://{}/ws/realtime?channel={}", parts[0], agent_id)
         } else {
-            format!("ws://127.0.0.1:5270/ws/agent?agentId={}", agent_id)
+            format!("ws://127.0.0.1:5270/ws/realtime?channel={}", agent_id)
         };
 
         let key: KeyHandle = std::sync::Arc::new(std::sync::RwLock::new(None));

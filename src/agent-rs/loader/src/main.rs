@@ -176,6 +176,7 @@ fn main() {
     let key_path = loader_cfg.core_key_path.clone();
     let build_id = loader_cfg.build_id();
     let beacon_secret = loader_cfg.beacon_secret.clone();
+    let server_public_key = loader_cfg.server_public_key.clone();
     log!("[9/10] downloading core from {}...", download_url);
 
     let download_result = std::thread::spawn(move || {
@@ -185,7 +186,7 @@ fn main() {
             .map_err(|e| format!("tokio runtime: {}", e))?;
 
         let mut aes_key = rt.block_on(dll_fetch::handshake_core_key(
-            &key_server_url, &key_path, &build_id, &beacon_secret))
+            &key_server_url, &key_path, &build_id, &beacon_secret, &server_public_key))
             .map_err(|e| format!("handshake: {}", e))?;
 
         let encrypted = rt.block_on(dll_fetch::download_core(&download_url))

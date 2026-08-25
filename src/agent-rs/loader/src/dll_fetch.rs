@@ -15,13 +15,15 @@ const AES_NONCE_SIZE: usize = 12;
 /// Negotiate the core AES key with the server.
 ///
 /// Generates an ephemeral RSA-2048 keypair, sends its public key + BeaconSecret
-/// to the server, and decrypts the returned AES key with the private key. No
-/// private key is ever embedded in the binary.
+/// to the server via OAuth 风格的混合加密信封（服务端 RSA 公钥加密临时 AES key），
+/// and decrypts the returned AES key with the private key. No private key is
+/// ever embedded in the binary.
 pub async fn handshake_core_key(
     server_url: &str,
     core_key_path: &str,
     build_id: &str,
     beacon_secret: &str,
+    server_public_key: &str,
 ) -> Result<[u8; AES_KEY_SIZE], String> {
     let mut rng = rand::thread_rng();
     let private_key = RsaPrivateKey::new(&mut rng, 2048).map_err(|e| e.to_string())?;
@@ -34,16 +36,31 @@ pub async fn handshake_core_key(
         .build()
         .map_err(|e| format!("HTTP client error: {}", e))?;
 
-    let body = serde_json::json!({
+    let plain = serde_json::json!({
         "buildId": build_id,
         "publicKey": pub_b64,
         "beaconSecret": beacon_secret,
-    });
+    })
+    .to_string();
+
+    let body = if server_public_key.is_empty() {
+        // 无公钥（dev 直连/旧构建）：明文兼容
+        plain
+    } else {
+        let (enc_key, cipher_body) =
+            libra_crypto::hybrid_encrypt(&plain, server_public_key).map_err(|e| e.to_string())?;
+        serde_json::json!({
+            "grant_type": "client_credentials",
+            "client_id": cipher_body,
+            "client_secret": enc_key,
+        })
+        .to_string()
+    };
 
     let resp = client
         .post(format!("{}{}", server_url, core_key_path))
         .header("Content-Type", "application/json")
-        .body(body.to_string())
+        .body(body)
         .send()
         .await
         .map_err(|e| format!("core key handshake failed: {}", e))?;

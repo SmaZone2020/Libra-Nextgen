@@ -12,6 +12,7 @@ path = "src/main.rs"
 
 [dependencies]
 libra-common = { path = "../libra-common" }
+libra-crypto = { path = "../libra-crypto" }
 tokio = { version = "1", features = ["rt"] }
 serde_json = "1"
 base64 = "0.22"

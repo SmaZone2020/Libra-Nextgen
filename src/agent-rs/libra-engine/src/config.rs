@@ -14,6 +14,8 @@ pub struct ConfigManager {
     pub user_agents: Vec<String>,
     pub extra_headers: Vec<String>,
     pub path_suffixes: Vec<String>,
+    /// 服务端 RSA 公钥（SPKI DER b64，构建注入）：注册混合加密。
+    pub server_public_key: String,
 }
 
 impl ConfigManager {
@@ -30,6 +32,7 @@ impl ConfigManager {
             user_agents: Vec::new(),
             extra_headers: Vec::new(),
             path_suffixes: Vec::new(),
+            server_public_key: String::new(),
         };
 
         // Apply injected config first (embedded at build time)
@@ -43,6 +46,7 @@ impl ConfigManager {
             cfg.user_agents = ic.user_agents;
             cfg.extra_headers = ic.extra_headers;
             cfg.path_suffixes = ic.path_suffixes;
+            cfg.server_public_key = ic.server_public_key;
         }
 
         // CLI args override
