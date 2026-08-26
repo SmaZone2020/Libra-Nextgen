@@ -31,7 +31,7 @@ cd src/webapp && npm install && npm run dev
 # 3. 载荷：Console 的 Builder 页在线构建 Win/Linux 载荷（交叉构建需 zig 工具链）
 ```
 
-三条路：**上传插件**（zip）/ **从 Git 导入**（Git 链接）/ **插件市场**（Libra-Plugins 仓库一键安装，走 GitHub raw 直连 + 1h 浏览器缓存）。
+三条路：**上传插件**（zip）/ **从 Git 导入**（[插件开发脚手架](https://github.com/SmaZone2020/Libra-Plugin-Template) 链接）/ **插件市场**（[Libra-Plugins](https://github.com/SmaZone2020/Libra-Plugins) 官方仓库一键安装，走 GitHub raw 直连 + 1h 浏览器缓存）。
 
 ## 核心功能
 
@@ -50,7 +50,12 @@ cd src/webapp && npm install && npm run dev
 | [部署与构建](docs/zh/部署与构建.md) | Server/Console 部署、Builder 在线构建、Win/Linux 交叉编译、插件模块 stage |
 | [操作手册](docs/zh/操作手册.md) | Agent 上线、插件市场/上传/Git 导入、Shell/文件/MCP 使用、审计与风险策略 |
 
-> 完整文档同步发布在 [GitHub Wiki](https://github.com/SmaZone2020/Libra-Nextgen/wiki)（中英）。
+## 相关仓库
+
+| 仓库 | 说明 |
+| --- | --- |
+| [Libra-Plugin-Template](https://github.com/SmaZone2020/Libra-Plugin-Template) | 插件开发脚手架：`meta.json` 契约 + `module/`（Agent 端脚本）+ `service/`（服务端 C#）+ `page/`（前端页面），`npm run pack` 一键打包 |
+| [Libra-Plugins](https://github.com/SmaZone2020/Libra-Plugins) | 官方插件仓库：按 `plugins/<pluginId>/` 存放打包 zip，`index.json` 由 CI 自动重建，作为 Console「插件市场」的安装源 |
 
 ## 许可证
 

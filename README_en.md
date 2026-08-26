@@ -32,7 +32,7 @@ cd src/webapp && npm install && npm run dev
 #    (cross-builds need the zig toolchain)
 ```
 
-Three plugin channels: **Upload** (zip) / **Import from Git** (a Git URL) / **Plugin Market** (Libra-Plugins repo, one-click install — fetched directly from GitHub raw with a 1h browser cache).
+Three plugin channels: **Upload** (zip) / **Import from Git** (e.g. the [plugin scaffold repo](https://github.com/SmaZone2020/Libra-Plugin-Template)) / **Plugin Market** (the [Libra-Plugins](https://github.com/SmaZone2020/Libra-Plugins) official repo — one-click install, fetched directly from GitHub raw with a 1h browser cache).
 
 ## Core Features
 
@@ -51,7 +51,12 @@ Three plugin channels: **Upload** (zip) / **Import from Git** (a Git URL) / **Pl
 | [Deployment & Building](docs/en/deployment.md) | Server/Console setup, Builder, Win/Linux cross-compile, plugin module staging |
 | [Operations](docs/en/operations.md) | Agent onboarding, market/upload/Git installs, Shell/files/MCP usage, audit & risk policy |
 
-> Full docs are also published to the [GitHub Wiki](https://github.com/SmaZone2020/Libra-Nextgen/wiki) (zh + en).
+## Related Repositories
+
+| Repository | Description |
+| --- | --- |
+| [Libra-Plugin-Template](https://github.com/SmaZone2020/Libra-Plugin-Template) | Plugin development scaffold: `meta.json` contract + `module/` (Agent-side scripts) + `service/` (server-side C#) + `page/` (frontend page), one-click `npm run pack` |
+| [Libra-Plugins](https://github.com/SmaZone2020/Libra-Plugins) | Official plugin repository: packaged zips under `plugins/<pluginId>/`, `index.json` rebuilt automatically by CI — the install source for the Console's Plugin Market |
 
 ## License
 
