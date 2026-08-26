@@ -41,7 +41,7 @@ cd src/webapp && npm install && npm run dev
 #    (cross-builds need the zig toolchain)
 ```
 
-Three plugin channels: **Upload** (zip) / **Import from Git** (e.g. the [plugin scaffold repo](https://github.com/SmaZone2020/Libra-Plugin-Template)) / **Plugin Market** (the [Libra-Plugins](https://github.com/SmaZone2020/Libra-Plugins) official repo — direct install, fetched from GitHub raw with a 1-hour browser cache and a manual refresh button).
+Plugin installation: **Upload** (zip) / **Import from Git** (e.g. the [plugin scaffold repo](https://github.com/SmaZone2020/Libra-Plugin-Template)) / **Plugin Market** (the [Libra-Plugins](https://github.com/SmaZone2020/Libra-Plugins) official repository, online install).
 
 ## Core Features
 
@@ -51,7 +51,7 @@ Three plugin channels: **Upload** (zip) / **Import from Git** (e.g. the [plugin 
 - **Recon**: system & hardware fingerprinting, network + GeoIP, WiFi / LAN / Bluetooth scanning, processes / windows / accounts
 - **Credentials**: browser passwords, RDP credentials, SSH keys, WeChat data, AI tool API keys (plugin)
 - **Proxy**: Socks proxy module + ProxyBrowser for browsing intranet web apps
-- **Plugin system**: upload zip / Git import / Plugin Market (GitHub raw + 1-hour browser cache + manual refresh)
+- **Plugin system**: upload zip / Git import / Plugin Market with online install & update
 - **Builder**: online Win/Linux payload builds, per-module enable switches, one-liner delivery (PowerShell/Cmd/Bash commands, LNK packaging, anonymous download links)
 - **MCP**: built-in MCP server (Streamable HTTP at `/mcp`, toggleable) — AI clients can drive every C2 capability
 - **Console**: ECharts dashboard (traffic charts/map), configurable backend address, reconnect handling, audit logs, risk policy
@@ -64,13 +64,7 @@ Three plugin channels: **Upload** (zip) / **Import from Git** (e.g. the [plugin 
 | Linux x64 | Cross-compilation passes; runtime verification pending |
 | Windows x86 | Unsupported (no 32-bit indirect syscall implementation; disabled in Builder) |
 
-See the [platform support matrix](docs/平台支持矩阵.md) (verified records).
-
-## Quality Assurance
-
-- **CI** (GitHub Actions, `.github/workflows/ci.yml`): Rust (fmt + workspace tests), .NET (build + format check + MongoDB integration tests), WebApp (typecheck + Vitest + build)
-- **Tests**: Rust unit/integration tests, `src/tests/LibraNextgen.Tests` server integration tests, `src/webapp` Vitest component tests
-- **Regression**: `scripts/e2e/` automated regression suite (agent protocol / module management / traffic profiles / download formats — 14 scenarios), run via `run-all.ps1`
+See the [platform support matrix](docs/平台支持矩阵.md).
 
 ## Docs
 

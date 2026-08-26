@@ -38,7 +38,7 @@ cd src/webapp && npm install && npm run dev
 # 3. 载荷：Console 的 Builder 页在线构建 Win/Linux 载荷（交叉构建需 zig 工具链）
 ```
 
-三条插件入口：**上传插件**（zip）/ **从 Git 导入**（[插件开发脚手架](https://github.com/SmaZone2020/Libra-Plugin-Template)）/ **插件市场**（[Libra-Plugins](https://github.com/SmaZone2020/Libra-Plugins) 官方仓库直接安装，浏览器直连 GitHub raw + 1 小时缓存，支持手动刷新）。
+插件安装途径：**上传**（zip 包）/ **从 Git 导入**（[插件开发脚手架](https://github.com/SmaZone2020/Libra-Plugin-Template)）/ **插件市场**（[Libra-Plugins](https://github.com/SmaZone2020/Libra-Plugins) 官方仓库在线安装）。
 
 ## 核心功能
 
@@ -48,7 +48,7 @@ cd src/webapp && npm install && npm run dev
 - **侦查**：系统/硬件指纹、网络与 GeoIP、WiFi/LAN/蓝牙扫描、进程/窗口/账户
 - **凭据**：浏览器密码、RDP 凭证、SSH 密钥、微信数据、AI 工具 API Key（插件）
 - **代理**：Socks 代理模块 + ProxyBrowser 内网 Web 浏览
-- **插件体系**：上传 zip / Git 导入 / 插件市场（GitHub raw 直连 + 1 小时浏览器缓存 + 手动刷新按钮）
+- **插件体系**：上传 zip / Git 导入 / 插件市场在线安装与更新
 - **Builder**：在线构建 Win/Linux 载荷、模块启用开关、投递（PowerShell/Cmd/Bash 命令、LNK 打包、匿名下载链接）
 - **MCP**：内置 MCP 服务器（Streamable HTTP，`/mcp`，可开关），AI 客户端可直接调用全部 C2 功能
 - **Console**：ECharts 仪表盘（流量图/地图）、后端地址可配置、断线重连、审计日志、风险策略
@@ -61,13 +61,7 @@ cd src/webapp && npm install && npm run dev
 | Linux x64 | 交叉编译通过，运行时待验证 |
 | Windows x86 | 不支持（无 32 位间接 Syscall 实现，Builder 已禁用） |
 
-详见 [平台支持矩阵](docs/平台支持矩阵.md)（实测记录）。
-
-## 质量保障
-
-- **CI**（GitHub Actions，`.github/workflows/ci.yml`）：Rust（fmt + workspace 测试）、.NET（构建 + format 校验 + MongoDB 集成测试）、WebApp（typecheck + Vitest + 构建）
-- **测试**：Rust 单元/集成测试、`src/tests/LibraNextgen.Tests` 服务端集成测试、`src/webapp` Vitest 组件测试
-- **回归**：`scripts/e2e/` 自动化回归套件（Agent 协议/模块管理/流量伪装/下载格式等 14 项场景），`run-all.ps1` 执行
+详见 [平台支持矩阵](docs/平台支持矩阵.md)。
 
 ## 文档
 
