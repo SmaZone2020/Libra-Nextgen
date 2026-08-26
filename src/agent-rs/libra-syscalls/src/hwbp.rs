@@ -197,7 +197,7 @@ pub unsafe fn install_amsi_etw_bypass() -> Result<(), &'static str> {
     Ok(())
 }
 
-#[cfg(test)]
+#[cfg(all(test, windows))]
 mod tests {
     use super::*;
 

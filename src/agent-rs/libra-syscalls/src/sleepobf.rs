@@ -391,7 +391,7 @@ unsafe fn nt_wait_single(handle: usize) -> i32 {
     crate::invoke::nt_wait_for_single_object(handle, 0, core::ptr::null_mut())
 }
 
-#[cfg(test)]
+#[cfg(all(test, windows))]
 mod tests {
     use super::*;
 

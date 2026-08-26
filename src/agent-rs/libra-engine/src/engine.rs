@@ -311,11 +311,17 @@ impl AgentEngine {
         });
 
         // ── 主循环：等待重注册信号（SESSION_LOST）──
+        // 循环体所有分支都 return（有意挂起直到信号/退出），clippy never_loop 属误报
+        #[allow(clippy::never_loop)]
         loop {
             tokio::select! {
                 _ = reconnect_rx.recv() => {
                     libra_common::dlog!("[INFO] re-registering with server");
                     return Err("SESSION_LOST".into());
+                }
+                _ = tokio::signal::ctrl_c() => {
+                    libra_common::dlog!("[INFO] ctrl-c received — shutting down");
+                    return Ok(());
                 }
             }
         }
