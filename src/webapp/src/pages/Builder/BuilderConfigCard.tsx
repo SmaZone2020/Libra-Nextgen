@@ -1,22 +1,48 @@
-﻿import { useRef, useState } from 'react';
+﻿import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Button, Card, Input, Label, NumberField, Spinner, TextField } from '@heroui/react';
+import {
+  Button,
+  Card,
+  ComboBox,
+  Input,
+  Label,
+  ListBox,
+  NumberField,
+  Spinner,
+  TextField,
+} from '@heroui/react';
 import { Picture } from '@gravity-ui/icons';
 import { uploadIcon } from '../../api/build';
+import { loadBuildPresets } from '../../utils/buildPresets';
 import type { BuildConfigRequest } from '../../types/models';
+import type { BuildPreset } from '../../utils/buildPresets';
 
 interface BuilderConfigCardProps {
   config: BuildConfigRequest;
   set: <K extends keyof BuildConfigRequest>(key: K, value: BuildConfigRequest[K]) => void;
+  /** 整体替换配置（选中历史预设时快速填充所有字段）。 */
+  applyConfig: (config: BuildConfigRequest) => void;
 }
 
-export function BuilderConfigCard({ config, set }: BuilderConfigCardProps) {
+export function BuilderConfigCard({ config, set, applyConfig }: BuilderConfigCardProps) {
   const { t } = useTranslation();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [iconUploading, setIconUploading] = useState(false);
   const [iconPreview, setIconPreview] = useState<string | null>(null);
+  const [presets, setPresets] = useState<BuildPreset[]>([]);
   // PE icon/metadata embedding is Windows-only; hide for Linux targets.
   const isLinux = config.platform === 'linux-x64';
+
+  useEffect(() => {
+    setPresets(loadBuildPresets());
+  }, []);
+
+  /** 下拉项按 IP 过滤（仅过滤主机地址）。 */
+  const filteredPresets = useMemo(() => {
+    const q = config.serverHost.trim().toLowerCase();
+    if (!q) return presets;
+    return presets.filter((p) => p.config.serverHost.toLowerCase().includes(q));
+  }, [presets, config.serverHost]);
 
   const handleIconUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -40,15 +66,34 @@ export function BuilderConfigCard({ config, set }: BuilderConfigCardProps) {
     <Card className="p-4">
       <h2 className="text-lg font-semibold mb-3">{t('builder.connection')}</h2>
       <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
-        <TextField
+        <ComboBox
           className="col-span-2"
-          value={config.serverHost}
           variant="secondary"
-          onChange={(v) => set('serverHost', v)}
+          inputValue={config.serverHost}
+          allowsCustomValue
+          onInputChange={(v) => set('serverHost', v)}
+          onSelectionChange={(key) => {
+            if (key == null) return;
+            const preset = presets.find((p) => p.id === key);
+            if (preset) applyConfig({ ...preset.config });
+          }}
         >
           <Label>{t('builder.serverHost')}</Label>
-          <Input variant="secondary" placeholder="127.0.0.1" />
-        </TextField>
+          <ComboBox.InputGroup>
+            <Input variant="secondary" placeholder="127.0.0.1" />
+            <ComboBox.Trigger />
+          </ComboBox.InputGroup>
+          <ComboBox.Popover>
+            <ListBox>
+              {filteredPresets.map((p) => (
+                <ListBox.Item key={p.id} id={p.id} textValue={p.config.serverHost}>
+                  <span className="font-mono text-xs">{p.config.serverHost}:{p.config.serverPort}</span>
+                  <ListBox.ItemIndicator />
+                </ListBox.Item>
+              ))}
+            </ListBox>
+          </ComboBox.Popover>
+        </ComboBox>
         <NumberField
           className="w-full max-w-64"
           value={config.serverPort}

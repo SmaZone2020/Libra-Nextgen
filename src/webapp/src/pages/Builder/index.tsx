@@ -28,6 +28,7 @@ import { BuilderHistoryPanel } from './BuilderHistoryPanel';
 import { BuilderModals } from './BuilderModals';
 import { BuilderOptionsCard } from './BuilderOptionsCard';
 import { BuilderTrafficCard } from './BuilderTrafficCard';
+import { saveBuildPreset } from '../../utils/buildPresets';
 import { DEFAULT_CONFIG } from './constants';
 
 export default function BuilderPage() {
@@ -42,6 +43,8 @@ export default function BuilderPage() {
   const [elapsed, setElapsed] = useState(0);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const lastBuildResultRef = useRef<string | null>(null);
+  /** 最近一次成功构建的最终配置（SSE done 时用于保存预设）。 */
+  const finalConfigRef = useRef<BuildConfigRequest | null>(null);
   const esRef = useRef<EventSource | null>(null);
 
   // History
@@ -140,6 +143,9 @@ export default function BuilderPage() {
   const set = <K extends keyof BuildConfigRequest>(key: K, value: BuildConfigRequest[K]) =>
     setConfig((c) => ({ ...c, [key]: value }));
 
+  /** 选中历史预设时整体替换配置（不丢失其他页面状态）。 */
+  const applyConfig = (next: BuildConfigRequest) => setConfig(next);
+
   const handleBuild = async () => {
     setBuilding(true);
     setError(null);
@@ -165,6 +171,7 @@ export default function BuilderPage() {
         pathSuffixes: (trafficLists?.pathSuffixes ?? []).filter(i => i.enabled).map(i => i.value),
         enabledModules: activeModules(),
       };
+      finalConfigRef.current = finalConfig;
       const id = await startBuild(finalConfig);
       streamBuild(id);
     } catch (err: unknown) {
@@ -205,6 +212,7 @@ export default function BuilderPage() {
             esRef.current = null;
             if (lastBuildResultRef.current === 'completed') {
               setBuildSucceeded(true);
+              saveBuildPreset(finalConfigRef.current ?? config);
             }
             setBuilding(false);
             setModulesBuilding(false);
@@ -327,7 +335,7 @@ export default function BuilderPage() {
     <div className="flex flex-col lg:flex-row gap-4 max-w-6xl mx-auto items-start">
       {/* Left: Build Config */}
       <div className="flex-1 space-y-4">
-        <BuilderConfigCard config={config} set={set} />
+        <BuilderConfigCard config={config} set={set} applyConfig={applyConfig} />
         {/* 连接参数（流量伪装）：独立卡片，置于目标平台上方 */}
         <BuilderConnectionCard config={config} set={set} />
         <BuilderOptionsCard config={config} set={set} />
