@@ -125,12 +125,15 @@ export async function importPlugin(file: File, enable: boolean): Promise<PluginR
 // ── Plugin marketplace (GitHub raw, fetched directly from the browser) ──
 
 /**
- * Raw base URL of the plugin market repository (Libra-Plugins).
+ * Standard GitHub raw base URL of the plugin market repository.
+ * The index `file` field is now repo-root-relative (plugins/<id>/<name>.zip),
+ * so `${PLUGIN_MARKET_BASE}/${file}` downloads the zip directly:
+ *   https://github.com/SmaZone2020/Libra-Plugins/raw/refs/heads/main/plugins/<id>/<name>.zip
  * Override with VITE_PLUGIN_MARKET_BASE at build time if the repo moves.
  */
 const PLUGIN_MARKET_BASE =
   import.meta.env.VITE_PLUGIN_MARKET_BASE ||
-  'https://raw.githubusercontent.com/SmaZone2020/Libra-Plugins/refs/heads/main';
+  'https://raw.githubusercontent.com/SmaZone2020/Libra-Plugins/refs/heads/main/';
 
 const REGISTRY_CACHE_KEY = 'libra.plugin.registry';
 const REGISTRY_TTL_MS = 60 * 60 * 1000; // 1 hour
@@ -178,10 +181,14 @@ export async function getPluginRegistry(options?: { force?: boolean }): Promise<
 
 /** Download a marketplace archive from GitHub raw and import it. */
 export async function installPluginFromRegistry(file: string): Promise<PluginRecord> {
-  const res = await fetch(`${PLUGIN_MARKET_BASE}/${encodeURIComponent(file)}`);
+  // `file` is repo-root-relative (plugins/<id>/<name>.zip) — encode only the
+  // path segments so the slash structure survives URL encoding.
+const fileUrl = file.split('/').slice(-3).map(encodeURIComponent).join('/');
+  const res = await fetch(`${PLUGIN_MARKET_BASE}/${fileUrl}`);
   if (!res.ok) throw new Error(`Download failed: ${res.status}`);
   const blob = await res.blob();
-  const f = new File([blob], file, { type: 'application/zip' });
+  const fileName = file.split('/').pop() ?? 'plugin.zip';
+  const f = new File([blob], fileName, { type: 'application/zip' });
   return importPlugin(f, true);
 }
 

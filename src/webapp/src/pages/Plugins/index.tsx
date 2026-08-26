@@ -186,14 +186,6 @@ export default function PluginsPage() {
                 <LogoGithub />
                 {t('plugins.gitImport')}
               </Button>
-              <Button
-                variant="outline"
-                aria-label={t('plugins.marketRefresh')}
-                onPress={() => document.getElementById('market-refresh-btn')?.click()}
-              >
-                <ArrowRotateRight className="w-4 h-4" />
-                {t('plugins.marketRefresh')}
-              </Button>
             </div>
           </div>
           <Input
@@ -425,7 +417,7 @@ function MarketTab({ installedIds }: { installedIds: Set<string> }) {
         <Card className="p-4 border border-danger">
           <div className="flex items-center justify-between gap-4">
             <p className="text-danger text-sm">{fail}</p>
-            <Button size="sm" variant="ghost" onPress={refresh}>
+            <Button variant="ghost" onPress={refresh}>
               <ArrowRotateRight className="w-4 h-4" />
               {t('plugins.marketRefresh')}
             </Button>
