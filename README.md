@@ -1,4 +1,5 @@
 <div align="center">
+  <p><b>简体中文</b> | <a href="README_en.md">English</a></p>
   <h1>Libra-Nextgen</h1>
   
   面向企业级红蓝对抗的现代化 **C2（Command & Control）框架**

@@ -1,4 +1,5 @@
 <div align="center">
+  <p><a href="README.md">简体中文</a> | <b>English</b></p>
   <h1>Libra-Nextgen</h1>
   
   A modern **C2 (Command & Control) framework** for enterprise red-team operations
