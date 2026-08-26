@@ -1,7 +1,9 @@
 import type { WsMessage } from '../types/models';
-import { getToken, API_ORIGIN } from '../api/client';
+import { getToken, getApiOrigin } from '../api/client';
 
-const WS_BASE = API_ORIGIN.replace(/^http/, 'ws') + '/ws/console';
+function wsBase(): string {
+  return getApiOrigin().replace(/^http/, 'ws') + '/ws/console';
+}
 
 type MessageHandler = (msg: WsMessage) => void;
 
@@ -15,7 +17,7 @@ class ConsoleWebSocket {
     const token = getToken();
     if (!token) return;
 
-    this.ws = new WebSocket(`${WS_BASE}?token=${token}`);
+    this.ws = new WebSocket(`${wsBase()}?token=${token}`);
 
     this.ws.onopen = () => {
       this.isOpen = true;

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Accordion, Button, Card, Chip, Spinner } from '@heroui/react';
 import { ChevronDown } from '@gravity-ui/icons';
-import { API_ORIGIN } from '../../api/client';
+import { getApiOrigin } from '../../api/client';
 import { usePluginHost } from '../../hooks/usePluginHost';
 
 interface AITokenItem {
@@ -33,7 +33,7 @@ const VENDOR_META: Record<string, { icon: string; label: string }> = {
 const PLUGIN_ID = 'com.libra.aitoken';
 
 function assetUrl(file: string): string {
-  return `${API_ORIGIN}/api/plugins/${PLUGIN_ID}/assets/${file}`;
+  return `${getApiOrigin()}/api/plugins/${PLUGIN_ID}/assets/${file}`;
 }
 
 /** 插件结果可能是 JSON 字符串（服务端透传）或已是对象，统一解析。 */

@@ -1,5 +1,60 @@
-export const API_ORIGIN = import.meta.env.VITE_API_BASE || 'http://127.0.0.1:5270';
-const API_BASE = `${API_ORIGIN}/api`;
+/**
+ * API 基址解析（运行时，非编译期）：
+ *
+ * 优先级（高 → 低）：
+ *   1. 首选项 localStorage `api_origin`（用户在 设置 → 首选项 中显式设置）
+ *   2. VITE_API_BASE（构建配置文件，.env / vite define）
+ *   3. 前端 Host 推导（默认）：取 window.location.hostname，拼后端默认端口 5270；
+ *      若前端本身就是后端同源（端口 5270，由后端托管），直接用同源 origin
+ *   4. 兜底 http://127.0.0.1:5270
+ *
+ * 通过 getApiOrigin() 每次调用实时解析，修改首选项后无需刷新即可生效。
+ */
+
+const API_ORIGIN_KEY = 'api_origin';
+const DEFAULT_BACKEND_PORT = 5270;
+
+const BUILTIN_API_ORIGIN = (import.meta.env.VITE_API_BASE as string | undefined)?.trim() || '';
+
+function stripTrailingSlash(url: string): string {
+  return url.replace(/\/+$/, '');
+}
+
+function deriveHostOrigin(): string {
+  if (typeof window === 'undefined') return '';
+  const { protocol, hostname, port } = window.location;
+  // 前端本身由后端托管（同源）→ 直接用同源地址
+  if (port === String(DEFAULT_BACKEND_PORT)) {
+    return window.location.origin;
+  }
+  // 否则按前端 hostname 推导后端地址（保持协议一致，如 https 部署）
+  return `${protocol}//${hostname}:${DEFAULT_BACKEND_PORT}`;
+}
+
+export function getApiOrigin(): string {
+  const stored = localStorage.getItem(API_ORIGIN_KEY)?.trim();
+  if (stored) return stripTrailingSlash(stored);
+  if (BUILTIN_API_ORIGIN) return stripTrailingSlash(BUILTIN_API_ORIGIN);
+  const derived = deriveHostOrigin();
+  if (derived) return derived;
+  return `http://127.0.0.1:${DEFAULT_BACKEND_PORT}`;
+}
+
+/** 用户在首选项中设置自定义后端地址；传空/null 清除 → 恢复默认解析。 */
+export function setApiOrigin(url: string | null | undefined): void {
+  const value = url?.trim();
+  if (value) localStorage.setItem(API_ORIGIN_KEY, stripTrailingSlash(value));
+  else localStorage.removeItem(API_ORIGIN_KEY);
+}
+
+/** 当前是否被首选项覆盖（区别于默认解析）。 */
+export function hasCustomApiOrigin(): boolean {
+  return Boolean(localStorage.getItem(API_ORIGIN_KEY)?.trim());
+}
+
+export function apiBase(): string {
+  return `${getApiOrigin()}/api`;
+}
 
 let authToken: string | null = localStorage.getItem('token');
 let onAuthFailed: (() => void) | null = null;
@@ -44,7 +99,7 @@ async function request<T>(
 
   let response: Response;
   try {
-    response = await fetch(`${API_BASE}${path}`, {
+    response = await fetch(`${apiBase()}${path}`, {
       ...options,
       headers,
     });

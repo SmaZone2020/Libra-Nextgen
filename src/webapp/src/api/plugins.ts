@@ -1,4 +1,4 @@
-import { api } from './client';
+import { api, getApiOrigin } from './client';
 
 // ── Types mirroring the server's PluginModels ─────────────────────────
 
@@ -110,7 +110,7 @@ export async function importPlugin(file: File, enable: boolean): Promise<PluginR
   const form = new FormData();
   form.append('file', file);
   form.append('enable', String(enable));
-  const res = await fetch(`${import.meta.env.VITE_API_BASE || 'http://127.0.0.1:5270'}/api/plugins/manager/import`, {
+  const res = await fetch(`${getApiOrigin()}/api/plugins/manager/import`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
     body: form,

@@ -1,6 +1,4 @@
-import { api, getToken, API_ORIGIN } from './client';
-
-const API_BASE = `${API_ORIGIN}/api`;
+import { api, getToken, apiBase } from './client';
 
 export interface FileListResult {
   path: string;
@@ -108,7 +106,7 @@ export interface DownloadOptions {
  */
 export async function downloadFile(agentId: string, path: string, opts?: DownloadOptions): Promise<void> {
   const token = getToken();
-  const res = await fetch(`${API_BASE}/files/${agentId}/download`, {
+  const res = await fetch(`${apiBase()}/files/${agentId}/download`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',

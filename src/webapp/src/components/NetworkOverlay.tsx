@@ -1,10 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { Button } from '@heroui/react';
 import { ArrowRotateLeft } from '@gravity-ui/icons';
-import { getToken, setOnNetworkError, setOnNetworkRecovered, API_ORIGIN } from '../api/client';
+import { getToken, setOnNetworkError, setOnNetworkRecovered, apiBase } from '../api/client';
 import { consoleWs } from '../ws/consoleWs';
 
-const API_BASE = `${API_ORIGIN}/api`;
 const RETRY_INTERVAL = 10_000;
 const MAX_RETRIES = 15;
 
@@ -45,7 +44,7 @@ export function NetworkOverlay() {
         const headers: Record<string, string> = {};
         const token = getToken();
         if (token) headers['Authorization'] = `Bearer ${token}`;
-        const resp = await fetch(`${API_BASE}/agents?page=1&pageSize=1`, { headers });
+        const resp = await fetch(`${apiBase()}/agents?page=1&pageSize=1`, { headers });
         if (resp.ok) {
           clearTimers();
           setOffline(false);

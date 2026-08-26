@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Button, Card, Label, ListBox, Modal, Surface, Switch, Tabs } from '@heroui/react';
+import { Button, Card, Input, Label, ListBox, Modal, Surface, Switch, Tabs, TextField } from '@heroui/react';
 import type { Selection } from '@heroui/react';
 import { Check } from '@gravity-ui/icons';
 import i18n, { switchLang } from '../../i18n';
 import { getStoredTheme, applyTheme, type ThemePreference } from '../../utils/theme';
 import { EVENT_TYPE_IDS, getEnabledEventTypes, setEnabledEventTypes } from '../../utils/eventTypes';
+import { getApiOrigin, setApiOrigin, hasCustomApiOrigin } from '../../api/client';
 
 const NOTICE_SOUND_KEY = 'notice_sound';
 
@@ -14,6 +15,8 @@ export default function PreferencesTab() {
   const [lang, setLang] = useState(() => (i18n.language.startsWith('zh') ? 'zh' : 'en'));
   const [theme, setTheme] = useState<ThemePreference>(getStoredTheme());
   const [sound, setSound] = useState(() => localStorage.getItem(NOTICE_SOUND_KEY) !== 'false');
+  const [apiOrigin, setApiOriginInput] = useState(() => localStorage.getItem('api_origin')?.trim() ?? '');
+  const [apiOriginSaved, setApiOriginSaved] = useState(false);
 
   // 事件流事件类型选择
   const [eventModalOpen, setEventModalOpen] = useState(false);
@@ -45,6 +48,19 @@ export default function PreferencesTab() {
   const handleSound = (checked: boolean) => {
     setSound(checked);
     localStorage.setItem(NOTICE_SOUND_KEY, String(checked));
+  };
+
+  const saveApiOrigin = () => {
+    setApiOrigin(apiOrigin);
+    setApiOriginSaved(true);
+    setTimeout(() => setApiOriginSaved(false), 2000);
+  };
+
+  const resetApiOrigin = () => {
+    setApiOrigin('');
+    setApiOrigin(null);
+    setApiOriginSaved(true);
+    setTimeout(() => setApiOriginSaved(false), 2000);
   };
 
   return (
@@ -81,6 +97,39 @@ export default function PreferencesTab() {
               <Switch.Thumb />
             </Switch.Control>
           </Switch>
+        </div>
+
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <h3 className="font-semibold">{t('settings.backendAddress')}</h3>
+            <p className="text-sm text-default-500">{t('settings.backendAddressDesc')}</p>
+            <p className="text-xs text-default-400 mt-1">
+              {t('settings.backendAddressCurrent')}：<code className="font-mono">{getApiOrigin()}</code>
+              {hasCustomApiOrigin() && <span className="ml-2 text-accent">({t('settings.backendAddressCustom')})</span>}
+            </p>
+          </div>
+          <div className="flex flex-col items-end gap-2">
+            <TextField
+              variant="secondary"
+              className="w-80"
+              value={apiOrigin}
+              onChange={(v) => {
+                setApiOriginInput(v);
+                setApiOriginSaved(false);
+              }}
+            >
+              <Label className="sr-only">{t('settings.backendAddress')}</Label>
+              <Input placeholder="http://10.0.0.5:5270" />
+            </TextField>
+            <div className="flex gap-2">
+              <Button size="sm" variant="secondary" isDisabled={!hasCustomApiOrigin()} onPress={resetApiOrigin}>
+                {t('settings.backendAddressReset')}
+              </Button>
+              <Button size="sm" variant="primary" onPress={saveApiOrigin}>
+                {apiOriginSaved ? t('settings.backendAddressSaved') : t('common.save')}
+              </Button>
+            </div>
+          </div>
         </div>
 
         <div className="flex items-center justify-between gap-4">
