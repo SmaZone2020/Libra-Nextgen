@@ -6,7 +6,6 @@ import {
   ListBox,
   NumberField,
   Select,
-  Slider,
 } from '@heroui/react';
 import { ChevronDown } from '@gravity-ui/icons';
 import { Input, TextField } from '@heroui/react';
@@ -74,55 +73,57 @@ export function BuilderConnectionCard({ config, set }: BuilderConnectionCardProp
           <Label>{t('builder.heartbeatInterval')}</Label>
           <div className="flex items-center gap-2">
             <NumberField
-              className="w-full max-w-40"
-              value={config.heartbeatIntervalMs}
+              className="w-full"
+              value={config.heartbeatIntervalMs || 3000}
               variant="secondary"
               minValue={500}
-              maxValue={60000}
+              maxValue={120000}
               step={500}
+              name="unit"
+              formatOptions={{
+                style: "unit",
+                unit: "millisecond",
+                unitDisplay: "short",
+              }}
               onChange={(v) => set('heartbeatIntervalMs', v ?? undefined)}
             >
               <NumberField.Group>
                 <NumberField.DecrementButton />
-                <NumberField.Input className="w-[90px]" />
+                <NumberField.Input className="w-[120px]" />
                 <NumberField.IncrementButton />
               </NumberField.Group>
             </NumberField>
-            <span className="text-xs text-default-500 whitespace-nowrap">{t('builder.ms')}</span>
           </div>
           <p className="text-xs text-default-500">{t('builder.heartbeatIntervalDesc')}</p>
         </div>
 
         <div className="space-y-2">
-          <Label>
-            {t('builder.jitter')}{' '}
-            <span className="text-default-500">
-              {Math.round((config.jitterPercent ?? 0.2) * 100)}%
-            </span>
-          </Label>
-          <Slider
-            className="w-full max-w-56"
-            value={config.jitterPercent ?? 0.2}
-            minValue={0}
+          <Label>{t('builder.jitter')}</Label>
+
+          <NumberField
+            formatOptions={{ style: "percent", minimumFractionDigits: 0 }}
             maxValue={0.9}
+            minValue={0}
+            name="percentage"
             step={0.05}
-            onChange={(v) => set('jitterPercent', (Array.isArray(v) ? v[0] : v) ?? 0.2)}
+            value={config.jitterPercent ?? 0.2}
+            variant="secondary"
+            onChange={(v) => set('jitterPercent', v ?? undefined)}
           >
-            <Slider.Output />
-            <Slider.Track>
-              <Slider.Fill />
-              <Slider.Thumb />
-            </Slider.Track>
-          </Slider>
+            <NumberField.Group>
+              <NumberField.DecrementButton />
+              <NumberField.Input className="w-[120px]" />
+              <NumberField.IncrementButton />
+            </NumberField.Group>
+          </NumberField>
           <p className="text-xs text-default-500">{t('builder.jitterDesc')}</p>
         </div>
       </div>
 
-      {/* 高级路径（留空 = 服务端默认） */}
       <Accordion className="mt-2 w-full" variant="surface" hideSeparator>
         <Accordion.Item>
           <Accordion.Heading>
-            <Accordion.Trigger>
+            <Accordion.Trigger className="w-full flex items-center justify-between">
               <span className="text-sm font-medium">{t('builder.advancedPaths')}</span>
               <Accordion.Indicator>
                 <ChevronDown />
