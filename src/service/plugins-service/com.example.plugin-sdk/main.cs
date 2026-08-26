@@ -1,4 +1,4 @@
-// ═══════════════════════════════════════════════════════════════════════
+﻿// ═══════════════════════════════════════════════════════════════════════
 //  com.example.plugin-sdk — 服务端脚本全能力演示（service/main.cs）
 // ═══════════════════════════════════════════════════════════════════════
 //  执行宿主：ServerScriptService（Roslyn C# Scripting，编译结果按插件缓存）
@@ -49,33 +49,33 @@ using System.Linq;
 
 // ── 函数实现（每个函数 = 一个能力点） ───────────────────────────────────
 
-// 1) echo —— 动态参数访问：body 的任意字段都能以 p.字段 直接读（含嵌套对象）。
-string Echo(dynamic p)
+// 1) echo —— 动态参数访问：body 的任意字段都能以 SafeGet(p,"字段") 读取（含嵌套对象）。
+string Echo(object? p)
 {
     return JsonSerializer.Serialize(new
     {
         // 原样回显参数（演示任意嵌套结构访问）
         received = new
         {
-            text = Str((object?)p?.text),
-            count = Int((object?)p?.count, -1),
-            nested = p?.nested,   // 嵌套对象直接透传
-            anyExtra = p?.extra,  // 未约定字段也能读
+            text = Str(SafeGet(p, "text")),
+            count = Int(SafeGet(p, "count"), -1),
+            nested = SafeGet(p, "nested"),   // 嵌套对象直接透传
+            anyExtra = SafeGet(p, "extra"),  // 未约定字段也能读
         },
         paramTypes = new
         {
-            text = (p?.text ?? "null").GetType().Name,
-            count = (p?.count ?? "null").GetType().Name,
+            text = (SafeGet(p, "text") ?? "null").GetType().Name,
+            count = (SafeGet(p, "count") ?? "null").GetType().Name,
         },
         serverTime = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
     });
 }
 
 // 2) now —— DateTime 格式化。可选项：format（默认 yyyy-MM-dd HH:mm:ss）、utc（默认 0）。
-string Now(dynamic p)
+string Now(object? p)
 {
-    var format = Str((object?)p?.format, "yyyy-MM-dd HH:mm:ss");
-    var t = Int((object?)p?.utc, 0) == 1 ? DateTimeOffset.UtcNow : DateTimeOffset.Now;
+    var format = Str(SafeGet(p, "format"), "yyyy-MM-dd HH:mm:ss");
+    var t = Int(SafeGet(p, "utc"), 0) == 1 ? DateTimeOffset.UtcNow : DateTimeOffset.Now;
     return JsonSerializer.Serialize(new
     {
         format,
@@ -87,16 +87,16 @@ string Now(dynamic p)
 
 // 3) bkn —— 纯计算/签名（与 qqkeytool 一致的 bkn/g_tk 算法）。
 //    可选项：skey（必填，签名输入）。
-long Bkn(dynamic p)
+long Bkn(object? p)
 {
-    var skey = Str((object?)p?.skey);
+    var skey = Str(SafeGet(p, "skey"));
     long h = 5381;
     foreach (var c in skey) h += (h << 5) + c;
     return h & 0x7fffffff;
 }
 
 // 4) state —— 跨调用内存状态：每次调用 Calls+1（脚本程序集缓存，静态字段保留）。
-string State(dynamic p)
+string State(object? p)
 {
     DemoState.Calls++;
     DemoState.LastCallUtc = DateTimeOffset.UtcNow;
@@ -109,7 +109,7 @@ string State(dynamic p)
 }
 
 // 5) ip —— 服务端网络请求（无 CORS）：取本机外网 IP。
-string Ip(dynamic p)
+string Ip(object? p)
 {
     using var c = MakeClient();
     var resp = c.GetStringAsync("https://api.ipify.org?format=json").GetAwaiter().GetResult();
@@ -129,21 +129,21 @@ string Ip(dynamic p)
 //      body       对象（自动 JSON）或字符串（原样发送）；POST/PUT/PATCH 生效
 //      timeoutSec 超时秒数（默认 15，上限 120）
 //    返回：{ ok, status, reason, elapsedMs, headers, body, bodyLength, truncated }
-string Http(dynamic p)
+string Http(object? p)
 {
-    var url = Str((object?)p?.url);
+    var url = Str(SafeGet(p, "url"));
     if (string.IsNullOrWhiteSpace(url))
         throw new ArgumentException("http: url 必填（可选项：method/headers/body/timeoutSec）");
 
-    var method = Str((object?)p?.method, "GET").ToUpperInvariant();
-    var timeoutSec = Math.Clamp(Int((object?)p?.timeoutSec, 15), 1, 120);
+    var method = Str(SafeGet(p, "method"), "GET").ToUpperInvariant();
+    var timeoutSec = Math.Clamp(Int(SafeGet(p, "timeoutSec"), 15), 1, 120);
 
     using var c = MakeClient();
     c.Timeout = TimeSpan.FromSeconds(timeoutSec);
     using var req = new HttpRequestMessage(new HttpMethod(method), url);
 
     // 请求头可选项
-    if (p?.headers is IDictionary<string, object> hdrs)
+    if (SafeGet(p, "headers") is IDictionary<string, object> hdrs)
     {
         foreach (var kv in hdrs)
         {
@@ -156,11 +156,17 @@ string Http(dynamic p)
         }
     }
 
-    // body 可选项（对象自动 JSON 序列化）
-    if (p?.body is not null && method is "POST" or "PUT" or "PATCH")
+    // body 可选项（对象自动 JSON 序列化）。body 到达形态：
+    //   - 对象（ExpandoObject）→ 自动 JSON 序列化
+    //   - 字符串 → 原样发送（若看起来是 JSON 文本也原样发，不二次转义）
+    var body = SafeGet(p, "body");
+    if (body is not null && method is "POST" or "PUT" or "PATCH")
     {
-        object? body = p?.body;
-        var text = body is string s ? s : JsonSerializer.Serialize(body);
+        var text = body switch
+        {
+            string s => s,
+            _ => JsonSerializer.Serialize(body),
+        };
         req.Content = new StringContent(text, Encoding.UTF8, "application/json");
     }
 
@@ -168,7 +174,7 @@ string Http(dynamic p)
     try
     {
         using var resp = c.Send(req);
-        var body = resp.Content.ReadAsStringAsync().GetAwaiter().GetResult();
+        var respText = resp.Content.ReadAsStringAsync().GetAwaiter().GetResult();
         sw.Stop();
         return JsonSerializer.Serialize(new
         {
@@ -182,9 +188,9 @@ string Http(dynamic p)
                 server = resp.Headers.Server?.ToString(),
                 date = resp.Headers.Date?.ToString("o"),
             },
-            bodyLength = body.Length,
-            truncated = body.Length > 2048,
-            body = body.Length > 2048 ? body[..2048] : body,
+            bodyLength = respText.Length,
+            truncated = respText.Length > 2048,
+            body = respText.Length > 2048 ? respText[..2048] : respText,
         });
     }
     catch (Exception ex)
@@ -201,9 +207,9 @@ string Http(dynamic p)
 
 // 7) file —— 读取插件包内随包分发的文件（数据/配置随 zip 分发）。
 //    可选项：name（默认 meta.json）。
-string ReadFile(dynamic p)
+string ReadFile(object? p)
 {
-    var name = Str((object?)p?.name, "meta.json");
+    var name = Str(SafeGet(p, "name"), "meta.json");
     foreach (var root in PluginRootCandidates())
     {
         var path = System.IO.Path.Combine(root, name);
@@ -229,10 +235,10 @@ string ReadFile(dynamic p)
 }
 
 // 8) list —— 返回数组。可选项：count（默认 5）、prefix（默认 item）。
-string List(dynamic p)
+string List(object? p)
 {
-    var count = Math.Clamp(Int((object?)p?.count, 5), 1, 100);
-    var prefix = Str((object?)p?.prefix, "item");
+    var count = Math.Clamp(Int(SafeGet(p, "count"), 5), 1, 100);
+    var prefix = Str(SafeGet(p, "prefix"), "item");
     var items = Enumerable.Range(1, count)
         .Select(i => (object)new { index = i, label = $"{prefix}-{i}", enabled = i % 2 == 0 })
         .ToList();
@@ -241,10 +247,10 @@ string List(dynamic p)
 
 // 9) table —— 返回对象数组（前端直接渲染 Table）。
 //    可选项：rows（默认 3）、prefix（默认 sdk）。
-string Table(dynamic p)
+string Table(object? p)
 {
-    var rows = Math.Clamp(Int((object?)p?.rows, 3), 1, 20);
-    var prefix = Str((object?)p?.prefix, "sdk");
+    var rows = Math.Clamp(Int(SafeGet(p, "rows"), 3), 1, 20);
+    var prefix = Str(SafeGet(p, "prefix"), "sdk");
     var statuses = new[] { "online", "offline", "error", "idle" };
     var items = Enumerable.Range(1, rows)
         .Select(i => (object)new
@@ -261,14 +267,14 @@ string Table(dynamic p)
 
 // 10) fail —— 抛异常：宿主统一转成 { ok:false, error }（错误契约）。
 //     可选项：message（默认 "demo failure"）。
-string Fail(dynamic p)
+string Fail(object? p)
 {
-    throw new InvalidOperationException(Str((object?)p?.message, "demo failure"));
+    throw new InvalidOperationException(Str(SafeGet(p, "message"), "demo failure"));
 }
 
 // 11) manifest —— 自描述：返回本脚本全部函数目录。
 //     前端"服务端脚本"页调用它，即可实时渲染"有哪些能力、有什么可选项"。
-string Manifest(dynamic p)
+string Manifest(object? p)
 {
     var funcs = new object[]
     {
@@ -315,15 +321,15 @@ string Manifest(dynamic p)
 
 return new Dictionary<string, Func<object, object>>
 {
-    ["echo"]     = p => Echo((dynamic)p),
-    ["now"]      = p => Now((dynamic)p),
-    ["bkn"]      = p => Bkn((dynamic)p),
-    ["state"]    = p => State((dynamic)p),
-    ["ip"]       = p => Ip((dynamic)p),
-    ["http"]     = p => Http((dynamic)p),
-    ["file"]     = p => ReadFile((dynamic)p),
-    ["list"]     = p => List((dynamic)p),
-    ["table"]    = p => Table((dynamic)p),
-    ["fail"]     = p => Fail((dynamic)p),
-    ["manifest"] = p => Manifest((dynamic)p),
+    ["echo"]     = p => Echo(p),
+    ["now"]      = p => Now(p),
+    ["bkn"]      = p => Bkn(p),
+    ["state"]    = p => State(p),
+    ["ip"]       = p => Ip(p),
+    ["http"]     = p => Http(p),
+    ["file"]     = p => ReadFile(p),
+    ["list"]     = p => List(p),
+    ["table"]    = p => Table(p),
+    ["fail"]     = p => Fail(p),
+    ["manifest"] = p => Manifest(p),
 };

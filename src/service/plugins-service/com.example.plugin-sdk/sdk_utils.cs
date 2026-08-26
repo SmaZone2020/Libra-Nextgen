@@ -1,4 +1,4 @@
-// ═══════════════════════════════════════════════════════════════════════
+﻿// ═══════════════════════════════════════════════════════════════════════
 //  com.example.plugin-sdk — 服务端工具/状态（service/sdk_utils.cs）
 // ═══════════════════════════════════════════════════════════════════════
 //  【多文件组织演示】
@@ -42,6 +42,20 @@ static string Str(object? v, string def = "") => v?.ToString() ?? def;
 static int Int(object? v, int def = 0)
 {
     try { return Convert.ToInt32(v); } catch { return def; }
+}
+
+/// <summary>
+/// 从 dynamic 参数对象安全取字段。宿主把请求 body 反序列化为 ExpandoObject；
+/// 在 dynamic 上直接访问不存在的属性会抛 RuntimeBinderException
+/// （"does not contain a definition"），而不是返回 null。这里转成字典用
+/// TryGetValue 读取：字段缺失时返回 null（调用方按可选项处理）。
+/// </summary>
+static object? SafeGet(object? p, string name)
+{
+    if (p is null) return null;
+    if (p is IDictionary<string, object> d && d.TryGetValue(name, out var v)) return v;
+    if (p is IDictionary<string, object?> dn && dn.TryGetValue(name, out var vn)) return vn;
+    return null;
 }
 
 /// <summary>定位插件包根目录（运行时解压目录优先，其次仓库内开发目录）。</summary>

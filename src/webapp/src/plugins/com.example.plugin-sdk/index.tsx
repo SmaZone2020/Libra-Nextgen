@@ -289,41 +289,41 @@ function DocsTab() {
         </Alert.Content>
       </Alert>
 
-      <div className="grid gap-4 md:grid-cols-[220px_1fr]">
-        <Card className="p-2 self-start">
-          <div className="flex flex-col gap-1">
+      <Tabs className="w-full max-w-lg" orientation="vertical" variant="secondary" selectedKey={docId} onSelectionChange={(k) => { if (k) setDocId(String(k)); }}>
+        <Tabs.ListContainer>
+          <Tabs.List aria-label="活文档目录">
             {DOC_FILES.map((d) => (
-              <Button
-                key={d.id}
-                variant={docId === d.id ? 'primary' : 'tertiary'}
-                size="sm"
-                className="justify-start"
-                onPress={() => setDocId(d.id)}
-              >
-                <span className="font-mono">{d.id}</span>
-                <span className="ml-2">{d.label}</span>
-              </Button>
+              <Tabs.Tab key={d.id} id={d.id}>
+                <span className="font-mono">{d.id}</span> {d.label}
+                <Tabs.Indicator />
+              </Tabs.Tab>
             ))}
-          </div>
-        </Card>
+          </Tabs.List>
+        </Tabs.ListContainer>
 
-        <Card className="p-5 min-w-0">
-          {loading && (
-            <div className="space-y-2">
-              <Skeleton className="h-8 rounded-lg w-1/2" />
-              <Skeleton className="h-5 rounded-lg" />
-              <Skeleton className="h-5 rounded-lg w-3/4" />
-              <Skeleton className="h-5 rounded-lg w-1/2" />
-            </div>
-          )}
-          {err && <p className="text-danger text-sm">{err}（服务端未重启/插件未启用/包内缺 docs？）</p>}
-          {md !== null && !loading && (
-            <article className="prose-sdk max-w-none text-sm leading-relaxed space-y-3 [&_h1]:text-lg [&_h2]:text-base [&_h3]:text-sm [&_h1]:font-semibold [&_h2]:font-semibold [&_h3]:font-semibold [&_pre]:bg-default-50 [&_pre]:dark:bg-default-900 [&_pre]:p-3 [&_pre]:rounded [&_pre]:overflow-auto [&_code]:font-mono [&_code]:text-[12px] [&_table]:w-full [&_table]:text-xs [&_th]:text-left [&_th]:border-b [&_th]:border-default-200 [&_th]:pb-1 [&_td]:py-1 [&_td]:pr-3 [&_a]:text-primary [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5 [&_blockquote]:border-l-2 [&_blockquote]:border-default-200 [&_blockquote]:pl-3 [&_blockquote]:text-default-500">
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>{md}</ReactMarkdown>
-            </article>
-          )}
-        </Card>
-      </div>
+        {DOC_FILES.map((d) => (
+          <Tabs.Panel key={d.id} id={d.id} className="px-4">
+            <h3 className="mb-2 font-semibold">{d.id} · {d.label}</h3>
+            <p className="text-sm text-muted mb-3">
+              来源：<code className="font-mono text-xs">assets/docs/{d.file.replace('docs/', '')}</code>
+            </p>
+            {loading && (
+              <div className="space-y-2">
+                <Skeleton className="h-8 rounded-lg w-1/2" />
+                <Skeleton className="h-5 rounded-lg" />
+                <Skeleton className="h-5 rounded-lg w-3/4" />
+                <Skeleton className="h-5 rounded-lg w-1/2" />
+              </div>
+            )}
+            {err && <p className="text-danger text-sm">{err}（服务端未重启/插件未启用/包内缺 docs？）</p>}
+            {md !== null && !loading && (
+              <article className="prose-sdk max-w-none text-sm leading-relaxed space-y-3 [&_h1]:text-lg [&_h2]:text-base [&_h3]:text-sm [&_h1]:font-semibold [&_h2]:font-semibold [&_h3]:font-semibold [&_pre]:bg-default-50 [&_pre]:dark:bg-default-900 [&_pre]:p-3 [&_pre]:rounded [&_pre]:overflow-auto [&_code]:font-mono [&_code]:text-[12px] [&_table]:w-full [&_table]:text-xs [&_th]:text-left [&_th]:border-b [&_th]:border-default-200 [&_th]:pb-1 [&_td]:py-1 [&_td]:pr-3 [&_a]:text-primary [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5 [&_blockquote]:border-l-2 [&_blockquote]:border-default-200 [&_blockquote]:pl-3 [&_blockquote]:text-default-500">
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>{md}</ReactMarkdown>
+              </article>
+            )}
+          </Tabs.Panel>
+        ))}
+      </Tabs>
     </div>
   );
 }
@@ -750,7 +750,19 @@ function ServiceTab() {
                   <Alert status={modal.ok ? 'success' : 'danger'}>
                     <Alert.Content>
                       <Alert.Title>{modal.ok ? '调用成功' : '调用失败'}</Alert.Title>
-                      {modal.error && <Alert.Description>{modal.error}</Alert.Description>}
+                      {modal.error && (
+                        <>
+                          <Alert.Description>{modal.error}</Alert.Description>
+                          {!modal.ok && (
+                            <p className="text-xs text-default-500 mt-1">
+                              提示：请求 body 在 callScript 里统一以 <code className="font-mono">{'{'}params ?? {'{}'}{'}'}</code>
+                              发送；服务端把 body 反序列化为 dynamic <code className="font-mono">p</code> 传给脚本函数。
+                              报 “does not contain a definition” 是脚本里访问了 body 里不存在的字段名 —— 检查演练表单
+                              参数名是否与函数期望一致（见上方函数目录）。
+                            </p>
+                          )}
+                        </>
+                      )}
                     </Alert.Content>
                   </Alert>
                   <pre className="font-mono text-xs whitespace-pre-wrap break-all bg-default-50 dark:bg-default-900 p-3 rounded max-h-[60vh] overflow-auto">
