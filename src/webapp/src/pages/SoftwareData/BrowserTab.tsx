@@ -310,7 +310,7 @@ export function BrowserTab({ agentId }: BrowserTabProps) {
           {filteredPasswords.length === 0 && !pw.loading ? (
             <div className="text-center text-neutral-500 py-8">{t('othersoft.browser.noData')}</div>
           ) : (
-            <div className="max-h-[600px] overflow-y-auto">
+            <div className="overflow-y-auto">
               <Accordion className="w-full">
                 {passwordsByDomain.map(([domain, items]) => (
                   <Accordion.Item key={domain}>
@@ -358,7 +358,7 @@ export function BrowserTab({ agentId }: BrowserTabProps) {
           {filteredHistory.length === 0 && !hs.loading ? (
             <div className="text-center text-neutral-500 py-8">{t('othersoft.browser.noData')}</div>
           ) : (
-            <div className="max-h-[600px] overflow-y-auto">
+            <div className="overflow-y-auto">
               <Accordion className="w-full">
                 {historyByHost.map(([host, items]) => (
                   <Accordion.Item key={host}>
