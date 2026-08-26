@@ -22,6 +22,7 @@ import type { BuildTrafficLists } from '../../api/build';
 import type { BuildConfigRequest, BuildRecord, BuildRecordDetail, TemplateInfo } from '../../types/models';
 import type { ModuleEntry } from '../../api/build';
 import { BuilderConfigCard } from './BuilderConfigCard';
+import { BuilderConnectionCard } from './BuilderConnectionCard';
 import { BuilderDownloadModal } from './BuilderDownloadModal';
 import { BuilderHistoryPanel } from './BuilderHistoryPanel';
 import { BuilderModals } from './BuilderModals';
@@ -327,6 +328,8 @@ export default function BuilderPage() {
       {/* Left: Build Config */}
       <div className="flex-1 space-y-4">
         <BuilderConfigCard config={config} set={set} />
+        {/* 连接参数（流量伪装）：独立卡片，置于目标平台上方 */}
+        <BuilderConnectionCard config={config} set={set} />
         <BuilderOptionsCard config={config} set={set} />
         {/* 流量伪装：独立卡片，置于最底部 */}
         <BuilderTrafficCard
