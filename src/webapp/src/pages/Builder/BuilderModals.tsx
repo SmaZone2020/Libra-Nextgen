@@ -1,7 +1,7 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Button, Modal, Spinner } from '@heroui/react';
-import { CircleCheck } from '@gravity-ui/icons';
+import { Button, Modal, ProgressBar, Spinner } from '@heroui/react';
+import { CircleCheck, CircleXmark } from '@gravity-ui/icons';
 import type { BuildRecordDetail } from '../../types/models';
 import { APP_TYPE_LABEL, PLATFORM_LABEL, STATUS_LABEL } from './constants';
 
@@ -40,6 +40,35 @@ const formatDate = (iso: string): string => {
   return d.toLocaleString();
 };
 
+// ── 构建阶段定义（按服务端 job.Log 的 "=== Stage N: ... ===" 标记识别）─────────
+
+interface BuildStageDef {
+  id: string;
+  /** 服务端日志里该阶段的标记；命中即推进。 */
+  marker: string;
+  labelKey: string;
+}
+
+const BUILD_STAGES: BuildStageDef[] = [
+  { id: 'core', marker: 'Stage 1:', labelKey: 'builder.stageCore' },
+  { id: 'srdi', marker: 'Stage 1.5:', labelKey: 'builder.stageSrdi' },
+  { id: 'modules', marker: 'Stage 1.6:', labelKey: 'builder.stageModules' },
+  { id: 'encrypt', marker: 'Stage 2:', labelKey: 'builder.stageEncrypt' },
+  { id: 'loader', marker: 'Stage 3:', labelKey: 'builder.stageLoader' },
+  { id: 'inject', marker: 'Stage 4:', labelKey: 'builder.stageInject' },
+];
+
+/** 从原始日志行提取阶段序号（0-based）；无标记返回 -1。 */
+function stageIndexForLine(line: string): number {
+  for (let i = 0; i < BUILD_STAGES.length; i++) {
+    if (line.includes(BUILD_STAGES[i]!.marker)) return i;
+  }
+  return -1;
+}
+
+/** 阶段状态：done / active / pending / failed。 */
+type StageState = 'done' | 'active' | 'pending' | 'failed';
+
 export function BuilderModals({
   building,
   buildSucceeded,
@@ -63,61 +92,150 @@ export function BuilderModals({
     logEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [logs]);
 
+  // ── 从日志推导阶段状态 ─────────────────────────────────────────────
+
+  /** 日志中按出现顺序见过的阶段序号（去重）。 */
+  const stageOrder = useMemo(() => {
+    const seen = new Set<number>();
+    const order: number[] = [];
+    for (const line of logs) {
+      const idx = stageIndexForLine(line);
+      if (idx >= 0 && !seen.has(idx)) {
+        seen.add(idx);
+        order.push(idx);
+      }
+    }
+    return order;
+  }, [logs]);
+
+  const failed = !building && !buildSucceeded && logs.length > 0;
+  const currentStage = building ? (stageOrder.length > 0 ? stageOrder[stageOrder.length - 1]! : -1) : -1;
+
+  const stageStates = useMemo<StageState[]>(() => {
+    const states: StageState[] = BUILD_STAGES.map(() => 'pending');
+    // 已出现 = done（失败时最后一个出现 = failed）
+    stageOrder.forEach((idx, pos) => {
+      states[idx] = failed && pos === stageOrder.length - 1 ? 'failed' : 'done';
+    });
+    // 构建中：当前阶段 = active（spinner）
+    if (building && currentStage >= 0) states[currentStage] = 'active';
+    return states;
+  }, [stageOrder, failed, building, currentStage]);
+
+  /** 失败原因（stderr / WARN / error 行，取最后一条）。 */
+  const lastError = useMemo(() => {
+    if (!failed) return null;
+    for (let i = logs.length - 1; i >= 0; i--) {
+      const line = logs[i]!;
+      if (line.startsWith('[stderr]') || line.startsWith('[WARN]') || /error/i.test(line)) return line;
+    }
+    return null;
+  }, [logs, failed]);
+
   return (
     <>
-      {/* Build Log / Success Modal */}
+      {/* Build Progress Modal（横向步骤时间线） */}
       <Modal.Backdrop
         isOpen={logs.length > 0 || building || buildSucceeded}
         isDismissable={!building}
         onOpenChange={(open) => { if (!open && !building) onCloseLogs(); }}
       >
-        <Modal.Container size={buildSucceeded && !building ? "lg" : "cover"}>
+        <Modal.Container size="lg">
           <Modal.Dialog>
             {!building && <Modal.CloseTrigger />}
-            {buildSucceeded && !building ? (
-              <>
-                <Modal.Body>
-                  <div className="flex flex-col items-center py-10 gap-4">
-                    <div className="w-16 h-16 rounded-full bg-green-500 flex items-center justify-center">
-                      <CircleCheck className="w-10 h-10 text-white" />
-                    </div>
-                    <h2 className="text-2xl font-semibold">{t('builder.buildSuccess')}</h2>
-                    <p className="text-default-500 text-lg">{t('builder.buildSuccessDesc', { time: formatElapsed(elapsed) })}</p>
-                  </div>
-                </Modal.Body>
-                <Modal.Footer>
-                  {buildId && (
-                    <Button variant="primary" onPress={() => onDownload(buildId)}>
-                      {t('builder.download')}
-                    </Button>
-                  )}
-                  <Button variant="ghost" onPress={onCloseLogs}>
-                    {t('common.close')}
-                  </Button>
-                </Modal.Footer>
-              </>
-            ) : (
-              <>
-                <Modal.Header>
-                  <Modal.Heading className="flex items-center gap-3">
-                    {t('builder.buildLog')}
-                    <span className="text-sm font-normal text-default-500 tabular-nums">
-                      {formatElapsed(elapsed)}
-                    </span>
-                  </Modal.Heading>
-                </Modal.Header>
-                <Modal.Body>
-                  <div className="bg-default-100 rounded p-3 font-mono text-xs overflow-auto">
-                    {logs.map((line, i) => (
-                      <div key={i} className="whitespace-pre-wrap break-all leading-5">
-                        {line}
+            <Modal.Header>
+              <Modal.Heading className="flex items-center gap-3">
+                {building ? t('builder.buildProgress') : failed ? t('builder.buildFailed') : t('builder.buildSuccess')}
+                <span className="text-sm font-normal text-default-500 tabular-nums">{formatElapsed(elapsed)}</span>
+                {building && <Spinner size="sm" className="text-primary" />}
+              </Modal.Heading>
+            </Modal.Header>
+            <Modal.Body>
+              {/* 横向步骤时间线 */}
+              <div className="flex items-start justify-between gap-2 pb-2">
+                {BUILD_STAGES.map((def, i) => {
+                  const state = stageStates[i]!;
+                  const isCurrent = i === currentStage;
+                  return (
+                    <div key={def.id} className="flex flex-col items-center gap-1.5 flex-1 min-w-0">
+                      <div className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 border-2 transition-colors ${state === 'done' ? 'bg-success border-success text-white' : state === 'failed' ? 'bg-danger border-danger text-white' : isCurrent ? 'border-primary text-primary' : 'border-default-300 text-default-400'}`}>
+                        {state === 'done' ? (
+                          <CircleCheck className="w-4 h-4" />
+                        ) : state === 'failed' ? (
+                          <CircleXmark className="w-4 h-4" />
+                        ) : isCurrent ? (
+                          <Spinner size="sm" />
+                        ) : (
+                          <span className="text-xs">{i + 1}</span>
+                        )}
                       </div>
-                    ))}
-                    <div ref={logEndRef} />
-                  </div>
-                </Modal.Body>
-              </>
-            )}
+                      <div className={`text-[11px] leading-tight text-center break-words w-full ${isCurrent ? 'text-primary font-medium' : state === 'done' ? 'text-default-700' : state === 'failed' ? 'text-danger' : 'text-default-400'}`}>
+                        {t(def.labelKey)}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* 阶段之间连线 */}
+              <div className="relative h-px bg-default-200 -mt-1 mx-2 mb-3">
+                <div
+                  className="absolute top-0 left-0 h-px bg-success transition-all duration-500"
+                  style={{ width: `${BUILD_STAGES.length > 0 ? (stageOrder.length / BUILD_STAGES.length) * 100 : 0}%` }}
+                />
+              </div>
+
+              {/* 状态明细 */}
+              <div className="flex items-center gap-2 text-sm">
+                {building ? (
+                  <>
+                    <Spinner size="sm" className="text-primary" />
+                    <span className="text-default-600">
+                      {currentStage >= 0 ? t('builder.stageRunningDetail', { stage: t(BUILD_STAGES[currentStage]!.labelKey) }) : t('builder.preparing')}
+                    </span>
+                  </>
+                ) : failed ? (
+                  <span className="text-danger">
+                    {t('builder.stageFailedDetail')}
+                    {lastError && <span className="ml-2 font-mono text-xs break-all">{lastError}</span>}
+                  </span>
+                ) : (
+                  <span className="text-success flex items-center gap-1.5">
+                    <CircleCheck className="w-4 h-4" />
+                    {t('builder.stageAllDone')}
+                  </span>
+                )}
+              </div>
+
+              {/* 原始日志（折叠） */}
+              <details className="mt-4 group">
+                <summary className="cursor-pointer text-xs text-default-500 hover:text-default-700 select-none list-none flex items-center gap-1">
+                  <span className="group-open:hidden">▶</span>
+                  <span className="hidden group-open:inline">▼</span>
+                  {logs.length > 0 ? t('builder.showRawLog', { count: logs.length }) : t('builder.noLogsYet')}
+                </summary>
+                <div className="bg-default-100 rounded p-3 font-mono text-xs overflow-auto max-h-52 mt-2">
+                  {logs.map((line, i) => (
+                    <div key={i} className={`whitespace-pre-wrap break-all leading-5 ${line.startsWith('[stderr]') || line.startsWith('[WARN]') ? 'text-warning' : ''}`}>
+                      {line}
+                    </div>
+                  ))}
+                  <div ref={logEndRef} />
+                </div>
+              </details>
+            </Modal.Body>
+            <Modal.Footer>
+              {!building && buildSucceeded && buildId && (
+                <Button variant="primary" onPress={() => onDownload(buildId)}>
+                  {t('builder.download')}
+                </Button>
+              )}
+              {!building && (
+                <Button variant="ghost" onPress={onCloseLogs}>
+                  {t('common.close')}
+                </Button>
+              )}
+            </Modal.Footer>
           </Modal.Dialog>
         </Modal.Container>
       </Modal.Backdrop>
