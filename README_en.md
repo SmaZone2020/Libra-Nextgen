@@ -3,11 +3,12 @@
 A modern **C2 (Command & Control) framework** for enterprise red-team operations
 
 ![.NET](https://img.shields.io/badge/.NET-C172D7?style=flat-square&logo=.net&logoColor=black)
-![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=flat-square&logo=typescript&logoColor=white)
 ![Rust](https://img.shields.io/badge/Rust-FFFFFF?style=flat-square&logo=rust&logoColor=black)
-![MongoDB](https://img.shields.io/badge/MongoDB-21BF3E?style=flat-square&logo=mongodb&logoColor=white)
+![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=flat-square&logo=typescript&logoColor=white)
 ![React](https://img.shields.io/badge/React-61DAFB?style=flat-square&logo=react&logoColor=black)
-![HeroUI](https://img.shields.io/badge/HeroUI-000000?style=flat-square&logo=heroui&logoColor=white)
+![MongoDB](https://img.shields.io/badge/MongoDB-21BF3E?style=flat-square&logo=mongodb&logoColor=white)
+![Release](https://img.shields.io/github/v/release/SmaZone2020/Libra-Nextgen?style=flat-square)
+![CI](https://github.com/SmaZone2020/Libra-Nextgen/actions/workflows/ci.yml/badge.svg)
 
 ## Architecture
 
@@ -17,7 +18,9 @@ A modern **C2 (Command & Control) framework** for enterprise red-team operations
 | **Server** | `src/service/` | ASP.NET Core 10 · MongoDB · JWT |
 | **Console** | `src/webapp/` | React 19 · HeroUI 3 · Vite |
 
-The Agent uses a **Bootstrapper + cloud modules** architecture: the loader reflectively loads an encrypted minimal kernel (comm / crypto / scheduling / streaming), while everything else (files, credentials, recon, shell, PowerShell, proxy) is delivered as modules downloaded on demand from the Server and executed in memory — nothing touches disk. A **plugin system** extends it with zip-delivered capabilities: Agent-side Rhai scripts (no compiler) or native `cdylib`, and frontend runtime page registration.
+The Agent uses a **Bootstrapper + cloud modules** architecture: the loader reflectively loads an encrypted minimal kernel (`core.bin` — comm / crypto / scheduling / streaming), while everything else (files, credentials, recon, shell, PowerShell, proxy, token) is delivered as **modules** downloaded on demand from the Server and executed in memory — nothing touches disk. A **plugin system** extends it with zip-delivered capabilities: Agent-side **JavaScript (QuickJS sandbox, no compiler)** or native `cdylib`, server-side C# scripts, and frontend runtime page registration.
+
+**Zero-WebSocket architecture**: Agents hold no WebSocket connection at all — all agent traffic goes over HTTP(S) masquerading channels (AI-style endpoints + SSE event stream); WebSocket remains only for the Console realtime channel.
 
 ## Quick Start
 
@@ -32,24 +35,47 @@ cd src/webapp && npm install && npm run dev
 #    (cross-builds need the zig toolchain)
 ```
 
-Three plugin channels: **Upload** (zip) / **Import from Git** (e.g. the [plugin scaffold repo](https://github.com/SmaZone2020/Libra-Plugin-Template)) / **Plugin Market** (the [Libra-Plugins](https://github.com/SmaZone2020/Libra-Plugins) official repo — one-click install, fetched directly from GitHub raw with a 1h browser cache).
+Three plugin channels: **Upload** (zip) / **Import from Git** (e.g. the [plugin scaffold repo](https://github.com/SmaZone2020/Libra-Plugin-Template)) / **Plugin Market** (the [Libra-Plugins](https://github.com/SmaZone2020/Libra-Plugins) official repo — one-click install, fetched directly from GitHub raw with a 1h browser cache and a manual refresh button).
 
 ## Core Features
 
-- **Communication**: HTTP(S) polling + WebSocket, AES-256-GCM end-to-end encryption, RSA dynamic key negotiation
-- **Agent**: concurrent task processing (modules run lock-free), interactive Shell (xterm.js/PTY), live screen / webcam / microphone streaming, anti-sandbox / anti-VM, multi-vector persistence
+- **Communication**: HTTP(S) masquerading channel (OpenAI-style endpoints + SSE task event stream), AES-256-GCM end-to-end encryption, RSA dynamic key negotiation; Console realtime channel over WebSocket (30s keepalive)
+- **Traffic masquerading**: configurable profiles (comm path / headers / UA, etc.), persisted manage/disable in the Builder; connection parameters (protocol / heartbeat / jitter) injected at build time
+- **Agent**: concurrent task processing (modules run lock-free), interactive Shell (xterm.js), indirect syscalls + sleep obfuscation, anti-sandbox / anti-VM, in-memory PowerShell (CLR host), multi-vector persistence
 - **Recon**: system & hardware fingerprinting, network + GeoIP, WiFi / LAN / Bluetooth scanning, processes / windows / accounts
 - **Credentials**: browser passwords, RDP credentials, SSH keys, WeChat data, AI tool API keys (plugin)
-- **Plugin Market**: a standalone repo of zips + `index.json` (rebuilt by CI), one-click install/update from the Console
-- **MCP**: built-in MCP server (Streamable HTTP) — AI clients can drive every C2 capability
+- **Proxy**: Socks proxy module + ProxyBrowser for browsing intranet web apps
+- **Plugin system**: upload zip / Git import / Plugin Market (GitHub raw + 1h browser cache + manual refresh)
+- **Builder**: online Win/Linux payload builds, per-module enable switches, one-liner delivery (PowerShell/Cmd/Bash commands, LNK packaging, anonymous download links)
+- **MCP**: built-in MCP server (Streamable HTTP at `/mcp`, toggleable) — AI clients can drive every C2 capability
+- **Console**: ECharts dashboard (traffic charts/map), configurable backend address + reconnect page, audit logs, risk policy
+
+## Platform Support
+
+| Platform | Status |
+| --- | --- |
+| Windows x64 | ✅ Primary platform, fully verified |
+| Linux x64 | ⚠️ Cross-compiles; runtime not yet verified |
+| Windows x86 | ❌ Unsupported (no 32-bit indirect syscall implementation; disabled in Builder) |
+
+See the [platform support matrix](docs/平台支持矩阵.md) (verified records).
+
+## Quality Assurance
+
+- **CI** (GitHub Actions, `.github/workflows/ci.yml`): Rust (fmt + workspace tests), .NET (build + format check + MongoDB integration tests), WebApp (typecheck + Vitest + build)
+- **Tests**: Rust unit/integration tests, `src/tests/LibraNextgen.Tests` server integration tests, `src/webapp` Vitest component tests
+- **Regression**: `scripts/e2e/` automated regression suite (agent protocol / module management / traffic profiles / download formats — 14 scenarios), run via `run-all.ps1`
 
 ## Docs
 
 | Topic | Content |
 | --- | --- |
-| [Plugin Development](docs/en/plugin-development.md) | meta.json contract, zip layout, Rhai/native channels, frontend `usePluginHost`, sample plugins |
-| [Deployment & Building](docs/en/deployment.md) | Server/Console setup, Builder, Win/Linux cross-compile, plugin module staging |
-| [Operations](docs/en/operations.md) | Agent onboarding, market/upload/Git installs, Shell/files/MCP usage, audit & risk policy |
+| [Plugin Development](docs/zh/插件开发.md) | meta.json contract, zip layout, JS/native channels, frontend `usePluginHost`, sample plugins |
+| [Deployment & Building](docs/zh/部署与构建.md) | Server/Console setup, Builder, Win/Linux cross-compile, plugin module staging |
+| [Deployment Manual](docs/部署手册.md) | Production deployment: env vars (`LIBRA_SERVER_KEY`/`LIBRA_BUILDS_DIR`), MongoDB auth, nginx/TLS |
+| [Platform Support Matrix](docs/平台支持矩阵.md) | Per-platform verified records (build commands / results / conclusions) |
+| [Operations](docs/zh/操作手册.md) | Agent onboarding, market/upload/Git installs, Shell/files/MCP usage, audit & risk policy |
+| [LLM Plugin Guide](docs/LLM-插件开发指南.md) | Plugin development guide for LLMs (contract / channels / packaging) |
 
 ## Related Repositories
 
