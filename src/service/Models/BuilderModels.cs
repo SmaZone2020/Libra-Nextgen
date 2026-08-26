@@ -52,6 +52,15 @@ public class BuildJob
     }
 }
 
+/// <summary>模块构建结果：失败列表（构建成功但未部署/禁用）与硬失败（编译失败）。</summary>
+public class ModuleBuildResult
+{
+    public bool Compiled { get; set; }
+    public List<string> Missing { get; set; } = new();
+    public List<string> Deployed { get; set; } = new();
+    public List<string> Disabled { get; set; } = new();
+}
+
 /// <summary>Rust cross-compile target OS (platform key → os).</summary>
 public static class BuildPlatforms
 {

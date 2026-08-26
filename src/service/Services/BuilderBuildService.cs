@@ -72,8 +72,9 @@ public partial class BuilderBuildService
     }
 
     /// <summary>
-    /// 云模块是否可复用：产物齐全 且 模块源码没有比产物更新。
-    /// 任一启用模块缺失、或任一启用模块的 src/** 时间戳晚于对应产物 → false（需重建）。
+    /// 云模块是否可复用：产物齐全 且 模块源码/清单没有比产物更新。
+    /// 任一启用模块缺失、或任一启用模块的源码（*.rs / Cargo.toml）或关键依赖
+    /// crate（libra-psinline、libra-syscalls 等共享库）时间戳晚于对应产物 → false（需重建）。
     /// </summary>
     private static bool ModulesUpToDate(BuildContext ctx)
     {
@@ -81,6 +82,15 @@ public partial class BuilderBuildService
             return false;
         var enabled = EnabledModuleList(ctx);
         var enabledSet = new HashSet<string>(enabled);
+
+        // 共享依赖 crate：任一启用模块的依赖源码更新 → 所有模块产物视为过期
+        // （避免"改 libra-psinline 后 powershell/script 模块仍复用旧产物"）。
+        var sharedDeps = new[] { "libra-psinline", "libra-syscalls", "libra-common", "libra-platform", "libra-modules" };
+        var newestSharedDep = sharedDeps
+            .Select(d => NewestSource(Path.Combine(RustAgentDir, d)))
+            .DefaultIfEmpty(DateTime.MinValue)
+            .Max();
+
         foreach (var (moduleName, _) in CloudModules)
         {
             if (!enabledSet.Contains(moduleName))
@@ -88,20 +98,31 @@ public partial class BuilderBuildService
             var artifact = Path.Combine(ctx.ModulesDir, $"{moduleName}.{ctx.ModuleExt}");
             if (!System.IO.File.Exists(artifact))
                 return false;
+            var artifactTime = System.IO.File.GetLastWriteTimeUtc(artifact);
 
             // 源码时间戳校验：改模块代码后构建必须重编（否则旧 dll 被复用）
             var srcDir = Path.Combine(RustAgentDir, "modules", moduleName);
-            if (Directory.Exists(srcDir))
-            {
-                var newestSrc = Directory.GetFiles(srcDir, "*.rs", SearchOption.AllDirectories)
-                    .Select(System.IO.File.GetLastWriteTimeUtc)
-                    .DefaultIfEmpty(DateTime.MinValue)
-                    .Max();
-                if (newestSrc > System.IO.File.GetLastWriteTimeUtc(artifact))
-                    return false;
-            }
+            var newestSrc = NewestSource(srcDir);
+            if (newestSrc > artifactTime)
+                return false;
+            // 共享依赖 crate 更新 → 也需重编（cargo 增量会重建，产物时间戳会刷新）
+            if (newestSharedDep > artifactTime)
+                return false;
         }
         return true;
+    }
+
+    /// <summary>目录内最新源码时间戳（.rs / Cargo.toml）；目录不存在返回 MinValue。</summary>
+    private static DateTime NewestSource(string dir)
+    {
+        if (!Directory.Exists(dir))
+            return DateTime.MinValue;
+        var files = Directory.GetFiles(dir, "*.rs", SearchOption.AllDirectories)
+            .Select(System.IO.File.GetLastWriteTimeUtc);
+        var toml = Path.Combine(dir, "Cargo.toml");
+        if (System.IO.File.Exists(toml))
+            files = files.Append(System.IO.File.GetLastWriteTimeUtc(toml));
+        return files.DefaultIfEmpty(DateTime.MinValue).Max();
     }
 
     // Module name -> cdylib lib target name (as produced by cargo).
@@ -155,6 +176,7 @@ public partial class BuilderBuildService
     /// <summary>
     /// 仅构建/部署云模块（不构建 agent core/loader）。供"构建模块"端点使用。
     /// 按 EnabledModules 子集构建，并清理被禁用模块的旧产物。
+    /// 模块编译失败返回 false（调用方标记失败）；编译成功但个别产物缺失返回 true。
     /// </summary>
     public async Task<bool> BuildModulesOnlyAsync(string platform, List<string>? enabledModules, BuildJob job)
     {
@@ -188,12 +210,17 @@ public partial class BuilderBuildService
             ctx.ModulesDir = ModulesDirFor(platform);
             ctx.EnvVars["RUSTFLAGS"] = "-C strip=symbols";
 
-            await Stage1_6_BuildModuleAsync(ctx, targetArg, job);
+            var result = await Stage1_6_BuildModuleAsync(ctx, targetArg, job);
+            if (!result.Compiled)
+            {
+                job.Fail($"cloud module build failed — modules not deployed: {string.Join(", ", result.Missing)}");
+                return false;
+            }
             return true;
         }
         catch (Exception ex)
         {
-            job.Log($"[WARN] module build failed: {ex.Message}");
+            job.Fail($"module build failed: {ex.Message}");
             return false;
         }
     }
@@ -302,6 +329,7 @@ public partial class BuilderBuildService
             }
 
             var buildSteps = new List<Func<Task>>();
+            ModuleBuildResult? moduleResult = null;
             if (!ctx.SkipCompile)
             {
                 buildSteps.Add(() => Stage1_BuildCoreAsync(ctx, targetArg, job));
@@ -310,7 +338,20 @@ public partial class BuilderBuildService
             // 模块构建独立于 core 的 prebuilt 跳过：modules 缺失/过期时，
             // 即使 core 走缓存也必须编译模块，否则 agent 模块下载 404。
             if (!modulesComplete)
-                buildSteps.Add(() => Stage1_6_BuildModuleAsync(ctx, targetArg, job));
+                buildSteps.Add(() =>
+                {
+                    // 模块编译失败不应连带整个 agent 构建失败（agent 本体仍可用），
+                    // 但必须明确记录缺失，避免"completed 但模块全 404"的静默事故。
+                    return Stage1_6_BuildModuleAsync(ctx, targetArg, job).ContinueWith(t =>
+                    {
+                        if (t.IsCompletedSuccessfully)
+                        {
+                            moduleResult = t.Result;
+                            if (!moduleResult.Compiled)
+                                job.Log($"[ERROR] module build failed — agent built without cloud modules: {string.Join(", ", moduleResult.Missing)}");
+                        }
+                    });
+                });
             else
                 job.Log($"Cloud modules already deployed for {req.Platform} — skipping module build");
             buildSteps.Add(() => Stage2_EncryptCoreAsync(ctx, job));
@@ -322,6 +363,11 @@ public partial class BuilderBuildService
                 await step();
                 if (job.IsCompleted) break; // success or failure — finalize history below
             }
+
+            // 模块编译失败时：agent 本体可用但云端模块缺失 —— 在构建记录里留痕，
+            // 便于 Console 区分"完全成功"与"agent 可用但模块缺失"。
+            if (moduleResult is { Compiled: false })
+                job.Record.Error ??= $"cloud modules missing: {string.Join(", ", moduleResult.Missing)}";
 
             UpdateHistory(job);
 

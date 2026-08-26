@@ -96,7 +96,7 @@ public partial class BuilderBuildService
     // Stage 1.6: Build cloud modules for this platform
     // ══════════════════════════════════════════════════════════════════
 
-    private static async Task Stage1_6_BuildModuleAsync(BuildContext ctx, string targetArg, BuildJob job)
+    private static async Task<ModuleBuildResult> Stage1_6_BuildModuleAsync(BuildContext ctx, string targetArg, BuildJob job)
     {
         job.Log($"=== Stage 1.6: Building cloud modules ({ctx.TargetTriple}) ===");
 
@@ -106,6 +106,8 @@ public partial class BuilderBuildService
         var targets = BuilderBuildService.CloudModules
             .Where(m => enabledSet.Contains(m.Module))
             .ToList();
+
+        var result = new ModuleBuildResult();
 
         // 禁用/启用状态 = 文件名后缀：禁用 → {name}.{ext}.disable（保留，可恢复）；
         // 启用 → 恢复为 {name}.{ext}。agent 请求原文件名，禁用后自然 404。
@@ -120,6 +122,7 @@ public partial class BuilderBuildService
                     if (!System.IO.File.Exists(normal) && System.IO.File.Exists(disabled))
                     {
                         System.IO.File.Move(disabled, normal);
+                        result.Disabled.Add(moduleName);
                         job.Log($"Re-enabled module {moduleName}.{ctx.ModuleExt}");
                     }
                 }
@@ -139,38 +142,50 @@ public partial class BuilderBuildService
         var moduleBuildResult = await RunProcessAsync(BuilderBuildService.CargoExe(ctx), moduleBuildArgs, job, RustAgentDir, ctx.EnvVars);
         if (moduleBuildResult.ExitCode != 0)
         {
-            job.Log("[WARN] cloud module build failed — cloud modules unavailable");
-            return;
+            // 硬失败：编译/链接失败会连带阻塞其他模块部署（cargo 一条命令构建全部）。
+            // 之前静默 [WARN] 导致 Linux 平台全部模块缺失而构建仍标记 completed。
+            job.Log($"[ERROR] cloud module build failed (exit {moduleBuildResult.ExitCode}) — modules not deployed: {string.Join(", ", targets.Select(t => t.Module))}");
+            result.Compiled = false;
+            result.Missing.AddRange(targets.Select(t => t.Module));
+            return result;
         }
+        result.Compiled = true;
 
-        Directory.CreateDirectory(ctx.ModulesDir);
-        var deployed = 0;
-        foreach (var (moduleName, libName) in targets)
+        // 部署在共享模块目录上：并发构建同平台时互斥（防交错写/改名）。
+        lock (BuilderBuildService.BuildLock)
         {
-            var artifact = ctx.IsWindows
-                ? $"{libName}.dll"
-                : ctx.IsMacos
-                    ? $"lib{libName}.dylib"
-                    : $"lib{libName}.so";
-            var modulePath = Path.Combine(ctx.ReleaseDir, artifact);
-            if (!System.IO.File.Exists(modulePath))
+            Directory.CreateDirectory(ctx.ModulesDir);
+            foreach (var (moduleName, libName) in targets)
             {
-                var found = Directory.GetFiles(ctx.ReleaseDir, $"*{libName}*")
-                    .FirstOrDefault(f => f.EndsWith(".dll") || f.EndsWith(".so") || f.EndsWith(".dylib"));
-                if (found != null) modulePath = found;
-            }
-            if (System.IO.File.Exists(modulePath))
-            {
-                System.IO.File.Copy(modulePath, Path.Combine(ctx.ModulesDir, $"{moduleName}.{ctx.ModuleExt}"), true);
-                job.Log($"Deployed {moduleName}.{ctx.ModuleExt}");
-                deployed++;
-            }
-            else
-            {
-                job.Log($"[WARN] {moduleName} module binary not found after build");
+                var artifact = ctx.IsWindows
+                    ? $"{libName}.dll"
+                    : ctx.IsMacos
+                        ? $"lib{libName}.dylib"
+                        : $"lib{libName}.so";
+                var modulePath = Path.Combine(ctx.ReleaseDir, artifact);
+                if (!System.IO.File.Exists(modulePath))
+                {
+                    var found = Directory.GetFiles(ctx.ReleaseDir, $"*{libName}*")
+                        .FirstOrDefault(f => f.EndsWith(".dll") || f.EndsWith(".so") || f.EndsWith(".dylib"));
+                    if (found != null) modulePath = found;
+                }
+                if (System.IO.File.Exists(modulePath))
+                {
+                    System.IO.File.Copy(modulePath, Path.Combine(ctx.ModulesDir, $"{moduleName}.{ctx.ModuleExt}"), true);
+                    result.Deployed.Add(moduleName);
+                    job.Log($"Deployed {moduleName}.{ctx.ModuleExt}");
+                }
+                else
+                {
+                    result.Missing.Add(moduleName);
+                    job.Log($"[WARN] {moduleName} module binary not found after build");
+                }
             }
         }
-        job.Log($"Cloud modules deployed: {deployed}/{targets.Count} -> {ctx.ModulesDir}");
+        job.Log($"Cloud modules deployed: {result.Deployed.Count}/{targets.Count} -> {ctx.ModulesDir}");
+        if (result.Missing.Count > 0)
+            job.Log($"[WARN] missing module artifacts: {string.Join(", ", result.Missing)}");
+        return result;
     }
 
     // ══════════════════════════════════════════════════════════════════

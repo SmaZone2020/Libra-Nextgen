@@ -1024,6 +1024,9 @@ public class AgentCommsController : ControllerBase
     /// presents its ephemeral RSA public key + the build's BeaconSecret; the
     /// server encrypts the core AES key with it. No private key is ever embedded
     /// in the agent binary.
+    ///
+    /// 旧端点（兼容旧 loader）：不发放 core.bin 下载凭证；新 loader 走
+    /// /api/v1/auth/token（同样密钥协商 + 一次性下载凭证，防 buildId 枚举拉取）。
     /// </summary>
     [HttpPost("core-key")]
     public IActionResult CoreKey([FromBody] CoreKeyRequest request)

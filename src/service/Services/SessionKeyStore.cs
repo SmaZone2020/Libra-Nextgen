@@ -76,7 +76,8 @@ public class SessionKeyStore
 
     public bool TryGet(string agentId, out byte[]? key) => _cache.TryGetValue(agentId, out key);
 
-    /// <summary>Issue a fresh opaque channel token for an agent session（持久化，重启不丢）。</summary>
+    /// <summary>Issue a fresh opaque channel token for an agent session（持久化，重启不丢）。
+    /// 每次轮换时清理该 agent 的旧 token，防止 token 映射无限累积。</summary>
     public string IssueToken(string agentId)
     {
         var token = Convert.ToHexString(RandomNumberGenerator.GetBytes(16)).ToLowerInvariant();
@@ -87,6 +88,16 @@ public class SessionKeyStore
                 Builders<SessionTokenDoc>.Filter.Eq(t => t.Token, token),
                 new SessionTokenDoc { Token = token, AgentId = agentId },
                 new ReplaceOptions { IsUpsert = true }).GetAwaiter().GetResult();
+            // 清理该 agent 的旧 token（含内存 + Mongo），避免每次重注册无限累积
+            foreach (var (oldToken, mapped) in _tokens.ToList())
+            {
+                if (mapped == agentId && oldToken != token)
+                {
+                    _tokens.TryRemove(oldToken, out _);
+                    _ = _tokenCollection.DeleteOneAsync(
+                        Builders<SessionTokenDoc>.Filter.Eq(t => t.Token, oldToken));
+                }
+            }
         }
         catch
         {
