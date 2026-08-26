@@ -120,13 +120,52 @@ public class ServerScriptService
             || cached.LastWriteUtc != lastWrite
             || !cached.SourcePaths.SequenceEqual(paths))
         {
-            var source = string.Join("\n", paths.Select(File.ReadAllText));
+            var source = JoinScriptSources(paths);
             var script = new CachedScript(paths, lastWrite,
                 new Lazy<Script<object>>(() => CSharpScript.Create<object>(source, Options)));
             _cache[pluginId] = script;
             cached = script;
         }
         return cached.Script.Value;
+    }
+
+    /// <summary>
+    /// 把 service/ 下多个 .cs 拼接为单个脚本。C# Script 要求 using 位于所有
+    /// 其他元素之前：若第二个文件的 using 出现在首个文件声明的后面，会触发
+    /// CS1529。因此先把所有“纯导入”using 行（using &lt;ns&gt;; 与
+    /// using static &lt;type&gt;;）抽到最前面（按出现顺序去重），其余内容再按
+    /// 文件顺序拼接。using var / using (...) / using X = ... 属于语句/别名，
+    /// 留在原位不抽取。
+    /// </summary>
+    private static string JoinScriptSources(string[] paths)
+    {
+        var usings = new List<string>();
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        var bodies = new List<string>();
+
+        foreach (var path in paths)
+        {
+            foreach (var line in File.ReadAllLines(path))
+            {
+                var trimmed = line.Trim();
+                if (trimmed.StartsWith("using ", StringComparison.Ordinal)
+                    && trimmed.EndsWith(';')
+                    && !trimmed.Contains('(')
+                    && !trimmed.Contains('=')
+                    && (trimmed.StartsWith("using static ", StringComparison.Ordinal)
+                        || trimmed.Length > 6 /* using <ns>; */))
+                {
+                    // 导入行：去重后抽到顶部；重复项直接丢弃，绝不落回 bodies
+                    if (seen.Add(trimmed)) usings.Add(line);
+                }
+                else
+                {
+                    bodies.Add(line);
+                }
+            }
+        }
+
+        return string.Join("\n", usings) + "\n\n" + string.Join("\n", bodies);
     }
 
     private static bool IsSafeName(string s) =>
