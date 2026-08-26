@@ -111,6 +111,22 @@ public class ServerScriptService
         return result;
     }
 
+    /// <summary>
+    /// 列出已导入且含 service/*.cs 的插件及其导出函数，序列化为对象形状
+    /// （{ pluginId, functions }）。ValueTuple 会被 System.Text.Json 序列化成
+    /// JSON 数组（[id, [fns]]），前端按对象字段读取会拿到 undefined。
+    /// </summary>
+    public async Task<List<PluginScriptListEntry>> ListPluginScriptsJsonAsync(CancellationToken ct)
+    {
+        var items = await ListPluginScriptsAsync(ct);
+        return items
+            .Select(t => new PluginScriptListEntry(t.PluginId, t.Functions.ToList()))
+            .ToList();
+    }
+
+    /// <summary>插件服务端脚本列表条目（对象形状，可被 JSON 序列化为 { pluginId, functions }）。</summary>
+    public sealed record PluginScriptListEntry(string PluginId, IReadOnlyList<string> Functions);
+
     /// <summary>获取编译缓存；service/ 下任一 .cs 变更（导入覆盖/时间戳变化）时重新编译。</summary>
     private Script<object> EnsureScript(string pluginId, string[] paths)
     {

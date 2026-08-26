@@ -23,10 +23,10 @@ public class ServerScriptController : ControllerBase
         _scripts = scripts;
     }
 
-    /// <summary>列出含 service/main.cs 的插件及其导出函数。</summary>
+    /// <summary>列出含 service/*.cs 的插件及其导出函数。</summary>
     [HttpGet("list")]
     public async Task<IActionResult> List(CancellationToken ct)
-        => Ok(new { plugins = await _scripts.ListPluginScriptsAsync(ct) });
+        => Ok(new { plugins = await _scripts.ListPluginScriptsJsonAsync(ct) });
 
     [HttpPost("{pluginId}/{functionName}")]
     public async Task<IActionResult> Invoke(string pluginId, string functionName, [FromBody] JsonElement? body, CancellationToken ct)
