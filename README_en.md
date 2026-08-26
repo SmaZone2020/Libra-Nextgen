@@ -28,8 +28,6 @@
 
 The Agent uses a **Bootstrapper + cloud modules** architecture: the loader reflectively loads an encrypted minimal kernel (`core.bin` — comm / crypto / scheduling / streaming), while everything else (files, credentials, recon, shell, PowerShell, proxy, token) is delivered as **modules** downloaded on demand from the Server and executed in memory — nothing touches disk. A **plugin system** extends it with zip-delivered capabilities: Agent-side **JavaScript (QuickJS sandbox, no compiler)** or native `cdylib`, server-side C# scripts, and frontend runtime page registration.
 
-**Zero-WebSocket architecture**: Agents hold no WebSocket connection at all — all agent traffic goes over HTTP(S) masquerading channels (AI-style endpoints + SSE event stream); WebSocket remains only for the Console realtime channel.
-
 ## Quick Start
 
 Requirements: Rust 1.80+ · .NET SDK 10 · Node.js 20+ · MongoDB 7.0+.
@@ -43,28 +41,28 @@ cd src/webapp && npm install && npm run dev
 #    (cross-builds need the zig toolchain)
 ```
 
-Three plugin channels: **Upload** (zip) / **Import from Git** (e.g. the [plugin scaffold repo](https://github.com/SmaZone2020/Libra-Plugin-Template)) / **Plugin Market** (the [Libra-Plugins](https://github.com/SmaZone2020/Libra-Plugins) official repo — one-click install, fetched directly from GitHub raw with a 1h browser cache and a manual refresh button).
+Three plugin channels: **Upload** (zip) / **Import from Git** (e.g. the [plugin scaffold repo](https://github.com/SmaZone2020/Libra-Plugin-Template)) / **Plugin Market** (the [Libra-Plugins](https://github.com/SmaZone2020/Libra-Plugins) official repo — direct install, fetched from GitHub raw with a 1-hour browser cache and a manual refresh button).
 
 ## Core Features
 
-- **Communication**: HTTP(S) masquerading channel (OpenAI-style endpoints + SSE task event stream), AES-256-GCM end-to-end encryption, RSA dynamic key negotiation; Console realtime channel over WebSocket (30s keepalive)
+- **Communication**: HTTP(S) masquerading channel (OpenAI-style endpoints + SSE task event stream), AES-256-GCM end-to-end encryption, RSA dynamic key negotiation; Console realtime channel over WebSocket (30-second keepalive)
 - **Traffic masquerading**: configurable profiles (comm path / headers / UA, etc.), persisted manage/disable in the Builder; connection parameters (protocol / heartbeat / jitter) injected at build time
 - **Agent**: concurrent task processing (modules run lock-free), interactive Shell (xterm.js), indirect syscalls + sleep obfuscation, anti-sandbox / anti-VM, in-memory PowerShell (CLR host), multi-vector persistence
 - **Recon**: system & hardware fingerprinting, network + GeoIP, WiFi / LAN / Bluetooth scanning, processes / windows / accounts
 - **Credentials**: browser passwords, RDP credentials, SSH keys, WeChat data, AI tool API keys (plugin)
 - **Proxy**: Socks proxy module + ProxyBrowser for browsing intranet web apps
-- **Plugin system**: upload zip / Git import / Plugin Market (GitHub raw + 1h browser cache + manual refresh)
+- **Plugin system**: upload zip / Git import / Plugin Market (GitHub raw + 1-hour browser cache + manual refresh)
 - **Builder**: online Win/Linux payload builds, per-module enable switches, one-liner delivery (PowerShell/Cmd/Bash commands, LNK packaging, anonymous download links)
 - **MCP**: built-in MCP server (Streamable HTTP at `/mcp`, toggleable) — AI clients can drive every C2 capability
-- **Console**: ECharts dashboard (traffic charts/map), configurable backend address + reconnect page, audit logs, risk policy
+- **Console**: ECharts dashboard (traffic charts/map), configurable backend address, reconnect handling, audit logs, risk policy
 
 ## Platform Support
 
 | Platform | Status |
 | --- | --- |
-| Windows x64 | ✅ Primary platform, fully verified |
-| Linux x64 | ⚠️ Cross-compiles; runtime not yet verified |
-| Windows x86 | ❌ Unsupported (no 32-bit indirect syscall implementation; disabled in Builder) |
+| Windows x64 | Supported (primary platform, fully verified) |
+| Linux x64 | Cross-compilation passes; runtime verification pending |
+| Windows x86 | Unsupported (no 32-bit indirect syscall implementation; disabled in Builder) |
 
 See the [platform support matrix](docs/平台支持矩阵.md) (verified records).
 
