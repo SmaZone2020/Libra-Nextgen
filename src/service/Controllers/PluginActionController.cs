@@ -101,10 +101,16 @@ public class PluginActionController : ControllerBase
 
     /// <summary>
     /// Serve a plugin's bundled static assets (icons, images, markdown docs)
-    /// from its extracted <c>assets/</c> directory. Anonymous so &lt;img&gt;
-    /// tags and markdown fetches can load them without a JWT header.
+    /// from its extracted <c>assets/</c> directory, including nested
+    /// subdirectories (e.g. <c>docs/01-overview.md</c>). Anonymous so
+    /// &lt;img&gt; tags and markdown fetches can load them without a JWT header.
     /// </summary>
-    [HttpGet("assets/{filename}")]
+    /// <remarks>
+    /// The <c>{**filename}</c> catch-all is required: a single-segment
+    /// <c>{filename}</c> route cannot match <c>docs/01-overview.md</c>
+    /// (ASP.NET treats <c>/</c> as a segment separator) and would return 404.
+    /// </remarks>
+    [HttpGet("assets/{**filename}")]
     [AllowAnonymous]
     public IActionResult GetAsset(string pluginId, string filename)
     {
