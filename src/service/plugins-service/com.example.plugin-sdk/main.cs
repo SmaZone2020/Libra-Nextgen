@@ -5,6 +5,12 @@
 //  统一入口：POST /api/plugin/com.example.plugin-sdk/<函数名>
 //            body 任意 JSON → 脚本函数参数 p（dynamic，body 为空时为 null）
 //
+//  【多文件组织】
+//  宿主把 service/ 下所有 *.cs 按文件名排序拼接为单个脚本再编译：
+//    sdk_utils.cs —— using / DemoState（跨调用状态）/ MakeClient / Str / Int /
+//                     PluginRootCandidates（工具类，先拼接）
+//    main.cs      —— 本文件（最后拼接），导出函数 + 末尾 return Dictionary
+//
 //  【脚本约定】
 //   1. 文件末尾必须 return new Dictionary<string, Func<object, object>>，
 //      键 = 函数名，值 = 处理函数；处理函数返回任意可 JSON 序列化对象。
@@ -40,45 +46,6 @@ using System.Text;
 using System.Text.Json;
 using System.Collections.Generic;
 using System.Linq;
-
-// ── 跨调用状态：脚本程序集只编译一次，静态字段在多次调用间保持 ────────
-static class DemoState
-{
-    public static int Calls;
-    public static DateTimeOffset LastCallUtc;
-}
-
-// ── 通用工具 ───────────────────────────────────────────────────────────
-
-static HttpClient MakeClient(string ua = "Mozilla/5.0 (Windows NT 10.0; Win64; x64)")
-{
-    var c = new HttpClient(new HttpClientHandler { AllowAutoRedirect = true })
-    {
-        Timeout = TimeSpan.FromSeconds(15),
-    };
-    c.DefaultRequestHeaders.UserAgent.ParseAdd(ua);
-    return c;
-}
-
-/// <summary>安全取值：object → string（null 时返回默认值）。</summary>
-static string Str(object? v, string def = "") => v?.ToString() ?? def;
-
-/// <summary>安全取值：object → int。</summary>
-static int Int(object? v, int def = 0)
-{
-    try { return Convert.ToInt32(v); } catch { return def; }
-}
-
-/// <summary>定位插件包根目录（运行时解压目录优先，其次仓库内开发目录）。</summary>
-static List<string> PluginRootCandidates() => new()
-{
-    // 部署形态：PluginsBaseDir = AppContext.BaseDirectory\..\..\..\..\plugins
-    System.IO.Path.GetFullPath(System.IO.Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "plugins", "com.example.plugin-sdk")),
-    // 直接挂在 bin 旁
-    System.IO.Path.Combine(AppContext.BaseDirectory, "com.example.plugin-sdk"),
-    // 开发源目录（service/main.cs 的开发副本）
-    System.IO.Path.GetFullPath(System.IO.Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "plugins-service", "com.example.plugin-sdk")),
-};
 
 // ── 函数实现（每个函数 = 一个能力点） ───────────────────────────────────
 

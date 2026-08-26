@@ -1,10 +1,10 @@
-//! Script module — executes Rhai plugin scripts inside the agent.
+//! Script module — executes plugin scripts inside the agent.
 //!
-//! This is the "no-compiler" plugin path: plugin authors ship a `.rhai` text
-//! source instead of a compiled cdylib. The script runs in a sandboxed Rhai
-//! engine whose API surface is gated by (a) the platform and (b) an optional
-//! feature allowlist, with C#-MAUI-style `#if(WINDOWS)/#endif` conditional
-//! compilation resolved at parse time.
+//! This is the "no-compiler" plugin path: plugin authors ship a `.js` text
+//! source instead of a compiled cdylib. The script runs in a sandboxed
+//! QuickJS (rquickjs) runtime whose API surface is gated by (a) the platform
+//! and (b) an optional feature allowlist. Platform branching is done at
+//! runtime via `__platform()` (there is no compile-time preprocessor anymore).
 //!
 //! ABI (same as every cloud module, see `libra-load`):
 //! ```text
@@ -15,14 +15,20 @@
 //!
 //! Input JSON: `{"script":"...", "args":{...}, "entry":"main", "features":[...]}`
 //! Output: the entry function's return value, serialized as JSON.
+//!
+//! Script contract:
+//!   - the script must define a function named `entry` (default `main`) that
+//!     receives the deserialized `args` object and returns a JSON-serializable
+//!     value;
+//!   - the JS globals `fs`/`proc`/`env` and the functions `whoami()`/`log()`
+//!     plus platform command helpers (`cmd`, `powershell`, `reg_query`, … on
+//!     Windows; `shell`, `bash`, `uname`, … elsewhere) are always available;
+//!   - `__platform()` returns "windows" | "linux" | "macos" | "unknown".
 
+mod api_common;
+mod api_linux;
+mod api_windows;
 mod engine;
-mod ifdef;
-mod platform_common;
-#[cfg(target_os = "windows")]
-mod platform_windows;
-#[cfg(not(target_os = "windows"))]
-mod platform_linux;
 
 use serde_json::Value;
 
@@ -62,7 +68,10 @@ fn run_script(input_json: &str) -> String {
         return serde_json::json!({ "error": "missing script" }).to_string();
     }
 
-    let args: Value = req.get("args").cloned().unwrap_or(Value::Object(Default::default()));
+    let args: Value = req
+        .get("args")
+        .cloned()
+        .unwrap_or(Value::Object(Default::default()));
     let entry = req
         .get("entry")
         .and_then(|v| v.as_str())
@@ -72,11 +81,7 @@ fn run_script(input_json: &str) -> String {
     let features: Vec<String> = req
         .get("features")
         .and_then(|v| v.as_array())
-        .map(|a| {
-            a.iter()
-                .filter_map(|x| x.as_str().map(String::from))
-                .collect()
-        })
+        .map(|a| a.iter().filter_map(|x| x.as_str().map(String::from)).collect())
         .unwrap_or_default();
 
     engine::execute(&script, &args, &entry, &features)
@@ -88,7 +93,9 @@ fn write_output(s: &str, output: *mut u8, output_cap: usize) -> usize {
     let bytes = s.as_bytes();
     let n = bytes.len().min(output_cap);
     if n > 0 && !output.is_null() {
-        unsafe { std::ptr::copy_nonoverlapping(bytes.as_ptr(), output, n); }
+        unsafe {
+            std::ptr::copy_nonoverlapping(bytes.as_ptr(), output, n);
+        }
     }
     n
 }
@@ -100,28 +107,41 @@ mod tests {
     #[test]
     fn shell_script_returns_map() {
         let script = r#"
-fn main(args) {
-    let op = if args.contains("op") { args["op"] } else { "showcase" };
-    let result;
-    if op == "shell" {
-        let command = args["command"];
-        result = #{ "command": command, "output": "OK" };
-    } else {
-        result = #{ "other": true };
+function main(args) {
+    const op = args.op || "showcase";
+    if (op === "shell") {
+        return { command: args.command, output: "OK" };
     }
-    result
+    return { other: true };
 }
 "#;
-        let out = run_script(&serde_json::json!({
-            "script": script,
-            "args": { "op": "shell", "command": "whoami" },
-            "entry": "main",
-            "features": []
-        }).to_string());
+        let out = run_script(
+            &serde_json::json!({
+                "script": script,
+                "args": { "op": "shell", "command": "whoami" },
+                "entry": "main",
+                "features": []
+            })
+            .to_string(),
+        );
         let v: Value = serde_json::from_str(&out).unwrap();
         assert_eq!(v["ok"], true);
         assert!(v["result"].is_object(), "result should be object, got {:?}", v["result"]);
         assert_eq!(v["result"]["output"], "OK");
     }
-}
 
+    #[test]
+    fn missing_entry_falls_back_to_main() {
+        let out = run_script(
+            &serde_json::json!({
+                "script": "function main() { return { hello: 1 }; }",
+                "args": {},
+                "features": []
+            })
+            .to_string(),
+        );
+        let v: Value = serde_json::from_str(&out).unwrap();
+        assert_eq!(v["ok"], true);
+        assert_eq!(v["result"]["hello"], 1);
+    }
+}

@@ -9,6 +9,6 @@ crate-type = ["cdylib"]
 
 [dependencies]
 serde_json = { workspace = true }
-rhai = { workspace = true }
+rquickjs = { workspace = true }
 libra-common = { path = "../../libra-common" }
 libra-psinline = { path = "../../libra-psinline" }

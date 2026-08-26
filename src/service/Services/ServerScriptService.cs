@@ -9,14 +9,15 @@ namespace LibraNextgen.Service.Services;
 
 /// <summary>
 /// 服务端插件脚本驱动器（基于 .NET 自带 Roslyn C# Scripting）。
-/// 插件 zip 的 <c>service/main.cs</c>（解压到 <c>PluginsBaseDir/&lt;pluginId&gt;/service/main.cs</c>）
-/// 作为该插件的服务端逻辑：编译结果按插件缓存（文件变更自动失效），
-/// 统一入口 <c>POST /api/plugin/{pluginId}/{fn}</c> 驱动执行。
+/// 插件 zip 的 <c>service/</c> 目录（解压到 <c>PluginsBaseDir/&lt;pluginId&gt;/service/</c>）
+/// 作为该插件的服务端逻辑：目录下所有 <c>*.cs</c> 按文件名排序后拼接为单个脚本编译，
+/// 结果按插件缓存（文件变更自动失效），统一入口 <c>POST /api/plugin/{pluginId}/{fn}</c> 驱动执行。
 ///
-/// main.cs 约定：
+/// service/*.cs 约定：
 ///   - 可直接 <c>using System.Net.Http / System.Text.Json / System.Collections.Generic</c> 等引用库，
 ///     自己 new HttpClient 做网络请求（服务端发起，无 CORS）。
-///   - 末尾 <c>return new Dictionary&lt;string, Func&lt;object, object&gt;&gt; { ["fn"] = p => …, … };</c>
+///   - 目录下所有 .cs 按名称排序拼接（一个文件放工具函数/状态类，main.cs 放导出），
+///     拼接后的脚本末尾 <c>return new Dictionary&lt;string, Func&lt;object, object&gt;&gt; { ["fn"] = p => …, … };</c>
 ///     导出函数；<c>p</c> 为请求 body 反序列化后的 dynamic 对象（body 为空时为 null）。
 ///   - 函数返回值作为 <c>data</c> 返回（对象自动 JSON 序列化）。
 /// </summary>
@@ -33,34 +34,48 @@ public class ServerScriptService
             "System", "System.Net", "System.Net.Http", "System.Text", "System.Text.Json",
             "System.Threading.Tasks", "System.Collections.Generic", "System.Dynamic", "System.Linq");
 
-    private sealed record CachedScript(string SourcePath, DateTime LastWriteUtc, Lazy<Script<object>> Script);
+    private sealed record CachedScript(string[] SourcePaths, DateTime LastWriteUtc, Lazy<Script<object>> Script);
 
     private readonly ConcurrentDictionary<string, CachedScript> _cache = new();
 
-    /// <summary>插件 service/main.cs 的路径（运行时解压目录优先，其次仓库内开发源）。</summary>
-    public static string? SourcePathFor(string pluginId)
+    /// <summary>插件 service/ 目录下所有 .cs 文件的路径（运行时解压目录优先，其次仓库内开发源）。</summary>
+    public static string[] SourcePathsFor(string pluginId)
     {
-        var runPath = Path.Combine(PluginService.PluginsBaseDir, pluginId, "service", "main.cs");
-        if (File.Exists(runPath)) return runPath;
-        var devPath = Path.GetFullPath(
-            Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "plugins-service", pluginId, "main.cs"));
-        return File.Exists(devPath) ? devPath : null;
+        var runDir = Path.Combine(PluginService.PluginsBaseDir, pluginId, "service");
+        if (Directory.Exists(runDir))
+        {
+            var files = Directory.GetFiles(runDir, "*.cs", SearchOption.AllDirectories)
+                .OrderBy(f => f, StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+            if (files.Length > 0) return files;
+        }
+        var devDir = Path.GetFullPath(
+            Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "plugins-service", pluginId));
+        if (Directory.Exists(devDir))
+        {
+            var files = Directory.GetFiles(devDir, "*.cs", SearchOption.AllDirectories)
+                .OrderBy(f => f, StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+            if (files.Length > 0) return files;
+        }
+        return Array.Empty<string>();
     }
 
-    /// <summary>调用某插件 service/main.cs 的某导出函数，返回其返回值（可 JSON 序列化）。</summary>
+    /// <summary>调用某插件 service/ 的某导出函数，返回其返回值（可 JSON 序列化）。</summary>
     public async Task<object?> InvokeAsync(string pluginId, string fn, string? jsonBody, CancellationToken ct)
     {
         if (!IsSafeName(pluginId) || !IsSafeName(fn))
             throw new ArgumentException("invalid plugin/function name");
 
-        var path = SourcePathFor(pluginId)
-            ?? throw new FileNotFoundException($"plugin '{pluginId}' has no service/main.cs");
+        var paths = SourcePathsFor(pluginId);
+        if (paths.Length == 0)
+            throw new FileNotFoundException($"plugin '{pluginId}' has no service/*.cs");
 
-        var script = EnsureScript(pluginId, path);
+        var script = EnsureScript(pluginId, paths);
         var state = await script.RunAsync(cancellationToken: ct).ConfigureAwait(false);
 
         if (state.ReturnValue is not IDictionary<string, Func<object?, object?>> funcs)
-            throw new InvalidDataException($"plugin '{pluginId}' service/main.cs must return a Dictionary<string, Func<object, object>>");
+            throw new InvalidDataException($"plugin '{pluginId}' service scripts must return a Dictionary<string, Func<object, object>>");
 
         if (!funcs.TryGetValue(fn, out var handler))
             throw new ArgumentException($"function '{fn}' not found in plugin '{pluginId}' service");
@@ -68,7 +83,7 @@ public class ServerScriptService
         return handler(ToDynamic(jsonBody));
     }
 
-    /// <summary>列出已导入且含 service/main.cs 的插件及其导出函数。</summary>
+    /// <summary>列出已导入且含 service/*.cs 的插件及其导出函数。</summary>
     public async Task<List<(string PluginId, IReadOnlyList<string> Functions)>> ListPluginScriptsAsync(CancellationToken ct)
     {
         var result = new List<(string, IReadOnlyList<string>)>();
@@ -78,12 +93,12 @@ public class ServerScriptService
         {
             var pluginId = Path.GetFileName(dir);
             if (!IsSafeName(pluginId)) continue;
-            var main = Path.Combine(dir, "service", "main.cs");
-            if (!File.Exists(main)) continue;
+            var paths = SourcePathsFor(pluginId);
+            if (paths.Length == 0) continue;
 
             try
             {
-                var script = EnsureScript(pluginId, main);
+                var script = EnsureScript(pluginId, paths);
                 var state = await script.RunAsync(cancellationToken: ct).ConfigureAwait(false);
                 var funcs = state.ReturnValue as IDictionary<string, Func<object?, object?>>;
                 result.Add((pluginId, funcs?.Keys.ToList() ?? new List<string>()));
@@ -96,15 +111,18 @@ public class ServerScriptService
         return result;
     }
 
-    /// <summary>获取编译缓存；main.cs 文件变更（导入覆盖/时间戳变化）时重新编译。</summary>
-    private Script<object> EnsureScript(string pluginId, string path)
+    /// <summary>获取编译缓存；service/ 下任一 .cs 变更（导入覆盖/时间戳变化）时重新编译。</summary>
+    private Script<object> EnsureScript(string pluginId, string[] paths)
     {
-        var lastWrite = File.GetLastWriteTimeUtc(path);
+        var lastWrite = paths.Max(p => File.GetLastWriteTimeUtc(p));
         var cached = _cache.GetValueOrDefault(pluginId);
-        if (cached is null || cached.LastWriteUtc != lastWrite)
+        if (cached is null
+            || cached.LastWriteUtc != lastWrite
+            || !cached.SourcePaths.SequenceEqual(paths))
         {
-            var script = new CachedScript(path, lastWrite,
-                new Lazy<Script<object>>(() => CSharpScript.Create<object>(File.ReadAllText(path), Options)));
+            var source = string.Join("\n", paths.Select(File.ReadAllText));
+            var script = new CachedScript(paths, lastWrite,
+                new Lazy<Script<object>>(() => CSharpScript.Create<object>(source, Options)));
             _cache[pluginId] = script;
             cached = script;
         }

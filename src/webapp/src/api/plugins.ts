@@ -130,7 +130,7 @@ export async function importPlugin(file: File, enable: boolean): Promise<PluginR
  */
 const PLUGIN_MARKET_BASE =
   import.meta.env.VITE_PLUGIN_MARKET_BASE ||
-  'https://raw.githubusercontent.com/SmaZone2020/Libra-Plugins/refs/heads/main';
+  'https://raw.githubusercontent.com/SmaZone2020/Libra-Plugins/refs/heads/main/plugins';
 
 const REGISTRY_CACHE_KEY = 'libra.plugin.registry';
 const REGISTRY_TTL_MS = 60 * 60 * 1000; // 1 hour

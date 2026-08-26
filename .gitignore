@@ -143,7 +143,14 @@ dist
 **/obj/
 /src/build-output/
 /src/wechatdump/
+# Plugin sources live in the separate Libra-Plugins repo (plugins/<id>/)
 /src/plugins/
+# plugin demo page sources are mirrored into the webapp tree (tracked there)
+/src/webapp/src/plugins
+# the plugin demo pages under src/plugins are a packaging mirror; the only
+# tracked page copies live under src/webapp/src/plugins (see above)
+# (uncomment the line below only if a plugin page should be tracked here)
+# !/src/webapp/src/plugins/com.example.plugin-sdk/index.tsx
 
 # JetBrains IDE
 .idea/

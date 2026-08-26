@@ -77,8 +77,8 @@ public class PluginActionController : ControllerBase
         {
             var script = LoadScriptSource(plugin.PluginId, def.Module.Name);
             if (script == null)
-                return NotFound(new { error = $"script module '{def.Module.Name}.rhai' not found" });
-            // 任务化 relay：script 模块（Rhai 沙箱）
+                return NotFound(new { error = $"script module '{def.Module.Name}.js' not found" });
+            // 任务化 relay：script 模块（QuickJS 沙箱，JS 源码随包分发）
             result = await _relay.RelayAndWaitAsync(agentId, "script", new
             {
                 script,
@@ -100,16 +100,17 @@ public class PluginActionController : ControllerBase
     }
 
     /// <summary>
-    /// Serve a plugin's bundled static assets (icons, images) from its extracted
-    /// <c>assets/</c> directory. Anonymous so &lt;img&gt; tags can load them
-    /// (image requests cannot carry the JWT header).
+    /// Serve a plugin's bundled static assets (icons, images, markdown docs)
+    /// from its extracted <c>assets/</c> directory. Anonymous so &lt;img&gt;
+    /// tags and markdown fetches can load them without a JWT header.
     /// </summary>
     [HttpGet("assets/{filename}")]
     [AllowAnonymous]
     public IActionResult GetAsset(string pluginId, string filename)
     {
         if (string.IsNullOrWhiteSpace(filename)
-            || filename.Any(c => !(char.IsAsciiLetterOrDigit(c) || c is '.' or '-' or '_')))
+            || filename.Contains("..")
+            || filename.Any(c => !(char.IsAsciiLetterOrDigit(c) || c is '.' or '-' or '_' or '/')))
             return BadRequest(new { error = "invalid filename" });
 
         var path = Path.Combine(PluginService.PluginsBaseDir, pluginId, "assets", filename);
@@ -124,6 +125,9 @@ public class PluginActionController : ControllerBase
             ".ico" => "image/x-icon",
             ".gif" => "image/gif",
             ".webp" => "image/webp",
+            ".md" => "text/markdown; charset=utf-8",
+            ".txt" => "text/plain; charset=utf-8",
+            ".json" => "application/json; charset=utf-8",
             _ => "application/octet-stream",
         };
 
@@ -132,7 +136,7 @@ public class PluginActionController : ControllerBase
 
     // ── helpers ────────────────────────────────────────────────────────
 
-    /// <summary>Read a plugin's Rhai script source (cached by PluginService),
+    /// <summary>Read a plugin's JS script source (cached by PluginService),
     /// guarding against path traversal.</summary>
     private static string? LoadScriptSource(string pluginId, string name)
         => PluginService.GetScriptSource(pluginId, name);

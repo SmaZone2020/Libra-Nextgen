@@ -56,9 +56,10 @@ public class PluginService
     // ── Script source cache ────────────────────────────────────────────
 
     /// <summary>
-    /// Read a plugin's Rhai script source (guarding against path traversal),
+    /// Read a plugin's script source (guarding against path traversal),
     /// caching it in memory so repeated action invocations don't re-read disk.
-    /// Returns <c>null</c> when the script file is missing.
+    /// Scripts are plain JavaScript (<c>module/*.js</c>) executed by the agent's
+    /// QuickJS runtime. Returns <c>null</c> when the script file is missing.
     /// </summary>
     public static string? GetScriptSource(string pluginId, string name)
     {
@@ -70,7 +71,7 @@ public class PluginService
         if (ScriptCache.TryGetValue(key, out var cached))
             return cached;
 
-        var path = Path.Combine(PluginsBaseDir, pluginId, "module", name + ".rhai");
+        var path = Path.Combine(PluginsBaseDir, pluginId, "module", name + ".js");
         if (!File.Exists(path))
             return null;
 

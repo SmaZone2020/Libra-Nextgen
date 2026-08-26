@@ -19,7 +19,7 @@ public class PluginsController : ControllerBase
 
     /// <summary>Plugin marketplace root (Libra-Plugins/ sibling of src/).</summary>
     private static readonly string RegistryDir = Path.GetFullPath(
-        Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "Libra-Plugins"));
+        Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "Libra-Plugins", "plugins"));
 
     public PluginsController(PluginService plugins)
     {
@@ -36,20 +36,25 @@ public class PluginsController : ControllerBase
         return PhysicalFile(indexPath, "application/json");
     }
 
-    /// <summary>Download a plugin archive from the marketplace by its zip file name.</summary>
+    /// <summary>
+    /// Download a plugin archive from the marketplace. The index's `file` field
+    /// carries a path relative to the plugins/ dir (e.g.
+    /// com.libra.qqkey/qqkey.zip), so subdirectory names are allowed here.
+    /// </summary>
     [HttpGet("registry/plugins/{file}")]
     public IActionResult RegistryPlugin(string file)
     {
         if (string.IsNullOrWhiteSpace(file)
-            || Path.GetFileName(file) != file
-            || !file.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
+            || !file.EndsWith(".zip", StringComparison.OrdinalIgnoreCase)
+            || file.Contains("..")
+            || file.Any(c => !(char.IsAsciiLetterOrDigit(c) || c is '.' or '-' or '_' or '/')))
             return BadRequest(new { error = "invalid file name" });
 
         var path = Path.Combine(RegistryDir, file);
         if (!System.IO.File.Exists(path))
             return NotFound(new { error = "plugin archive not found" });
 
-        return PhysicalFile(path, "application/octet-stream", fileDownloadName: file);
+        return PhysicalFile(path, "application/octet-stream", fileDownloadName: Path.GetFileName(file));
     }
 
     /// <summary>All plugins (management view, includes disabled).</summary>

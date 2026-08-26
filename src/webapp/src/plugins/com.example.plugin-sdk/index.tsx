@@ -1,26 +1,24 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
-  Accordion, Alert, Avatar, Badge, Button, Card, Checkbox, Chip, ComboBox, Description,
-  Dropdown, Input, Kbd, Label, Link, ListBox, Modal, ProgressCircle, Skeleton, Slider,
-  Spinner, Surface, Switch, Table, Tabs, TextArea, TextField, Tooltip,
+  Accordion, Alert, Button, Card, Chip, ComboBox, Description, Input, Label, ListBox,
+  Modal, ProgressCircle, Skeleton, Spinner, Switch, Table, Tabs, TextArea, TextField, Tooltip,
 } from '@heroui/react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { usePluginHost, type PluginOutput } from '../../hooks/usePluginHost';
 import { api, API_ORIGIN } from '../../api/client';
-import {
-  getPluginRegistry, installPluginFromRegistry, listPlugins,
-  type PluginRecord, type PluginRegistryIndex,
-} from '../../api/plugins';
+import { listPlugins, type PluginRecord } from '../../api/plugins';
 
 /**
  * 插件 SDK 全能力演示（活文档）。
  *
  * 本页同时是【示例】和【文档】：把插件作者能用的所有宿主 API、组件与
  * 可选项都真实渲染出来，作者照着抄即可。分五个页签：
- *   1. 总览        —— 三层架构 / 包目录结构 / meta.json 全字段与可选项
- *   2. Agent 模块  —— Rhai 脚本能力目录 + 实时执行（dispatchTask + WS 推送）
- *   3. 服务端脚本  —— service/main.cs 全函数目录 + 实时调用（/api/plugin/*）
- *   4. 前端 API    —— usePluginHost / api client / 插件管理 / 插件市场
- *   5. HeroUI 组件 —— 可用组件画廊（每个组件列出可选项）
+ *   1. 总览        —— 三层架构 / 包目录结构 / 接入流程（简版，详见文档页签）
+ *   2. 文档        —— 活文档：在线拉取 assets/docs/*.md 渲染（随 zip 分发）
+ *   3. Agent 端    —— JS 能力目录 + 实时执行（dispatchTask + WS 推送）
+ *   4. 服务端脚本  —— service/*.cs 全函数目录 + 实时调用（/api/plugin/*）
+ *   5. 前端 API    —— usePluginHost / api client / 插件管理
  */
 
 const SDK_ID = 'com.example.plugin-sdk';
@@ -43,66 +41,53 @@ function pretty(data: unknown): string {
   return typeof parsed === 'string' ? parsed : JSON.stringify(parsed ?? '(empty)', null, 2);
 }
 
-// ── 目录/清单常量 ───────────────────────────────────────────────────────
+/** 插件包内静态资源端点（与 com.libra.aitoken 的 assets 用法一致，匿名可访问）。 */
+function assetUrl(file: string): string {
+  return `${API_ORIGIN}/api/plugins/${SDK_ID}/assets/${file}`;
+}
+
+/** 在包内 assets/docs/ 下按文件名顺序加载六篇文档。 */
+const DOC_FILES: { id: string; label: string; file: string }[] = [
+  { id: '01', label: '总览', file: 'docs/01-overview.md' },
+  { id: '02', label: '插件契约', file: 'docs/02-plugin-contract.md' },
+  { id: '03', label: 'Agent JS API', file: 'docs/03-agent-js-api.md' },
+  { id: '04', label: '服务端脚本', file: 'docs/04-server-script.md' },
+  { id: '05', label: '前端宿主', file: 'docs/05-frontend-host.md' },
+  { id: '06', label: '打包发布', file: 'docs/06-pack-publish.md' },
+];
 
 const DIR_TREE = `com.example.plugin-sdk/
 ├── meta.json               # 插件契约（必需）
 ├── module/                 # Agent 端模块
-│   ├── plugin_sdk.rhai     #   script 通道：Rhai，无需编译，内存执行
-│   ├── x64/plugin.dll      #   native 通道：按平台目录放 cdylib
-│   ├── x86/plugin.dll
-│   └── linux-x64/plugin.so
+│   └── plugin_sdk.js       #   script 通道：JS 源码，QuickJS 内存执行
 ├── service/                # 服务端逻辑（C# 脚本，随包分发）
-│   └── main.cs             #   由 ServerScriptService 执行：/api/plugin/<pluginId>/<fn>
+│   ├── sdk_utils.cs        #   工具类/静态状态（按文件名排序，先拼接）
+│   └── main.cs             #   导出函数（末尾 return Dictionary）
 ├── page/                   # 前端页面源码（分发用，需重建前端）
 │   └── index.tsx
-├── data/                   # 随包分发的数据/配置文件（脚本可读）
-├── assets/                 # 静态资源（图标等）
+├── assets/                 # 静态资源（经 /api/plugins/<id>/assets/ 动态加载）
+│   └── docs/               #   活文档（markdown，本页「文档」页签在线渲染）
+├── data/                   # 随包分发的数据/配置文件（脚本 file 函数可读）
 └── README.md               # 插件说明`;
 
-const META_FIELDS: { field: string; required: string; desc: string; options: string }[] = [
-  { field: 'schemaVersion', required: '是', desc: '契约版本', options: '恒为 1' },
-  { field: 'pluginId', required: '是', desc: '全局唯一 ID，也是包目录名 / 脚本目录名', options: '仅 [A-Za-z0-9.-_]，建议 com.作者.插件' },
-  { field: 'name', required: '是', desc: '插件显示名', options: '任意字符串' },
-  { field: 'version', required: '是', desc: '插件版本', options: '语义化版本号，如 1.0.0' },
-  { field: 'author', required: '是', desc: '作者', options: '任意字符串' },
-  { field: 'description', required: '是', desc: '一句话说明（市场列表显示）', options: '任意字符串' },
-  { field: 'entry.route', required: '是', desc: '前端路由', options: '/plugins/<route>' },
-  { field: 'entry.label', required: '是', desc: '导航名', options: 'i18n 键，如 nav.pluginSdk' },
-  { field: 'entry.icon', required: '否', desc: '导航图标', options: '@gravity-ui/icons 图标名，如 Puzzle' },
-  { field: 'entry.apiRoot', required: '否', desc: '页面 API 前缀（约定，页面自行使用）', options: '/api/plugins/<pluginId>' },
-  { field: 'i18n', required: '否', desc: '多语言文案', options: '{ zh: {...}, en: {...} }' },
-  { field: 'actions[]', required: '是', desc: '动作 = 按钮 + 转发 + Agent 模块调用', options: '见下方 actions 表' },
-];
-
-const ACTION_FIELDS: { field: string; required: string; desc: string; options: string }[] = [
-  { field: 'action', required: '是', desc: '动作 ID（前端 dispatchTask 用）', options: '任意字符串，如 showcase' },
-  { field: 'label', required: '是', desc: '按钮/动作显示名', options: '任意字符串' },
-  { field: 'method', required: '是', desc: 'HTTP 方法', options: 'GET / POST' },
-  { field: 'argsSchema', required: '否', desc: '参数表单（JSON Schema 子集）', options: 'type: object；properties: {字段: {type, title}}；required: [字段]' },
-  { field: 'module.kind', required: '是', desc: 'Agent 模块通道', options: 'script（.rhai，无需编译）/ native（cdylib .dll/.so）' },
-  { field: 'module.name', required: '是', desc: '模块名', options: '.rhai 文件 stem 或 .dll/.so 名' },
-  { field: 'module.op', required: '否', desc: '注入模块输入 JSON 的 op 字段', options: '任意字符串，模块内分支用' },
-  { field: 'module.entry', required: '否', desc: '脚本入口函数', options: '如 main' },
-];
-
 const STEPS: [string, string][] = [
-  ['建包', '写好 meta.json + module/（script 或 native）+ service/main.cs + page/index.tsx，打成 zip'],
+  ['建包', '写好 meta.json + module/（script 或 native）+ service/*.cs + page/index.tsx，npm run pack 打成 zip'],
   ['导入', '控制台 → 插件管理 → 上传插件 / 从 Git 导入 / 从市场安装'],
   ['启用', '插件登记到后端，动作可下发到 Agent'],
   ['写页面', 'src/webapp/src/plugins/<pluginId>/index.tsx（import.meta.glob 收集，需重建前端）'],
   ['调 Agent', '页面里 usePluginHost().dispatchTask(pluginId, action, args)'],
-  ['调服务', '页面里 api.post(\'/plugin/<pluginId>/<fn>\', params) 驱动 service/main.cs'],
-  ['发布', '把 zip 提交到 Libra-Plugins 仓库，CI 生成 index.json 即上架市场'],
+  ['调服务', '页面里 api.post(\'/plugin/<pluginId>/<fn>\', params) 驱动 service/*.cs'],
+  ['发布', '把 zip 提交到 Libra-Plugins 仓库 plugins/<pluginId>/，CI 生成 index.json 即上架市场'],
 ];
 
-// ── Agent 能力清单（与 module/plugin_sdk.rhai 的 capability 分支一致）──
+// ── Agent 能力清单（与 module/plugin_sdk.js 的 capability 分支一致）──
 const AGENT_CAPS: { value: string; label: string; desc: string; needsCommand?: boolean }[] = [
   { value: 'whoami', label: 'whoami', desc: '当前用户' },
   { value: 'fs', label: 'fs', desc: '文件系统：写 /tmp/libra_sdk_probe.txt → 读 → 列目录 → 存在性' },
   { value: 'proc', label: 'proc', desc: '进程列表 + PATH 环境变量' },
   { value: 'network', label: 'network', desc: '网络信息（按平台自动选命令）' },
   { value: 'system', label: 'system', desc: '系统信息（按平台自动选命令）' },
+  { value: 'env', label: 'env', desc: '环境变量集合 + 当前用户（新增）' },
   { value: 'shell', label: 'shell', desc: '执行任意命令（可选项 command）', needsCommand: true },
   { value: 'log', label: 'log', desc: '写一条 Agent 日志（控制台日志流可见）' },
   { value: 'all', label: 'all', desc: '全量自检（默认）' },
@@ -120,36 +105,29 @@ const COMMON_API: [string, string][] = [
   ['env.set(name, value)', '写环境变量（多线程下安全 no-op 占位）'],
   ['whoami()', '当前用户名'],
   ['log(msg)', '打印到 Agent 日志'],
+  ['__platform()', '运行时平台分支："windows"|"linux"|"macos"|"unknown"'],
 ];
 
 const WINDOWS_API: [string, string][] = [
   ['cmd(cmdline)', '执行 CMD 命令'],
-  ['powershell(script)', '执行 PowerShell 脚本'],
+  ['powershell(script)', '进程内 CLR 执行 PowerShell（无 powershell.exe 进程）'],
   ['reg_query(key, name)', '查询注册表值'],
   ['reg_set(key, name, data)', '写注册表值，返回 bool'],
   ['reg_delete(key, name)', '删注册表值，返回 bool'],
-  ['ipconfig()', '网络配置'],
-  ['wmic(query)', '执行 WMIC 查询'],
+  ['ipconfig()', '网络配置（/all）'],
+  ['wmic(query)', '执行 WMIC 查询（Win11 24H2 已移除，注意空返回）'],
   ['tasklist()', '任务列表'],
 ];
 
 const LINUX_API: [string, string][] = [
-  ['shell(cmdline)', '执行 /bin/sh'],
-  ['bash(script)', '执行 /bin/bash'],
-  ['uname()', '内核/主机/架构'],
+  ['shell(cmdline)', '执行 /bin/sh -c'],
+  ['bash(script)', '执行 /bin/bash -c'],
+  ['uname()', '内核/主机/架构（uname -a）'],
   ['ip_route()', '网络接口/IP，等价 ip addr'],
   ['ss(path)', '读 /proc 或 /sys 文件'],
   ['hostname()', '主机名'],
   ['dns()', '/etc/resolv.conf'],
 ];
-
-const IFDEF_EXAMPLE = `#if(WINDOWS)
-    let net = ipconfig();
-#elif(LINUX)
-    let net = ip_route() + "\\n" + dns();
-#else
-    let net = "unsupported";
-#endif`;
 
 // ── 主页面 ─────────────────────────────────────────────────────────────
 
@@ -160,10 +138,11 @@ export default function PluginSdkPage() {
         <h1 className="text-xl font-semibold">插件开发 SDK 示例（全能力演示）</h1>
         <p className="text-sm text-default-500 mt-1">
           这是一个"活文档"插件：五个页签覆盖插件能用的所有能力与可选项 —— Agent 端
-          <code className="font-mono text-xs">module/plugin_sdk.rhai</code>（Rhai 脚本，多平台）、服务端
-          <code className="font-mono text-xs">service/main.cs</code>（C# 脚本，经
+          <code className="font-mono text-xs">module/plugin_sdk.js</code>（QuickJS，多平台）、服务端
+          <code className="font-mono text-xs">service/*.cs</code>（C# 脚本多文件，经
           <code className="font-mono text-xs">/api/plugin/com.example.plugin-sdk/&lt;fn&gt;</code> 驱动）、
-          前端 <code className="font-mono text-xs">page/index.tsx</code>（HeroUI + usePluginHost + 市场）。
+          前端 <code className="font-mono text-xs">page/index.tsx</code>（HeroUI + usePluginHost +
+          在线文档渲染）。
         </p>
       </Card>
 
@@ -171,18 +150,18 @@ export default function PluginSdkPage() {
         <Tabs.ListContainer>
           <Tabs.List aria-label="sdk sections">
             <Tabs.Tab id="overview">总览<Tabs.Indicator /></Tabs.Tab>
-            <Tabs.Tab id="agent">Agent 模块<Tabs.Indicator /></Tabs.Tab>
+            <Tabs.Tab id="docs">文档<Tabs.Indicator /></Tabs.Tab>
+            <Tabs.Tab id="agent">Agent 端<Tabs.Indicator /></Tabs.Tab>
             <Tabs.Tab id="service">服务端脚本<Tabs.Indicator /></Tabs.Tab>
             <Tabs.Tab id="frontend">前端 API<Tabs.Indicator /></Tabs.Tab>
-            <Tabs.Tab id="heroui">HeroUI 组件<Tabs.Indicator /></Tabs.Tab>
           </Tabs.List>
         </Tabs.ListContainer>
 
         <Tabs.Panel id="overview"><OverviewTab /></Tabs.Panel>
+        <Tabs.Panel id="docs"><DocsTab /></Tabs.Panel>
         <Tabs.Panel id="agent"><AgentTab /></Tabs.Panel>
         <Tabs.Panel id="service"><ServiceTab /></Tabs.Panel>
         <Tabs.Panel id="frontend"><FrontendApiTab /></Tabs.Panel>
-        <Tabs.Panel id="heroui"><HeroUiTab /></Tabs.Panel>
       </Tabs>
     </div>
   );
@@ -201,19 +180,19 @@ function OverviewTab() {
             <h3 className="font-semibold">module/</h3>
           </div>
           <ul className="text-sm text-default-500 mt-2 space-y-1 list-disc list-inside">
-            <li>script 通道：.rhai 脚本，无需编译，随动作下发内存执行</li>
+            <li>script 通道：.js 源码，QuickJS 内存执行，无需编译</li>
             <li>native 通道：Rust cdylib，按平台目录分发（x64/x86/linux-x64）</li>
             <li>能力：文件/进程/环境/Shell/注册表/网络/系统信息…</li>
-            <li>#if(WINDOWS)/#elif(LINUX) 解析期条件编译</li>
+            <li>__platform() 运行时平台分支（无需 #if 预处理）</li>
           </ul>
         </Card>
         <Card className="p-4">
           <div className="flex items-center gap-2">
             <Chip size="sm" color="warning">服务端</Chip>
-            <h3 className="font-semibold">service/main.cs</h3>
+            <h3 className="font-semibold">service/*.cs</h3>
           </div>
           <ul className="text-sm text-default-500 mt-2 space-y-1 list-disc list-inside">
-            <li>随包分发的 C# 脚本（Roslyn 解析执行，编译缓存）</li>
+            <li>随包分发的 C# 脚本（Roslyn 解析执行，多文件拼接编译）</li>
             <li>POST /api/plugin/&lt;pluginId&gt;/&lt;fn&gt; 驱动</li>
             <li>可引用库：HttpClient / System.Text.Json / Linq…</li>
             <li>服务端发起网络请求（无 CORS）、读包内文件、跨调用状态</li>
@@ -227,7 +206,7 @@ function OverviewTab() {
           <ul className="text-sm text-default-500 mt-2 space-y-1 list-disc list-inside">
             <li>HeroUI 组件 + usePluginHost（设备/任务/WS 推送）</li>
             <li>dispatchTask 调 Agent 模块；api.post 调服务端脚本</li>
-            <li>可直接 fetch 插件市场（localStorage 1h 缓存）</li>
+            <li>活文档在线渲染（assets/docs/*.md + react-markdown）</li>
             <li>源码分发：import.meta.glob 构建期收集，需重建前端</li>
           </ul>
         </Card>
@@ -236,13 +215,6 @@ function OverviewTab() {
       <Card className="p-4">
         <h3 className="font-semibold mb-2">插件包目录结构</h3>
         <pre className="text-xs font-mono overflow-auto bg-default-50 dark:bg-default-900 p-3 rounded">{DIR_TREE}</pre>
-      </Card>
-
-      <Card className="p-4">
-        <h3 className="font-semibold mb-2">meta.json 全字段（契约）</h3>
-        <MetaTable rows={META_FIELDS} />
-        <h4 className="font-semibold mt-4 mb-2">actions[] 子字段</h4>
-        <MetaTable rows={ACTION_FIELDS} />
       </Card>
 
       <Card className="p-4">
@@ -266,6 +238,7 @@ function OverviewTab() {
           <Alert.Description>
             module/ 与 service/ 随 zip 运行时分发；page/index.tsx 是源码分发，需放入前端仓库
             src/webapp/src/plugins/&lt;pluginId&gt;/index.tsx 并重建前端才会生效（本插件仓库内已内置）。
+            完整文档见「文档」页签（assets/docs/*.md 随包分发，在线渲染）。
           </Alert.Description>
         </Alert.Content>
       </Alert>
@@ -273,34 +246,89 @@ function OverviewTab() {
   );
 }
 
-function MetaTable({ rows }: { rows: { field: string; required: string; desc: string; options: string }[] }) {
+// ── 2. 文档：活文档在线渲染 ───────────────────────────────────────────
+
+function DocsTab() {
+  const [docId, setDocId] = useState(DOC_FILES[0]?.id ?? '01');
+  const [md, setMd] = useState<string | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  const load = useCallback(async (id: string) => {
+    const doc = DOC_FILES.find((d) => d.id === id);
+    if (!doc) return;
+    setLoading(true);
+    setErr(null);
+    try {
+      const res = await fetch(assetUrl(doc.file));
+      if (!res.ok) throw new Error(`加载失败：HTTP ${res.status}`);
+      setMd(await res.text());
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : String(e));
+      setMd(null);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    load(docId);
+  }, [docId, load]);
+
   return (
-    <Table>
-      <Table.ScrollContainer>
-        <Table.Content aria-label="meta fields" className="min-w-[720px]">
-          <Table.Header>
-            <Table.Column isRowHeader>字段</Table.Column>
-            <Table.Column>必填</Table.Column>
-            <Table.Column>说明</Table.Column>
-            <Table.Column>可选项</Table.Column>
-          </Table.Header>
-          <Table.Body>
-            {rows.map((r, i) => (
-              <Table.Row key={r.field} id={`mf-${i}`}>
-                <Table.Cell><code className="font-mono text-xs">{r.field}</code></Table.Cell>
-                <Table.Cell>{r.required === '是' ? <Chip size="sm" color="danger" variant="soft">必填</Chip> : <Chip size="sm" variant="secondary">可选</Chip>}</Table.Cell>
-                <Table.Cell className="text-sm">{r.desc}</Table.Cell>
-                <Table.Cell className="text-sm text-default-500">{r.options}</Table.Cell>
-              </Table.Row>
+    <div className="space-y-4">
+      <Alert status="accent">
+        <Alert.Content>
+          <Alert.Title>活文档（随 zip 分发）</Alert.Title>
+          <Alert.Description>
+            六篇 markdown 存放在插件包 <code className="font-mono text-xs">assets/docs/</code>，
+            经 <code className="font-mono text-xs">/api/plugins/com.example.plugin-sdk/assets/docs/&lt;file&gt;</code>
+            在线拉取渲染（react-markdown + remark-gfm）。文档只写一份，页面与仓库共用 ——
+            改文档 → 重新打包 → 刷新页面即可，无需重建前端。
+          </Alert.Description>
+        </Alert.Content>
+      </Alert>
+
+      <div className="grid gap-4 md:grid-cols-[220px_1fr]">
+        <Card className="p-2 self-start">
+          <div className="flex flex-col gap-1">
+            {DOC_FILES.map((d) => (
+              <Button
+                key={d.id}
+                variant={docId === d.id ? 'primary' : 'tertiary'}
+                size="sm"
+                className="justify-start"
+                onPress={() => setDocId(d.id)}
+              >
+                <span className="font-mono">{d.id}</span>
+                <span className="ml-2">{d.label}</span>
+              </Button>
             ))}
-          </Table.Body>
-        </Table.Content>
-      </Table.ScrollContainer>
-    </Table>
+          </div>
+        </Card>
+
+        <Card className="p-5 min-w-0">
+          {loading && (
+            <div className="space-y-2">
+              <Skeleton className="h-8 rounded-lg w-1/2" />
+              <Skeleton className="h-5 rounded-lg" />
+              <Skeleton className="h-5 rounded-lg w-3/4" />
+              <Skeleton className="h-5 rounded-lg w-1/2" />
+            </div>
+          )}
+          {err && <p className="text-danger text-sm">{err}（服务端未重启/插件未启用/包内缺 docs？）</p>}
+          {md !== null && !loading && (
+            <article className="prose-sdk max-w-none text-sm leading-relaxed space-y-3 [&_h1]:text-lg [&_h2]:text-base [&_h3]:text-sm [&_h1]:font-semibold [&_h2]:font-semibold [&_h3]:font-semibold [&_pre]:bg-default-50 [&_pre]:dark:bg-default-900 [&_pre]:p-3 [&_pre]:rounded [&_pre]:overflow-auto [&_code]:font-mono [&_code]:text-[12px] [&_table]:w-full [&_table]:text-xs [&_th]:text-left [&_th]:border-b [&_th]:border-default-200 [&_th]:pb-1 [&_td]:py-1 [&_td]:pr-3 [&_a]:text-primary [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5 [&_blockquote]:border-l-2 [&_blockquote]:border-default-200 [&_blockquote]:pl-3 [&_blockquote]:text-default-500">
+              <ReactMarkdown remarkPlugins={[remarkGfm]}>{md}</ReactMarkdown>
+            </article>
+          )}
+        </Card>
+      </div>
+    </div>
   );
 }
 
-// ── 2. Agent 模块：能力目录 + 实时执行 ────────────────────────────────
+// ── 3. Agent 端：能力目录 + 实时执行 ───────────────────────────────────
 
 function AgentTab() {
   const { selectedAgent, dispatchTask, subscribeOutput } = usePluginHost();
@@ -357,7 +385,7 @@ function AgentTab() {
 
       {/* 实时执行 */}
       <Card className="p-4">
-        <h3 className="font-semibold mb-1">实时执行（dispatchTask → Agent 内存执行 Rhai → WS 推送）</h3>
+        <h3 className="font-semibold mb-1">实时执行（dispatchTask → Agent 内存执行 JS → WS 推送）</h3>
         <p className="text-sm text-default-500 mb-3">
           {selectedAgent
             ? <>目标设备：<Chip size="sm" color="success">{selectedAgent.hostname} ({selectedAgent.ipAddress})</Chip></>
@@ -444,17 +472,31 @@ function AgentTab() {
       </div>
 
       <Card className="p-4">
-        <h3 className="font-semibold mb-2">多平台条件编译（#if，解析期裁剪）</h3>
+        <h3 className="font-semibold mb-2">跨平台写法（__platform 运行时分支）</h3>
         <p className="text-sm text-default-500 mb-2">
-          非本平台的代码块在解析前被裁剪，不会进入引擎，也不会因为调用不存在的函数而报错。
+          平台 API 按运行平台注册：Windows 上调用 shell() 会得到 "not a function" 错误，反之亦然。
+          跨平台脚本用 __platform() 运行时分支（不需要 #if 预处理）。
         </p>
-        <pre className="text-xs font-mono overflow-auto bg-default-50 dark:bg-default-900 p-3 rounded">{IFDEF_EXAMPLE}</pre>
+        <pre className="text-xs font-mono overflow-auto bg-default-50 dark:bg-default-900 p-3 rounded">{`function main(args) {
+    if (args.capability === "network") {
+        var net;
+        if (__platform() === "windows") {
+            net = ipconfig();
+        } else if (__platform() === "linux") {
+            net = ip_route() + "\\n" + dns();
+        } else {
+            net = "unsupported platform";
+        }
+        return { "network": net };
+    }
+    return { "ok": true };
+}`}</pre>
       </Card>
     </div>
   );
 }
 
-// ── 3. 服务端脚本：全函数目录 + 实时调用 ──────────────────────────────
+// ── 4. 服务端脚本：全函数目录 + 实时调用 ──────────────────────────────
 
 interface SdkManifest {
   pluginId: string;
@@ -529,10 +571,11 @@ function ServiceTab() {
       {/* 运行方式 */}
       <Alert status="accent">
         <Alert.Content>
-          <Alert.Title>如何驱动 service/main.cs</Alert.Title>
+          <Alert.Title>如何驱动 service/*.cs（多文件拼接编译）</Alert.Title>
           <Alert.Description>
             POST /api/plugin/&lt;pluginId&gt;/&lt;fn&gt;，body 任意 JSON 会变成脚本函数的 p（dynamic）；
-            返回 {'{ ok:true, data }'}；脚本抛异常返回 {'{ ok:false, error }'}。编译结果按插件缓存，文件变更自动失效。
+            返回 {'{ ok:true, data }'}；脚本抛异常返回 {'{ ok:false, error }'}。宿主把 service/ 下所有
+            .cs 按文件名排序拼接为单个脚本编译，文件变更自动失效。
             函数是同步签名，内部可用 .GetAwaiter().GetResult() 等待异步（如 HttpClient）。
           </Alert.Description>
         </Alert.Content>
@@ -673,13 +716,13 @@ function ServiceTab() {
       {/* 已启用插件的服务端脚本列表 */}
       <Card className="p-4">
         <div className="flex items-center gap-3 mb-2">
-          <h3 className="font-semibold">GET /api/plugin/list — 已导入且含 service/main.cs 的插件</h3>
+          <h3 className="font-semibold">GET /api/plugin/list — 已导入且含 service/*.cs 的插件</h3>
           <Button size="sm" variant="secondary" onPress={loadList}>加载</Button>
         </div>
         {listErr && <p className="text-danger text-sm mb-2">{listErr}</p>}
         {list && (
           list.length === 0 ? (
-            <p className="text-sm text-default-500">没有插件带 service/main.cs。</p>
+            <p className="text-sm text-default-500">没有插件带 service/*.cs。</p>
           ) : (
             <div className="divide-y divide-default-100">
               {list.map((p) => (
@@ -723,7 +766,7 @@ function ServiceTab() {
   );
 }
 
-// ── 4. 前端 API：宿主 / api client / 管理 / 市场 ──────────────────────
+// ── 5. 前端 API：宿主 / api client / 管理 ─────────────────────────────
 
 const HOST_API: { member: string; desc: string; sample: string }[] = [
   { member: 'selectedAgent', desc: '当前选中的设备（与控制台顶部选择器共享）', sample: 'selectedAgent?.hostname' },
@@ -741,54 +784,18 @@ const CLIENT_API: { member: string; desc: string; sample: string }[] = [
   { member: 'API_ORIGIN', desc: '后端地址（VITE_API_BASE 或默认 5270）', sample: 'http://127.0.0.1:5270' },
 ];
 
+const RESOURCE_API: { member: string; desc: string; sample: string }[] = [
+  { member: 'GET /api/plugins/<id>/assets/<file>', desc: '包内静态资源（图标/图片/markdown），匿名可访问', sample: "fetch(`${API_ORIGIN}/api/plugins/com.example.plugin-sdk/assets/docs/01-overview.md`)" },
+];
+
 function FrontendApiTab() {
   const { selectedAgent, lastOutput } = usePluginHost();
   const [plugins, setPlugins] = useState<PluginRecord[] | null>(null);
   const [pluginsErr, setPluginsErr] = useState<string | null>(null);
-  const [market, setMarket] = useState<{ data: PluginRegistryIndex; fromCache: boolean } | null>(null);
-  const [marketErr, setMarketErr] = useState<string | null>(null);
-  const [marketBusy, setMarketBusy] = useState(false);
-  const [marketMsg, setMarketMsg] = useState<string | null>(null);
 
   const loadPlugins = useCallback(async () => {
     setPluginsErr(null);
     try { setPlugins(await listPlugins()); } catch (e) { setPluginsErr(e instanceof Error ? e.message : String(e)); }
-  }, []);
-
-  const loadMarket = useCallback(async () => {
-    setMarketBusy(true);
-    setMarketErr(null);
-    setMarketMsg(null);
-    try {
-      // 与 getPluginRegistry 相同的缓存判定：fresh 缓存存在 → 将直接从 localStorage 返回
-      let fromCache = false;
-      try {
-        const raw = localStorage.getItem('libra.plugin.registry');
-        if (raw) { const j = JSON.parse(raw) as { ts: number }; fromCache = Date.now() - j.ts < 60 * 60 * 1000; }
-      } catch { /* ignore */ }
-      const data = await getPluginRegistry();
-      setMarket({ data, fromCache });
-    } catch (e) {
-      setMarketErr(e instanceof Error ? e.message : String(e));
-    } finally {
-      setMarketBusy(false);
-    }
-  }, []);
-
-  const clearMarketCache = useCallback(() => {
-    localStorage.removeItem('libra.plugin.registry');
-    setMarket(null);
-    setMarketMsg('缓存已清除（libra.plugin.registry），下次加载将重新拉取');
-  }, []);
-
-  const install = useCallback(async (file: string) => {
-    setMarketMsg(null);
-    try {
-      const rec = await installPluginFromRegistry(file);
-      setMarketMsg(`安装成功：${rec.name} v${rec.version}`);
-    } catch (e) {
-      setMarketErr(e instanceof Error ? e.message : String(e));
-    }
   }, []);
 
   return (
@@ -831,6 +838,24 @@ function FrontendApiTab() {
         <p className="text-xs text-default-400 mt-2">当前 API_ORIGIN：<code className="font-mono">{API_ORIGIN}</code></p>
       </Card>
 
+      {/* 资源端点（活文档的加载方式） */}
+      <Card className="p-4">
+        <h3 className="font-semibold mb-2">包内资源端点（assets 动态加载）</h3>
+        <div className="divide-y divide-default-100">
+          {RESOURCE_API.map((c) => (
+            <div key={c.member} className="py-2">
+              <code className="font-mono text-xs">{c.member}</code>
+              <p className="text-sm text-default-500 mt-0.5">{c.desc}</p>
+              <pre className="text-[11px] font-mono bg-default-50 dark:bg-default-900 rounded px-2 py-1 mt-1 overflow-auto">{c.sample}</pre>
+            </div>
+          ))}
+        </div>
+        <p className="text-xs text-default-400 mt-2">
+          图标/图片：<code className="font-mono">{`<img src={assetUrl('icons/foo.svg')} />`}</code>（参见 com.libra.aitoken 的 assets 用法）；
+          活文档：fetch + react-markdown 渲染（本页「文档」页签即此模式）。
+        </p>
+      </Card>
+
       {/* 插件管理 */}
       <Card className="p-4">
         <div className="flex items-center gap-3 mb-2">
@@ -871,339 +896,11 @@ function FrontendApiTab() {
           deletePlugin(id) · importPlugin(file, enable) · importPluginFromGit(gitUrl, enable)
         </p>
       </Card>
-
-      {/* 插件市场 */}
-      <Card className="p-4">
-        <div className="flex items-center gap-3 mb-2 flex-wrap">
-          <h3 className="font-semibold">插件市场（GitHub raw 直连 + localStorage 1h 缓存）</h3>
-          <Button size="sm" variant="secondary" isPending={marketBusy} onPress={loadMarket}>加载市场</Button>
-          <Button size="sm" variant="tertiary" onPress={clearMarketCache}>清缓存</Button>
-        </div>
-        <p className="text-sm text-default-500 mb-2">
-          索引 <code className="font-mono text-xs">index.json</code> 直接从 GitHub raw 拉取；结果缓存到浏览器
-          <code className="font-mono text-xs"> libra.plugin.registry</code>，60 分钟内重复访问不再联网。
-        </p>
-        {marketErr && <p className="text-danger text-sm mb-2">{marketErr}</p>}
-        {marketMsg && <p className="text-success text-sm mb-2">{marketMsg}</p>}
-        {market && (
-          <div className="space-y-2">
-            <div className="flex items-center gap-2">
-              <Chip size="sm" variant={market.fromCache ? 'soft' : 'secondary'}>
-                来源：{market.fromCache ? 'localStorage 缓存' : '网络拉取'}
-              </Chip>
-              <Chip size="sm" variant="soft">生成于 {new Date(market.data.generatedAt).toLocaleString()}</Chip>
-              <Chip size="sm" variant="soft">{market.data.pluginCount} 个插件</Chip>
-            </div>
-            <Table>
-              <Table.ScrollContainer>
-                <Table.Content aria-label="market" className="min-w-[720px]">
-                  <Table.Header>
-                    <Table.Column isRowHeader>pluginId</Table.Column>
-                    <Table.Column>名称</Table.Column>
-                    <Table.Column>版本</Table.Column>
-                    <Table.Column>大小</Table.Column>
-                    <Table.Column>操作</Table.Column>
-                  </Table.Header>
-                  <Table.Body>
-                    {market.data.plugins.map((p, i) => (
-                      <Table.Row key={p.pluginId} id={`mk-${i}`}>
-                        <Table.Cell><code className="font-mono text-xs">{p.pluginId}</code></Table.Cell>
-                        <Table.Cell className="text-sm">{p.name}</Table.Cell>
-                        <Table.Cell className="font-mono text-xs">{p.version}</Table.Cell>
-                        <Table.Cell className="font-mono text-xs">{(p.size / 1024).toFixed(1)} KB</Table.Cell>
-                        <Table.Cell>
-                          <Button size="sm" variant="primary" onPress={() => install(p.file)}>安装</Button>
-                        </Table.Cell>
-                      </Table.Row>
-                    ))}
-                  </Table.Body>
-                </Table.Content>
-              </Table.ScrollContainer>
-            </Table>
-          </div>
-        )}
-      </Card>
-    </div>
-  );
-}
-
-// ── 5. HeroUI 组件画廊（每个组件标注可选项）────────────────────────────
-
-function HeroUiTab() {
-  const [switchOn, setSwitchOn] = useState(true);
-  const [checkOn, setCheckOn] = useState(true);
-  const [input, setInput] = useState('');
-  const [sliderVal, setSliderVal] = useState(42);
-  const [comboVal, setComboVal] = useState<string | null>('script');
-  const [showSkeleton, setShowSkeleton] = useState(true);
-  const [modalOpen, setModalOpen] = useState(false);
-  const [accordionOpen, setAccordionOpen] = useState<string | null>('a1');
-
-  return (
-    <div className="space-y-4">
-      <GallerySection title="Button" note="可选项：variant（primary/secondary/tertiary，部分版本另含 ghost/outline/soft/danger）、size（sm/md/lg）、isDisabled、isPending、isIconOnly">
-        <div className="flex flex-wrap items-center gap-2">
-          <Button variant="primary">primary</Button>
-          <Button variant="secondary">secondary</Button>
-          <Button variant="tertiary">tertiary</Button>
-          <Button variant="primary" size="sm">sm</Button>
-          <Button variant="primary" isDisabled>disabled</Button>
-          <Button variant="primary" isPending>pending</Button>
-          <Button variant="secondary" isIconOnly aria-label="icon only">⚙</Button>
-        </div>
-      </GallerySection>
-
-      <GallerySection title="Chip / Badge" note="Chip 可选项：variant（secondary/soft/tertiary/primary）、color（default/accent/success/warning/danger）、size">
-        <div className="flex flex-wrap items-center gap-2">
-          <Chip variant="secondary">secondary</Chip>
-          <Chip variant="soft">soft</Chip>
-          <Chip variant="tertiary">tertiary</Chip>
-          <Chip color="success">success</Chip>
-          <Chip color="warning">warning</Chip>
-          <Chip color="danger" variant="soft">danger</Chip>
-          <Badge>badge</Badge>
-        </div>
-      </GallerySection>
-
-      <GallerySection title="Input / TextField / TextArea" note="TextField 可选项：variant（secondary 等）；Input/TextArea 均可控（value/onChange）">
-        <div className="flex flex-col gap-3 max-w-xl">
-          <TextField variant="secondary">
-            <Label>文本框</Label>
-            <Input variant="secondary" value={input} onChange={(e) => setInput((e.target as HTMLInputElement).value)} placeholder="placeholder 提示" />
-          </TextField>
-          <TextArea placeholder="多行文本" rows={2} />
-        </div>
-      </GallerySection>
-
-      <GallerySection title="Switch / Checkbox" note="Switch：isSelected + onChange；子元素可放说明文字（需配 Control/Thumb）">
-        <div className="flex flex-wrap items-center gap-6">
-          <Switch isSelected={switchOn} onChange={setSwitchOn}>
-            <Switch.Control><Switch.Thumb /></Switch.Control>
-            <span className="text-sm">开关：{switchOn ? '开' : '关'}</span>
-          </Switch>
-          <Checkbox isSelected={checkOn} onChange={setCheckOn}>
-            复选框：{checkOn ? '已勾选' : '未勾选'}
-            <Checkbox.Control><Checkbox.Indicator /></Checkbox.Control>
-          </Checkbox>
-        </div>
-      </GallerySection>
-
-      <GallerySection title="ComboBox" note="可选项：selectedKey / onSelectionChange / placeholder（放内层 Input 上）；结构 InputGroup + Trigger + Popover + ListBox">
-        <ComboBox className="w-64" selectedKey={comboVal} onSelectionChange={(k) => setComboVal(String(k ?? ''))}>
-          <Label>选择模块通道</Label>
-          <ComboBox.InputGroup>
-            <Input placeholder="搜索通道…" />
-            <ComboBox.Trigger />
-          </ComboBox.InputGroup>
-          <ComboBox.Popover>
-            <ListBox aria-label="channels">
-              {['script', 'native'].map((c) => (
-                <ListBox.Item key={c} id={c} textValue={c}>
-                  <span className="font-mono">{c}</span>
-                  <ListBox.ItemIndicator />
-                </ListBox.Item>
-              ))}
-            </ListBox>
-          </ComboBox.Popover>
-        </ComboBox>
-      </GallerySection>
-
-      <GallerySection title="Slider" note="可选项：minValue / maxValue / step / value / onChange；结构 Output + Track + Fill + Thumb">
-        <Slider
-          className="w-full max-w-xs"
-          value={sliderVal}
-          minValue={0}
-          maxValue={100}
-          step={1}
-          onChange={(v) => setSliderVal((Array.isArray(v) ? v[0] : v) ?? 0)}
-        >
-          <Label>数值：{sliderVal}</Label>
-          <Slider.Output />
-          <Slider.Track>
-            <Slider.Fill />
-            <Slider.Thumb />
-          </Slider.Track>
-        </Slider>
-      </GallerySection>
-
-      <GallerySection title="ProgressCircle / Spinner / Skeleton" note="ProgressCircle：value（0-100）；Spinner：size（sm/md/lg）；Skeleton：className 控制形状">
-        <div className="flex flex-wrap items-center gap-4">
-          <ProgressCircle value={70} />
-          <Spinner size="sm" />
-          <Spinner size="md" />
-          <Spinner size="lg" />
-          <div className="w-40 space-y-2">
-            {showSkeleton ? (
-              <>
-                <Skeleton className="h-6 rounded-lg" />
-                <Skeleton className="h-6 rounded-lg w-3/4" />
-                <Skeleton className="h-6 rounded-lg w-1/2" />
-              </>
-            ) : <p className="text-sm text-default-500">已隐藏（点下面按钮）</p>}
-            <Button size="sm" variant="tertiary" onPress={() => setShowSkeleton((v) => !v)}>切换 Skeleton</Button>
-          </div>
-        </div>
-      </GallerySection>
-
-      <GallerySection title="Alert" note="可选项：status（default/accent/success/warning/danger）；结构 Content + Title + Description">
-        <div className="space-y-2">
-          <Alert status="accent"><Alert.Content><Alert.Title>accent</Alert.Title><Alert.Description>提示信息</Alert.Description></Alert.Content></Alert>
-          <Alert status="success"><Alert.Content><Alert.Title>success</Alert.Title><Alert.Description>操作成功</Alert.Description></Alert.Content></Alert>
-          <Alert status="warning"><Alert.Content><Alert.Title>warning</Alert.Title><Alert.Description>需要注意</Alert.Description></Alert.Content></Alert>
-          <Alert status="danger"><Alert.Content><Alert.Title>danger</Alert.Title><Alert.Description>发生错误</Alert.Description></Alert.Content></Alert>
-        </div>
-      </GallerySection>
-
-      <GallerySection title="Tooltip / Dropdown" note="Tooltip：delay / isDisabled；Content 可 placement。Dropdown：Trigger 任意元素 + Popover + Menu + Item">
-        <div className="flex flex-wrap items-center gap-4">
-          <Tooltip delay={0}>
-            <Button variant="secondary">悬停我</Button>
-            <Tooltip.Content placement="top"><p>tooltip 内容（placement 可选项）</p></Tooltip.Content>
-          </Tooltip>
-          <Dropdown>
-            <Button variant="secondary">下拉菜单</Button>
-            <Dropdown.Popover>
-              <Dropdown.Menu onAction={(key) => alert(`选择了 ${key}`)}>
-                <Dropdown.Item key="a" id="a" textValue="选项 A">选项 A</Dropdown.Item>
-                <Dropdown.Item key="b" id="b" textValue="选项 B">选项 B</Dropdown.Item>
-                <Dropdown.Item key="c" id="c" textValue="危险项" className="text-danger">危险项</Dropdown.Item>
-              </Dropdown.Menu>
-            </Dropdown.Popover>
-          </Dropdown>
-        </div>
-      </GallerySection>
-
-      <GallerySection title="Tabs" note="受控：selectedKey / onSelectionChange；结构 ListContainer + List + Tab（内含 Indicator）+ Panel">
-        <Tabs selectedKey={accordionOpen === 'a1' ? 't1' : 't2'} onSelectionChange={(k) => { /* 演示受控 */ }}>
-          <Tabs.ListContainer>
-            <Tabs.List aria-label="mini tabs">
-              <Tabs.Tab id="t1">页签一<Tabs.Indicator /></Tabs.Tab>
-              <Tabs.Tab id="t2">页签二<Tabs.Indicator /></Tabs.Tab>
-            </Tabs.List>
-          </Tabs.ListContainer>
-          <Tabs.Panel id="t1"><p className="text-sm text-default-500">页签一内容</p></Tabs.Panel>
-          <Tabs.Panel id="t2"><p className="text-sm text-default-500">页签二内容</p></Tabs.Panel>
-        </Tabs>
-      </GallerySection>
-
-      <GallerySection title="Accordion" note="受控：expandedKeys / onExpandedChange；结构 Item + Heading + Trigger（含 Indicator）+ Panel + Body">
-        <Accordion
-          className="w-full max-w-xl"
-          expandedKeys={accordionOpen ? new Set([accordionOpen]) : new Set()}
-          onExpandedChange={(keys) => setAccordionOpen(Array.from(keys as Set<string>)[0] ?? null)}
-        >
-          <Accordion.Item key="a1">
-            <Accordion.Heading>
-              <Accordion.Trigger>
-                <span className="font-semibold">第一项</span>
-                <Accordion.Indicator />
-              </Accordion.Trigger>
-            </Accordion.Heading>
-            <Accordion.Panel>
-              <Accordion.Body><p className="text-sm text-default-500">第一项内容</p></Accordion.Body>
-            </Accordion.Panel>
-          </Accordion.Item>
-          <Accordion.Item key="a2">
-            <Accordion.Heading>
-              <Accordion.Trigger>
-                <span className="font-semibold">第二项</span>
-                <Accordion.Indicator />
-              </Accordion.Trigger>
-            </Accordion.Heading>
-            <Accordion.Panel>
-              <Accordion.Body><p className="text-sm text-default-500">第二项内容</p></Accordion.Body>
-            </Accordion.Panel>
-          </Accordion.Item>
-        </Accordion>
-      </GallerySection>
-
-      <GallerySection title="Table" note="结构 ScrollContainer + Content + Header + Column（isRowHeader）+ Body + Row（id）+ Cell">
-        <Table>
-          <Table.ScrollContainer>
-            <Table.Content aria-label="mini table" className="min-w-[480px]">
-              <Table.Header>
-                <Table.Column isRowHeader>名称</Table.Column>
-                <Table.Column>状态</Table.Column>
-              </Table.Header>
-              <Table.Body>
-                {[{ n: '能力 A', s: 'online' }, { n: '能力 B', s: 'offline' }].map((r, i) => (
-                  <Table.Row key={r.n} id={`tb-${i}`}>
-                    <Table.Cell>{r.n}</Table.Cell>
-                    <Table.Cell>{r.s}</Table.Cell>
-                  </Table.Row>
-                ))}
-              </Table.Body>
-            </Table.Content>
-          </Table.ScrollContainer>
-        </Table>
-      </GallerySection>
-
-      <GallerySection title="Surface + ListBox + Avatar" note="带头像列表（适合联系人/群组）；Item 内 Avatar.Image/Fallback + Label + Description + ItemIndicator">
-        <Surface className="w-[320px] rounded-3xl shadow-surface">
-          <ListBox aria-label="users" selectionMode="multiple">
-            <ListBox.Item id="1" textValue="Bob">
-              <Avatar size="sm">
-                <Avatar.Image alt="Bob" src="https://heroui-assets.nyc3.cdn.digitaloceanspaces.com/avatars/blue.jpg" />
-                <Avatar.Fallback>B</Avatar.Fallback>
-              </Avatar>
-              <div className="flex flex-col">
-                <Label>Bob</Label>
-                <Description>bob@heroui.com</Description>
-              </div>
-              <ListBox.ItemIndicator />
-            </ListBox.Item>
-            <ListBox.Item id="2" textValue="Fred">
-              <Avatar size="sm">
-                <Avatar.Image alt="Fred" src="https://heroui-assets.nyc3.cdn.digitaloceanspaces.com/avatars/green.jpg" />
-                <Avatar.Fallback>F</Avatar.Fallback>
-              </Avatar>
-              <div className="flex flex-col">
-                <Label>Fred</Label>
-                <Description>fred@heroui.com</Description>
-              </div>
-              <ListBox.ItemIndicator />
-            </ListBox.Item>
-          </ListBox>
-        </Surface>
-      </GallerySection>
-
-      <GallerySection title="Modal / Kbd / Link / Card" note="Modal：Backdrop(isOpen/onOpenChange) + Container(size) + Dialog + CloseTrigger + Header/Heading/Body；Kbd 可放组合键；Link target=_blank">
-        <div className="flex flex-wrap items-center gap-3">
-          <Button variant="primary" onPress={() => setModalOpen(true)}>打开模态框</Button>
-          <Kbd>Ctrl + C</Kbd>
-          <Link href="https://heroui.com/cn/docs/react/components" target="_blank">HeroUI 组件文档（新窗口）</Link>
-        </div>
-      </GallerySection>
-
-      <Modal.Backdrop isOpen={modalOpen} onOpenChange={(open) => { if (!open) setModalOpen(false); }}>
-        <Modal.Container size="md">
-          <Modal.Dialog>
-            <Modal.CloseTrigger />
-            <Modal.Header><Modal.Heading>模态框演示</Modal.Heading></Modal.Header>
-            <Modal.Body>
-              <p className="text-sm text-default-500">
-                模态框可选项：Container size（sm/md/lg/xl）、Backdrop isOpen/onOpenChange。
-                结果类内容（如 QQ 好友列表、服务端脚本返回值）都用它渲染。
-              </p>
-            </Modal.Body>
-          </Modal.Dialog>
-        </Modal.Container>
-      </Modal.Backdrop>
     </div>
   );
 }
 
 // ── 通用小组件 ─────────────────────────────────────────────────────────
-
-function GallerySection({ title, note, children }: { title: string; note?: string; children: ReactNode }) {
-  return (
-    <Card className="p-4">
-      <h3 className="font-semibold">{title}</h3>
-      {note && <p className="text-sm text-default-500 mb-3 mt-0.5">{note}</p>}
-      {children}
-    </Card>
-  );
-}
 
 function ApiTable({ title, rows }: { title: string; rows: string[][] }) {
   return (

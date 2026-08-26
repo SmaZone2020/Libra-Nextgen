@@ -1,125 +1,176 @@
-//! Rhai engine construction and script execution with platform API gating.
+//! rquickjs (QuickJS) engine construction and script execution with platform
+//! API gating. The runtime is deliberately bare: no timers, no fetch, no
+//! eval/Function (deleted from the global object), no host object prototypes.
+//! The exposed API is the allowlist registered in `api_common`/`api_windows`/
+//! `api_linux`, nothing else.
 
-use rhai::{Dynamic, Engine, Map, Scope, AST};
-use rhai::packages::{Package, BasicArrayPackage, BasicMapPackage, BasicStringPackage};
-use serde_json::Value;
+use rquickjs::{Ctx, Function, Runtime, Value};
+use serde_json::Value as JsonValue;
 
-use super::ifdef::preprocess;
-use super::platform_common::register_common_api;
-
-#[cfg(target_os = "windows")]
-use super::platform_windows::register_platform_api;
-#[cfg(not(target_os = "windows"))]
-use super::platform_linux::register_platform_api;
+use super::api_common::register_common_api;
+use super::api_linux::register_linux_api;
+use super::api_windows::register_windows_api;
 
 /// Execute a plugin script and return its entry function's return value as a
-/// Rhai `Dynamic` (serialized to JSON by the caller).
+/// serde_json::Value (serialized to JSON by the caller).
 pub fn execute(
     script: &str,
-    args: &Value,
+    args: &JsonValue,
     entry: &str,
     features: &[String],
-) -> Result<Dynamic, String> {
+) -> Result<JsonValue, String> {
     let platform = current_platform();
 
-    // 1. Preprocess #if/#endif — compile-time platform trimming.
-    let source = preprocess(script, platform)?;
+    // 1. Bare runtime.
+    let runtime = Runtime::new().map_err(|e| format!("runtime init failed: {}", e))?;
+    let context = rquickjs::Context::full(&runtime)
+        .map_err(|e| format!("context init failed: {}", e))?;
 
-    // 2. Build a bare engine (no built-ins) and register the gated API.
-    let mut engine = Engine::new_raw();
-    engine.set_max_expr_depths(64, 32);
-    engine.set_max_call_levels(16);
-    engine.set_max_operations(100_000);
+    context.with(|ctx| {
+        // 2. Strip escape hatches (a sandboxed script must not eval new code).
+        drop_globals(&ctx);
 
-    register_core_api(&mut engine, platform);
-    register_common_api(&mut engine);
-    register_platform_api(&mut engine, features);
-
-    // Restore basic Map/Array/String methods (contains/len/keys/...) that
-    // `new_raw()` omits, while still excluding print/eval/IO from the sandbox.
-    engine.register_global_module(BasicMapPackage::new().as_shared_module());
-    engine.register_global_module(BasicArrayPackage::new().as_shared_module());
-    engine.register_global_module(BasicStringPackage::new().as_shared_module());
-
-    // 3. Compile.
-    let ast: AST = engine
-        .compile(&source)
-        .map_err(|e| format!("compile error: {}", e))?;
-
-    // 4. Build scope: expose args as a root-level map.
-    let mut scope = Scope::new();
-    let args_dynamic = json_to_dynamic(args);
-    scope.push_dynamic("args", args_dynamic.clone());
-
-    // 5. Invoke the entry function if the script defines one; otherwise treat
-    //    the script as a bare expression and evaluate it.
-    let entry = if entry.is_empty() { "main" } else { entry };
-
-    match engine.call_fn::<Dynamic>(&mut scope, &ast, entry, (args_dynamic.clone(),)) {
-        Ok(v) => Ok(v),
-        Err(call_err) => {
-            // `main` may not be a function — fall back to evaluating the AST.
-            engine
-                .eval_ast_with_scope::<Dynamic>(&mut scope, &ast)
-                .map_err(|eval_err| {
-                    format!("entry '{}' error: {}; top-level error: {}", entry, call_err, eval_err)
-                })
+        // 3. Register the gated API surface.
+        register_common_api(&ctx, platform);
+        if platform == "windows" {
+            register_windows_api(&ctx, features);
+        } else {
+            register_linux_api(&ctx, features);
         }
+
+        // 4. Evaluate the script source (defines the entry function).
+        ctx.eval::<(), _>(script)
+            .map_err(|e| format!("script error: {}", e))?;
+
+        // 5. Resolve the entry function (default "main").
+        let entry_name = if entry.is_empty() { "main" } else { entry };
+        let func: Function = ctx.globals().get(entry_name).map_err(|_| {
+            format!(
+                "entry function '{}' not found (script must define `function {}`)",
+                entry_name, entry_name
+            )
+        })?;
+
+        // 6. Invoke with the deserialized args object.
+        let args_js = json_to_js(&ctx, args)?;
+        let result: Value = func
+            .call((args_js,))
+            .map_err(|e| format!("entry '{}' error: {}", entry_name, e))?;
+
+        // 7. Convert the JS return value back to JSON.
+        js_to_json(&ctx, &result)
+    })
+}
+
+/// Recursively convert a serde_json::Value into a JS value using only the
+/// primitive constructors (bool / int / float / string) and Object/Array.
+fn json_to_js<'js>(ctx: &Ctx<'js>, v: &JsonValue) -> Result<Value<'js>, String> {
+    let js: rquickjs::Value = match v {
+        JsonValue::Null => rquickjs::Value::new_null(ctx.clone()),
+        JsonValue::Bool(b) => rquickjs::Value::new_bool(ctx.clone(), *b),
+        JsonValue::Number(n) => {
+            if let Some(i) = n.as_i64() {
+                if let Ok(i32v) = i32::try_from(i) {
+                    rquickjs::Value::new_int(ctx.clone(), i32v)
+                } else {
+                    rquickjs::Value::new_float(ctx.clone(), i as f64)
+                }
+            } else if let Some(f) = n.as_f64() {
+                rquickjs::Value::new_float(ctx.clone(), f)
+            } else {
+                rquickjs::Value::new_float(ctx.clone(), n.to_string().parse::<f64>().unwrap_or(0.0))
+            }
+        }
+        JsonValue::String(s) => rquickjs::String::from_str(ctx.clone(), s)
+            .map_err(|e| e.to_string())?
+            .into_value(),
+        JsonValue::Array(items) => {
+            let arr = rquickjs::Array::new(ctx.clone()).map_err(|e| e.to_string())?;
+            for (i, item) in items.iter().enumerate() {
+                arr.set(i, json_to_js(ctx, item)?)
+                    .map_err(|e| e.to_string())?;
+            }
+            arr.into_value()
+        }
+        JsonValue::Object(map) => {
+            let obj = rquickjs::Object::new(ctx.clone()).map_err(|e| e.to_string())?;
+            for (k, val) in map {
+                obj.set(k.as_str(), json_to_js(ctx, val)?)
+                    .map_err(|e| e.to_string())?;
+            }
+            obj.into_value()
+        }
+    };
+    Ok(js)
+}
+
+/// Recursively convert a JS value into a serde_json::Value. Undefined/null →
+/// null; bool → bool; number → f64 (i64 when integral); string → string;
+/// arrays/objects recurse; anything else → its string form.
+fn js_to_json(ctx: &Ctx, v: &Value) -> Result<JsonValue, String> {
+    if v.is_null() || v.is_undefined() {
+        return Ok(JsonValue::Null);
     }
+    if let Some(b) = v.as_bool() {
+        return Ok(JsonValue::Bool(b));
+    }
+    if let Some(n) = v.as_number() {
+        let f = n;
+        if f.fract() == 0.0 && f >= i64::MIN as f64 && f <= i64::MAX as f64 {
+            return Ok(JsonValue::from(f as i64));
+        }
+        return Ok(JsonValue::from(f));
+    }
+    if v.is_string() {
+        let s: String = v.get().map_err(|e| e.to_string())?;
+        return Ok(JsonValue::String(s));
+    }
+    if let Some(arr) = v.as_array() {
+        let mut out = Vec::with_capacity(arr.len());
+        for item in arr.iter::<Value>() {
+            let item = item.map_err(|e| e.to_string())?;
+            out.push(js_to_json(ctx, &item)?);
+        }
+        return Ok(JsonValue::Array(out));
+    }
+    if let Some(obj) = v.as_object() {
+        let mut map = serde_json::Map::new();
+        for key in obj.keys::<String>() {
+            let key = key.map_err(|e| e.to_string())?;
+            let val: Value = obj.get(&key).map_err(|e| e.to_string())?;
+            map.insert(key, js_to_json(ctx, &val)?);
+        }
+        return Ok(JsonValue::Object(map));
+    }
+    // Symbols / functions / host objects — represent as strings.
+    Ok(JsonValue::String(format!("<{}>", v.type_name())))
 }
 
 fn current_platform() -> &'static str {
     #[cfg(target_os = "windows")]
-    { "windows" }
+    {
+        "windows"
+    }
     #[cfg(target_os = "linux")]
-    { "linux" }
+    {
+        "linux"
+    }
     #[cfg(target_os = "macos")]
-    { "macos" }
+    {
+        "macos"
+    }
     #[cfg(not(any(target_os = "windows", target_os = "linux", target_os = "macos")))]
-    { "unknown" }
+    {
+        "unknown"
+    }
 }
 
-/// Always-on APIs available on every platform.
-fn register_core_api(engine: &mut Engine, platform: &str) {
-    // A tiny JSON helper namespace: args.xxx accessors are handled by the map
-    // itself, but expose a couple of cross-cutting utilities.
-    engine.register_fn("len", |s: &str| s.len() as i64);
-
-    // Expose the runtime platform as constants so scripts can also branch at
-    // runtime (in addition to the compile-time #if).
-    let win = platform == "windows";
-    let linux = platform == "linux";
-    let macos = platform == "macos";
-    engine.register_fn("__platform_windows", move || win);
-    engine.register_fn("__platform_linux", move || linux);
-    engine.register_fn("__platform_macos", move || macos);
-}
-
-/// Recursively convert a serde_json::Value into a Rhai Dynamic.
-fn json_to_dynamic(v: &Value) -> Dynamic {
-    match v {
-        Value::Null => Dynamic::UNIT,
-        Value::Bool(b) => Dynamic::from(*b),
-        Value::Number(n) => {
-            if let Some(i) = n.as_i64() {
-                Dynamic::from(i)
-            } else if let Some(f) = n.as_f64() {
-                Dynamic::from(f)
-            } else {
-                Dynamic::from(n.to_string())
-            }
-        }
-        Value::String(s) => Dynamic::from(s.clone()),
-        Value::Array(arr) => {
-            let items: Vec<Dynamic> = arr.iter().map(json_to_dynamic).collect();
-            Dynamic::from(items)
-        }
-        Value::Object(obj) => {
-            let mut map = Map::new();
-            for (k, val) in obj {
-                map.insert(k.clone().into(), json_to_dynamic(val));
-            }
-            Dynamic::from(map)
-        }
+/// Remove escape hatches from the global object so a plugin script cannot
+/// self-extend the sandbox. `eval`/`Function` are host functions; removing
+/// them makes code evaluation impossible.
+fn drop_globals(ctx: &Ctx) {
+    let globals = ctx.globals();
+    for name in ["eval", "Function", "gc", "print"] {
+        let _ = globals.remove(name);
     }
 }
