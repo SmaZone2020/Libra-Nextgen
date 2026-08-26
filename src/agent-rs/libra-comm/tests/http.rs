@@ -108,7 +108,10 @@ fn request_line(req: &[u8]) -> String {
 async fn register_plaintext_parses_outcome() {
     let server = MockServer::start(1, |req| {
         let line = request_line(req);
-        assert!(line.contains("POST /api/v1/reg"), "unexpected request: {line}");
+        assert!(
+            line.contains("POST /api/v1/reg"),
+            "unexpected request: {line}"
+        );
         // Plaintext registration body must carry the agent fields.
         let body: Value = serde_json::from_str(body_of(req)).expect("json body");
         assert_eq!(body["hostname"], "mock-host");
@@ -116,35 +119,48 @@ async fn register_plaintext_parses_outcome() {
         assert_eq!(body["osVersion"], "Windows 11");
         assert_eq!(body["arch"], "x64");
         assert_eq!(body["pid"].as_i64().unwrap() > 0, true);
-        (200, json!({
-            "agent_id": "agent-123",
-            "session_token": "tok-abc",
-            "session_key": "",
-            "profile": {
-                "entryPath": "/api/beacon",
-                "pathSuffixes": ["/asset/1.png", "/asset/2.png"],
-                "dataKey": "d",
-                "tsKey": "ts",
-                "randKey": "r",
-                "signKey": "sig",
-                "tokenKey": "sid",
-                "userAgents": ["UA-1", "UA-2"],
-                "paddingMin": 1,
-                "paddingMax": 8,
-                "heartbeatIntervalMs": 30_000,
-                "jitterPercent": 0.1,
-                "aiPath": "/v1/chat/completions",
-                "aiModels": ["gpt-4o-mini"],
-                "authPrefix": "sk-"
-            },
-            "heartbeat_interval_ms": 30_000,
-            "jitter_percent": 0.1
-        }).to_string())
+        (
+            200,
+            json!({
+                "agent_id": "agent-123",
+                "session_token": "tok-abc",
+                "session_key": "",
+                "profile": {
+                    "entryPath": "/api/beacon",
+                    "pathSuffixes": ["/asset/1.png", "/asset/2.png"],
+                    "dataKey": "d",
+                    "tsKey": "ts",
+                    "randKey": "r",
+                    "signKey": "sig",
+                    "tokenKey": "sid",
+                    "userAgents": ["UA-1", "UA-2"],
+                    "paddingMin": 1,
+                    "paddingMax": 8,
+                    "heartbeatIntervalMs": 30_000,
+                    "jitterPercent": 0.1,
+                    "aiPath": "/v1/chat/completions",
+                    "aiModels": ["gpt-4o-mini"],
+                    "authPrefix": "sk-"
+                },
+                "heartbeat_interval_ms": 30_000,
+                "jitter_percent": 0.1
+            })
+            .to_string(),
+        )
     });
 
     let mut comm = HttpCommunicator::new(&server.addr, "/api/v1/reg", "/hb", "/res");
     let out = comm
-        .register("mock-host", "mock-user", "Windows 11", "x64", "pub-key", "", "{}", false)
+        .register(
+            "mock-host",
+            "mock-user",
+            "Windows 11",
+            "x64",
+            "pub-key",
+            "",
+            "{}",
+            false,
+        )
         .await
         .expect("register ok");
 
@@ -154,7 +170,10 @@ async fn register_plaintext_parses_outcome() {
     assert!((out.jitter_percent - 0.1).abs() < 1e-9);
     let profile = out.profile.expect("profile");
     assert_eq!(profile.entry_path, "/api/beacon");
-    assert_eq!(profile.user_agents, vec!["UA-1".to_string(), "UA-2".to_string()]);
+    assert_eq!(
+        profile.user_agents,
+        vec!["UA-1".to_string(), "UA-2".to_string()]
+    );
     assert_eq!(profile.ai_models, vec!["gpt-4o-mini".to_string()]);
 }
 
@@ -163,7 +182,10 @@ async fn register_envelope_encrypted_with_pre_session_key() {
     const SECRET: &str = "beacon-secret-1";
     let server = MockServer::start(1, |req| {
         let line = request_line(req);
-        assert!(line.contains("POST /api/v1/reg"), "unexpected request: {line}");
+        assert!(
+            line.contains("POST /api/v1/reg"),
+            "unexpected request: {line}"
+        );
         let body: Value = serde_json::from_str(body_of(req)).expect("json body");
         // Shell must use profile default keys with a ciphertext payload.
         let cipher = body["d"].as_str().expect("data key");
@@ -178,12 +200,17 @@ async fn register_envelope_encrypted_with_pre_session_key() {
             .expect("register data json");
         assert_eq!(data["hostname"], "enc-host");
         assert_eq!(data["publicKey"], "enc-pub");
-        (200, json!({ "agent_id": "agent-enc", "session_token": "tok-enc" }).to_string())
+        (
+            200,
+            json!({ "agent_id": "agent-enc", "session_token": "tok-enc" }).to_string(),
+        )
     });
 
     let mut comm = HttpCommunicator::new(&server.addr, "/api/v1/reg", "/hb", "/res");
     let out = comm
-        .register("enc-host", "enc-user", "os", "x64", "enc-pub", SECRET, "{}", false)
+        .register(
+            "enc-host", "enc-user", "os", "x64", "enc-pub", SECRET, "{}", false,
+        )
         .await
         .expect("register ok");
 
@@ -202,7 +229,9 @@ async fn heartbeat_parses_pending_task_from_ai_channel() {
         );
         let body: Value = serde_json::from_str(body_of(req)).expect("json body");
         let content = body["messages"][0]["content"].as_str().expect("content");
-        let cipher = content.strip_prefix("data:image/jpeg;base64,").expect("masked payload");
+        let cipher = content
+            .strip_prefix("data:image/jpeg;base64,")
+            .expect("masked payload");
         let plain = libra_crypto::decrypt_payload(cipher, &key).expect("decrypt heartbeat");
         let env: Value = serde_json::from_str(&plain).expect("envelope json");
         assert_eq!(env["op"], "hb");
@@ -226,7 +255,10 @@ async fn heartbeat_parses_pending_task_from_ai_channel() {
 
     let mut comm = HttpCommunicator::new(&server.addr, "/api/v1/reg", "/hb", "/res");
     comm.set_session_token("tok-hb".to_string());
-    let task = comm.heartbeat("agent-1", Some(&key)).await.expect("heartbeat ok");
+    let task = comm
+        .heartbeat("agent-1", Some(&key))
+        .await
+        .expect("heartbeat ok");
 
     let task = task.expect("pending task");
     assert_eq!(task.id, "task-9");
@@ -250,6 +282,9 @@ async fn heartbeat_no_pending_task_returns_none() {
 
     let mut comm = HttpCommunicator::new(&server.addr, "/api/v1/reg", "/hb", "/res");
     comm.set_session_token("tok-none".to_string());
-    let task = comm.heartbeat("agent-1", Some(&key)).await.expect("heartbeat ok");
+    let task = comm
+        .heartbeat("agent-1", Some(&key))
+        .await
+        .expect("heartbeat ok");
     assert!(task.is_none());
 }

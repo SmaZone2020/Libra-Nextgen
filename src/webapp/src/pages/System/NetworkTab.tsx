@@ -1,8 +1,8 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button, Card } from '@heroui/react';
 import { Magnifier } from '@gravity-ui/icons';
-import { getNetworkWan, getNetworkWifi, getNetworkNearby, getNetworkProxy, scanLan } from '../../api/system';
+import { getNetworkWan, getNetworkWifi, getNetworkNearby, getNetworkProxy, startLanScan, getLanScanTask, parseLanScanResult } from '../../api/system';
 import { DataGrid } from '../../components/data-grid';
 import type { DataGridColumn } from '../../components/data-grid';
 import type { WifiProfile, NearbyWifiNetwork, LanDevice } from '../../types/models';
@@ -44,12 +44,63 @@ export function NetworkTab({ agentId }: NetworkTabProps) {
   const [dnsSuffix, setDnsSuffix] = useState('');
   const [proxyLoading, setProxyLoading] = useState(true);
 
-  // LAN scan state
+  // LAN scan state (task-based polling; a /24 sweep takes seconds to minutes)
   const [lanDevices, setLanDevices] = useState<LanDevice[] | null>(null);
   const [lanSubnets, setLanSubnets] = useState<string[]>([]);
   const [scanning, setScanning] = useState(false);
+  const [scanError, setScanError] = useState<string | null>(null);
+  const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const taskIdRef = useRef<string | null>(null);
 
-  // Fetch each module independently
+  const stopPolling = useCallback(() => {
+    if (pollTimerRef.current) {
+      clearInterval(pollTimerRef.current);
+      pollTimerRef.current = null;
+    }
+  }, []);
+
+  // Clear the timer on unmount.
+  useEffect(() => stopPolling, [stopPolling]);
+
+  const handleScan = useCallback(async () => {
+    stopPolling();
+    setScanning(true);
+    setScanError(null);
+    setLanDevices(null);
+    setLanSubnets([]);
+    try {
+      const { taskId } = await startLanScan(agentId);
+      taskIdRef.current = taskId;
+      // LAN scans are long-running: poll every 2s instead of blocking on a
+      // single synchronous relay request that would hit proxy/browser timeouts.
+      pollTimerRef.current = setInterval(async () => {
+        try {
+          const task = await getLanScanTask(taskId);
+          if (task.status === 'Completed') {
+            const parsed = parseLanScanResult(task);
+            if (parsed) {
+              setLanDevices(parsed.devices);
+              setLanSubnets(parsed.subnets);
+            } else {
+              setScanError(t('system.scanBadResult'));
+            }
+            stopPolling();
+            setScanning(false);
+          } else if (task.status === 'Failed' || task.status === 'Cancelled') {
+            setScanError(task.error || t('system.scanFailed'));
+            stopPolling();
+            setScanning(false);
+          }
+        } catch {
+          // Transient network error — keep polling until the task resolves.
+        }
+      }, 2000);
+    } catch {
+      setScanError(t('system.scanStartFailed'));
+      setScanning(false);
+    }
+  }, [agentId, stopPolling, t]);
+
   const fetchWan = useCallback(async () => {
     try {
       const res = await getNetworkWan(agentId);
@@ -89,16 +140,6 @@ export function NetworkTab({ agentId }: NetworkTabProps) {
     fetchNearby();
     fetchProxy();
   }, [fetchWan, fetchWifi, fetchNearby, fetchProxy]);
-
-  const handleScan = async () => {
-    setScanning(true);
-    try {
-      const res = await scanLan(agentId);
-      setLanDevices(res.devices);
-      setLanSubnets(res.subnets);
-    } catch { /* ignore */ }
-    finally { setScanning(false); }
-  };
 
   const lanColumns: DataGridColumn<LanDevice>[] = [
     {
@@ -203,7 +244,13 @@ export function NetworkTab({ agentId }: NetworkTabProps) {
           </div>
         )}
 
-        {!scanning && lanDevices && lanDevices.length === 0 && (
+        {scanError && (
+          <div className="flex justify-center py-6 text-danger text-sm">
+            {scanError}
+          </div>
+        )}
+
+        {!scanning && !scanError && lanDevices && lanDevices.length === 0 && (
           <div className="flex justify-center py-6 text-default-500 text-sm">
             {t('system.noLanDevices')}
           </div>
