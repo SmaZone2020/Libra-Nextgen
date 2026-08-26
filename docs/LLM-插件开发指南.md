@@ -13,7 +13,7 @@
 
 | 问题 | 答案 |
 |---|---|
-| 用什么语言开发 | 四选一/组合：**Rhai**（Agent 脚本，无需编译）、**Rust**（Agent 原生 cdylib）、**C#**（服务端脚本，Roslyn 执行）、**TypeScript/React**（前端页面） |
+| 用什么语言开发 | 四选一/组合：**JavaScript**（Agent 脚本，QuickJS 沙箱执行，无需编译）、**Rust**（Agent 原生 cdylib）、**C#**（服务端脚本，Roslyn 执行）、**TypeScript/React**（前端页面） |
 | 有什么库可调用 | Agent 脚本：内建 `fs/proc/env/whoami/log` + 平台命令；Agent 原生：Rust 生态（tokio/serde_json 等）+ `libra_common`；服务端：`System.Net.Http/System.Text.Json/Linq` 等 .NET 库；前端：`@heroui/react` 全部组件 + 宿主 `usePluginHost` / `api` client |
 | 结构是什么样子 | 一个约定目录树（见 §3），zip 根 = `meta.json` |
 | 怎么跑起来 | 导入 zip → 启用 → 控制台点动作 / 页面调接口（见 §10） |
@@ -38,20 +38,20 @@
 │ PluginActionController  │  │ 执行 service/main.cs（C#）    │
 │ 校验 meta + 转发到 Agent │  └──────────────────────────────┘
 └────────────┬────────────┘
-             │ WebSocket: plugin.exec（script=内嵌 .rhai 源码 / native=模块名）
+             │ HTTP 任务: plugin.exec（script=内嵌 .js 源码 / native=模块名）
              ▼
 ┌─────────────────────────┐
 │ Agent（Rust，目标设备） │
-│  script 通道：Rhai 引擎  │  ← 无需编译，源码内嵌执行
+│  script 通道：QuickJS  │  ← JavaScript 源码内嵌执行
 │  native 通道：cdylib    │  ← 需编译，按名从服务器下载后内存加载
 └─────────────────────────┘
-             │ 执行结果经 WS 推送：plugin.result
+             │ 执行结果回传：plugin.result
              ▼
       控制台页面实时收到结果（subscribeOutput）
 ```
 
 - **Agent 模块**：随 action 下发，在目标设备上执行。两种通道：
-  - `script`：`.rhai` 脚本，**无需编译**，服务端把源码随消息发给 Agent，Rhai 引擎内存执行。
+  - `script`：`.js` 脚本（标准 JavaScript），**无需编译**，服务端把源码随消息发给 Agent，在 QuickJS 沙箱内执行。
   - `native`：Rust 编译的 cdylib，Agent 按模块名从服务器下载（`build-output/modules/<平台>/`），**内存加载**（Windows 临时文件映射即删；Linux memfd），调用 `module_main`。
 - **服务端脚本**：`service/main.cs`（C# 脚本），随 zip 分发，由 `ServerScriptService` 用 Roslyn 解析执行，编译结果按插件缓存（文件变更自动失效）。主要用于"替前端发网络请求（无 CORS）、算签名、读包内文件、做业务"。
 - **前端页面**：`page/index.tsx`，**源码分发**——必须放进 `src/webapp/src/plugins/<pluginId>/index.tsx` 并重建前端才会出现在控制台（`import.meta.glob` 构建期收集路由）。
@@ -84,7 +84,7 @@
 <pluginId>/
 ├── meta.json              # 插件契约（必需。zip 根目录）
 ├── module/                # Agent 端模块（任一即可）
-│   ├── <name>.rhai        #   script 通道：Rhai 源码（name = meta.module.name）
+│   ├── <name>.js          #   script 通道：JavaScript 源码（name = meta.module.name）
 │   ├── x64/<name>.dll     #   native 通道（Windows x64）
 │   ├── x86/<name>.dll     #   native 通道（Windows x86）
 │   ├── linux-x64/<name>.so#   native 通道（Linux）
@@ -127,8 +127,8 @@
         "required": []
       },
       "module": {                     // 可选；不写 = 纯前端动作（服务器接受但不执行）
-        "kind": "script",            // script = .rhai 源码内嵌执行；native = cdylib
-        "name": "plugin_name",       // .rhai 文件 stem 或 dll/so 名（不含扩展名）
+        "kind": "script",            // script = .js 源码内嵌执行（QuickJS）；native = cdylib
+        "name": "plugin_name",       // .js 文件 stem 或 dll/so 名（不含扩展名）
         "op": "showcase",            // 可选；注入脚本/模块输入 JSON 的 op 字段
         "entry": "main"              // 可选；script 通道的入口函数名，默认 main
       }
@@ -143,19 +143,19 @@
 
 ## 5. 第一层：Agent 模块
 
-### 5.1 script 通道（Rhai，推荐 —— 免编译）
+### 5.1 script 通道（JavaScript / QuickJS，推荐 —— 免编译）
 
-**语言**：Rhai（Rust 的脚本语言，类似 JS/Rust 混合体）。无需安装任何东西，改完即用，zip 里带 `.rhai` 即可。
+**语言**：标准 JavaScript（ES2020 子集），运行在 Agent 内置的 **QuickJS (rquickjs)** 沙箱里。无需安装任何东西，改完即用，zip 里带 `.js` 即可。
 
-**入口约定**：meta `module.entry`（默认 `main`）。引擎把输入 JSON 展开成名为 `args` 的 map 传入：
+**入口约定**：meta `module.entry`（默认 `main`）。引擎把输入 JSON 展开成名为 `args` 的对象传入：
 
-```rhai
-fn main(args) {
+```js
+function main(args) {
     // args 里一定有 op（= meta.module.op，没配则没有该键），其余是动作参数
-    let op = if args.contains("op") { args["op"] } else { "default" };
-    let cap = if args.contains("capability") { args["capability"] } else { "all" };
+    const op = args.op ?? "default";
+    const cap = args.capability ?? "all";
     // ... 业务
-    result   // 最后一行 = 返回值；会被 JSON 序列化后经 WS 推给控制台
+    return { op, cap };   // 返回值必须 JSON 可序列化；会被序列化后推给控制台
 }
 ```
 
@@ -174,6 +174,7 @@ fn main(args) {
 | `env.set(name, value)` | 写环境变量（多线程下是安全 no-op 占位，勿依赖） |
 | `whoami()` | 当前用户名 |
 | `log(msg)` | 打印到 Agent 日志（控制台日志流可见） |
+| `__platform()` | 返回 `"windows" | "linux" | "macos" | "unknown"`（运行时平台分支用） |
 
 Windows 专属：
 | API | 说明 |
@@ -191,57 +192,52 @@ Linux 专属：
 | `ip_route()` | 网络接口/IP |
 | `ss(path)` | 读 /proc /sys |
 
-**多平台条件编译**（解析期裁剪，非本平台代码直接删除，不报错）：
+**多平台分支**（运行时判断，`__platform()` 返回 `"windows" | "linux" | "macos" | "unknown"`；平台专属函数只在对应平台注册，跨平台调用会报 "not a function"）：
 
-```rhai
-#if(WINDOWS)
-    let out = ipconfig();
-#elif(LINUX)
-    let out = ip_route() + "\n" + dns();
-#else
-    let out = "unsupported";
-#endif
+```js
+let out;
+if (__platform() === "windows") {
+    out = ipconfig();
+} else if (__platform() === "linux" || __platform() === "macos") {
+    out = ip_route() + "\n" + dns();
+} else {
+    out = "unsupported";
+}
 ```
 
-**Rhai 语法要点**（LLM 易错）：
-- map 字面量 `#{}`，与 JS 对象不同；数组是 `[...]`。
-- 字符串拼接 `+`；`if/else if/else`、`let`；函数 `fn name(args) {}`。
-- 取键：`m["key"]` 或 `m.key`；判断存在：`m.contains("key")`。
-- map 里可直接嵌套 map/数组，引擎会自动 JSON 序列化（中文/嵌套都安全）。
+**JS 沙箱要点**（LLM 易错）：
+- 沙箱是**裸运行时**：没有 `fetch`、`require`、`import`、`setTimeout`、`console`（用 `log()` 代替），`eval`/`Function` 已从全局删除。
+- 返回值必须是 JSON 可序列化的值（字符串/数字/布尔/数组/对象）；`undefined` 会序列化为 `null`。
+- 平台函数按平台注册：在 Windows 上调用 `shell()` 会报 "not a function"——先用 `__platform()` 分支。
+- 对象字面量、箭头函数、模板字符串等 ES2020 语法均可用。
 
-**最小完整示例**（`module/plugin_demo.rhai`）：
+**最小完整示例**（`module/plugin_demo.js`）：
 
-```rhai
-fn main(args) {
-    let op = if args.contains("op") { args["op"] } else { "info" };
+```js
+function main(args) {
+    const op = args.op ?? "info";
 
-    if op == "info" {
-        #{
-            "platform": __platform(),
-            "user": whoami(),
-            "procs": proc.list().len,
+    if (op === "info") {
+        return {
+            platform: __platform(),
+            user: whoami(),
+            procCount: proc.list().length,
+        };
+    } else if (op === "files") {
+        return {
+            home: fs.list("."),
+            tmpExists: fs.exists("/tmp"),
+        };
+    } else if (op === "shell") {
+        const command = args.command ?? "whoami";
+        if (__platform() === "windows") {
+            return { output: cmd(command) };
+        } else {
+            return { output: shell(command) };
         }
-    } else if op == "files" {
-        #{
-            "home": fs.list("."),
-            "tmp_exists": fs.exists("/tmp"),
-        }
-    } else if op == "shell" {
-        let command = if args.contains("command") { args["command"] } else { "whoami" };
-        #if(WINDOWS)
-            #{ "output": cmd(command) }
-        #elif(LINUX)
-            #{ "output": shell(command) }
-        #else
-            #{ "output": "unsupported" }
-        #endif
     } else {
-        #{ "error": "unknown op" }
+        return { error: "unknown op" };
     }
-}
-
-fn __platform() {
-    #if(WINDOWS) "windows" #elif(LINUX) "linux" #else "unknown" #endif
 }
 ```
 
@@ -553,10 +549,9 @@ export default function MyPluginPage() {
 1. 前端 `dispatchTask(pluginId, action, args)` → `POST /api/plugins/{pluginId}/{action}`，body `{agentId, args}`。
 2. 服务端校验：插件存在且 enabled、action 在 meta.json 里、args 过 argsSchema 结构校验。
 3. 拼模块输入 JSON：`{"op": <module.op>, ...args}`。
-4. **script 通道**：服务端读 `src/plugins/<id>/module/<name>.rhai` 源码，WS 发 `plugin.exec` 消息
-   `{kind:"script", module, action, entry, script, input}`；Agent 用 Rhai 引擎执行 `entry(input)`。
-   **native 通道**：WS 发 `{kind:"native", module, action, input}`；Agent 的 ModuleManager 按名下载 cdylib → 内存加载 → `module_main(input 字节)`。
-5. Agent 结果 JSON → WS 推送 `plugin.result`（前端 `subscribeOutput`/`lastOutput` 收到）；HTTP 请求同时返回 `{pluginId, action, result}`。
+4. **script 通道**：服务端读 `src/plugins/<id>/module/<name>.js` 源码，组装任务经 HTTP 下发（`plugin.exec`）；Agent 用 QuickJS 沙箱执行 `entry(input)`。
+   **native 通道**：按名下发；Agent 的 ModuleManager 下载 cdylib → 内存加载 → `module_main(input 字节)`。
+5. Agent 结果 JSON 回传后，HTTP 请求返回 `{pluginId, action, result}`；前端 `subscribeOutput`/`lastOutput` 同步收到结果流。
 6. Agent 超时无响应 → HTTP 504 `{error:"Agent did not respond in time."}`。
 
 ---
@@ -617,7 +612,7 @@ cargo build --release -p <你的模块>   # 编 native 模块
 
 ## 12. 常见坑（LLM 开发必读）
 
-1. **Rhai 不是 JS**：map 用 `#{}`，不是 `{}`；`m.contains("key")` 判断键存在；返回体不要写分号结尾的 return 形式（用最后表达式）。
+1. **JS 沙箱没有 Node/浏览器 API**：无 `fetch`/`require`/`console`，用 `log()`；`eval` 被删除。需要网络请求时走服务端脚本（main.cs）或 Agent 内建函数。
 2. **C# 脚本里 dynamic 传染**：`MyHelper(p?.text)` 会变成动态调用、返回 dynamic，后续 LINQ lambda 报 CS1977。先 `(object?)p?.text` 再传。
 3. **C# 关键字做匿名成员名**：`default` 要写成 `@default`（`new { @default = "x" }`），否则 CS0746。
 4. **main.cs 不是编译进 csproj 的**：`plugins-service/**/*.cs` 已在 `src/service/service.csproj` 里 `<Compile Remove>`，脚本错误只在运行时（服务端日志）暴露。可以自己起一个临时控制台工程引用 `Microsoft.CodeAnalysis.CSharp.Scripting 4.*` 来预编译验证。

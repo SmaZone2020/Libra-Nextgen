@@ -2,7 +2,7 @@
 
 ## First Login
 
-1. Start Server + Console (see [Deployment & Building](deployment.md))
+1. Start Server + Console (see [Deployment Manual](../../部署手册.md))
 2. Open the Console → `/setup` and create the admin account
 3. Sign in
 
@@ -26,13 +26,6 @@ Note: modules are downloaded per need — first execution of a task family (shel
 
 - paged browsing, upload/download (streaming, live progress + speed), in-archive browsing, timestomping
 - large downloads use 2MB chunked relay with server-side write-through; cancellable
-
-## Screen / Camera / Microphone
-
-- Screen: list → bind → live stream (fps/quality/screen index adjustable)
-- Camera: list → bind (single-threaded COM capture) → stream
-- Microphone: list → bind sampling
-- All support unbind; Windows-only
 
 ## Software Data
 

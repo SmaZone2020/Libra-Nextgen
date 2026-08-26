@@ -6,7 +6,7 @@
 //!
 //! 被以下模块复用：
 //!   - powershell 模块（Console 下发的 PowerShell 任务）
-//!   - script 模块（rhai 脚本里的 powershell() 函数）
+//!   - script 模块（QuickJS 脚本里的 powershell() 函数）
 //!
 //! 安全边界：CLR 宿主崩溃会影响宿主进程，因此所有托管调用串行化执行；
 //! 脚本超时由 stub 内 Task.Wait(timeout) 控制，超时后 ps.Stop()。

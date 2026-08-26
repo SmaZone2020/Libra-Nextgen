@@ -71,8 +71,7 @@ See the [platform support matrix](docs/平台支持矩阵.md) (verified records)
 | Topic | Content |
 | --- | --- |
 | [Plugin Development](docs/zh/插件开发.md) | meta.json contract, zip layout, JS/native channels, frontend `usePluginHost`, sample plugins |
-| [Deployment & Building](docs/zh/部署与构建.md) | Server/Console setup, Builder, Win/Linux cross-compile, plugin module staging |
-| [Deployment Manual](docs/部署手册.md) | Production deployment: env vars (`LIBRA_SERVER_KEY`/`LIBRA_BUILDS_DIR`), MongoDB auth, nginx/TLS |
+| [Deployment Manual](docs/部署手册.md) | env vars (`LIBRA_SERVER_KEY`/`LIBRA_BUILDS_DIR`), MongoDB auth, nginx/TLS, Builder, cloud modules & plugin staging |
 | [Platform Support Matrix](docs/平台支持矩阵.md) | Per-platform verified records (build commands / results / conclusions) |
 | [Operations](docs/zh/操作手册.md) | Agent onboarding, market/upload/Git installs, Shell/files/MCP usage, audit & risk policy |
 | [LLM Plugin Guide](docs/LLM-插件开发指南.md) | Plugin development guide for LLMs (contract / channels / packaging) |

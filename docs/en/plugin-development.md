@@ -1,6 +1,6 @@
 # Plugin Development
 
-Plugins are delivered as a **zip package** and imported/enabled from the Console **plugin management page**. For a full tutorial see [`examples/plugin-sdk/README.md`](../../examples/plugin-sdk/README.md).
+Plugins are delivered as a **zip package** and imported/enabled from the Console **plugin management page**. For a full tutorial see [`src/plugins/com.example.plugin-sdk/README.md`](../../src/plugins/com.example.plugin-sdk/README.md) (the SDK also ships a living-docs page inside the Console).
 
 ## The Three Layers
 
@@ -16,8 +16,8 @@ Plugins are delivered as a **zip package** and imported/enabled from the Console
 plugin.zip
 ├── meta.json          # plugin contract (required, at zip root)
 ├── module/
-│   ├── xxx.rhai       #   script channel (no compiler, recommended)
-│   ├── x64/xxx.dll    #   native channel (per-platform dirs: x64/x86/linux-x64)
+│   ├── xxx.js            #   script channel (JS/QuickJS, no compiler, recommended)
+│   ├── x64/xxx.dll    #   native channel (per-platform dirs: x64/linux-x64)
 ├── page/index.tsx     # frontend page source (HeroUI)
 ├── service/           # server logic (reserved)
 └── assets/            # static assets (served at /api/plugins/<pluginId>/assets/<file>)
@@ -51,8 +51,8 @@ plugin.zip
         "required": []
       },
       "module": {
-        "kind": "script",           // script=Rhai / native=cdylib
-        "name": "xxx",              // .rhai stem or .dll/.so file name
+        "kind": "script",           // script=JavaScript(QuickJS) / native=cdylib
+        "name": "xxx",              // .js stem or .dll/.so file name
         "op": "collect",            // injected into module input JSON as op
         "entry": "main"             // script entry fn (default main)
       }
@@ -63,28 +63,26 @@ plugin.zip
 
 ## Agent Channels
 
-### script (Rhai, recommended)
+### script (JavaScript / QuickJS, recommended)
 
-`module/xxx.rhai` entry `fn main(args)`; `args` is the server-assembled input (includes `op`); return a map/string as the result:
+`module/xxx.js` entry `function main(args)`; `args` is the server-assembled input (includes `op`); the return value is JSON-serialized as the result:
 
-```rust
-fn main(args) {
-    let op = if args.contains("op") { args["op"] } else { "all" };
+```js
+function main(args) {
+    const op = args.op ?? "all";
     let out;
-    #if(WINDOWS)
+    if (__platform() === "windows") {
         out = cmd("whoami");                 // Windows: CMD
-    #elif(LINUX)
-        out = shell("uname -a");             // Linux: /bin/sh
-    #else
-        out = "unsupported";
-    #endif
-    #{ "op": op, "out": out }
+    } else {
+        out = shell("uname -a");             // Linux/macOS: /bin/sh
+    }
+    return { op, out };
 }
 ```
 
-`#if(WINDOWS)/#elif(LINUX)/#else/#endif` are stripped **before parsing**, so non-platform branches never reach the engine. API quick reference:
+The sandbox is a bare QuickJS runtime (no `fetch`/`require`/`console`/`eval`; use `log()` for logging). Branch per-platform **at runtime** with `__platform()` (returns `"windows" | "linux" | "macos" | "unknown"`); platform-specific functions are registered only on their platform. API quick reference:
 
-| Common | Windows | Linux |
+| Common | Windows | Linux/macOS |
 | --- | --- | --- |
 | `fs.read/write/list/exists` | `cmd` / `powershell` | `shell` / `bash` |
 | `proc.list()/kill(pid)` | `reg_query/set/delete` | `uname` / `hostname` |

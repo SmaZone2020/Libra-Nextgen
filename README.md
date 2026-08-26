@@ -70,8 +70,7 @@ cd src/webapp && npm install && npm run dev
 | 主题 | 内容 |
 | --- | --- |
 | [插件开发教程](docs/zh/插件开发.md) | meta.json 契约、zip 结构、JS/native 双通道、前端 `usePluginHost`、示例插件 |
-| [部署与构建](docs/zh/部署与构建.md) | Server/Console 部署、Builder 在线构建、Win/Linux 交叉编译、插件模块 stage |
-| [部署手册](docs/部署手册.md) | 生产部署：环境变量（`LIBRA_SERVER_KEY`/`LIBRA_BUILDS_DIR`）、MongoDB 认证、nginx/TLS |
+| [部署手册](docs/部署手册.md) | 环境变量（`LIBRA_SERVER_KEY`/`LIBRA_BUILDS_DIR`）、MongoDB 认证、nginx/TLS、Builder 构建、云载模块与插件 stage |
 | [平台支持矩阵](docs/平台支持矩阵.md) | 各平台实测记录（构建命令/结果/结论） |
 | [操作手册](docs/zh/操作手册.md) | Agent 上线、插件市场/上传/Git 导入、Shell/文件/MCP 使用、审计与风险策略 |
 | [LLM 插件开发指南](docs/LLM-插件开发指南.md) | 面向 LLM 的插件开发指引（契约/通道/打包） |
