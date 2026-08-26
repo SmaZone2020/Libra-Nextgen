@@ -54,6 +54,24 @@ public partial class BuilderBuildService
     }
 
     /// <summary>
+    /// 连接节奏：null = 默认（3000ms / 0.2），并 clamp 到安全区间防脏数据。
+    /// </summary>
+    public static (ulong heartbeatMs, double jitter) ResolveConnectionTiming(BuildConfigRequest req)
+    {
+        var heartbeatMs = req.HeartbeatIntervalMs ?? 3000ul;
+        heartbeatMs = Math.Clamp(heartbeatMs, 500ul, 60_000ul);
+        var jitter = req.JitterPercent ?? 0.2;
+        jitter = Math.Clamp(jitter, 0.0, 0.9);
+        return (heartbeatMs, jitter);
+    }
+
+    /// <summary>路径解析：空白/空值回落默认；否则 trim 后返回。</summary>
+    public static string ResolvePath(string? value, string fallback)
+    {
+        return string.IsNullOrWhiteSpace(value) ? fallback : value.Trim();
+    }
+
+    /// <summary>
     /// 云模块是否可复用：产物齐全 且 模块源码没有比产物更新。
     /// 任一启用模块缺失、或任一启用模块的 src/** 时间戳晚于对应产物 → false（需重建）。
     /// </summary>

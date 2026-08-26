@@ -10,6 +10,13 @@ export interface AntiAnalysisToggle {
   key: keyof BuildConfigRequest['antiAnalysis'];
 }
 
+/** 心跳间隔快速预设（毫秒）。 */
+export const HEARTBEAT_PRESETS: { ms: number; label: string }[] = [
+  { ms: 3000, label: '3s' },
+  { ms: 30000, label: '30s' },
+  { ms: 60000, label: '60s' },
+];
+
 export const DEFAULT_CONFIG: BuildConfigRequest = {
   platform: 'x64',
   applicationType: 'Console',

