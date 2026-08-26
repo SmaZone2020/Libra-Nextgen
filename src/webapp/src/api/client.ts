@@ -56,6 +56,21 @@ export function apiBase(): string {
   return `${getApiOrigin()}/api`;
 }
 
+/** 探测后端是否可达（fetch 到 auth/status 或任意端点，返回是否收到响应）。 */
+export async function pingBackend(origin?: string): Promise<boolean> {
+  const target = origin?.trim() ? stripTrailingSlash(origin.trim()) : getApiOrigin();
+  try {
+    const resp = await fetch(`${target}/api/auth/status`, {
+      method: 'GET',
+      // 短超时：离线时快速失败，避免断线重连页卡住
+      signal: AbortSignal.timeout(4000),
+    });
+    return resp.ok || resp.status === 401 || resp.status === 500;
+  } catch {
+    return false;
+  }
+}
+
 let authToken: string | null = localStorage.getItem('token');
 let onAuthFailed: (() => void) | null = null;
 let onNetworkError: (() => void) | null = null;

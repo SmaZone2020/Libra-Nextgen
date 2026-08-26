@@ -141,14 +141,26 @@ export function App() {
   const [needsSetup, setNeedsSetup] = useState(false);
   const [checking, setChecking] = useState(true);
   const [agreedAt, setAgreedAt] = useState<string | null | undefined>(undefined);
+  // 后端可达性：不可达时优先展示断线重连页（而不是协议确认/登录页），
+  // 并可临时切换后端地址。null = 尚未探测。
+  const [backendReachable, setBackendReachable] = useState<boolean | null>(null);
 
   useEffect(() => {
-    checkSetupStatus().then(ns => {
-      setNeedsSetup(ns);
-      setChecking(false);
-    }).catch(() => {
-      setChecking(false);
-    });
+    let cancelled = false;
+    (async () => {
+      try {
+        const ns = await checkSetupStatus();
+        if (cancelled) return;
+        setNeedsSetup(ns);
+        setBackendReachable(true);
+      } catch {
+        if (cancelled) return;
+        setBackendReachable(false);
+      } finally {
+        if (!cancelled) setChecking(false);
+      }
+    })();
+    return () => { cancelled = true; };
   }, []);
 
   // Fetch agreement status whenever the user changes.
@@ -202,6 +214,15 @@ export function App() {
     });
     return () => setOnAuthFailed(null);
   }, []);
+
+  // 后端不可达：无论登录态/协议态如何，优先展示断线重连页（支持临时切后端地址）。
+  if (backendReachable === false) {
+    return (
+      <div className="min-h-screen bg-neutral-50 dark:bg-neutral-950">
+        <NetworkOverlay />
+      </div>
+    );
+  }
 
   if (!user) {
     if (checking) {
