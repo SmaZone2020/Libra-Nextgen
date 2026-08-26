@@ -36,6 +36,18 @@ function assetUrl(file: string): string {
   return `${API_ORIGIN}/api/plugins/${PLUGIN_ID}/assets/${file}`;
 }
 
+/** 插件结果可能是 JSON 字符串（服务端透传）或已是对象，统一解析。 */
+function parseResult(raw: unknown): AITokenResult | null {
+  if (raw && typeof raw === 'object' && !Array.isArray(raw)) return raw as AITokenResult;
+  if (typeof raw === 'string') {
+    try {
+      const p: unknown = JSON.parse(raw);
+      if (p && typeof p === 'object' && !Array.isArray(p)) return p as AITokenResult;
+    } catch { /* 非 JSON */ }
+  }
+  return null;
+}
+
 /** 获取本机 AI Agent 工具 APIKey。 */
 export default function AITokenPage() {
   const { selectedAgent, dispatchTask } = usePluginHost();
@@ -50,7 +62,11 @@ export default function AITokenPage() {
     setErr(null);
     try {
       const res = await dispatchTask(PLUGIN_ID, 'collect', {});
-      setResult(res.result as AITokenResult);
+      const parsed = parseResult(res.result);
+      if (!parsed || !Array.isArray(parsed.items)) {
+        throw new Error('扫描结果格式异常（未返回 items 列表）');
+      }
+      setResult(parsed);
     } catch (e) {
       setErr(e instanceof Error ? e.message : '扫描失败');
     } finally {
@@ -67,7 +83,7 @@ export default function AITokenPage() {
   }, [selectedAgent, run]);
 
   const groups = useMemo(() => {
-    if (!result) return [];
+    if (!result || !Array.isArray(result.items)) return [];
     const map = new Map<string, AITokenItem[]>();
     for (const it of result.items) {
       const vendor = it.vendor || 'Unknown';

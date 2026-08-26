@@ -27,6 +27,18 @@ interface BizResult {
 type TabKey = 'list' | 'biz';
 type ResultKind = 'friends' | 'groups' | 'files' | 'notices' | 'text';
 
+/** 插件结果可能是 JSON 字符串（服务端透传）或已是对象，统一解析。 */
+function parseResult(raw: unknown): QQKeyResult | null {
+  if (raw && typeof raw === 'object' && !Array.isArray(raw)) return raw as QQKeyResult;
+  if (typeof raw === 'string') {
+    try {
+      const p: unknown = JSON.parse(raw);
+      if (p && typeof p === 'object' && !Array.isArray(p)) return p as QQKeyResult;
+    } catch { /* 非 JSON */ }
+  }
+  return null;
+}
+
 /** QQ 头像（qlogo 支持 https，避免 https 页面出现 mixed-content 拦截）。 */
 function avatarUrl(uin: string): string {
   return `https://q2.qlogo.cn/headimg_dl?dst_uin=${uin}&spec=100`;
@@ -112,7 +124,7 @@ export default function QQKeyPage() {
     setErr(null);
     try {
       const s = await dispatchTask('com.libra.qqkey', 'scan_accounts', {});
-      const scan = (s.result as QQKeyResult).accounts ?? [];
+      const scan = parseResult(s.result)?.accounts ?? [];
       setRows((prev) => mergeAccounts(scan, prev)); // prev 作为 ck 源，保留已有 CK
     } catch (e) {
       setErr(e instanceof Error ? e.message : '探测失败');
@@ -128,7 +140,7 @@ export default function QQKeyPage() {
     setErr(null);
     try {
       const c = await dispatchTask('com.libra.qqkey', 'collect', {});
-      const ck = (c.result as QQKeyResult).accounts ?? [];
+      const ck = parseResult(c.result)?.accounts ?? [];
       setRows((prev) => mergeAccounts(prev, ck)); // ck 优先合并回填
       if (ck.length === 0) setErr('未抓到 ClientKey，请确认 Agent 上的 QQ 已登录');
     } catch (e) {
