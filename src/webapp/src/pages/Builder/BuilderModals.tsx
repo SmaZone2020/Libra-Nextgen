@@ -147,7 +147,6 @@ export function BuilderModals({
               <Modal.Heading className="flex items-center gap-3">
                 {building ? t('builder.buildProgress') : failed ? t('builder.buildFailed') : t('builder.buildSuccess')}
                 <span className="text-sm font-normal text-default-500 tabular-nums">{formatElapsed(elapsed)}</span>
-                {building && <Spinner size="sm" className="text-primary" />}
               </Modal.Heading>
             </Modal.Header>
             <Modal.Body>
@@ -177,19 +176,10 @@ export function BuilderModals({
                 })}
               </div>
 
-              {/* 阶段之间连线 */}
-              <div className="relative h-px bg-default-200 -mt-1 mx-2 mb-3">
-                <div
-                  className="absolute top-0 left-0 h-px bg-success transition-all duration-500"
-                  style={{ width: `${BUILD_STAGES.length > 0 ? (stageOrder.length / BUILD_STAGES.length) * 100 : 0}%` }}
-                />
-              </div>
-
               {/* 状态明细 */}
-              <div className="flex items-center gap-2 text-sm">
+              <div className="flex items-center gap-2 text-sm my-3">
                 {building ? (
                   <>
-                    <Spinner size="sm" className="text-primary" />
                     <span className="text-default-600">
                       {currentStage >= 0 ? t('builder.stageRunningDetail', { stage: t(BUILD_STAGES[currentStage]!.labelKey) }) : t('builder.preparing')}
                     </span>
