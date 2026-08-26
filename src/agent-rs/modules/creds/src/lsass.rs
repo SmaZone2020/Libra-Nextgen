@@ -4,6 +4,9 @@
 //! 共享的 kernel32/advapi32 FFI 复用 `browser_stealer::browser_ffi`，避免重复声明。
 
 #![allow(non_snake_case)]
+// 本模块依赖 Windows 专属 FFI（browser_stealer::browser_ffi 为 Windows-only），
+// 非 Windows 平台不编译（creds lib.rs 已按平台门控）。
+#![cfg(target_os = "windows")]
 
 use std::ffi::c_void;
 

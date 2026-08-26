@@ -147,7 +147,12 @@ fn spawn_self() {
 }
 
 fn wrap_result(task_id: &str, output: &str) -> String {
-    let success = !output.contains("\"error\"");
+    // 失败判定：模块/任务层显式返回 JSON 错误对象。之前用 `!output.contains("\"error\"")`
+    // 会把「命令输出本身含 error 字样」的合法结果误判为失败（如 grep error、echo error）。
+    let success = match serde_json::from_str::<serde_json::Value>(output) {
+        Ok(serde_json::Value::Object(map)) => !map.contains_key("error"),
+        _ => true,
+    };
     serde_json::json!({
         "taskId": task_id,
         "success": success,

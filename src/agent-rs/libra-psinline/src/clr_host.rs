@@ -140,6 +140,7 @@ struct IDispatchVtbl {
 const IID_NULL: Guid = Guid::new(0, 0, 0, [0; 8]);
 
 /// 按名字解析 DISPID；失败返回 None。
+#[cfg(target_os = "windows")]
 unsafe fn get_dispid(obj: *mut c_void, name: &str) -> Option<i32> {
     let vtbl = &*(*(obj as *const *const IDispatchVtbl));
     let mut name_wide = wide(name);
@@ -161,6 +162,9 @@ unsafe fn get_dispid(obj: *mut c_void, name: &str) -> Option<i32> {
 
 // ── kernel32 FFI ───────────────────────────────────────────────────────
 
+// Windows 专用：Linux/macOS 交叉编译不得链接 kernel32（此前漏掉门控导致
+// powershell-module 的 .so 链接期找不到 kernel32/oleaut32，全部云模块部署失败）。
+#[cfg(target_os = "windows")]
 #[link(name = "kernel32")]
 extern "system" {
     fn LoadLibraryW(name: *const u16) -> *mut c_void;
@@ -195,6 +199,7 @@ const ERROR_OPERATION_ABORTED: u32 = 995;
 
 // ── CLR 宿主状态（进程级单例）─────────────────────────────────────────
 
+#[cfg(target_os = "windows")]
 struct ClrHost {
     host: *mut c_void,
     /// true = ICLRRuntimeHost（ExecuteInDefaultAppDomain 入口）；
@@ -207,17 +212,22 @@ struct ClrHost {
 }
 
 // COM 接口指针在本进程中只被同步访问，跨线程共享是安全的。
+#[cfg(target_os = "windows")]
 unsafe impl Send for ClrHost {}
+#[cfg(target_os = "windows")]
 unsafe impl Sync for ClrHost {}
 
+#[cfg(target_os = "windows")]
 static CLR: OnceLock<Result<ClrHost, String>> = OnceLock::new();
 
+#[cfg(target_os = "windows")]
 fn get_clr_host() -> Result<&'static ClrHost, String> {
     CLR.get_or_init(|| unsafe { init_clr_host() })
         .as_ref()
         .map_err(|e| e.clone())
 }
 
+#[cfg(target_os = "windows")]
 unsafe fn init_clr_host() -> Result<ClrHost, String> {
     let mscoree = LoadLibraryW(wide("mscoree.dll").as_ptr());
     if mscoree.is_null() {
@@ -296,14 +306,16 @@ unsafe fn init_clr_host() -> Result<ClrHost, String> {
 
     Ok(ClrHost { host: runtime_host, use_new, domain: dispatch, gate: Mutex::new(()) })
 }
-// ── 命名管道回传通道 ───────────────────────────────────────────────────
+// ── 命名管道回传通道（Windows 专用）───────────────────────────────────
 
+#[cfg(target_os = "windows")]
 struct PipeReadResult {
     bytes: Vec<u8>,
     timeout: bool,
 }
 
 /// 主线程先创建管道（stub 执行前必须已存在），返回句柄。
+#[cfg(target_os = "windows")]
 unsafe fn create_pipe(pipe_name: &str) -> *mut c_void {
     let name = wide(&format!(r"\\.\pipe\{}", pipe_name));
     CreateNamedPipeW(
@@ -319,11 +331,15 @@ unsafe fn create_pipe(pipe_name: &str) -> *mut c_void {
 }
 
 /// Win32 句柄是 `usize` 值，跨线程移动是安全的。
+#[cfg(target_os = "windows")]
 struct PipeHandle(*mut c_void);
+#[cfg(target_os = "windows")]
 unsafe impl Send for PipeHandle {}
+#[cfg(target_os = "windows")]
 unsafe impl Sync for PipeHandle {}
 
 /// 管道读取线程：连接 → 轮询读取直到 EOF 或主线程关闭句柄。
+#[cfg(target_os = "windows")]
 fn pipe_reader(handle: PipeHandle, done: Arc<AtomicBool>, result: Arc<Mutex<Option<PipeReadResult>>>) {
     let handle = handle.0;
     unsafe {
@@ -467,6 +483,7 @@ pub fn execute_inline(script: &str, timeout_secs: u64) -> String {
 }
 
 /// 把内嵌 stub 字节写入临时文件（随机名），返回路径。调用方执行后立即删除。
+#[cfg(target_os = "windows")]
 unsafe fn write_stub_temp() -> Option<String> {
     let mut tmp = [0u16; 260];
     let len = GetTempPathW(260, tmp.as_mut_ptr());
@@ -482,6 +499,7 @@ unsafe fn write_stub_temp() -> Option<String> {
 }
 
 /// ICLRRuntimeHost 路径：stub 瞬时落盘 → ExecuteInDefaultAppDomain → 删除。
+#[cfg(target_os = "windows")]
 unsafe fn execute_via_new_interface(host: *mut c_void, args: &str) -> Result<i32, String> {
     let stub_path = write_stub_temp().ok_or("write stub temp failed")?;
     let vtbl = &*(*(host as *const *const ICLRRuntimeHostVtbl));
@@ -501,8 +519,9 @@ unsafe fn execute_via_new_interface(host: *mut c_void, args: &str) -> Result<i32
     Ok(exit_code as i32)
 }
 
-// ── 老接口路径：_AppDomain IDispatch 纯内存加载 ────────────────────────
+// ── 老接口路径：_AppDomain IDispatch 纯内存加载（Windows 专用）────────
 
+#[cfg(target_os = "windows")]
 #[repr(C)]
 union VariantData {
     llval: i64,
@@ -514,6 +533,7 @@ union VariantData {
     decimal: [u8; 16],
 }
 
+#[cfg(target_os = "windows")]
 #[repr(C)]
 struct Variant {
     vt: u16,
@@ -523,6 +543,7 @@ struct Variant {
     data: VariantData,
 }
 
+#[cfg(target_os = "windows")]
 #[repr(C)]
 struct DispParams {
     rgvarg: *mut Variant,
@@ -531,12 +552,14 @@ struct DispParams {
     c_named_args: u32,
 }
 
+#[cfg(target_os = "windows")]
 #[repr(C)]
 struct SafeArrayBound {
     c_elements: u32,
     l_lbound: i32,
 }
 
+#[cfg(target_os = "windows")]
 #[repr(C)]
 struct SafeArray {
     c_dims: u16,
@@ -547,16 +570,26 @@ struct SafeArray {
     rgsabound: [SafeArrayBound; 1],
 }
 
+#[cfg(target_os = "windows")]
 const VT_BSTR: u16 = 8;
+#[cfg(target_os = "windows")]
 const VT_DISPATCH: u16 = 9;
+#[cfg(target_os = "windows")]
 const VT_UNKNOWN: u16 = 13;
+#[cfg(target_os = "windows")]
 const VT_UI1: u16 = 17;
+#[cfg(target_os = "windows")]
 const VT_ARRAY: u16 = 0x2000;
+#[cfg(target_os = "windows")]
 const VT_BOOL: u16 = 11;
+#[cfg(target_os = "windows")]
 const VT_I4: u16 = 3;
+#[cfg(target_os = "windows")]
 const DISPATCH_METHOD: u16 = 0x1;
+#[cfg(target_os = "windows")]
 const VARIANT_TRUE: i16 = -1;
 
+#[cfg(target_os = "windows")]
 #[link(name = "oleaut32")]
 extern "system" {
     fn SafeArrayCreateVector(vt: u16, low: i32, count: u32) -> *mut SafeArray;
@@ -568,6 +601,7 @@ extern "system" {
 }
 
 /// Invoke 一个方法（参数在 rgvarg 中，反序），返回结果 VARIANT。
+#[cfg(target_os = "windows")]
 unsafe fn invoke_method(
     obj: *mut c_void,
     dispid: i32,
@@ -600,6 +634,7 @@ unsafe fn invoke_method(
 
 /// 老接口路径：_AppDomain::Load_2(byte[]) 纯内存加载 stub → 
 /// CreateInstanceAndUnwrap → IDispatch Invoke("Run")。
+#[cfg(target_os = "windows")]
 unsafe fn execute_via_legacy_idispatch(domain: *mut c_void, args: &str) -> Result<i32, String> {
     // 1) Load_2(byte[]) 内存加载
     let sa = SafeArrayCreateVector(VT_UI1, 0, STUB_DLL.len() as u32);
@@ -699,8 +734,7 @@ unsafe fn execute_via_legacy_idispatch(domain: *mut c_void, args: &str) -> Resul
 
 // ── 小工具 ─────────────────────────────────────────────────────────────
 
-fn wide(s: &str) -> Vec<u16> {
-    s.encode_utf16().chain(std::iter::once(0)).collect()
+fn wide(s: &str) -> Vec<u16> {    s.encode_utf16().chain(std::iter::once(0)).collect()
 }
 
 fn rand_hex() -> u64 {

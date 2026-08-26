@@ -57,9 +57,15 @@ impl ModuleManager {
         let module = load_module(&bytes, "module_main")?;
 
         // Self-identification check: the downloaded artifact must claim to be
-        // the requested module, otherwise a corrupted/mismatched download
-        // would execute under the wrong name.
-        if !module.name.is_empty() && module.name != name {
+        // the requested module. 空名（模块未导出 module_name）视为不匹配——
+        // 之前空名会静默放行，把任意 .so 伪装成目标模块执行。
+        if module.name.is_empty() {
+            libra_common::dlog!("[module] '{name}' artifact has no module_name export — refusing to load");
+            return Err(format!(
+                "module content invalid: '{name}' artifact missing module_name export"
+            ));
+        }
+        if module.name != name {
             libra_common::dlog!("[module] MISMATCH: requested '{name}', downloaded '{0}'", module.name);
             return Err(format!(
                 "module content mismatch: requested '{name}', downloaded '{}'",

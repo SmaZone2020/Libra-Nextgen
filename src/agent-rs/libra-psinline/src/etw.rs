@@ -20,6 +20,7 @@
 
 use std::ffi::c_void;
 
+#[cfg(target_os = "windows")]
 #[link(name = "kernel32")]
 extern "system" {
     fn GetModuleHandleA(name: *const u8) -> *mut c_void;
@@ -27,6 +28,7 @@ extern "system" {
     fn VirtualProtect(addr: *mut c_void, size: usize, new_protect: u32, old: *mut u32) -> i32;
 }
 
+#[cfg(target_os = "windows")]
 const PAGE_EXECUTE_READWRITE: u32 = 0x40;
 
 /// `xor eax, eax; ret` —— Etw* 函数直接返回 STATUS_SUCCESS。
