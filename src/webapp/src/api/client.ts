@@ -14,7 +14,10 @@
 const API_ORIGIN_KEY = 'api_origin';
 const DEFAULT_BACKEND_PORT = 5270;
 
-const BUILTIN_API_ORIGIN = (import.meta.env.VITE_API_BASE as string | undefined)?.trim() || '';
+/** Build-time base override; read lazily so tests can stub it per-case. */
+function builtinApiOrigin(): string {
+  return (import.meta.env.VITE_API_BASE as string | undefined)?.trim() || '';
+}
 
 function stripTrailingSlash(url: string): string {
   return url.replace(/\/+$/, '');
@@ -33,16 +36,33 @@ export function deriveHostOrigin(location: { protocol: string; hostname: string;
   return `${location.protocol}//${location.hostname}:${DEFAULT_BACKEND_PORT}`;
 }
 
-export function getApiOrigin(): string {
+/**
+ * Resolve the API origin with an explicit window handle.
+ *
+ * Priority (high → low):
+ *   1. stored preference (localStorage `api_origin`)
+ *   2. build-time VITE_API_BASE
+ *   3. derive from the page location (same-origin when served by the backend)
+ *   4. fallback http://127.0.0.1:5270
+ *
+ * Exported so tests can pass a deterministic window regardless of whether
+ * the test runner exposes the jsdom global to the module scope (this differs
+ * across platforms/versions).
+ */
+export function resolveApiOrigin(win?: Window | undefined): string {
   const stored = localStorage.getItem(API_ORIGIN_KEY)?.trim();
   if (stored) return stripTrailingSlash(stored);
-  if (BUILTIN_API_ORIGIN) return stripTrailingSlash(BUILTIN_API_ORIGIN);
-  const w = (globalThis as { window?: Window }).window;
-  if (w) {
-    const derived = deriveHostOrigin(w.location);
+  const builtin = builtinApiOrigin();
+  if (builtin) return stripTrailingSlash(builtin);
+  if (win) {
+    const derived = deriveHostOrigin(win.location);
     if (derived) return derived;
   }
   return `http://127.0.0.1:${DEFAULT_BACKEND_PORT}`;
+}
+
+export function getApiOrigin(): string {
+  return resolveApiOrigin((globalThis as { window?: Window }).window);
 }
 
 /** 用户在首选项中设置自定义后端地址；传空/null 清除 → 恢复默认解析。 */
