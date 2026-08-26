@@ -13,7 +13,7 @@ import {
   Label,
   Input,
 } from '@heroui/react';
-import { PlugConnection, TrashBin, Pencil, LogoGithub } from '@gravity-ui/icons';
+import { PlugConnection, TrashBin, Pencil, LogoGithub, ArrowRotateRight } from '@gravity-ui/icons';
 import { useDialog } from '../../hooks/useDialog';
 import {
   listPlugins,
@@ -21,6 +21,7 @@ import {
   importPluginFromGit,
   installPluginFromRegistry,
   getPluginRegistry,
+  clearPluginRegistryCache,
   updatePlugin,
   deletePlugin,
   togglePlugin,
@@ -185,6 +186,14 @@ export default function PluginsPage() {
                 <LogoGithub />
                 {t('plugins.gitImport')}
               </Button>
+              <Button
+                variant="outline"
+                aria-label={t('plugins.marketRefresh')}
+                onPress={() => document.getElementById('market-refresh-btn')?.click()}
+              >
+                <ArrowRotateRight className="w-4 h-4" />
+                {t('plugins.marketRefresh')}
+              </Button>
             </div>
           </div>
           <Input
@@ -332,12 +341,28 @@ function MarketTab({ installedIds }: { installedIds: Set<string> }) {
   const [registry, setRegistry] = useState<PluginRegistryIndex | null>(null);
   const [fail, setFail] = useState<string | null>(null);
   const [installing, setInstalling] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const load = useCallback(async (force: boolean) => {
+    setFail(null);
+    if (force) setRefreshing(true);
+    try {
+      setRegistry(await getPluginRegistry({ force }));
+    } catch (e) {
+      setFail(e instanceof Error ? e.message : t('plugins.marketFail'));
+    } finally {
+      setRefreshing(false);
+    }
+  }, [t]);
 
   useEffect(() => {
-    getPluginRegistry()
-      .then(setRegistry)
-      .catch((e) => setFail(e instanceof Error ? e.message : t('plugins.marketFail')));
-  }, [t]);
+    load(false);
+  }, [load]);
+
+  const refresh = useCallback(async () => {
+    clearPluginRegistryCache();
+    await load(true);
+  }, [load]);
 
   const install = async (file: string) => {
     setInstalling(file);
@@ -375,37 +400,79 @@ function MarketTab({ installedIds }: { installedIds: Set<string> }) {
   }
 
   return (
-    <div className="grid gap-4">
-      {registry.plugins.map((p) => {
-        const installed = installedIds.has(p.pluginId);
-        return (
-          <Card key={p.pluginId} className="p-4">
-            <div className="flex items-start justify-between gap-4">
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2">
-                  <span className="font-semibold">{p.name || p.pluginId}</span>
-                  <Chip size="sm" variant="secondary">{p.version}</Chip>
-                  {installed && <Chip size="sm" variant="soft" color="success">{t('plugins.installedChip')}</Chip>}
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h3 className="text-sm font-semibold text-neutral-700">{t('plugins.market')}</h3>
+        <Button
+          id="market-refresh-btn"
+          size="sm"
+          variant="outline"
+          isPending={refreshing}
+          onPress={refresh}
+        >
+          <ArrowRotateRight className="w-4 h-4" />
+          {refreshing ? t('plugins.marketRefreshing') : t('plugins.marketRefresh')}
+        </Button>
+      </div>
+
+      {registry === null && !fail && (
+        <Card className="p-12 flex items-center justify-center">
+          <Spinner size="lg" />
+        </Card>
+      )}
+
+      {fail && (
+        <Card className="p-4 border border-danger">
+          <div className="flex items-center justify-between gap-4">
+            <p className="text-danger text-sm">{fail}</p>
+            <Button size="sm" variant="ghost" onPress={refresh}>
+              <ArrowRotateRight className="w-4 h-4" />
+              {t('plugins.marketRefresh')}
+            </Button>
+          </div>
+        </Card>
+      )}
+
+      {!fail && registry && registry.plugins.length === 0 && (
+        <Card className="p-12 text-center text-default-500">
+          {t('plugins.marketEmpty')}
+        </Card>
+      )}
+
+      {!fail && registry && registry.plugins.length > 0 && (
+        <div className="grid gap-4">
+          {registry.plugins.map((p) => {
+            const installed = installedIds.has(p.pluginId);
+            return (
+              <Card key={p.pluginId} className="p-4">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className="font-semibold">{p.name || p.pluginId}</span>
+                      <Chip size="sm" variant="secondary">{p.version}</Chip>
+                      {installed && <Chip size="sm" variant="soft" color="success">{t('plugins.installedChip')}</Chip>}
+                    </div>
+                    <p className="text-xs text-default-500 mt-1 font-mono">{p.pluginId}</p>
+                    {p.description && <p className="text-sm mt-1 text-default-600">{p.description}</p>}
+                    <p className="text-xs text-default-400 mt-1">
+                      {p.author && `${p.author} · `}{(p.size / 1024).toFixed(0)} KB
+                    </p>
+                  </div>
+                  <Button
+                    variant={installed ? 'ghost' : 'primary'}
+                    size="sm"
+                    isDisabled={installed}
+                    isPending={installing === p.file}
+                    onPress={() => install(p.file)}
+                  >
+                    {t('plugins.install')}
+                  </Button>
                 </div>
-                <p className="text-xs text-default-500 mt-1 font-mono">{p.pluginId}</p>
-                {p.description && <p className="text-sm mt-1 text-default-600">{p.description}</p>}
-                <p className="text-xs text-default-400 mt-1">
-                  {p.author && `${p.author} · `}{(p.size / 1024).toFixed(0)} KB
-                </p>
-              </div>
-              <Button
-                variant={installed ? 'ghost' : 'primary'}
-                size="sm"
-                isDisabled={installed}
-                isPending={installing === p.file}
-                onPress={() => install(p.file)}
-              >
-                {t('plugins.install')}
-              </Button>
-            </div>
-          </Card>
-        );
-      })}
+              </Card>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

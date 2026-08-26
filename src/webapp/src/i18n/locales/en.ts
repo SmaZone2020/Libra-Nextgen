@@ -95,6 +95,8 @@ export default {
       installedChip: 'Installed',
       marketEmpty: 'The plugin market is empty.',
       marketFail: 'Failed to load plugin market',
+      marketRefresh: 'Refresh Market',
+      marketRefreshing: 'Refreshing...',
       edit: 'Edit {{name}}',
       delete: 'Delete',
       enabled: 'Enabled',

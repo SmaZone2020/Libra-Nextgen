@@ -95,6 +95,8 @@ export default {
       installedChip: '已安装',
       marketEmpty: '插件市场为空。',
       marketFail: '加载插件市场失败',
+      marketRefresh: '刷新市场',
+      marketRefreshing: '刷新中...',
       edit: '编辑 {{name}}',
       delete: '删除',
       enabled: '已启用',

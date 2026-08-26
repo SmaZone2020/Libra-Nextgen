@@ -130,27 +130,38 @@ export async function importPlugin(file: File, enable: boolean): Promise<PluginR
  */
 const PLUGIN_MARKET_BASE =
   import.meta.env.VITE_PLUGIN_MARKET_BASE ||
-  'https://raw.githubusercontent.com/SmaZone2020/Libra-Plugins/refs/heads/main/plugins';
+  'https://raw.githubusercontent.com/SmaZone2020/Libra-Plugins/refs/heads/main';
 
 const REGISTRY_CACHE_KEY = 'libra.plugin.registry';
 const REGISTRY_TTL_MS = 60 * 60 * 1000; // 1 hour
+
+/** Drop the cached market index so the next fetch re-downloads it. */
+export function clearPluginRegistryCache(): void {
+  try {
+    localStorage.removeItem(REGISTRY_CACHE_KEY);
+  } catch {
+    /* storage blocked — no-op */
+  }
+}
 
 /**
  * Fetch the marketplace index.json directly from GitHub raw, caching it in
  * localStorage for up to 1 hour so repeated visits don't re-download it.
  */
-export async function getPluginRegistry(): Promise<PluginRegistryIndex> {
-  // Serve from browser cache first (within TTL).
-  try {
-    const cached = localStorage.getItem(REGISTRY_CACHE_KEY);
-    if (cached) {
-      const parsed = JSON.parse(cached) as { ts: number; data: PluginRegistryIndex };
-      if (Date.now() - parsed.ts < REGISTRY_TTL_MS && parsed.data?.plugins) {
-        return parsed.data;
+export async function getPluginRegistry(options?: { force?: boolean }): Promise<PluginRegistryIndex> {
+  // Serve from browser cache first (within TTL) unless force-refreshing.
+  if (!options?.force) {
+    try {
+      const cached = localStorage.getItem(REGISTRY_CACHE_KEY);
+      if (cached) {
+        const parsed = JSON.parse(cached) as { ts: number; data: PluginRegistryIndex };
+        if (Date.now() - parsed.ts < REGISTRY_TTL_MS && parsed.data?.plugins) {
+          return parsed.data;
+        }
       }
+    } catch {
+      /* stale or corrupt cache — fall through to fetch */
     }
-  } catch {
-    /* stale or corrupt cache — fall through to fetch */
   }
 
   const res = await fetch(`${PLUGIN_MARKET_BASE}/index.json`);
