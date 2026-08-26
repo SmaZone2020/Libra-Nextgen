@@ -76,7 +76,10 @@ impl EnvInfo {
 
         // System env vars from registry
         if let Ok(output) = std::process::Command::new("reg")
-            .args(["query", r"HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Environment"])
+            .args([
+                "query",
+                r"HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Environment",
+            ])
             .creation_flags(0x08000000)
             .output()
         {
@@ -85,7 +88,8 @@ impl EnvInfo {
                 if let Some((name, val)) = parse_reg_line(line) {
                     system_items.push(format!(
                         r#"{{"name":"{}","value":"{}"}}"#,
-                        escape(&name), escape(&val)
+                        escape(&name),
+                        escape(&val)
                     ));
                 }
             }
@@ -102,7 +106,8 @@ impl EnvInfo {
                 if let Some((name, val)) = parse_reg_line(line) {
                     user_items.push(format!(
                         r#"{{"name":"{}","value":"{}"}}"#,
-                        escape(&name), escape(&val)
+                        escape(&name),
+                        escape(&val)
                     ));
                 }
             }
@@ -121,7 +126,8 @@ impl EnvInfo {
             .map(|(name, value)| {
                 format!(
                     r#"{{"name":"{}","value":"{}"}}"#,
-                    escape(&name), escape(&value)
+                    escape(&name),
+                    escape(&value)
                 )
             })
             .collect();
@@ -138,7 +144,11 @@ fn parse_reg_line(line: &str) -> Option<(String, String)> {
         if parts.len() < 2 {
             return None;
         }
-        let name = parts[0].trim().trim_end_matches("REG_EXPAND_SZ").trim().to_string();
+        let name = parts[0]
+            .trim()
+            .trim_end_matches("REG_EXPAND_SZ")
+            .trim()
+            .to_string();
         let val = parts[1].trim().to_string();
         if name.is_empty() || name.contains('\\') && !name.contains("REG_") {
             // Filter out header/footer lines
@@ -151,7 +161,11 @@ fn parse_reg_line(line: &str) -> Option<(String, String)> {
             Some((name, val))
         }
     } else {
-        let name = parts[0].trim().trim_end_matches("REG_SZ").trim().to_string();
+        let name = parts[0]
+            .trim()
+            .trim_end_matches("REG_SZ")
+            .trim()
+            .to_string();
         let val = parts[1].trim().to_string();
         if name.is_empty() {
             None

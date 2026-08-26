@@ -1,5 +1,5 @@
-use std::path::{Path, PathBuf};
 use base64::Engine;
+use std::path::{Path, PathBuf};
 
 pub struct FileOps;
 
@@ -140,8 +140,13 @@ impl FileOps {
                 .stderr(std::process::Stdio::null())
                 .status();
             match result {
-                Ok(s) if s.success() => format!(r#"{{"path":"{}","status":"opened"}}"#, escape(path)),
-                Ok(s) => format!(r#"{{"error":"cmd exited with code {}"}}"#, s.code().unwrap_or(-1)),
+                Ok(s) if s.success() => {
+                    format!(r#"{{"path":"{}","status":"opened"}}"#, escape(path))
+                }
+                Ok(s) => format!(
+                    r#"{{"error":"cmd exited with code {}"}}"#,
+                    s.code().unwrap_or(-1)
+                ),
                 Err(e) => format!(r#"{{"error":"{}"}}"#, escape(&e.to_string())),
             }
         }
@@ -153,8 +158,13 @@ impl FileOps {
                 .stderr(std::process::Stdio::null())
                 .status();
             match result {
-                Ok(s) if s.success() => format!(r#"{{"path":"{}","status":"opened"}}"#, escape(path)),
-                Ok(s) => format!(r#"{{"error":"xdg-open exited with code {}"}}"#, s.code().unwrap_or(-1)),
+                Ok(s) if s.success() => {
+                    format!(r#"{{"path":"{}","status":"opened"}}"#, escape(path))
+                }
+                Ok(s) => format!(
+                    r#"{{"error":"xdg-open exited with code {}"}}"#,
+                    s.code().unwrap_or(-1)
+                ),
                 Err(e) => format!(r#"{{"error":"{}"}}"#, escape(&e.to_string())),
             }
         }
@@ -181,10 +191,18 @@ impl FileOps {
 
             let name_len = u16::from_le_bytes([data[pos + 26], data[pos + 27]]) as usize;
             let extra_len = u16::from_le_bytes([data[pos + 28], data[pos + 29]]) as usize;
-            let comp_size =
-                u32::from_le_bytes([data[pos + 18], data[pos + 19], data[pos + 20], data[pos + 21]]) as usize;
-            let uncomp_size =
-                u32::from_le_bytes([data[pos + 22], data[pos + 23], data[pos + 24], data[pos + 25]]) as usize;
+            let comp_size = u32::from_le_bytes([
+                data[pos + 18],
+                data[pos + 19],
+                data[pos + 20],
+                data[pos + 21],
+            ]) as usize;
+            let uncomp_size = u32::from_le_bytes([
+                data[pos + 22],
+                data[pos + 23],
+                data[pos + 24],
+                data[pos + 25],
+            ]) as usize;
 
             let header_end = pos + 30 + name_len + extra_len;
             if header_end > data.len() {
@@ -336,13 +354,20 @@ impl FileOps {
         let files = if p.is_dir() {
             collect_files(p).unwrap_or_default()
         } else {
-            vec![(p.to_path_buf(), p.file_name().unwrap_or_default().to_string_lossy().to_string())]
+            vec![(
+                p.to_path_buf(),
+                p.file_name()
+                    .unwrap_or_default()
+                    .to_string_lossy()
+                    .to_string(),
+            )]
         };
 
         match create_zip(&zip_path, p, &files) {
             Ok(size) => format!(
                 r#"{{"path":"{}","size":{},"status":"compressed"}}"#,
-                escape(&zip_path), size
+                escape(&zip_path),
+                size
             ),
             Err(e) => format!(r#"{{"error":"{}"}}"#, escape(&e.to_string())),
         }
@@ -421,7 +446,11 @@ fn collect_files_recursive(
     for entry in std::fs::read_dir(current)? {
         let entry = entry?;
         let path = entry.path();
-        let rel = path.strip_prefix(base).unwrap_or(&path).to_string_lossy().to_string();
+        let rel = path
+            .strip_prefix(base)
+            .unwrap_or(&path)
+            .to_string_lossy()
+            .to_string();
 
         if path.is_file() {
             files.push((path, rel));
@@ -451,16 +480,26 @@ fn create_zip(zip_path: &str, _base: &Path, files: &[(PathBuf, String)]) -> Resu
         // Local file header
         let name_bytes = name.as_bytes();
         zip.write_all(b"PK\03\04").map_err(|e| e.to_string())?; // Signature
-        zip.write_all(&20u16.to_le_bytes()).map_err(|e| e.to_string())?; // Version
-        zip.write_all(&0u16.to_le_bytes()).map_err(|e| e.to_string())?; // Flags
-        zip.write_all(&0u16.to_le_bytes()).map_err(|e| e.to_string())?; // Compression: store
-        zip.write_all(&0u16.to_le_bytes()).map_err(|e| e.to_string())?; // Time
-        zip.write_all(&0u16.to_le_bytes()).map_err(|e| e.to_string())?; // Date
-        zip.write_all(&crc.to_le_bytes()).map_err(|e| e.to_string())?;
-        zip.write_all(&(content.len() as u32).to_le_bytes()).map_err(|e| e.to_string())?; // Compressed size
-        zip.write_all(&(content.len() as u32).to_le_bytes()).map_err(|e| e.to_string())?; // Uncompressed size
-        zip.write_all(&(name_bytes.len() as u16).to_le_bytes()).map_err(|e| e.to_string())?;
-        zip.write_all(&0u16.to_le_bytes()).map_err(|e| e.to_string())?; // Extra length
+        zip.write_all(&20u16.to_le_bytes())
+            .map_err(|e| e.to_string())?; // Version
+        zip.write_all(&0u16.to_le_bytes())
+            .map_err(|e| e.to_string())?; // Flags
+        zip.write_all(&0u16.to_le_bytes())
+            .map_err(|e| e.to_string())?; // Compression: store
+        zip.write_all(&0u16.to_le_bytes())
+            .map_err(|e| e.to_string())?; // Time
+        zip.write_all(&0u16.to_le_bytes())
+            .map_err(|e| e.to_string())?; // Date
+        zip.write_all(&crc.to_le_bytes())
+            .map_err(|e| e.to_string())?;
+        zip.write_all(&(content.len() as u32).to_le_bytes())
+            .map_err(|e| e.to_string())?; // Compressed size
+        zip.write_all(&(content.len() as u32).to_le_bytes())
+            .map_err(|e| e.to_string())?; // Uncompressed size
+        zip.write_all(&(name_bytes.len() as u16).to_le_bytes())
+            .map_err(|e| e.to_string())?;
+        zip.write_all(&0u16.to_le_bytes())
+            .map_err(|e| e.to_string())?; // Extra length
         zip.write_all(name_bytes).map_err(|e| e.to_string())?;
         zip.write_all(&content).map_err(|e| e.to_string())?;
 
@@ -474,21 +513,36 @@ fn create_zip(zip_path: &str, _base: &Path, files: &[(PathBuf, String)]) -> Resu
     // Central directory
     for (name_bytes, crc, size, loc_offset) in &central_dir {
         zip.write_all(b"PK\01\02").map_err(|e| e.to_string())?;
-        zip.write_all(&20u16.to_le_bytes()).map_err(|e| e.to_string())?;
-        zip.write_all(&20u16.to_le_bytes()).map_err(|e| e.to_string())?;
-        zip.write_all(&0u16.to_le_bytes()).map_err(|e| e.to_string())?;
-        zip.write_all(&0u16.to_le_bytes()).map_err(|e| e.to_string())?;
-        zip.write_all(&0u16.to_le_bytes()).map_err(|e| e.to_string())?;
-        zip.write_all(&0u16.to_le_bytes()).map_err(|e| e.to_string())?;
-        zip.write_all(&crc.to_le_bytes()).map_err(|e| e.to_string())?;
-        zip.write_all(&size.to_le_bytes()).map_err(|e| e.to_string())?;
-        zip.write_all(&size.to_le_bytes()).map_err(|e| e.to_string())?;
-        zip.write_all(&(name_bytes.len() as u16).to_le_bytes()).map_err(|e| e.to_string())?;
-        zip.write_all(&0u16.to_le_bytes()).map_err(|e| e.to_string())?;
-        zip.write_all(&0u16.to_le_bytes()).map_err(|e| e.to_string())?;
-        zip.write_all(&0u16.to_le_bytes()).map_err(|e| e.to_string())?;
-        zip.write_all(&0u32.to_le_bytes()).map_err(|e| e.to_string())?;
-        zip.write_all(&loc_offset.to_le_bytes()).map_err(|e| e.to_string())?;
+        zip.write_all(&20u16.to_le_bytes())
+            .map_err(|e| e.to_string())?;
+        zip.write_all(&20u16.to_le_bytes())
+            .map_err(|e| e.to_string())?;
+        zip.write_all(&0u16.to_le_bytes())
+            .map_err(|e| e.to_string())?;
+        zip.write_all(&0u16.to_le_bytes())
+            .map_err(|e| e.to_string())?;
+        zip.write_all(&0u16.to_le_bytes())
+            .map_err(|e| e.to_string())?;
+        zip.write_all(&0u16.to_le_bytes())
+            .map_err(|e| e.to_string())?;
+        zip.write_all(&crc.to_le_bytes())
+            .map_err(|e| e.to_string())?;
+        zip.write_all(&size.to_le_bytes())
+            .map_err(|e| e.to_string())?;
+        zip.write_all(&size.to_le_bytes())
+            .map_err(|e| e.to_string())?;
+        zip.write_all(&(name_bytes.len() as u16).to_le_bytes())
+            .map_err(|e| e.to_string())?;
+        zip.write_all(&0u16.to_le_bytes())
+            .map_err(|e| e.to_string())?;
+        zip.write_all(&0u16.to_le_bytes())
+            .map_err(|e| e.to_string())?;
+        zip.write_all(&0u16.to_le_bytes())
+            .map_err(|e| e.to_string())?;
+        zip.write_all(&0u32.to_le_bytes())
+            .map_err(|e| e.to_string())?;
+        zip.write_all(&loc_offset.to_le_bytes())
+            .map_err(|e| e.to_string())?;
         zip.write_all(name_bytes).map_err(|e| e.to_string())?;
         offset += 46 + name_bytes.len() as u64;
     }
@@ -498,13 +552,20 @@ fn create_zip(zip_path: &str, _base: &Path, files: &[(PathBuf, String)]) -> Resu
 
     // End of central directory
     zip.write_all(b"PK\05\06").map_err(|e| e.to_string())?;
-    zip.write_all(&0u16.to_le_bytes()).map_err(|e| e.to_string())?;
-    zip.write_all(&0u16.to_le_bytes()).map_err(|e| e.to_string())?;
-    zip.write_all(&cd_count.to_le_bytes()).map_err(|e| e.to_string())?;
-    zip.write_all(&cd_count.to_le_bytes()).map_err(|e| e.to_string())?;
-    zip.write_all(&(cd_size as u32).to_le_bytes()).map_err(|e| e.to_string())?;
-    zip.write_all(&(cd_offset as u32).to_le_bytes()).map_err(|e| e.to_string())?;
-    zip.write_all(&0u16.to_le_bytes()).map_err(|e| e.to_string())?;
+    zip.write_all(&0u16.to_le_bytes())
+        .map_err(|e| e.to_string())?;
+    zip.write_all(&0u16.to_le_bytes())
+        .map_err(|e| e.to_string())?;
+    zip.write_all(&cd_count.to_le_bytes())
+        .map_err(|e| e.to_string())?;
+    zip.write_all(&cd_count.to_le_bytes())
+        .map_err(|e| e.to_string())?;
+    zip.write_all(&(cd_size as u32).to_le_bytes())
+        .map_err(|e| e.to_string())?;
+    zip.write_all(&(cd_offset as u32).to_le_bytes())
+        .map_err(|e| e.to_string())?;
+    zip.write_all(&0u16.to_le_bytes())
+        .map_err(|e| e.to_string())?;
 
     zip.flush().map_err(|e| e.to_string())?;
 
@@ -519,8 +580,10 @@ fn extract_zip(src: &Path, dest: &Path) -> Result<(), String> {
     std::fs::create_dir_all(dest).map_err(|e| e.to_string())?;
 
     while pos + 30 <= data.len() {
-        if data[pos..].len() < 4 { break; }
-        let sig = u32::from_le_bytes([data[pos], data[pos+1], data[pos+2], data[pos+3]]);
+        if data[pos..].len() < 4 {
+            break;
+        }
+        let sig = u32::from_le_bytes([data[pos], data[pos + 1], data[pos + 2], data[pos + 3]]);
         if sig == 0x02014b50 || sig == 0x06054b50 {
             break; // Central directory or EOCD
         }
@@ -529,15 +592,22 @@ fn extract_zip(src: &Path, dest: &Path) -> Result<(), String> {
             continue;
         }
 
-        let name_len = u16::from_le_bytes([data[pos+26], data[pos+27]]) as usize;
-        let extra_len = u16::from_le_bytes([data[pos+28], data[pos+29]]) as usize;
-        let comp_size = u32::from_le_bytes([data[pos+18], data[pos+19], data[pos+20], data[pos+21]]) as usize;
-        let comp_method = u16::from_le_bytes([data[pos+8], data[pos+9]]);
+        let name_len = u16::from_le_bytes([data[pos + 26], data[pos + 27]]) as usize;
+        let extra_len = u16::from_le_bytes([data[pos + 28], data[pos + 29]]) as usize;
+        let comp_size = u32::from_le_bytes([
+            data[pos + 18],
+            data[pos + 19],
+            data[pos + 20],
+            data[pos + 21],
+        ]) as usize;
+        let comp_method = u16::from_le_bytes([data[pos + 8], data[pos + 9]]);
 
         let header_end = pos + 30 + name_len + extra_len;
-        if header_end + comp_size > data.len() { break; }
+        if header_end + comp_size > data.len() {
+            break;
+        }
 
-        let name = String::from_utf8_lossy(&data[pos+30..pos+30+name_len]);
+        let name = String::from_utf8_lossy(&data[pos + 30..pos + 30 + name_len]);
         let content = &data[header_end..header_end + comp_size];
 
         if comp_method == 0 {
@@ -545,7 +615,11 @@ fn extract_zip(src: &Path, dest: &Path) -> Result<(), String> {
             let canonical_dest = dest.canonicalize().unwrap_or_else(|_| dest.to_path_buf());
             let canonical_out = out_path.canonicalize().unwrap_or_else(|_| {
                 let mut p = out_path.clone();
-                while !p.exists() { if !p.pop() { break; } }
+                while !p.exists() {
+                    if !p.pop() {
+                        break;
+                    }
+                }
                 p
             });
             if !canonical_out.starts_with(&canonical_dest) {
@@ -597,7 +671,9 @@ fn copy_dir_recursive(src: &Path, dest: &Path) -> Result<(), std::io::Error> {
 }
 
 fn format_unix_timestamp(secs: u64) -> String {
-    if secs == 0 { return String::new(); }
+    if secs == 0 {
+        return String::new();
+    }
     let days_since_epoch = secs / 86400;
     let time_of_day = secs % 86400;
     let hours = time_of_day / 3600;
@@ -607,7 +683,9 @@ fn format_unix_timestamp(secs: u64) -> String {
     let mut remaining_days = days_since_epoch as i64;
     loop {
         let days_in_year = if is_leap(year) { 366 } else { 365 };
-        if remaining_days < days_in_year { break; }
+        if remaining_days < days_in_year {
+            break;
+        }
         remaining_days -= days_in_year;
         year += 1;
     }
@@ -618,15 +696,22 @@ fn format_unix_timestamp(secs: u64) -> String {
     };
     let mut month = 1;
     for &dim in &days_in_months {
-        if remaining_days < dim as i64 { break; }
+        if remaining_days < dim as i64 {
+            break;
+        }
         remaining_days -= dim as i64;
         month += 1;
     }
     let day = remaining_days + 1;
-    format!("{:04}-{:02}-{:02}T{:02}:{:02}:{:02}.0000000Z", year, month, day, hours, minutes, seconds)
+    format!(
+        "{:04}-{:02}-{:02}T{:02}:{:02}:{:02}.0000000Z",
+        year, month, day, hours, minutes, seconds
+    )
 }
 
-fn is_leap(y: i64) -> bool { y % 4 == 0 && (y % 100 != 0 || y % 400 == 0) }
+fn is_leap(y: i64) -> bool {
+    y % 4 == 0 && (y % 100 != 0 || y % 400 == 0)
+}
 
 fn escape(s: &str) -> String {
     s.replace('\\', "\\\\")
@@ -658,18 +743,32 @@ mod shortcut_native {
 
     impl Guid {
         const fn new(d1: u32, d2: u16, d3: u16, d4: [u8; 8]) -> Self {
-            Self { data1: d1, data2: d2, data3: d3, data4: d4 }
+            Self {
+                data1: d1,
+                data2: d2,
+                data3: d3,
+                data4: d4,
+            }
         }
     }
 
     const CLSID_ShellLink: Guid = Guid::new(
-        0x00021401, 0x0000, 0x0000, [0xC0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x46],
+        0x00021401,
+        0x0000,
+        0x0000,
+        [0xC0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x46],
     );
     const IID_IShellLinkW: Guid = Guid::new(
-        0x000214F9, 0x0000, 0x0000, [0xC0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x46],
+        0x000214F9,
+        0x0000,
+        0x0000,
+        [0xC0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x46],
     );
     const IID_IPersistFile: Guid = Guid::new(
-        0x0000010B, 0x0000, 0x0000, [0xC0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x46],
+        0x0000010B,
+        0x0000,
+        0x0000,
+        [0xC0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x46],
     );
 
     const CLSCTX_INPROC_SERVER: u32 = 0x1;
@@ -677,8 +776,11 @@ mod shortcut_native {
     #[link(name = "ole32")]
     extern "system" {
         fn CoCreateInstance(
-            clsid: *const Guid, outer: *mut c_void, ctx: u32,
-            iid: *const Guid, ppv: *mut *mut c_void,
+            clsid: *const Guid,
+            outer: *mut c_void,
+            ctx: u32,
+            iid: *const Guid,
+            ppv: *mut *mut c_void,
         ) -> i32;
     }
 
@@ -691,7 +793,8 @@ mod shortcut_native {
     // IShellLinkW vtable：IUnknown(3) + 18 个方法，SetPath 是第 18 个。
     #[repr(C)]
     struct IShellLinkWVtbl {
-        query_interface: unsafe extern "system" fn(*mut c_void, *const Guid, *mut *mut c_void) -> i32,
+        query_interface:
+            unsafe extern "system" fn(*mut c_void, *const Guid, *mut *mut c_void) -> i32,
         add_ref: unsafe extern "system" fn(*mut c_void) -> u32,
         release: unsafe extern "system" fn(*mut c_void) -> u32,
         get_path: unsafe extern "system" fn(*mut c_void, *mut u16, i32, *mut c_void, u32) -> i32,
@@ -718,7 +821,8 @@ mod shortcut_native {
     // Save 是第 7 个方法（vtable index 6）。
     #[repr(C)]
     struct IPersistFileVtbl {
-        query_interface: unsafe extern "system" fn(*mut c_void, *const Guid, *mut *mut c_void) -> i32,
+        query_interface:
+            unsafe extern "system" fn(*mut c_void, *const Guid, *mut *mut c_void) -> i32,
         add_ref: unsafe extern "system" fn(*mut c_void) -> u32,
         release: unsafe extern "system" fn(*mut c_void) -> u32,
         get_class_id: unsafe extern "system" fn(*mut c_void, *mut Guid) -> i32,
@@ -744,7 +848,10 @@ mod shortcut_native {
             &mut shell_link,
         );
         if hr != 0 || shell_link.is_null() {
-            return Err(format!("CoCreateInstance(ShellLink) failed: 0x{:08X}", hr as u32));
+            return Err(format!(
+                "CoCreateInstance(ShellLink) failed: 0x{:08X}",
+                hr as u32
+            ));
         }
 
         let vtbl = &*(*(shell_link as *const *const IShellLinkWVtbl));

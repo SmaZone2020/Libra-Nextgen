@@ -13,9 +13,7 @@ use core::sync::atomic::{AtomicUsize, Ordering};
 use crate::ffi::{
     wide, GetCurrentThreadId, GetModuleHandleW, GetProcAddress, RtlAddVectoredExceptionHandler,
 };
-use crate::invoke::{
-    nt_close, nt_get_context_thread, nt_open_thread, nt_set_context_thread,
-};
+use crate::invoke::{nt_close, nt_get_context_thread, nt_open_thread, nt_set_context_thread};
 use crate::types::{ClientId, ObjectAttributes};
 use crate::Context;
 
@@ -236,7 +234,10 @@ mod tests {
 
             let f: extern "system" fn() -> u32 = core::mem::transmute(gpid);
             let result = f();
-            assert_eq!(result, 0xDEAD_BEEF, "VEH must skip function body and fake rax");
+            assert_eq!(
+                result, 0xDEAD_BEEF,
+                "VEH must skip function body and fake rax"
+            );
         }
     }
 }

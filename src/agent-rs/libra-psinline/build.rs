@@ -19,7 +19,9 @@ fn main() {
             r"C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe",
             r"C:\Windows\Microsoft.NET\Framework\v4.0.30319\csc.exe",
         ];
-        let csc = csc_candidates.iter().find(|p| std::path::Path::new(p).exists());
+        let csc = csc_candidates
+            .iter()
+            .find(|p| std::path::Path::new(p).exists());
         let csc = match csc {
             Some(p) => p,
             None => {
@@ -37,8 +39,7 @@ fn main() {
         let sma = find_sma_in_gac(gac_sma)
             .unwrap_or_else(|| panic!("System.Management.Automation not found in GAC ({gac_sma})"));
 
-        let out_dir = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap())
-            .join("stub");
+        let out_dir = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap()).join("stub");
         std::fs::create_dir_all(&out_dir).expect("create stub dir");
         let out_dll = out_dir.join("psinline_stub.dll");
         let src = out_dir.join("PsInlineStub.cs");

@@ -34,13 +34,21 @@ pub struct SpoofFrame {
 
 extern "C" {
     fn libra_spoof(
-        a: usize, b: usize, c: usize, d: usize,
-        frame: usize, pad: usize,
-        e: usize, f: usize, g: usize, h: usize,
+        a: usize,
+        b: usize,
+        c: usize,
+        d: usize,
+        frame: usize,
+        pad: usize,
+        e: usize,
+        f: usize,
+        g: usize,
+        h: usize,
     ) -> usize;
 }
 
-core::arch::global_asm!(r#"
+core::arch::global_asm!(
+    r#"
     .p2align 4
     .globl libra_spoof
 libra_spoof:
@@ -61,7 +69,8 @@ libra_spoof_fixup:
     mov rcx, rsi
     mov rsi, qword ptr [rcx + 16]
     jmp qword ptr [rcx + 8]
-"#);
+"#
+);
 
 /// 在 kernel32 / kernelbase 的可执行段里找 `jmp [rsi]` gadget。
 pub fn init_spoof() -> Result<(), &'static str> {
@@ -97,8 +106,14 @@ fn find_gadget() -> Option<usize> {
 #[inline(always)]
 pub unsafe fn spoof_call(
     target: usize,
-    a1: usize, a2: usize, a3: usize, a4: usize,
-    a5: usize, a6: usize, a7: usize, a8: usize,
+    a1: usize,
+    a2: usize,
+    a3: usize,
+    a4: usize,
+    a5: usize,
+    a6: usize,
+    a7: usize,
+    a8: usize,
 ) -> usize {
     let gadget = LIBRA_SPOOF_GADGET.load(Ordering::Relaxed) as usize;
     assert!(
@@ -112,9 +127,15 @@ pub unsafe fn spoof_call(
         saved_rsi: 0,
     };
     libra_spoof(
-        a1, a2, a3, a4,
+        a1,
+        a2,
+        a3,
+        a4,
         &mut frame as *mut SpoofFrame as usize,
         0,
-        a5, a6, a7, a8,
+        a5,
+        a6,
+        a7,
+        a8,
     )
 }

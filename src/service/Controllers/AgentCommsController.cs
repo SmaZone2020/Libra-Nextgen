@@ -358,96 +358,96 @@ public class AgentCommsController : ControllerBase
         switch (env.Op)
         {
             case "reg":
-            {
-                // 注册走旧端点（明文/密文），AI 通道不承载注册
-                return BadRequest(new { error = "register via beacon endpoint" });
-            }
+                {
+                    // 注册走旧端点（明文/密文），AI 通道不承载注册
+                    return BadRequest(new { error = "register via beacon endpoint" });
+                }
             case "hb":
-            {
-                if (agentId == null || key == null)
-                    return Unauthorized(new { error = "session not established" });
-                // 重放保护
-                try
                 {
-                    using var hb = JsonDocument.Parse(env.Data);
-                    if (hb.RootElement.TryGetProperty("ts", out var ts) && ts.TryGetInt64(out var ms))
+                    if (agentId == null || key == null)
+                        return Unauthorized(new { error = "session not established" });
+                    // 重放保护
+                    try
                     {
-                        var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-                        if (Math.Abs(now - ms) > 120_000)
-                            return Unauthorized(new { error = "stale heartbeat" });
+                        using var hb = JsonDocument.Parse(env.Data);
+                        if (hb.RootElement.TryGetProperty("ts", out var ts) && ts.TryGetInt64(out var ms))
+                        {
+                            var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+                            if (Math.Abs(now - ms) > 120_000)
+                                return Unauthorized(new { error = "stale heartbeat" });
+                        }
                     }
+                    catch (JsonException)
+                    {
+                        return BadRequest(new { error = "invalid payload" });
+                    }
+                    var (valid, task, hostname) = await _commsService.HandleHeartbeatAsync(agentId);
+                    if (!valid)
+                        return NotFound(new { error = "agent not found" });
+                    responsePlain = J(new HeartbeatResponse { PendingTask = task });
+                    _commsService.RecordTraffic(agentId, hostname, bytesReceived, 0);
+                    break;
                 }
-                catch (JsonException)
-                {
-                    return BadRequest(new { error = "invalid payload" });
-                }
-                var (valid, task, hostname) = await _commsService.HandleHeartbeatAsync(agentId);
-                if (!valid)
-                    return NotFound(new { error = "agent not found" });
-                responsePlain = J(new HeartbeatResponse { PendingTask = task });
-                _commsService.RecordTraffic(agentId, hostname, bytesReceived, 0);
-                break;
-            }
             case "res":
-            {
-                if (agentId == null || key == null)
-                    return Unauthorized(new { error = "session not established" });
-                TaskResult? result;
-                try
                 {
-                    result = D<TaskResult>(env.Data);
+                    if (agentId == null || key == null)
+                        return Unauthorized(new { error = "session not established" });
+                    TaskResult? result;
+                    try
+                    {
+                        result = D<TaskResult>(env.Data);
+                    }
+                    catch (JsonException)
+                    {
+                        return BadRequest(new { error = "invalid payload" });
+                    }
+                    if (result == null)
+                        return BadRequest(new { error = "invalid payload" });
+                    var ok = await _commsService.HandleResultAsync(agentId, result, bytesReceived, 0);
+                    if (!ok)
+                        return NotFound(new { error = "invalid task" });
+                    responsePlain = J(new { status = "received" });
+                    break;
                 }
-                catch (JsonException)
-                {
-                    return BadRequest(new { error = "invalid payload" });
-                }
-                if (result == null)
-                    return BadRequest(new { error = "invalid payload" });
-                var ok = await _commsService.HandleResultAsync(agentId, result, bytesReceived, 0);
-                if (!ok)
-                    return NotFound(new { error = "invalid task" });
-                responsePlain = J(new { status = "received" });
-                break;
-            }
             case "mod":
-            {
-                if (agentId == null || key == null)
-                    return Unauthorized(new { error = "session not established" });
-                string? name = null;
-                try
                 {
-                    using var doc = JsonDocument.Parse(env.Data);
-                    if (doc.RootElement.TryGetProperty("name", out var n))
-                        name = n.GetString();
-                }
-                catch (JsonException)
-                {
-                    return BadRequest(new { error = "invalid payload" });
-                }
-                if (string.IsNullOrEmpty(name) || name.Any(c => !(char.IsAsciiLetterOrDigit(c) || c == '-' || c == '_')))
-                    return BadRequest(new { error = "invalid module name" });
+                    if (agentId == null || key == null)
+                        return Unauthorized(new { error = "session not established" });
+                    string? name = null;
+                    try
+                    {
+                        using var doc = JsonDocument.Parse(env.Data);
+                        if (doc.RootElement.TryGetProperty("name", out var n))
+                            name = n.GetString();
+                    }
+                    catch (JsonException)
+                    {
+                        return BadRequest(new { error = "invalid payload" });
+                    }
+                    if (string.IsNullOrEmpty(name) || name.Any(c => !(char.IsAsciiLetterOrDigit(c) || c == '-' || c == '_')))
+                        return BadRequest(new { error = "invalid module name" });
 
-                var platform = await ResolveAgentPlatformAsync(agentId);
-                if (platform == null)
-                    return NotFound(new { error = "agent platform unknown" });
+                    var platform = await ResolveAgentPlatformAsync(agentId);
+                    if (platform == null)
+                        return NotFound(new { error = "agent platform unknown" });
 
-                var modulesDir = Path.Combine(BuildsDir, "modules", platform);
-                var ext = platform.StartsWith("linux") ? "so" : "dll";
-                var modulePath = Path.Combine(modulesDir, $"{name}.{ext}");
-                if (!System.IO.File.Exists(modulePath))
-                {
-                    var legacy = Path.Combine(BuildsDir, "modules", $"{name}.{ext}");
-                    if (System.IO.File.Exists(legacy))
-                        modulePath = legacy;
+                    var modulesDir = Path.Combine(BuildsDir, "modules", platform);
+                    var ext = platform.StartsWith("linux") ? "so" : "dll";
+                    var modulePath = Path.Combine(modulesDir, $"{name}.{ext}");
+                    if (!System.IO.File.Exists(modulePath))
+                    {
+                        var legacy = Path.Combine(BuildsDir, "modules", $"{name}.{ext}");
+                        if (System.IO.File.Exists(legacy))
+                            modulePath = legacy;
+                    }
+                    if (!System.IO.File.Exists(modulePath))
+                        return NotFound(new { error = "module not found" });
+
+                    var bytes = System.IO.File.ReadAllBytes(modulePath);
+                    // 密文内容为 base64 的模块二进制
+                    responsePlain = Convert.ToBase64String(bytes);
+                    break;
                 }
-                if (!System.IO.File.Exists(modulePath))
-                    return NotFound(new { error = "module not found" });
-
-                var bytes = System.IO.File.ReadAllBytes(modulePath);
-                // 密文内容为 base64 的模块二进制
-                responsePlain = Convert.ToBase64String(bytes);
-                break;
-            }
             default:
                 return BadRequest(new { error = "unknown op" });
         }

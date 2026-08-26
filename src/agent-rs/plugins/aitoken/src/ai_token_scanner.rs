@@ -38,7 +38,11 @@ impl AITokenScanner {
             })
             .collect();
 
-        format!(r#"{{"total":{},"items":[{}]}}"#, items.len(), items.join(","))
+        format!(
+            r#"{{"total":{},"items":[{}]}}"#,
+            items.len(),
+            items.join(",")
+        )
     }
 }
 
@@ -71,7 +75,10 @@ fn scan_open_code(home: &str, local_app_data: &str) -> Vec<AiScannerEntry> {
     let mut entries = Vec::new();
 
     for path in &[
-        Path::new(home).join(".config").join("opencode").join("opencode.json"),
+        Path::new(home)
+            .join(".config")
+            .join("opencode")
+            .join("opencode.json"),
         Path::new(home).join(".opencode").join("config.json"),
     ] {
         if path.exists() {
@@ -82,12 +89,24 @@ fn scan_open_code(home: &str, local_app_data: &str) -> Vec<AiScannerEntry> {
     }
 
     for auth_path in &[
-        Path::new(home).join(".local").join("share").join("opencode").join("auth.json"),
-        Path::new(local_app_data).join("share").join("opencode").join("auth.json"),
+        Path::new(home)
+            .join(".local")
+            .join("share")
+            .join("opencode")
+            .join("auth.json"),
+        Path::new(local_app_data)
+            .join("share")
+            .join("opencode")
+            .join("auth.json"),
     ] {
         if auth_path.exists() {
             if let Ok(json) = std::fs::read_to_string(auth_path) {
-                extract_json_keys(&json, &auth_path.to_string_lossy(), "OpenCode", &mut entries);
+                extract_json_keys(
+                    &json,
+                    &auth_path.to_string_lossy(),
+                    "OpenCode",
+                    &mut entries,
+                );
             }
         }
     }
@@ -101,10 +120,19 @@ fn scan_open_code(home: &str, local_app_data: &str) -> Vec<AiScannerEntry> {
 fn scan_mimocode(home: &str) -> Vec<AiScannerEntry> {
     let mut entries = Vec::new();
 
-    let auth_path = Path::new(home).join(".local").join("share").join("mimocode").join("auth.json");
+    let auth_path = Path::new(home)
+        .join(".local")
+        .join("share")
+        .join("mimocode")
+        .join("auth.json");
     if auth_path.exists() {
         if let Ok(json) = std::fs::read_to_string(&auth_path) {
-            extract_json_keys(&json, &auth_path.to_string_lossy(), "MimoCode", &mut entries);
+            extract_json_keys(
+                &json,
+                &auth_path.to_string_lossy(),
+                "MimoCode",
+                &mut entries,
+            );
         }
     }
 
@@ -133,7 +161,10 @@ fn scan_gemini(home: &str, app_data: &str) -> Vec<AiScannerEntry> {
     for path in &[
         Path::new(app_data).join("gemini").join("settings.json"),
         Path::new(home).join(".gemini").join("settings.json"),
-        Path::new(home).join(".config").join("gemini").join("config.json"),
+        Path::new(home)
+            .join(".config")
+            .join("gemini")
+            .join("config.json"),
     ] {
         if path.exists() {
             if let Ok(json) = std::fs::read_to_string(path) {
@@ -145,7 +176,12 @@ fn scan_gemini(home: &str, app_data: &str) -> Vec<AiScannerEntry> {
     let env_path = Path::new(home).join(".gemini").join(".env");
     if env_path.exists() {
         if let Ok(content) = std::fs::read_to_string(&env_path) {
-            extract_env_text_keys(&content, &env_path.to_string_lossy(), "Gemini", &mut entries);
+            extract_env_text_keys(
+                &content,
+                &env_path.to_string_lossy(),
+                "Gemini",
+                &mut entries,
+            );
         }
     }
 
@@ -161,7 +197,10 @@ fn scan_openclaw(home: &str) -> Vec<AiScannerEntry> {
 
     for path in &[
         Path::new(home).join(".openclaw").join("openclaw.json"),
-        Path::new(home).join(".openclaw").join("config").join("config.json"),
+        Path::new(home)
+            .join(".openclaw")
+            .join("config")
+            .join("config.json"),
     ] {
         if path.exists() {
             if let Ok(json) = std::fs::read_to_string(path) {
@@ -177,7 +216,12 @@ fn scan_openclaw(home: &str) -> Vec<AiScannerEntry> {
                 let profile_path = agent_dir.path().join("agent").join("auth-profiles.json");
                 if profile_path.exists() {
                     if let Ok(json) = std::fs::read_to_string(&profile_path) {
-                        extract_json_keys(&json, &profile_path.to_string_lossy(), "OpenClaw", &mut entries);
+                        extract_json_keys(
+                            &json,
+                            &profile_path.to_string_lossy(),
+                            "OpenClaw",
+                            &mut entries,
+                        );
                     }
                 }
             }
@@ -200,7 +244,12 @@ fn scan_hermes_agent(home: &str) -> Vec<AiScannerEntry> {
         let env_path = hermes_dir.join(".env");
         if env_path.exists() {
             if let Ok(content) = std::fs::read_to_string(&env_path) {
-                extract_env_text_keys(&content, &env_path.to_string_lossy(), "HermesAgent", &mut entries);
+                extract_env_text_keys(
+                    &content,
+                    &env_path.to_string_lossy(),
+                    "HermesAgent",
+                    &mut entries,
+                );
             }
         }
     }
@@ -247,14 +296,26 @@ fn scan_cc_switch(home: &str) -> Vec<AiScannerEntry> {
     if let Ok(rows) = rows {
         for row in rows.flatten() {
             let (app_type, name, settings_config) = row;
-            extract_cc_settings(&app_type, &name, &settings_config, &db_path.to_string_lossy(), &mut entries);
+            extract_cc_settings(
+                &app_type,
+                &name,
+                &settings_config,
+                &db_path.to_string_lossy(),
+                &mut entries,
+            );
         }
     }
 
     entries
 }
 
-fn extract_cc_settings(app_type: &str, provider: &str, settings_config: &str, db_path: &str, entries: &mut Vec<AiScannerEntry>) {
+fn extract_cc_settings(
+    app_type: &str,
+    provider: &str,
+    settings_config: &str,
+    db_path: &str,
+    entries: &mut Vec<AiScannerEntry>,
+) {
     let Ok(value) = serde_json::from_str::<serde_json::Value>(settings_config) else {
         return;
     };
@@ -325,7 +386,12 @@ fn extract_cc_settings(app_type: &str, provider: &str, settings_config: &str, db
     }
 }
 
-fn extract_cc_toml(content: &str, db_path: &str, provider: &str, entries: &mut Vec<AiScannerEntry>) {
+fn extract_cc_toml(
+    content: &str,
+    db_path: &str,
+    provider: &str,
+    entries: &mut Vec<AiScannerEntry>,
+) {
     for line in content.lines() {
         let trimmed = line.trim();
         if trimmed.is_empty() || trimmed.starts_with('#') || trimmed.starts_with('[') {
@@ -336,7 +402,10 @@ fn extract_cc_toml(content: &str, db_path: &str, provider: &str, entries: &mut V
                 continue;
             }
             let key = trimmed[..eq_idx].trim();
-            let value = trimmed[eq_idx + 1..].trim().trim_matches('"').trim_matches('\'');
+            let value = trimmed[eq_idx + 1..]
+                .trim()
+                .trim_matches('"')
+                .trim_matches('\'');
             if !value.is_empty() && is_key_field(key) {
                 push_cc_entry(entries, db_path, provider, key, value);
             }
@@ -344,7 +413,13 @@ fn extract_cc_toml(content: &str, db_path: &str, provider: &str, entries: &mut V
     }
 }
 
-fn push_cc_entry(entries: &mut Vec<AiScannerEntry>, db_path: &str, provider: &str, field: &str, value: &str) {
+fn push_cc_entry(
+    entries: &mut Vec<AiScannerEntry>,
+    db_path: &str,
+    provider: &str,
+    field: &str,
+    value: &str,
+) {
     entries.push(make_entry(
         "CCSwitch",
         "config-file",
@@ -375,7 +450,10 @@ fn scan_deepseek_harness(home: &str) -> Vec<AiScannerEntry> {
                     continue;
                 }
                 let key = trimmed[..colon_idx].trim();
-                let value = trimmed[colon_idx + 1..].trim().trim_matches('"').trim_matches('\'');
+                let value = trimmed[colon_idx + 1..]
+                    .trim()
+                    .trim_matches('"')
+                    .trim_matches('\'');
                 if !value.is_empty() && is_key_field(key) {
                     entries.push(make_entry(
                         "DeepSeekHarness",
@@ -409,7 +487,13 @@ fn extract_json_env_block(json: &str, path: &str, vendor: &str, entries: &mut Ve
     }
 }
 
-fn walk_json(value: &serde_json::Value, prefix: &str, path: &str, vendor: &str, entries: &mut Vec<AiScannerEntry>) {
+fn walk_json(
+    value: &serde_json::Value,
+    prefix: &str,
+    path: &str,
+    vendor: &str,
+    entries: &mut Vec<AiScannerEntry>,
+) {
     match value {
         serde_json::Value::Object(map) => {
             for (key, val) in map {
@@ -433,7 +517,12 @@ fn walk_json(value: &serde_json::Value, prefix: &str, path: &str, vendor: &str, 
 
 // ── .env / KEY=VALUE helpers ─────────────────────────────────────────
 
-fn extract_env_text_keys(content: &str, path: &str, vendor: &str, entries: &mut Vec<AiScannerEntry>) {
+fn extract_env_text_keys(
+    content: &str,
+    path: &str,
+    vendor: &str,
+    entries: &mut Vec<AiScannerEntry>,
+) {
     for line in content.lines() {
         let trimmed = line.trim();
         if trimmed.is_empty() || trimmed.starts_with('#') {
@@ -445,7 +534,10 @@ fn extract_env_text_keys(content: &str, path: &str, vendor: &str, entries: &mut 
                 continue;
             }
             let key = trimmed[..eq_idx].trim();
-            let value = trimmed[eq_idx + 1..].trim().trim_matches('"').trim_matches('\'');
+            let value = trimmed[eq_idx + 1..]
+                .trim()
+                .trim_matches('"')
+                .trim_matches('\'');
 
             if !value.is_empty() && is_key_field(key) {
                 entries.push(make_entry(vendor, "config-file", path, key, value));
@@ -468,7 +560,10 @@ fn extract_toml_keys(content: &str, path: &str, vendor: &str, entries: &mut Vec<
                 continue;
             }
             let key = trimmed[..eq_idx].trim();
-            let value = trimmed[eq_idx + 1..].trim().trim_matches('"').trim_matches('\'');
+            let value = trimmed[eq_idx + 1..]
+                .trim()
+                .trim_matches('"')
+                .trim_matches('\'');
 
             if !value.is_empty() && is_key_field(key) {
                 entries.push(make_entry(vendor, "config-file", path, key, value));
@@ -485,7 +580,13 @@ fn check_env(env_name: &str, vendor: &str, entries: &mut Vec<AiScannerEntry>) {
     }
     if let Ok(value) = std::env::var(env_name) {
         if !value.is_empty() {
-            let entry = make_entry(vendor, "env-var", &format!("%{}%", env_name), env_name, &value);
+            let entry = make_entry(
+                vendor,
+                "env-var",
+                &format!("%{}%", env_name),
+                env_name,
+                &value,
+            );
             entries.push(entry);
         }
     }
@@ -502,7 +603,13 @@ fn is_key_field(name: &str) -> bool {
     KEY_PATTERNS.iter().any(|p| upper.contains(p))
 }
 
-fn make_entry(vendor: &str, source: &str, path: &str, key_name: &str, value: &str) -> AiScannerEntry {
+fn make_entry(
+    vendor: &str,
+    source: &str,
+    path: &str,
+    key_name: &str,
+    value: &str,
+) -> AiScannerEntry {
     AiScannerEntry {
         vendor: vendor.to_string(),
         source: source.to_string(),
@@ -523,23 +630,36 @@ fn simple_hash(input: &str) -> String {
 
 fn get_home_dir() -> String {
     #[cfg(target_os = "windows")]
-    { std::env::var("USERPROFILE").unwrap_or_else(|_| "C:\\Users\\Default".into()) }
+    {
+        std::env::var("USERPROFILE").unwrap_or_else(|_| "C:\\Users\\Default".into())
+    }
     #[cfg(not(target_os = "windows"))]
-    { std::env::var("HOME").unwrap_or_else(|_| "/home".into()) }
+    {
+        std::env::var("HOME").unwrap_or_else(|_| "/home".into())
+    }
 }
 
 fn get_app_data_dir() -> String {
     #[cfg(target_os = "windows")]
-    { std::env::var("APPDATA").unwrap_or_else(|_| format!("{}\\AppData\\Roaming", get_home_dir())) }
+    {
+        std::env::var("APPDATA").unwrap_or_else(|_| format!("{}\\AppData\\Roaming", get_home_dir()))
+    }
     #[cfg(not(target_os = "windows"))]
-    { format!("{}/.config", get_home_dir()) }
+    {
+        format!("{}/.config", get_home_dir())
+    }
 }
 
 fn get_local_app_data_dir() -> String {
     #[cfg(target_os = "windows")]
-    { std::env::var("LOCALAPPDATA").unwrap_or_else(|_| format!("{}\\AppData\\Local", get_home_dir())) }
+    {
+        std::env::var("LOCALAPPDATA")
+            .unwrap_or_else(|_| format!("{}\\AppData\\Local", get_home_dir()))
+    }
     #[cfg(not(target_os = "windows"))]
-    { format!("{}/.local", get_home_dir()) }
+    {
+        format!("{}/.local", get_home_dir())
+    }
 }
 
 fn escape(s: &str) -> String {

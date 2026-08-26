@@ -5,7 +5,8 @@ pub struct SystemInfo;
 impl SystemInfo {
     pub fn collect() -> String {
         let hostname = hostname();
-        let user_name = env::var("USERNAME").unwrap_or_else(|_| env::var("USER").unwrap_or_default());
+        let user_name =
+            env::var("USERNAME").unwrap_or_else(|_| env::var("USER").unwrap_or_default());
         let os_version = Self::get_os_version();
         let platform = std::env::consts::OS;
         let arch = std::env::consts::ARCH;
@@ -32,13 +33,18 @@ impl SystemInfo {
         #[cfg(target_os = "windows")]
         {
             // Try to get Windows version from registry
-            use std::process::Command;
             use std::os::windows::process::CommandExt;
+            use std::process::Command;
 
             // Get ProductName from registry
             let product_name = {
                 let output = Command::new("reg")
-                    .args(["query", r"HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows NT\CurrentVersion", "/v", "ProductName"])
+                    .args([
+                        "query",
+                        r"HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows NT\CurrentVersion",
+                        "/v",
+                        "ProductName",
+                    ])
                     .creation_flags(0x08000000)
                     .output();
                 match output {
@@ -56,7 +62,12 @@ impl SystemInfo {
 
             let display_version = {
                 let output = Command::new("reg")
-                    .args(["query", r"HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows NT\CurrentVersion", "/v", "DisplayVersion"])
+                    .args([
+                        "query",
+                        r"HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows NT\CurrentVersion",
+                        "/v",
+                        "DisplayVersion",
+                    ])
                     .creation_flags(0x08000000)
                     .output();
                 match output {
@@ -104,7 +115,9 @@ impl SystemInfo {
                     let free = get_drive_free(&path);
                     drives.push(format!(
                         r#"{{"name":"{}","totalGb":{:.1},"freeGb":{:.1}}}"#,
-                        escape(&path), total, free
+                        escape(&path),
+                        total,
+                        free
                     ));
                 }
             }
@@ -115,7 +128,10 @@ impl SystemInfo {
             if let Ok(entries) = std::fs::read_dir("/mnt") {
                 for entry in entries.filter_map(|e| e.ok()) {
                     let path = entry.path().to_string_lossy().to_string();
-                    drives.push(format!(r#"{{"name":"{}","totalGb":0,"freeGb":0}}"#, escape(&path)));
+                    drives.push(format!(
+                        r#"{{"name":"{}","totalGb":0,"freeGb":0}}"#,
+                        escape(&path)
+                    ));
                 }
             }
         }
@@ -139,7 +155,9 @@ fn hostname() -> String {
 }
 
 fn num_cpus() -> usize {
-    std::thread::available_parallelism().map(|n| n.get()).unwrap_or(1)
+    std::thread::available_parallelism()
+        .map(|n| n.get())
+        .unwrap_or(1)
 }
 
 fn get_drive_size(path: &str) -> f64 {

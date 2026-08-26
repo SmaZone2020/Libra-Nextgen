@@ -81,7 +81,11 @@ fn run_script(input_json: &str) -> String {
     let features: Vec<String> = req
         .get("features")
         .and_then(|v| v.as_array())
-        .map(|a| a.iter().filter_map(|x| x.as_str().map(String::from)).collect())
+        .map(|a| {
+            a.iter()
+                .filter_map(|x| x.as_str().map(String::from))
+                .collect()
+        })
         .unwrap_or_default();
 
     engine::execute(&script, &args, &entry, &features)
@@ -126,7 +130,11 @@ function main(args) {
         );
         let v: Value = serde_json::from_str(&out).unwrap();
         assert_eq!(v["ok"], true);
-        assert!(v["result"].is_object(), "result should be object, got {:?}", v["result"]);
+        assert!(
+            v["result"].is_object(),
+            "result should be object, got {:?}",
+            v["result"]
+        );
         assert_eq!(v["result"]["output"], "OK");
     }
 

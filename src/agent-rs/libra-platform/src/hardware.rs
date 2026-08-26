@@ -72,7 +72,10 @@ fn collect_cpu() -> CpuInfo {
         let logical = std::thread::available_parallelism()
             .map(|n| n.get())
             .unwrap_or(1);
-        return CpuInfo { logical_cores: logical, ..info };
+        return CpuInfo {
+            logical_cores: logical,
+            ..info
+        };
     }
 
     info
@@ -81,11 +84,19 @@ fn collect_cpu() -> CpuInfo {
 fn sysinfo_cpu() -> CpuInfo {
     let sys = sysinfo::System::new_all();
     let cpus = sys.cpus();
-    let name = cpus.first().map(|c| c.brand().to_string()).unwrap_or_default();
+    let name = cpus
+        .first()
+        .map(|c| c.brand().to_string())
+        .unwrap_or_default();
     let physical = sys.physical_core_count().unwrap_or(1);
     let logical = cpus.len();
     let max_clock = cpus.first().map(|c| c.frequency()).unwrap_or(0);
-    CpuInfo { name, physical_cores: physical, logical_cores: logical, max_clock_mhz: max_clock }
+    CpuInfo {
+        name,
+        physical_cores: physical,
+        logical_cores: logical,
+        max_clock_mhz: max_clock,
+    }
 }
 
 /// 注册表读取 CPU 型号与核心数（HKLM\HARDWARE\DESCRIPTION\System\CentralProcessor\0）。
@@ -97,13 +108,7 @@ fn registry_cpu() -> Option<CpuInfo> {
     unsafe {
         let mut key = HKEY::default();
         let path = PCWSTR(wide("HARDWARE\\DESCRIPTION\\System\\CentralProcessor\\0").as_ptr());
-        let status = RegOpenKeyExW(
-            HKEY_LOCAL_MACHINE,
-            path,
-            0,
-            KEY_QUERY_VALUE,
-            &mut key,
-        );
+        let status = RegOpenKeyExW(HKEY_LOCAL_MACHINE, path, 0, KEY_QUERY_VALUE, &mut key);
         if status.is_err() {
             return None;
         }
@@ -114,7 +119,16 @@ fn registry_cpu() -> Option<CpuInfo> {
         let mut buf = [0u16; 512];
         let mut size = (buf.len() * 2) as u32;
         let mut kind: REG_VALUE_TYPE = Default::default();
-        if RegQueryValueExW(key, name_pcw, None, Some(&mut kind), Some(buf.as_mut_ptr() as *mut u8), Some(&mut size)).is_ok() {
+        if RegQueryValueExW(
+            key,
+            name_pcw,
+            None,
+            Some(&mut kind),
+            Some(buf.as_mut_ptr() as *mut u8),
+            Some(&mut size),
+        )
+        .is_ok()
+        {
             name = String::from_utf16_lossy(&buf[..size as usize / 2])
                 .trim_end_matches('\0')
                 .to_string();
@@ -124,7 +138,14 @@ fn registry_cpu() -> Option<CpuInfo> {
         let mut clock_mhz: u32 = 0;
         let clock_pcw = PCWSTR(wide("~MHz").as_ptr());
         let mut csize = 4u32;
-        let _ = RegQueryValueExW(key, clock_pcw, None, None, Some(&mut clock_mhz as *mut u32 as *mut u8), Some(&mut csize));
+        let _ = RegQueryValueExW(
+            key,
+            clock_pcw,
+            None,
+            None,
+            Some(&mut clock_mhz as *mut u32 as *mut u8),
+            Some(&mut csize),
+        );
 
         let _ = RegCloseKey(key);
 
@@ -132,8 +153,12 @@ fn registry_cpu() -> Option<CpuInfo> {
             return None;
         }
         // 核心数用 sysinfo/available_parallelism 兜底
-        let logical = std::thread::available_parallelism().map(|n| n.get()).unwrap_or(1);
-        let physical = sysinfo::System::new_all().physical_core_count().unwrap_or(logical);
+        let logical = std::thread::available_parallelism()
+            .map(|n| n.get())
+            .unwrap_or(1);
+        let physical = sysinfo::System::new_all()
+            .physical_core_count()
+            .unwrap_or(logical);
         Some(CpuInfo {
             name,
             physical_cores: physical,
@@ -149,10 +174,16 @@ fn collect_gpus() -> Vec<GpuInfo> {
     #[cfg(windows)]
     {
         if let Ok(gpus) = dxgi_gpus() {
-            if !gpus.is_empty() { return gpus; }
+            if !gpus.is_empty() {
+                return gpus;
+            }
         }
     }
-    vec![GpuInfo { name: "Unknown GPU".into(), driver_version: None, vram_bytes: None }]
+    vec![GpuInfo {
+        name: "Unknown GPU".into(),
+        driver_version: None,
+        vram_bytes: None,
+    }]
 }
 
 #[cfg(windows)]
@@ -165,8 +196,8 @@ fn dxgi_gpus() -> Result<Vec<GpuInfo>, String> {
             windows::Win32::System::Com::COINIT_MULTITHREADED,
         );
 
-        let factory: IDXGIFactory1 = CreateDXGIFactory1()
-            .map_err(|e| format!("CreateDXGIFactory1: {e}"))?;
+        let factory: IDXGIFactory1 =
+            CreateDXGIFactory1().map_err(|e| format!("CreateDXGIFactory1: {e}"))?;
 
         let mut seen = Vec::new();
         let mut gpus = Vec::new();
@@ -182,9 +213,7 @@ fn dxgi_gpus() -> Result<Vec<GpuInfo>, String> {
                 }
             };
 
-            let desc = adapter
-                .GetDesc1()
-                .map_err(|e| format!("GetDesc1: {e}"))?;
+            let desc = adapter.GetDesc1().map_err(|e| format!("GetDesc1: {e}"))?;
 
             // Flags == 0 means DXGI_ADAPTER_FLAG_NONE (hardware adapter)
             if desc.Flags != 0 {
@@ -232,7 +261,14 @@ fn sysinfo_disks() -> Vec<DiskInfo> {
         .map(|d| DiskInfo {
             model: d.name().to_string_lossy().to_string(),
             size_bytes: d.total_space(),
-            media_type: Some(if d.is_removable() { "removable" } else { "fixed" }.into()),
+            media_type: Some(
+                if d.is_removable() {
+                    "removable"
+                } else {
+                    "fixed"
+                }
+                .into(),
+            ),
             serial_number: None,
         })
         .collect()
@@ -250,7 +286,9 @@ fn collect_ram() -> RamInfo {
 
     // sysinfo fallback (also used on Linux)
     let sys = sysinfo::System::new_all();
-    RamInfo { total_bytes: sys.total_memory() }
+    RamInfo {
+        total_bytes: sys.total_memory(),
+    }
 }
 
 /// GlobalMemoryStatusEx（kernel32，Vista+ 通用，无子进程）。
@@ -263,7 +301,9 @@ fn native_ram() -> Option<RamInfo> {
             ..Default::default()
         };
         if GlobalMemoryStatusEx(&mut status).is_ok() && status.ullTotalPhys > 0 {
-            return Some(RamInfo { total_bytes: status.ullTotalPhys });
+            return Some(RamInfo {
+                total_bytes: status.ullTotalPhys,
+            });
         }
         None
     }
@@ -275,7 +315,9 @@ fn collect_displays() -> Vec<DisplayInfo> {
     #[cfg(windows)]
     {
         if let Ok(displays) = gdi_displays() {
-            if !displays.is_empty() { return displays; }
+            if !displays.is_empty() {
+                return displays;
+            }
         }
     }
     vec![]
@@ -339,7 +381,11 @@ fn gdi_displays() -> Result<Vec<DisplayInfo>, ()> {
                         } else {
                             name
                         };
-                        displays.push(DisplayInfo { name: display_name, width, height });
+                        displays.push(DisplayInfo {
+                            name: display_name,
+                            width,
+                            height,
+                        });
                     }
                 }
             }
@@ -387,7 +433,11 @@ fn board_info() -> (Option<String>, Option<String>) {
                 .trim_end_matches('\0')
                 .trim()
                 .to_string();
-            if s.is_empty() { None } else { Some(s) }
+            if s.is_empty() {
+                None
+            } else {
+                Some(s)
+            }
         };
 
         let mut motherboard = read_sz("BaseBoardManufacturer");
@@ -419,12 +469,19 @@ mod tests {
         let info = collect();
         // CPU 名称不应为空（sysinfo 或注册表兜底）
         assert!(
-            info.cpu.as_ref().map(|c| !c.name.is_empty()).unwrap_or(false),
+            info.cpu
+                .as_ref()
+                .map(|c| !c.name.is_empty())
+                .unwrap_or(false),
             "cpu name empty: {:?}",
             info.cpu
         );
         // 内存必须 > 0（GlobalMemoryStatusEx 或 sysinfo）
-        assert!(info.ram.as_ref().map(|r| r.total_bytes > 0).unwrap_or(false));
+        assert!(info
+            .ram
+            .as_ref()
+            .map(|r| r.total_bytes > 0)
+            .unwrap_or(false));
         // 主板/BIOS 至少一个可读（注册表）
         assert!(
             info.motherboard_vendor.is_some() || info.bios_version.is_some(),

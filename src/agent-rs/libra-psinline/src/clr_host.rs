@@ -48,21 +48,38 @@ struct Guid {
 
 impl Guid {
     const fn new(d1: u32, d2: u16, d3: u16, d4: [u8; 8]) -> Self {
-        Self { data1: d1, data2: d2, data3: d3, data4: d4 }
+        Self {
+            data1: d1,
+            data2: d2,
+            data3: d3,
+            data4: d4,
+        }
     }
 }
 
 const CLSID_CorRuntimeHost: Guid = Guid::new(
-    0xCB2F6723, 0xAB3A, 0x11D2, [0x9C, 0x40, 0x00, 0xC0, 0x4F, 0xA3, 0x0A, 0x3E],
+    0xCB2F6723,
+    0xAB3A,
+    0x11D2,
+    [0x9C, 0x40, 0x00, 0xC0, 0x4F, 0xA3, 0x0A, 0x3E],
 );
 const IID_ICorRuntimeHost: Guid = Guid::new(
-    0xCB2F6722, 0xAB3A, 0x11D2, [0x9C, 0x40, 0x00, 0xC0, 0x4F, 0xA3, 0x0A, 0x3E],
+    0xCB2F6722,
+    0xAB3A,
+    0x11D2,
+    [0x9C, 0x40, 0x00, 0xC0, 0x4F, 0xA3, 0x0A, 0x3E],
 );
 const IID_ICLRRuntimeHost: Guid = Guid::new(
-    0x90F1A06C, 0x7712, 0x4762, [0x86, 0xB5, 0x7A, 0x5E, 0xBA, 0x6B, 0xDB, 0x02],
+    0x90F1A06C,
+    0x7712,
+    0x4762,
+    [0x86, 0xB5, 0x7A, 0x5E, 0xBA, 0x6B, 0xDB, 0x02],
 );
 const IID_IDispatch: Guid = Guid::new(
-    0x00000000, 0x0000, 0x0000, [0xC0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x46],
+    0x00000000,
+    0x0000,
+    0x0000,
+    [0xC0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x46],
 );
 
 // ── COM vtable（ICorRuntimeHost 老接口 + ICLRRuntimeHost 新接口）────────
@@ -81,12 +98,19 @@ struct ICorRuntimeHostVtbl {
     get_configuration: unsafe extern "system" fn(*mut c_void, *mut *mut c_void) -> i32,
     start: unsafe extern "system" fn(*mut c_void) -> i32,
     stop: unsafe extern "system" fn(*mut c_void) -> i32,
-    create_domain: unsafe extern "system" fn(*mut c_void, *const u16, *mut c_void, *mut *mut c_void) -> i32,
+    create_domain:
+        unsafe extern "system" fn(*mut c_void, *const u16, *mut c_void, *mut *mut c_void) -> i32,
     get_default_domain: unsafe extern "system" fn(*mut c_void, *mut *mut c_void) -> i32,
     enum_domains: unsafe extern "system" fn(*mut c_void, *mut *mut c_void) -> i32,
     next_domain: unsafe extern "system" fn(*mut c_void, *mut c_void, *mut *mut c_void) -> i32,
     close_enum: unsafe extern "system" fn(*mut c_void, *mut c_void) -> i32,
-    create_domain_ex: unsafe extern "system" fn(*mut c_void, *const u16, *mut c_void, *mut c_void, *mut *mut c_void) -> i32,
+    create_domain_ex: unsafe extern "system" fn(
+        *mut c_void,
+        *const u16,
+        *mut c_void,
+        *mut c_void,
+        *mut *mut c_void,
+    ) -> i32,
     create_domain_setup: unsafe extern "system" fn(*mut c_void, *mut *mut c_void) -> i32,
     create_evidence: unsafe extern "system" fn(*mut c_void, *mut *mut c_void) -> i32,
     unload_domain: unsafe extern "system" fn(*mut c_void, *mut c_void) -> i32,
@@ -100,17 +124,40 @@ struct ICLRRuntimeHostVtbl {
     release: unsafe extern "system" fn(*mut c_void) -> u32,
     start: unsafe extern "system" fn(*mut c_void) -> i32,
     stop: unsafe extern "system" fn(*mut c_void) -> i32,
-    execute_in_default_app_domain:
-        unsafe extern "system" fn(*mut c_void, *const u16, *const u16, *const u16, *const u16, *mut u32) -> i32,
+    execute_in_default_app_domain: unsafe extern "system" fn(
+        *mut c_void,
+        *const u16,
+        *const u16,
+        *const u16,
+        *const u16,
+        *mut u32,
+    ) -> i32,
     get_default_app_domain: unsafe extern "system" fn(*mut c_void, *mut *mut c_void) -> i32,
-    execute_assembly:
-        unsafe extern "system" fn(*mut c_void, *const u16, *const u16, u32, *mut *const u16, *mut u32) -> i32,
-    execute_assembly_in_app_domain:
-        unsafe extern "system" fn(*mut c_void, *mut c_void, *const u16, u32, *mut *const u16, *mut u32) -> i32,
+    execute_assembly: unsafe extern "system" fn(
+        *mut c_void,
+        *const u16,
+        *const u16,
+        u32,
+        *mut *const u16,
+        *mut u32,
+    ) -> i32,
+    execute_assembly_in_app_domain: unsafe extern "system" fn(
+        *mut c_void,
+        *mut c_void,
+        *const u16,
+        u32,
+        *mut *const u16,
+        *mut u32,
+    ) -> i32,
     create_domain:
         unsafe extern "system" fn(*mut c_void, *const u16, *mut c_void, *mut *mut c_void) -> i32,
-    create_domain_ex:
-        unsafe extern "system" fn(*mut c_void, *const u16, *mut c_void, *mut c_void, *mut *mut c_void) -> i32,
+    create_domain_ex: unsafe extern "system" fn(
+        *mut c_void,
+        *const u16,
+        *mut c_void,
+        *mut c_void,
+        *mut *mut c_void,
+    ) -> i32,
     create_domain_setup: unsafe extern "system" fn(*mut c_void, *mut *mut c_void) -> i32,
     create_evidence: unsafe extern "system" fn(*mut c_void, *mut *mut c_void) -> i32,
     unload_domain: unsafe extern "system" fn(*mut c_void, *mut c_void) -> i32,
@@ -129,11 +176,23 @@ struct IDispatchVtbl {
     get_type_info_count: unsafe extern "system" fn(*mut c_void, *mut u32) -> i32,
     get_type_info: unsafe extern "system" fn(*mut c_void, u32, u32, *mut *mut c_void) -> i32,
     get_ids_of_names: unsafe extern "system" fn(
-        *mut c_void, *const Guid, *mut *mut u16, u32, u32, *mut i32,
+        *mut c_void,
+        *const Guid,
+        *mut *mut u16,
+        u32,
+        u32,
+        *mut i32,
     ) -> i32,
     invoke: unsafe extern "system" fn(
-        *mut c_void, i32, *const Guid, u32, u16, *const c_void,
-        *mut c_void, *mut c_void, *mut u32,
+        *mut c_void,
+        i32,
+        *const Guid,
+        u32,
+        u16,
+        *const c_void,
+        *mut c_void,
+        *mut c_void,
+        *mut u32,
     ) -> i32,
 }
 
@@ -170,18 +229,31 @@ extern "system" {
     fn LoadLibraryW(name: *const u16) -> *mut c_void;
     fn GetProcAddress(module: *mut c_void, name: *const u8) -> *const c_void;
     fn CreateNamedPipeW(
-        name: *const u16, open_mode: u32, pipe_mode: u32,
-        max_instances: u32, out_buf: u32, in_buf: u32, default_timeout: u32,
+        name: *const u16,
+        open_mode: u32,
+        pipe_mode: u32,
+        max_instances: u32,
+        out_buf: u32,
+        in_buf: u32,
+        default_timeout: u32,
         security: *const c_void,
     ) -> *mut c_void;
     fn ConnectNamedPipe(pipe: *mut c_void, overlapped: *mut c_void) -> i32;
     fn DisconnectNamedPipe(pipe: *mut c_void) -> i32;
     fn PeekNamedPipe(
-        pipe: *mut c_void, buffer: *mut u8, buf_size: u32,
-        bytes_read: *mut u32, total_avail: *mut u32, bytes_left: *mut u32,
+        pipe: *mut c_void,
+        buffer: *mut u8,
+        buf_size: u32,
+        bytes_read: *mut u32,
+        total_avail: *mut u32,
+        bytes_left: *mut u32,
     ) -> i32;
     fn ReadFile(
-        file: *mut c_void, buf: *mut u8, n: u32, read: *mut u32, overlapped: *mut c_void,
+        file: *mut c_void,
+        buf: *mut u8,
+        n: u32,
+        read: *mut u32,
+        overlapped: *mut c_void,
     ) -> i32;
     fn CloseHandle(handle: *mut c_void) -> i32;
     fn GetTempPathW(len: u32, buf: *mut u16) -> u32;
@@ -238,7 +310,12 @@ unsafe fn init_clr_host() -> Result<ClrHost, String> {
         return Err("CorBindToRuntimeEx export not found".into());
     }
     type CorBindFn = unsafe extern "system" fn(
-        *const u16, *const u16, u32, *const Guid, *const Guid, *mut *mut c_void,
+        *const u16,
+        *const u16,
+        u32,
+        *const Guid,
+        *const Guid,
+        *mut *mut c_void,
     ) -> i32;
     let bind: CorBindFn = std::mem::transmute(bind_ptr);
 
@@ -277,16 +354,27 @@ unsafe fn init_clr_host() -> Result<ClrHost, String> {
         let vtbl = &*(*(runtime_host as *const *const ICLRRuntimeHostVtbl));
         let hr = (vtbl.start)(runtime_host);
         if hr != 0 && hr != 1 {
-            return Err(format!("ICLRRuntimeHost::Start failed: 0x{:08X}", hr as u32));
+            return Err(format!(
+                "ICLRRuntimeHost::Start failed: 0x{:08X}",
+                hr as u32
+            ));
         }
         let _ = (vtbl.get_default_app_domain)(runtime_host, &mut domain);
     } else {
         let vtbl = &*(*(runtime_host as *const *const ICorRuntimeHostVtbl));
         let hr = (vtbl.start)(runtime_host);
         if hr != 0 && hr != 1 {
-            return Err(format!("ICorRuntimeHost::Start failed: 0x{:08X}", hr as u32));
+            return Err(format!(
+                "ICorRuntimeHost::Start failed: 0x{:08X}",
+                hr as u32
+            ));
         }
-        let cdr = (vtbl.create_domain)(runtime_host, wide("LibraPs").as_ptr(), ptr::null_mut(), &mut domain);
+        let cdr = (vtbl.create_domain)(
+            runtime_host,
+            wide("LibraPs").as_ptr(),
+            ptr::null_mut(),
+            &mut domain,
+        );
         if cdr != 0 || domain.is_null() {
             // 回退 default domain
             let _ = (vtbl.get_default_domain)(runtime_host, &mut domain);
@@ -297,14 +385,21 @@ unsafe fn init_clr_host() -> Result<ClrHost, String> {
     let mut dispatch: *mut c_void = ptr::null_mut();
     if !domain.is_null() {
         let dhr = ((*(*(domain as *const *const IDispatchVtbl))).query_interface)(
-            domain, &IID_IDispatch, &mut dispatch,
+            domain,
+            &IID_IDispatch,
+            &mut dispatch,
         );
         if dhr != 0 {
             dispatch = ptr::null_mut();
         }
     }
 
-    Ok(ClrHost { host: runtime_host, use_new, domain: dispatch, gate: Mutex::new(()) })
+    Ok(ClrHost {
+        host: runtime_host,
+        use_new,
+        domain: dispatch,
+        gate: Mutex::new(()),
+    })
 }
 // ── 命名管道回传通道（Windows 专用）───────────────────────────────────
 
@@ -340,7 +435,11 @@ unsafe impl Sync for PipeHandle {}
 
 /// 管道读取线程：连接 → 轮询读取直到 EOF 或主线程关闭句柄。
 #[cfg(target_os = "windows")]
-fn pipe_reader(handle: PipeHandle, done: Arc<AtomicBool>, result: Arc<Mutex<Option<PipeReadResult>>>) {
+fn pipe_reader(
+    handle: PipeHandle,
+    done: Arc<AtomicBool>,
+    result: Arc<Mutex<Option<PipeReadResult>>>,
+) {
     let handle = handle.0;
     unsafe {
         let mut connected = ConnectNamedPipe(handle, ptr::null_mut());
@@ -349,7 +448,10 @@ fn pipe_reader(handle: PipeHandle, done: Arc<AtomicBool>, result: Arc<Mutex<Opti
         }
         if connected == 0 {
             CloseHandle(handle);
-            *result.lock().unwrap() = Some(PipeReadResult { bytes: Vec::new(), timeout: false });
+            *result.lock().unwrap() = Some(PipeReadResult {
+                bytes: Vec::new(),
+                timeout: false,
+            });
             done.store(true, Ordering::SeqCst);
             return;
         }
@@ -357,10 +459,20 @@ fn pipe_reader(handle: PipeHandle, done: Arc<AtomicBool>, result: Arc<Mutex<Opti
         let mut out = Vec::new();
         loop {
             let mut avail: u32 = 0;
-            let ok = PeekNamedPipe(handle, ptr::null_mut(), 0, ptr::null_mut(), &mut avail, ptr::null_mut());
+            let ok = PeekNamedPipe(
+                handle,
+                ptr::null_mut(),
+                0,
+                ptr::null_mut(),
+                &mut avail,
+                ptr::null_mut(),
+            );
             if ok == 0 {
                 let err = GetLastError();
-                if err == ERROR_BROKEN_PIPE || err == ERROR_NO_DATA || err == ERROR_OPERATION_ABORTED {
+                if err == ERROR_BROKEN_PIPE
+                    || err == ERROR_NO_DATA
+                    || err == ERROR_OPERATION_ABORTED
+                {
                     break;
                 }
                 std::thread::sleep(std::time::Duration::from_millis(10));
@@ -380,7 +492,10 @@ fn pipe_reader(handle: PipeHandle, done: Arc<AtomicBool>, result: Arc<Mutex<Opti
         }
         DisconnectNamedPipe(handle);
         CloseHandle(handle);
-        *result.lock().unwrap() = Some(PipeReadResult { bytes: out, timeout: false });
+        *result.lock().unwrap() = Some(PipeReadResult {
+            bytes: out,
+            timeout: false,
+        });
         done.store(true, Ordering::SeqCst);
     }
 }
@@ -421,7 +536,12 @@ pub fn execute_inline(script: &str, timeout_secs: u64) -> String {
         };
 
         // 2) 执行 stub
-        let args = format!("{}|{}|{}", pipe_name, script_b64, timeout_secs.max(1) * 1000);
+        let args = format!(
+            "{}|{}|{}",
+            pipe_name,
+            script_b64,
+            timeout_secs.max(1) * 1000
+        );
         let exec_result = unsafe {
             if host.use_new {
                 execute_via_new_interface(host.host, &args)
@@ -457,17 +577,18 @@ pub fn execute_inline(script: &str, timeout_secs: u64) -> String {
         }
         let _ = reader.join();
 
-        let read = result
-            .lock()
-            .unwrap()
-            .take()
-            .unwrap_or(PipeReadResult { bytes: Vec::new(), timeout: timed_out });
+        let read = result.lock().unwrap().take().unwrap_or(PipeReadResult {
+            bytes: Vec::new(),
+            timeout: timed_out,
+        });
 
         if read.timeout || (read.bytes.is_empty() && timed_out) {
             return r#"{"success":false,"error":"inline powershell timed out"}"#.to_string();
         }
         if read.bytes.is_empty() {
-            return format!(r#"{{"success":false,"error":"stub returned no output (exit {exit_code})"}}"#);
+            return format!(
+                r#"{{"success":false,"error":"stub returned no output (exit {exit_code})"}}"#
+            );
         }
 
         match String::from_utf8(read.bytes) {
@@ -514,7 +635,10 @@ unsafe fn execute_via_new_interface(host: *mut c_void, args: &str) -> Result<i32
     );
     let _ = std::fs::remove_file(&stub_path);
     if hr != 0 {
-        return Err(format!("ExecuteInDefaultAppDomain failed: 0x{:08X}", hr as u32));
+        return Err(format!(
+            "ExecuteInDefaultAppDomain failed: 0x{:08X}",
+            hr as u32
+        ));
     }
     Ok(exit_code as i32)
 }
@@ -609,7 +733,11 @@ unsafe fn invoke_method(
 ) -> Result<Variant, String> {
     let vtbl = &*(*(obj as *const *const IDispatchVtbl));
     let params = DispParams {
-        rgvarg: if args.is_empty() { ptr::null_mut() } else { args.as_mut_ptr() },
+        rgvarg: if args.is_empty() {
+            ptr::null_mut()
+        } else {
+            args.as_mut_ptr()
+        },
         rgdispid_named_args: ptr::null_mut(),
         c_args: args.len() as u32,
         c_named_args: 0,
@@ -627,12 +755,15 @@ unsafe fn invoke_method(
         ptr::null_mut(),
     );
     if hr != 0 {
-        return Err(format!("IDispatch::Invoke(0x{dispid:08X}) failed: 0x{:08X}", hr as u32));
+        return Err(format!(
+            "IDispatch::Invoke(0x{dispid:08X}) failed: 0x{:08X}",
+            hr as u32
+        ));
     }
     Ok(result)
 }
 
-/// 老接口路径：_AppDomain::Load_2(byte[]) 纯内存加载 stub → 
+/// 老接口路径：_AppDomain::Load_2(byte[]) 纯内存加载 stub →
 /// CreateInstanceAndUnwrap → IDispatch Invoke("Run")。
 #[cfg(target_os = "windows")]
 unsafe fn execute_via_legacy_idispatch(domain: *mut c_void, args: &str) -> Result<i32, String> {
@@ -649,7 +780,15 @@ unsafe fn execute_via_legacy_idispatch(domain: *mut c_void, args: &str) -> Resul
     ptr::copy_nonoverlapping(STUB_DLL.as_ptr(), data as *mut u8, STUB_DLL.len());
     SafeArrayUnaccessData(sa);
 
-    let mut load_arg = Variant { vt: VT_ARRAY | VT_UI1, reserved1: 0, reserved2: 0, reserved3: 0, data: VariantData { ptr: sa as *mut c_void } };
+    let mut load_arg = Variant {
+        vt: VT_ARRAY | VT_UI1,
+        reserved1: 0,
+        reserved2: 0,
+        reserved3: 0,
+        data: VariantData {
+            ptr: sa as *mut c_void,
+        },
+    };
     let mut load_dispid: Option<i32> = None;
     // 实测：Load_3 是 byte[] 单参重载（Load_2 在 .NET 4.8 上是别的签名）
     for name in ["Load_3", "Load", "Load_2"] {
@@ -669,16 +808,24 @@ unsafe fn execute_via_legacy_idispatch(domain: *mut c_void, args: &str) -> Resul
         VT_DISPATCH | VT_UNKNOWN => assembly.data.ptr,
         _ => {
             VariantClear(&mut assembly);
-            return Err(format!("Load(byte[]) returned unexpected vt={}", assembly.vt));
+            return Err(format!(
+                "Load(byte[]) returned unexpected vt={}",
+                assembly.vt
+            ));
         }
     };
     let mut asm_dispatch: *mut c_void = ptr::null_mut();
     let hr = ((*(*(assembly_ptr as *const *const IDispatchVtbl))).query_interface)(
-        assembly_ptr, &IID_IDispatch, &mut asm_dispatch,
+        assembly_ptr,
+        &IID_IDispatch,
+        &mut asm_dispatch,
     );
     if hr != 0 || asm_dispatch.is_null() {
         VariantClear(&mut assembly);
-        return Err(format!("_Assembly QI IDispatch failed: 0x{:08X}", hr as u32));
+        return Err(format!(
+            "_Assembly QI IDispatch failed: 0x{:08X}",
+            hr as u32
+        ));
     }
 
     let mut create_dispid: Option<i32> = None;
@@ -691,8 +838,20 @@ unsafe fn execute_via_legacy_idispatch(domain: *mut c_void, args: &str) -> Resul
     let create_dispid = create_dispid.ok_or("_Assembly CreateInstance DISPID not found")?;
 
     let type_name_bstr = SysAllocString(wide("PsInline.Stub").as_ptr());
-    let mut type_name = Variant { vt: VT_BSTR, reserved1: 0, reserved2: 0, reserved3: 0, data: VariantData { ptr: type_name_bstr } };
-    let mut instance = invoke_method(asm_dispatch, create_dispid, std::slice::from_mut(&mut type_name))?;
+    let mut type_name = Variant {
+        vt: VT_BSTR,
+        reserved1: 0,
+        reserved2: 0,
+        reserved3: 0,
+        data: VariantData {
+            ptr: type_name_bstr,
+        },
+    };
+    let mut instance = invoke_method(
+        asm_dispatch,
+        create_dispid,
+        std::slice::from_mut(&mut type_name),
+    )?;
     VariantClear(&mut type_name);
     VariantClear(&mut assembly);
 
@@ -701,22 +860,40 @@ unsafe fn execute_via_legacy_idispatch(domain: *mut c_void, args: &str) -> Resul
         VT_DISPATCH | VT_UNKNOWN => instance.data.ptr,
         _ => {
             VariantClear(&mut instance);
-            return Err(format!("CreateInstanceAndUnwrap returned unexpected vt={}", instance.vt));
+            return Err(format!(
+                "CreateInstanceAndUnwrap returned unexpected vt={}",
+                instance.vt
+            ));
         }
     };
     let mut instance_dispatch: *mut c_void = ptr::null_mut();
     let hr = ((*(*(instance_ptr as *const *const IDispatchVtbl))).query_interface)(
-        instance_ptr, &IID_IDispatch, &mut instance_dispatch,
+        instance_ptr,
+        &IID_IDispatch,
+        &mut instance_dispatch,
     );
     if hr != 0 || instance_dispatch.is_null() {
         VariantClear(&mut instance);
-        return Err(format!("stub instance QI IDispatch failed: 0x{:08X}", hr as u32));
+        return Err(format!(
+            "stub instance QI IDispatch failed: 0x{:08X}",
+            hr as u32
+        ));
     }
 
     let run_dispid = get_dispid(instance_dispatch, "Run").ok_or("Run DISPID not found")?;
     let args_bstr = SysAllocString(wide(args).as_ptr());
-    let mut args_v = Variant { vt: VT_BSTR, reserved1: 0, reserved2: 0, reserved3: 0, data: VariantData { ptr: args_bstr } };
-    let mut result = invoke_method(instance_dispatch, run_dispid, std::slice::from_mut(&mut args_v))?;
+    let mut args_v = Variant {
+        vt: VT_BSTR,
+        reserved1: 0,
+        reserved2: 0,
+        reserved3: 0,
+        data: VariantData { ptr: args_bstr },
+    };
+    let mut result = invoke_method(
+        instance_dispatch,
+        run_dispid,
+        std::slice::from_mut(&mut args_v),
+    )?;
     VariantClear(&mut args_v);
 
     let exit_code = match result.vt {
@@ -734,12 +911,15 @@ unsafe fn execute_via_legacy_idispatch(domain: *mut c_void, args: &str) -> Resul
 
 // ── 小工具 ─────────────────────────────────────────────────────────────
 
-fn wide(s: &str) -> Vec<u16> {    s.encode_utf16().chain(std::iter::once(0)).collect()
+fn wide(s: &str) -> Vec<u16> {
+    s.encode_utf16().chain(std::iter::once(0)).collect()
 }
 
 fn rand_hex() -> u64 {
     use std::time::{SystemTime, UNIX_EPOCH};
-    let t = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default();
+    let t = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default();
     let nanos = t.as_nanos() as u64;
     // 混合 PID 与时间，避免命名冲突
     let pid = std::process::id() as u64;

@@ -134,7 +134,11 @@ fn get_local_subnets() -> Vec<(String, String, String)> {
                             let mask = prefix_to_mask(prefix);
                             current_mask = mask;
                             if !current_ip.is_empty() {
-                                result.push((current_ip.clone(), current_mask.clone(), current_ip.clone()));
+                                result.push((
+                                    current_ip.clone(),
+                                    current_mask.clone(),
+                                    current_ip.clone(),
+                                ));
                             }
                         }
                     }
@@ -145,7 +149,11 @@ fn get_local_subnets() -> Vec<(String, String, String)> {
 
     // Fallback: add common subnets
     if result.is_empty() {
-        result.push(("192.168.1.1".into(), "255.255.255.0".into(), "192.168.1.1".into()));
+        result.push((
+            "192.168.1.1".into(),
+            "255.255.255.0".into(),
+            "192.168.1.1".into(),
+        ));
     }
 
     result
@@ -226,9 +234,7 @@ fn find_ip(line: &str) -> Option<String> {
     for part in &parts {
         let cleaned = part.trim_matches(|c: char| !c.is_ascii_digit() && c != '.');
         let segs: Vec<&str> = cleaned.split('.').collect();
-        if segs.len() == 4
-            && segs.iter().all(|s| s.parse::<u8>().is_ok())
-        {
+        if segs.len() == 4 && segs.iter().all(|s| s.parse::<u8>().is_ok()) {
             return Some(cleaned.to_string());
         }
     }
@@ -245,7 +251,9 @@ fn find_ip(line: &str) -> Option<String> {
                 if bytes[j].is_ascii_digit() {
                     current = current * 10 + (bytes[j] - b'0') as u32;
                 } else if bytes[j] == b'.' {
-                    if current > 255 { break; }
+                    if current > 255 {
+                        break;
+                    }
                     nums.push(current);
                     current = 0;
                     has_dot = true;
@@ -254,7 +262,9 @@ fn find_ip(line: &str) -> Option<String> {
                 }
                 j += 1;
             }
-            if current <= 255 { nums.push(current); }
+            if current <= 255 {
+                nums.push(current);
+            }
             if nums.len() == 4 && has_dot {
                 return Some(format!("{}.{}.{}.{}", nums[0], nums[1], nums[2], nums[3]));
             }
@@ -272,7 +282,9 @@ fn find_mac(line: &str) -> Option<String> {
         let cleaned = part.trim_matches(|c: char| !c.is_ascii_hexdigit() && c != '-' && c != ':');
         let segs: Vec<&str> = cleaned.split(|c| c == '-' || c == ':').collect();
         if segs.len() == 6
-            && segs.iter().all(|s| s.len() == 2 && s.chars().all(|c| c.is_ascii_hexdigit()))
+            && segs
+                .iter()
+                .all(|s| s.len() == 2 && s.chars().all(|c| c.is_ascii_hexdigit()))
         {
             return Some(cleaned.replace('-', ":"));
         }

@@ -8,7 +8,8 @@ const KERB_QUERY_TKT_CACHE_MESSAGE: u32 = 0x22;
 #[link(name = "secur32")]
 extern "system" {
     fn LsaConnectUntrusted(handle: *mut usize) -> i32;
-    fn LsaLookupAuthenticationPackage(handle: usize, name: *const u16, package_id: *mut i32) -> i32;
+    fn LsaLookupAuthenticationPackage(handle: usize, name: *const u16, package_id: *mut i32)
+        -> i32;
     fn LsaCallAuthenticationPackage(
         handle: usize,
         package_id: i32,
@@ -74,7 +75,10 @@ pub fn klist() -> String {
             return r#"{"success":false,"error":"Kerberos auth package not found"}"#.to_string();
         }
 
-        let req = KerbQueryTicketCacheRequest { message_type: KERB_QUERY_TKT_CACHE_MESSAGE, logon_id: 0 };
+        let req = KerbQueryTicketCacheRequest {
+            message_type: KERB_QUERY_TKT_CACHE_MESSAGE,
+            logon_id: 0,
+        };
         let mut output: *mut u8 = std::ptr::null_mut();
         let mut output_len = 0u32;
         let mut return_status = 0i32;
@@ -90,7 +94,8 @@ pub fn klist() -> String {
         );
 
         if status != 0 || return_status != 0 || output.is_null() {
-            return r#"{"success":false,"error":"LsaCallAuthenticationPackage failed"}"#.to_string();
+            return r#"{"success":false,"error":"LsaCallAuthenticationPackage failed"}"#
+                .to_string();
         }
 
         // 响应布局：{ message_type: u32, count: u32, tickets: [...] }

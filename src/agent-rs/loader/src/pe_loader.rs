@@ -76,7 +76,9 @@ struct LargeInteger {
 /// proper PE loading (TLS, DllMain, imports) while the image is backed by
 /// pagefile only — no file touches disk.
 #[cfg(target_os = "windows")]
-pub unsafe fn reflective_load(dll_bytes: &[u8]) -> Result<extern "system" fn(*const u8, usize), String> {
+pub unsafe fn reflective_load(
+    dll_bytes: &[u8],
+) -> Result<extern "system" fn(*const u8, usize), String> {
     // Try phantom DLL loading (NtCreateSection from memory) first
     match phantom_load(dll_bytes) {
         Ok(f) => return Ok(f),
@@ -100,15 +102,25 @@ unsafe fn phantom_load(dll_bytes: &[u8]) -> Result<extern "system" fn(*const u8,
 /// Load DLL using a transient temp file + LoadLibraryW.
 /// File is written, loaded, and immediately deleted. Exists on disk for ~1ms.
 #[cfg(target_os = "windows")]
-unsafe fn phantom_load_via_loadlibrary(dll_bytes: &[u8]) -> Result<extern "system" fn(*const u8, usize), String> {
+unsafe fn phantom_load_via_loadlibrary(
+    dll_bytes: &[u8],
+) -> Result<extern "system" fn(*const u8, usize), String> {
     extern "system" {
         fn CreateFileW(
-            name: *const u16, access: u32, share: u32, security: *mut u8,
-            disposition: u32, flags: u32, template: *mut u8,
+            name: *const u16,
+            access: u32,
+            share: u32,
+            security: *mut u8,
+            disposition: u32,
+            flags: u32,
+            template: *mut u8,
         ) -> *mut u8;
         fn WriteFile(
-            file: *mut u8, buffer: *const u8, size: u32,
-            written: *mut u32, overlapped: *mut u8,
+            file: *mut u8,
+            buffer: *const u8,
+            size: u32,
+            written: *mut u32,
+            overlapped: *mut u8,
         ) -> i32;
         fn GetTempPathW(buffer_len: u32, buffer: *mut u16) -> u32;
         fn LoadLibraryW(name: *const u16) -> *mut u8;
@@ -156,7 +168,13 @@ unsafe fn phantom_load_via_loadlibrary(dll_bytes: &[u8]) -> Result<extern "syste
     }
 
     let mut written = 0u32;
-    let ok = WriteFile(h_file, dll_bytes.as_ptr(), dll_bytes.len() as u32, &mut written, ptr::null_mut());
+    let ok = WriteFile(
+        h_file,
+        dll_bytes.as_ptr(),
+        dll_bytes.len() as u32,
+        &mut written,
+        ptr::null_mut(),
+    );
     CloseHandle(h_file); // Close BEFORE LoadLibrary
 
     if ok == 0 || written != dll_bytes.len() as u32 {
@@ -189,7 +207,9 @@ unsafe fn phantom_load_via_loadlibrary(dll_bytes: &[u8]) -> Result<extern "syste
 /// Manual map without DllMain — used as last resort.
 /// TLS-heavy code (tokio) may crash; prefer phantom_load.
 #[cfg(target_os = "windows")]
-unsafe fn manual_map_no_dllmain(dll_bytes: &[u8]) -> Result<extern "system" fn(*const u8, usize), String> {
+unsafe fn manual_map_no_dllmain(
+    dll_bytes: &[u8],
+) -> Result<extern "system" fn(*const u8, usize), String> {
     let base = dll_bytes.as_ptr();
     let len = dll_bytes.len();
 
@@ -210,7 +230,10 @@ unsafe fn manual_map_no_dllmain(dll_bytes: &[u8]) -> Result<extern "system" fn(*
         return Err("Invalid NT signature".into());
     }
     if nt.file_header.machine != 0x8664 {
-        return Err(format!("Unsupported machine: 0x{:04X}", nt.file_header.machine));
+        return Err(format!(
+            "Unsupported machine: 0x{:04X}",
+            nt.file_header.machine
+        ));
     }
 
     let opt = &nt.optional_header;
@@ -218,7 +241,9 @@ unsafe fn manual_map_no_dllmain(dll_bytes: &[u8]) -> Result<extern "system" fn(*
     let preferred_base = opt.image_base;
     let num_sections = nt.file_header.number_of_sections as usize;
 
-    let sections_offset = nt_offset + 4 + std::mem::size_of::<ImageFileHeader>()
+    let sections_offset = nt_offset
+        + 4
+        + std::mem::size_of::<ImageFileHeader>()
         + nt.file_header.size_of_optional_header as usize;
 
     let mut sections: Vec<&ImageSectionHeader> = Vec::with_capacity(num_sections);
@@ -231,35 +256,64 @@ unsafe fn manual_map_no_dllmain(dll_bytes: &[u8]) -> Result<extern "system" fn(*
     }
 
     let alloc_base = VirtualAlloc(
-        preferred_base as *mut u8, size_of_image, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE,
+        preferred_base as *mut u8,
+        size_of_image,
+        MEM_COMMIT | MEM_RESERVE,
+        PAGE_READWRITE,
     );
     let alloc_base = if alloc_base.is_null() {
-        let ab = VirtualAlloc(ptr::null_mut(), size_of_image, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
-        if ab.is_null() { return Err("VirtualAlloc failed".into()); }
+        let ab = VirtualAlloc(
+            ptr::null_mut(),
+            size_of_image,
+            MEM_COMMIT | MEM_RESERVE,
+            PAGE_READWRITE,
+        );
+        if ab.is_null() {
+            return Err("VirtualAlloc failed".into());
+        }
         ab
-    } else { alloc_base };
+    } else {
+        alloc_base
+    };
 
     let delta = (alloc_base as u64).wrapping_sub(preferred_base);
     let headers_size = opt.size_of_headers as usize;
     ptr::copy_nonoverlapping(base, alloc_base, headers_size.min(len));
 
     for sec in &sections {
-        if sec.size_of_raw_data == 0 { continue; }
+        if sec.size_of_raw_data == 0 {
+            continue;
+        }
         let raw_offset = sec.pointer_to_raw_data as usize;
         let copy_len = (sec.size_of_raw_data as usize).min(sec.virtual_size as usize);
-        if raw_offset + copy_len > len { continue; }
-        ptr::copy_nonoverlapping(base.add(raw_offset), alloc_base.add(sec.virtual_address as usize), copy_len);
+        if raw_offset + copy_len > len {
+            continue;
+        }
+        ptr::copy_nonoverlapping(
+            base.add(raw_offset),
+            alloc_base.add(sec.virtual_address as usize),
+            copy_len,
+        );
     }
 
-    if delta != 0 { process_relocations(alloc_base, opt, delta)?; }
+    if delta != 0 {
+        process_relocations(alloc_base, opt, delta)?;
+    }
     resolve_imports(alloc_base, opt)?;
 
     for sec in &sections {
-        if sec.virtual_size == 0 { continue; }
+        if sec.virtual_size == 0 {
+            continue;
+        }
         let sec_base = alloc_base.add(sec.virtual_address as usize);
         let sec_size = round_up(sec.virtual_size as usize, 4096);
         let mut old = 0u32;
-        VirtualProtect(sec_base, sec_size, section_protection(sec.characteristics), &mut old);
+        VirtualProtect(
+            sec_base,
+            sec_size,
+            section_protection(sec.characteristics),
+            &mut old,
+        );
     }
 
     FlushInstructionCache(ptr::null_mut(), alloc_base, size_of_image);
@@ -272,7 +326,9 @@ unsafe fn manual_map_no_dllmain(dll_bytes: &[u8]) -> Result<extern "system" fn(*
 // ── Linux: memfd_create + dlopen (unchanged, this works fine) ──────────
 
 #[cfg(target_os = "linux")]
-pub unsafe fn reflective_load(dll_bytes: &[u8]) -> Result<extern "system" fn(*const u8, usize), String> {
+pub unsafe fn reflective_load(
+    dll_bytes: &[u8],
+) -> Result<extern "system" fn(*const u8, usize), String> {
     use std::ffi::CStr;
 
     let fd = libc::memfd_create(b"core\0".as_ptr() as *const libc::c_char, libc::MFD_CLOEXEC);
@@ -282,7 +338,11 @@ pub unsafe fn reflective_load(dll_bytes: &[u8]) -> Result<extern "system" fn(*co
 
     let mut written = 0usize;
     while written < dll_bytes.len() {
-        let n = libc::write(fd, dll_bytes[written..].as_ptr() as *const libc::c_void, dll_bytes.len() - written);
+        let n = libc::write(
+            fd,
+            dll_bytes[written..].as_ptr() as *const libc::c_void,
+            dll_bytes.len() - written,
+        );
         if n < 0 {
             libc::close(fd);
             return Err("write to memfd failed".into());
@@ -296,7 +356,11 @@ pub unsafe fn reflective_load(dll_bytes: &[u8]) -> Result<extern "system" fn(*co
 
     if handle.is_null() {
         let err = libc::dlerror();
-        let msg = if err.is_null() { "unknown".into() } else { CStr::from_ptr(err).to_string_lossy().to_string() };
+        let msg = if err.is_null() {
+            "unknown".into()
+        } else {
+            CStr::from_ptr(err).to_string_lossy().to_string()
+        };
         return Err(format!("dlopen failed: {}", msg));
     }
 
@@ -311,24 +375,32 @@ pub unsafe fn reflective_load(dll_bytes: &[u8]) -> Result<extern "system" fn(*co
 // ── macOS: temp file + dlopen (no memfd on macOS) ──────────────────────
 
 #[cfg(target_os = "macos")]
-pub unsafe fn reflective_load(dll_bytes: &[u8]) -> Result<extern "system" fn(*const u8, usize), String> {
+pub unsafe fn reflective_load(
+    dll_bytes: &[u8],
+) -> Result<extern "system" fn(*const u8, usize), String> {
     use std::ffi::CStr;
 
     let nanos = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap_or_default()
         .as_nanos();
-    let tmp = std::env::temp_dir().join(format!("libra_core_{}_{}.dylib", std::process::id(), nanos));
+    let tmp =
+        std::env::temp_dir().join(format!("libra_core_{}_{}.dylib", std::process::id(), nanos));
 
     std::fs::write(&tmp, dll_bytes).map_err(|e| e.to_string())?;
-    let path_c = std::ffi::CString::new(tmp.to_str().unwrap_or_default()).map_err(|e| e.to_string())?;
+    let path_c =
+        std::ffi::CString::new(tmp.to_str().unwrap_or_default()).map_err(|e| e.to_string())?;
 
     let handle = libc::dlopen(path_c.as_ptr(), libc::RTLD_NOW);
     let _ = std::fs::remove_file(&tmp);
 
     if handle.is_null() {
         let err = libc::dlerror();
-        let msg = if err.is_null() { "unknown".to_string() } else { CStr::from_ptr(err).to_string_lossy().to_string() };
+        let msg = if err.is_null() {
+            "unknown".to_string()
+        } else {
+            CStr::from_ptr(err).to_string_lossy().to_string()
+        };
         return Err(format!("dlopen failed: {}", msg));
     }
 
@@ -475,7 +547,8 @@ unsafe fn process_relocations(
     let reloc_size = reloc_dir.size;
 
     while offset < reloc_size {
-        let block = &*(alloc_base.add(reloc_rva as usize + offset as usize) as *const ImageBaseRelocation);
+        let block =
+            &*(alloc_base.add(reloc_rva as usize + offset as usize) as *const ImageBaseRelocation);
         if block.virtual_address == 0 || block.size_of_block == 0 {
             break;
         }
@@ -511,10 +584,7 @@ unsafe fn process_relocations(
 // ── Import Resolution ─────────────────────────────────────────────────
 
 #[cfg(target_os = "windows")]
-unsafe fn resolve_imports(
-    alloc_base: *mut u8,
-    opt: &ImageOptionalHeader64,
-) -> Result<(), String> {
+unsafe fn resolve_imports(alloc_base: *mut u8, opt: &ImageOptionalHeader64) -> Result<(), String> {
     if opt.number_of_rva_and_sizes as usize <= IMAGE_DIRECTORY_ENTRY_IMPORT {
         return Ok(());
     }
@@ -526,7 +596,8 @@ unsafe fn resolve_imports(
 
     let mut desc_offset = 0usize;
     loop {
-        let desc = &*(alloc_base.add(import_dir.virtual_address as usize + desc_offset) as *const ImageImportDescriptor);
+        let desc = &*(alloc_base.add(import_dir.virtual_address as usize + desc_offset)
+            as *const ImageImportDescriptor);
         if desc.name == 0 {
             break;
         }
@@ -594,7 +665,8 @@ unsafe fn find_export(
         return Err("Empty export directory".into());
     }
 
-    let exports = &*(alloc_base.add(export_dir.virtual_address as usize) as *const ImageExportDirectory);
+    let exports =
+        &*(alloc_base.add(export_dir.virtual_address as usize) as *const ImageExportDirectory);
     let names_ptr = alloc_base.add(exports.address_of_names as usize) as *const u32;
     let ordinals_ptr = alloc_base.add(exports.address_of_name_ordinals as usize) as *const u16;
     let functions_ptr = alloc_base.add(exports.address_of_functions as usize) as *const u32;
@@ -617,7 +689,10 @@ unsafe fn find_export(
         }
     }
 
-    Err(format!("Export '{}' not found", String::from_utf8_lossy(name)))
+    Err(format!(
+        "Export '{}' not found",
+        String::from_utf8_lossy(name)
+    ))
 }
 
 // ── Utilities ─────────────────────────────────────────────────────────
@@ -628,7 +703,7 @@ fn section_protection(characteristics: u32) -> u32 {
     let write = characteristics & 0x80000000 != 0;
 
     match (exec, read, write) {
-        (true, _, true) => 0x40,  // PAGE_EXECUTE_READWRITE
+        (true, _, true) => 0x40, // PAGE_EXECUTE_READWRITE
         (true, _, _) => PAGE_EXECUTE_READ,
         (false, _, true) => PAGE_READWRITE,
         (false, true, false) => PAGE_READONLY,

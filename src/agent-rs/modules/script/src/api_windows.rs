@@ -21,19 +21,29 @@ pub fn register_windows_api(ctx: &Ctx, features: &[String]) {
     let _ = globals.set("reg_set", Function::new(ctx.clone(), reg_set));
     let _ = globals.set("reg_delete", Function::new(ctx.clone(), reg_delete));
 
-    let _ = globals.set("ipconfig", Function::new(ctx.clone(), || -> String {
-        run("ipconfig", &["/all"])
-    }));
-    let _ = globals.set("wmic", Function::new(ctx.clone(), |query: String| -> String {
-        // Win11 24H2 已移除 wmic，脚本需自行处理空返回。
-        run("wmic", &[query.as_str()])
-    }));
-    let _ = globals.set("tasklist", Function::new(ctx.clone(), || -> String {
-        run("tasklist", &["/FO", "LIST"])
-    }));
+    let _ = globals.set(
+        "ipconfig",
+        Function::new(ctx.clone(), || -> String { run("ipconfig", &["/all"]) }),
+    );
+    let _ = globals.set(
+        "wmic",
+        Function::new(ctx.clone(), |query: String| -> String {
+            // Win11 24H2 已移除 wmic，脚本需自行处理空返回。
+            run("wmic", &[query.as_str()])
+        }),
+    );
+    let _ = globals.set(
+        "tasklist",
+        Function::new(ctx.clone(), || -> String {
+            run("tasklist", &["/FO", "LIST"])
+        }),
+    );
 
     if features.iter().any(|f| f == "full") {
-        let _ = globals.set("__winapi_reserved", Function::new(ctx.clone(), || "winapi full-stack not yet wired"));
+        let _ = globals.set(
+            "__winapi_reserved",
+            Function::new(ctx.clone(), || "winapi full-stack not yet wired"),
+        );
     }
 }
 
@@ -53,7 +63,15 @@ fn reg_query(key: String, name: String) -> String {
 
 fn reg_set(key: String, name: String, data: String) -> bool {
     Command::new("reg")
-        .args(["add", key.as_str(), "/v", name.as_str(), "/d", data.as_str(), "/f"])
+        .args([
+            "add",
+            key.as_str(),
+            "/v",
+            name.as_str(),
+            "/d",
+            data.as_str(),
+            "/f",
+        ])
         .status()
         .map(|s| s.success())
         .unwrap_or(false)

@@ -52,11 +52,26 @@ impl ConfigManager {
         let mut i = 0;
         while i < args.len() {
             match args[i].as_str() {
-                "--server" if i + 1 < args.len() => { i += 1; cfg.server_url = args[i].clone(); }
-                "--register" if i + 1 < args.len() => { i += 1; cfg.register_path = args[i].clone(); }
-                "--heartbeat" if i + 1 < args.len() => { i += 1; cfg.heartbeat_path = args[i].clone(); }
-                "--result" if i + 1 < args.len() => { i += 1; cfg.result_path = args[i].clone(); }
-                "--ws" if i + 1 < args.len() => { i += 1; cfg.web_socket_path = args[i].clone(); }
+                "--server" if i + 1 < args.len() => {
+                    i += 1;
+                    cfg.server_url = args[i].clone();
+                }
+                "--register" if i + 1 < args.len() => {
+                    i += 1;
+                    cfg.register_path = args[i].clone();
+                }
+                "--heartbeat" if i + 1 < args.len() => {
+                    i += 1;
+                    cfg.heartbeat_path = args[i].clone();
+                }
+                "--result" if i + 1 < args.len() => {
+                    i += 1;
+                    cfg.result_path = args[i].clone();
+                }
+                "--ws" if i + 1 < args.len() => {
+                    i += 1;
+                    cfg.web_socket_path = args[i].clone();
+                }
                 _ => {}
             }
             i += 1;
@@ -65,13 +80,24 @@ impl ConfigManager {
         cfg
     }
 
-    pub fn register_url(&self) -> String { format!("{}{}", self.server_url, self.register_path) }
-    pub fn heartbeat_url(&self) -> String { format!("{}{}", self.server_url, self.heartbeat_path) }
-    pub fn result_url(&self) -> String { format!("{}{}", self.server_url, self.result_path) }
+    pub fn register_url(&self) -> String {
+        format!("{}{}", self.server_url, self.register_path)
+    }
+    pub fn heartbeat_url(&self) -> String {
+        format!("{}{}", self.server_url, self.heartbeat_path)
+    }
+    pub fn result_url(&self) -> String {
+        format!("{}{}", self.server_url, self.result_path)
+    }
 
     pub fn ws_url(&self) -> String {
-        let ws_scheme = if self.server_url.starts_with("https://") { "wss://" } else { "ws://" };
-        let without_scheme = self.server_url
+        let ws_scheme = if self.server_url.starts_with("https://") {
+            "wss://"
+        } else {
+            "ws://"
+        };
+        let without_scheme = self
+            .server_url
             .trim_start_matches("https://")
             .trim_start_matches("http://");
         format!("{}{}{}", ws_scheme, without_scheme, self.web_socket_path)

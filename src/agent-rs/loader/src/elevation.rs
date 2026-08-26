@@ -54,10 +54,17 @@ pub fn is_admin() -> bool {
     const TOKEN_ELEVATION: u32 = 20;
     #[link(name = "advapi32")]
     extern "system" {
-        fn OpenProcessToken(process: *mut core::ffi::c_void, access: u32, token: *mut *mut core::ffi::c_void) -> i32;
+        fn OpenProcessToken(
+            process: *mut core::ffi::c_void,
+            access: u32,
+            token: *mut *mut core::ffi::c_void,
+        ) -> i32;
         fn GetTokenInformation(
-            token: *mut core::ffi::c_void, class: u32, info: *mut core::ffi::c_void,
-            len: u32, ret: *mut u32,
+            token: *mut core::ffi::c_void,
+            class: u32,
+            info: *mut core::ffi::c_void,
+            len: u32,
+            ret: *mut u32,
         ) -> i32;
     }
     #[link(name = "kernel32")]
@@ -69,10 +76,18 @@ pub fn is_admin() -> bool {
 
     unsafe {
         let mut token: *mut core::ffi::c_void = std::ptr::null_mut();
-        if OpenProcessToken(GetCurrentProcess() as *mut core::ffi::c_void, TOKEN_QUERY, &mut token) == 0 || token.is_null() {
+        if OpenProcessToken(
+            GetCurrentProcess() as *mut core::ffi::c_void,
+            TOKEN_QUERY,
+            &mut token,
+        ) == 0
+            || token.is_null()
+        {
             return false;
         }
-        let mut elevation = TokenElevation { token_is_elevated: 0 };
+        let mut elevation = TokenElevation {
+            token_is_elevated: 0,
+        };
         let mut ret: u32 = 0;
         let ok = GetTokenInformation(
             token,
@@ -113,8 +128,13 @@ pub fn check_elevated_instance_running(exe_path: &str) -> bool {
             loop {
                 let pid = pe.th32ProcessID;
                 if pid != our_pid && pid != 0 {
-                    let name_len = pe.szExeFile.iter().position(|&c| c == 0).unwrap_or(pe.szExeFile.len());
-                    let proc_name = String::from_utf16_lossy(&pe.szExeFile[..name_len]).to_lowercase();
+                    let name_len = pe
+                        .szExeFile
+                        .iter()
+                        .position(|&c| c == 0)
+                        .unwrap_or(pe.szExeFile.len());
+                    let proc_name =
+                        String::from_utf16_lossy(&pe.szExeFile[..name_len]).to_lowercase();
                     if proc_name == our_name {
                         CloseHandle(snapshot as *mut u8);
                         return true;
@@ -139,22 +159,36 @@ pub fn spoof_peb(fake_name: &str) {
     unsafe {
         let peb: *mut u8;
         std::arch::asm!("mov {}, gs:[0x60]", out(reg) peb);
-        if peb.is_null() { return; }
+        if peb.is_null() {
+            return;
+        }
 
-        if peb as usize >= 0x0000800000000000 { return; }
+        if peb as usize >= 0x0000800000000000 {
+            return;
+        }
 
         let params_ptr = peb.add(0x20) as *const *mut u8;
-        if is_bad_read_ptr(params_ptr as *const u8, std::mem::size_of::<*mut u8>()) { return; }
+        if is_bad_read_ptr(params_ptr as *const u8, std::mem::size_of::<*mut u8>()) {
+            return;
+        }
         let process_params = *params_ptr;
-        if process_params.is_null() { return; }
-        if process_params as usize >= 0x0000800000000000 { return; }
+        if process_params.is_null() {
+            return;
+        }
+        if process_params as usize >= 0x0000800000000000 {
+            return;
+        }
 
         let image_path = process_params.add(0x60) as *mut UnicodeString;
         let command_line = process_params.add(0x70) as *mut UnicodeString;
 
         let us_size = std::mem::size_of::<UnicodeString>();
-        if is_bad_read_ptr(image_path as *const u8, us_size) { return; }
-        if is_bad_read_ptr(command_line as *const u8, us_size) { return; }
+        if is_bad_read_ptr(image_path as *const u8, us_size) {
+            return;
+        }
+        if is_bad_read_ptr(command_line as *const u8, us_size) {
+            return;
+        }
 
         let fake_wide = to_wide(fake_name);
 
@@ -180,33 +214,69 @@ pub fn spoof_peb(fake_name: &str) {
 
 #[cfg(target_os = "windows")]
 unsafe fn is_bad_read_ptr(ptr: *const u8, size: usize) -> bool {
-    if ptr.is_null() || size == 0 { return true; }
-    if ptr as usize >= 0x0000800000000000 { return true; }
+    if ptr.is_null() || size == 0 {
+        return true;
+    }
+    if ptr as usize >= 0x0000800000000000 {
+        return true;
+    }
 
     extern "system" {
-        fn VirtualQuery(lpAddress: *const u8, lpBuffer: *mut MEMORY_BASIC_INFORMATION, dwLength: usize) -> usize;
+        fn VirtualQuery(
+            lpAddress: *const u8,
+            lpBuffer: *mut MEMORY_BASIC_INFORMATION,
+            dwLength: usize,
+        ) -> usize;
     }
     let mut mbi: MEMORY_BASIC_INFORMATION = std::mem::zeroed();
-    let ret = VirtualQuery(ptr, &mut mbi, std::mem::size_of::<MEMORY_BASIC_INFORMATION>());
-    if ret == 0 { return true; }
-    if mbi.State != 0x1000 { return true; }
-    if mbi.Protect & 0x01 != 0 || mbi.Protect & 0x100 != 0 { return true; }
+    let ret = VirtualQuery(
+        ptr,
+        &mut mbi,
+        std::mem::size_of::<MEMORY_BASIC_INFORMATION>(),
+    );
+    if ret == 0 {
+        return true;
+    }
+    if mbi.State != 0x1000 {
+        return true;
+    }
+    if mbi.Protect & 0x01 != 0 || mbi.Protect & 0x100 != 0 {
+        return true;
+    }
     false
 }
 
 #[cfg(target_os = "windows")]
 unsafe fn is_bad_write_ptr(ptr: *mut u8, size: usize) -> bool {
-    if ptr.is_null() || size == 0 { return true; }
-    if ptr as usize >= 0x0000800000000000 { return true; }
+    if ptr.is_null() || size == 0 {
+        return true;
+    }
+    if ptr as usize >= 0x0000800000000000 {
+        return true;
+    }
 
     extern "system" {
-        fn VirtualQuery(lpAddress: *const u8, lpBuffer: *mut MEMORY_BASIC_INFORMATION, dwLength: usize) -> usize;
+        fn VirtualQuery(
+            lpAddress: *const u8,
+            lpBuffer: *mut MEMORY_BASIC_INFORMATION,
+            dwLength: usize,
+        ) -> usize;
     }
     let mut mbi: MEMORY_BASIC_INFORMATION = std::mem::zeroed();
-    let ret = VirtualQuery(ptr as *const u8, &mut mbi, std::mem::size_of::<MEMORY_BASIC_INFORMATION>());
-    if ret == 0 { return true; }
-    if mbi.State != 0x1000 { return true; }
-    if mbi.Protect & 0x01 != 0 || mbi.Protect & 0x100 != 0 { return true; }
+    let ret = VirtualQuery(
+        ptr as *const u8,
+        &mut mbi,
+        std::mem::size_of::<MEMORY_BASIC_INFORMATION>(),
+    );
+    if ret == 0 {
+        return true;
+    }
+    if mbi.State != 0x1000 {
+        return true;
+    }
+    if mbi.Protect & 0x01 != 0 || mbi.Protect & 0x100 != 0 {
+        return true;
+    }
     false
 }
 

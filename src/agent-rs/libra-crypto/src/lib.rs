@@ -3,13 +3,13 @@
 //! Implements RSA-2048 key exchange + AES-256-GCM payload encryption,
 //! matching the C# CryptoHelper + AgentCrypto protocol.
 
-use aes_gcm::{Aes256Gcm, Key, KeyInit, Nonce};
 use aes_gcm::aead::Aead;
-use base64::{Engine as _, engine::general_purpose::STANDARD as B64};
+use aes_gcm::{Aes256Gcm, Key, KeyInit, Nonce};
+use base64::{engine::general_purpose::STANDARD as B64, Engine as _};
 use rand::RngCore;
-use rsa::{RsaPrivateKey, RsaPublicKey, pkcs8::DecodePrivateKey};
 use rsa::pkcs1v15::SigningKey;
-use rsa::signature::{Signer, SignatureEncoding};
+use rsa::signature::{SignatureEncoding, Signer};
+use rsa::{pkcs8::DecodePrivateKey, RsaPrivateKey, RsaPublicKey};
 use sha2::{Digest, Sha256};
 
 const AES_KEY_SIZE: usize = 32; // 256 bits
@@ -86,7 +86,9 @@ impl AgentCrypto {
 
     /// Set the session key by decrypting an RSA-encrypted AES key from the server.
     pub fn set_session_key(&mut self, encrypted_key: &[u8]) -> Result<(), String> {
-        let priv_b64 = self.rsa_private_key.as_ref()
+        let priv_b64 = self
+            .rsa_private_key
+            .as_ref()
             .ok_or("RSA keypair not generated")?;
         let session_key = rsa_decrypt(encrypted_key, priv_b64)?;
         if session_key.len() != AES_KEY_SIZE {
@@ -100,14 +102,18 @@ impl AgentCrypto {
 
     /// AES-256-GCM encrypt a plaintext string. Returns base64 of (nonce || tag || ciphertext).
     pub fn encrypt_payload(&self, plaintext: &str) -> Result<String, String> {
-        let key = self.session_key.as_ref()
+        let key = self
+            .session_key
+            .as_ref()
             .ok_or("Session key not established")?;
         Ok(encrypt_payload(plaintext, key))
     }
 
     /// AES-256-GCM decrypt a base64-encoded (nonce || tag || ciphertext).
     pub fn decrypt_payload(&self, ciphertext_b64: &str) -> Result<String, String> {
-        let key = self.session_key.as_ref()
+        let key = self
+            .session_key
+            .as_ref()
             .ok_or("Session key not established")?;
         decrypt_payload(ciphertext_b64, key)
     }
@@ -185,7 +191,8 @@ pub fn decrypt_bytes(combined: &[u8], key: &[u8; AES_KEY_SIZE]) -> Result<Vec<u8
     let cipher = Aes256Gcm::new(Key::<Aes256Gcm>::from_slice(key));
     let nonce = Nonce::from_slice(nonce_bytes);
 
-    cipher.decrypt(nonce, ciphertext_with_tag.as_slice())
+    cipher
+        .decrypt(nonce, ciphertext_with_tag.as_slice())
         .map_err(|_| "AES-GCM decryption failed".to_string())
 }
 
@@ -207,7 +214,8 @@ pub fn rsa_encrypt(data: &[u8], public_key_b64: &str) -> Result<Vec<u8>, String>
     let pub_der = B64.decode(public_key_b64).map_err(|e| e.to_string())?;
     let public_key = RsaPublicKey::from_public_key_der(&pub_der).map_err(|e| e.to_string())?;
     let mut rng = rand::thread_rng();
-    public_key.encrypt(&mut rng, rsa::Oaep::new::<Sha256>(), data)
+    public_key
+        .encrypt(&mut rng, rsa::Oaep::new::<Sha256>(), data)
         .map_err(|e| e.to_string())
 }
 
@@ -215,7 +223,8 @@ pub fn rsa_encrypt(data: &[u8], public_key_b64: &str) -> Result<Vec<u8>, String>
 pub fn rsa_decrypt(data: &[u8], private_key_b64: &str) -> Result<Vec<u8>, String> {
     let priv_der = B64.decode(private_key_b64).map_err(|e| e.to_string())?;
     let private_key = RsaPrivateKey::from_pkcs8_der(&priv_der).map_err(|e| e.to_string())?;
-    private_key.decrypt(rsa::Oaep::new::<Sha256>(), data)
+    private_key
+        .decrypt(rsa::Oaep::new::<Sha256>(), data)
         .map_err(|e| e.to_string())
 }
 
@@ -231,7 +240,7 @@ pub fn hybrid_encrypt(plaintext: &str, public_key_b64: &str) -> Result<(String, 
 
 /// Generate RSA keypair, returns (public_key_b64, private_key_b64).
 pub fn generate_rsa_keypair() -> Result<(String, String), String> {
-    use rsa::pkcs8::{EncodePublicKey, EncodePrivateKey};
+    use rsa::pkcs8::{EncodePrivateKey, EncodePublicKey};
     let mut rng = rand::thread_rng();
     let private_key = RsaPrivateKey::new(&mut rng, 2048).map_err(|e| e.to_string())?;
     let public_key = RsaPublicKey::from(&private_key);
@@ -239,7 +248,10 @@ pub fn generate_rsa_keypair() -> Result<(String, String), String> {
     let pub_der = public_key.to_public_key_der().map_err(|e| e.to_string())?;
     let priv_der = private_key.to_pkcs8_der().map_err(|e| e.to_string())?;
 
-    Ok((B64.encode(pub_der.as_bytes()), B64.encode(priv_der.as_bytes())))
+    Ok((
+        B64.encode(pub_der.as_bytes()),
+        B64.encode(priv_der.as_bytes()),
+    ))
 }
 
 #[cfg(test)]
@@ -273,7 +285,10 @@ mod tests {
         let combined = B64.decode(&encrypted).unwrap();
 
         // nonce(12) + tag(16) + ciphertext(plaintext.len())
-        assert_eq!(combined.len(), AES_NONCE_SIZE + AES_TAG_SIZE + plaintext.len());
+        assert_eq!(
+            combined.len(),
+            AES_NONCE_SIZE + AES_TAG_SIZE + plaintext.len()
+        );
 
         // The bytes at [12..28] must be the GCM tag, not ciphertext.
         // Verify by feeding the crate `nonce || ciphertext || tag` (i.e. moving
@@ -285,7 +300,9 @@ mod tests {
         let cipher = Aes256Gcm::new(Key::<Aes256Gcm>::from_slice(&key));
         let mut ct_with_tag = ct.to_vec();
         ct_with_tag.extend_from_slice(tag);
-        let decrypted = cipher.decrypt(Nonce::from_slice(nonce), ct_with_tag.as_slice()).unwrap();
+        let decrypted = cipher
+            .decrypt(Nonce::from_slice(nonce), ct_with_tag.as_slice())
+            .unwrap();
         assert_eq!(decrypted, plaintext.as_bytes());
     }
 
@@ -300,7 +317,8 @@ mod tests {
             }
             k
         };
-        let vector = "oKGio6SlpqeoqaqrILXSPpyl22AxzrtwgykzeI59EEEq627WABfm824UtLsCwykw5tIxGLw/FLVLng==";
+        let vector =
+            "oKGio6SlpqeoqaqrILXSPpyl22AxzrtwgykzeI59EEEq627WABfm824UtLsCwykw5tIxGLw/FLVLng==";
         let plaintext = "hello libra interop test 12345";
         let decrypted = decrypt_payload(vector, &key).unwrap();
         assert_eq!(decrypted, plaintext);

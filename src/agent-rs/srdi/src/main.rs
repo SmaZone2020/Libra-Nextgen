@@ -48,7 +48,10 @@ fn main() {
     };
 
     let hash = srdi::hash_export_name(export_name);
-    eprintln!("[srdi] Export '{}' found (hash=0x{:08X})", export_name, hash);
+    eprintln!(
+        "[srdi] Export '{}' found (hash=0x{:08X})",
+        export_name, hash
+    );
     eprintln!("[srdi] Output size: {} bytes", output.len());
 
     if let Err(e) = fs::write(&output_path, &output) {

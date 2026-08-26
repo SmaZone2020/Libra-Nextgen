@@ -24,7 +24,8 @@ impl ModuleManager {
         session_key: Option<[u8; 32]>,
         session_token: Option<String>,
     ) -> Self {
-        let mut http = HttpCommunicator::new(server_url, register_path, heartbeat_path, result_path);
+        let mut http =
+            HttpCommunicator::new(server_url, register_path, heartbeat_path, result_path);
         if let Some(t) = session_token {
             http.set_session_token(t);
         }
@@ -50,23 +51,25 @@ impl ModuleManager {
             .as_ref()
             .ok_or("no session key — cannot download modules")?;
 
-        let bytes = self
-            .http
-            .download_module(name, &self.agent_id, key)
-            .await?;
+        let bytes = self.http.download_module(name, &self.agent_id, key).await?;
         let module = load_module(&bytes, "module_main")?;
 
         // Self-identification check: the downloaded artifact must claim to be
         // the requested module. 空名（模块未导出 module_name）视为不匹配——
         // 之前空名会静默放行，把任意 .so 伪装成目标模块执行。
         if module.name.is_empty() {
-            libra_common::dlog!("[module] '{name}' artifact has no module_name export — refusing to load");
+            libra_common::dlog!(
+                "[module] '{name}' artifact has no module_name export — refusing to load"
+            );
             return Err(format!(
                 "module content invalid: '{name}' artifact missing module_name export"
             ));
         }
         if module.name != name {
-            libra_common::dlog!("[module] MISMATCH: requested '{name}', downloaded '{0}'", module.name);
+            libra_common::dlog!(
+                "[module] MISMATCH: requested '{name}', downloaded '{0}'",
+                module.name
+            );
             return Err(format!(
                 "module content mismatch: requested '{name}', downloaded '{}'",
                 module.name
@@ -87,7 +90,11 @@ impl ModuleManager {
     /// plus the owned input. The caller must NOT hold `&mut self` (or the
     /// module manager lock) while executing, so concurrent tasks can run
     /// different modules in parallel instead of serializing on the loader.
-    pub async fn prepare(&mut self, name: &str, input: &str) -> Result<(ModuleMainFn, String), String> {
+    pub async fn prepare(
+        &mut self,
+        name: &str,
+        input: &str,
+    ) -> Result<(ModuleMainFn, String), String> {
         self.ensure_loaded(name).await?;
         let main = self
             .loaded

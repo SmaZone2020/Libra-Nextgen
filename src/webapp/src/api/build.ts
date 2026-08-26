@@ -1,4 +1,4 @@
-﻿import { getToken, apiBase, getApiOrigin } from './client';
+import { getToken, apiBase, getApiOrigin } from './client';
 import type { BuildConfigRequest, BuildRecord, BuildRecordDetail, TemplateInfo } from '../types/models';
 
 export async function uploadIcon(file: File): Promise<string> {
@@ -73,13 +73,13 @@ export function getBuildDownloadUrl(buildId: string): string {
   return `${apiBase()}/builder/download/${buildId}?token=${encodeURIComponent(getToken() || '')}`;
 }
 
-/** 鎸夋牸寮忎笅杞芥瀯寤轰骇鐗╋紙iso/img/vhd/lnk锛涚己鐪?= 鍘熷 exe锛夈€?*/
+/** 按格式下载构建产物（iso/img/vhd/lnk；缺省 = 原始 exe）。*/
 export function getBuildDownloadUrlByFormat(buildId: string, format: string): string {
   const token = encodeURIComponent(getToken() || '');
   return `${apiBase()}/builder/download/${buildId}?token=${token}&format=${encodeURIComponent(format)}`;
 }
 
-/** 鍖垮悕涓嬭浇 URL锛堟棤闇€閴存潈锛屼緵涓€閿懡浠?/ LNK 鍐呭祵浣跨敤锛涘垹闄ゆ瀯寤哄嵆澶辨晥锛夈€?*/
+/** 匿名下载 URL（无需鉴权，供一键命令 / LNK 内置使用；删除构建即失效）。*/
 export function getArtifactUrl(buildId: string): string {
   return `${getApiOrigin()}/api/beacon/artifact/${buildId}`;
 }
@@ -136,7 +136,7 @@ export async function deleteTemplate(platform: string): Promise<void> {
   }
 }
 
-/** 浠呮瀯寤轰簯妯″潡锛堜笉鏋勫缓 agent锛夈€傝繑鍥?buildId锛堝巻鍙?鏃ュ織娴佺敤锛夈€?*/
+/** 仅构建云模块（不构建 agent）。返回 buildId（历史/日志流用）。*/
 export async function buildModules(platform: string, enabledModules: string[]): Promise<string> {
   const response = await fetch(`${apiBase()}/builder/modules`, {
     method: 'POST',

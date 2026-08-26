@@ -58,10 +58,7 @@ impl WindowInfo {
             let _ = Box::from_raw(cb_ptr);
         }
 
-        format!(
-            r#"{{"windows":[{}],"supported":true}}"#,
-            items.join(",")
-        )
+        format!(r#"{{"windows":[{}],"supported":true}}"#, items.join(","))
     }
 
     pub fn close_window(hwnd: i64) -> String {
@@ -156,7 +153,11 @@ extern "system" {
 #[cfg(target_os = "windows")]
 unsafe extern "system" fn enum_windows_callback(hwnd: isize, lparam: isize) -> i32 {
     let cb = &mut *(lparam as *mut Box<dyn FnMut(isize) -> bool>);
-    if cb(hwnd) { 1 } else { 0 }
+    if cb(hwnd) {
+        1
+    } else {
+        0
+    }
 }
 
 #[cfg(target_os = "windows")]

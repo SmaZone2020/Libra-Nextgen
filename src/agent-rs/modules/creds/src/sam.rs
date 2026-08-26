@@ -20,7 +20,8 @@ pub fn save_sam(out_dir: &str) -> String {
     let ok_system = run_reg_save("HKLM\\SYSTEM", &system_path);
 
     if !ok_sam && !ok_system {
-        return r#"{"success":false,"error":"reg save failed — need SYSTEM privilege"}"#.to_string();
+        return r#"{"success":false,"error":"reg save failed — need SYSTEM privilege"}"#
+            .to_string();
     }
 
     serde_json::json!({

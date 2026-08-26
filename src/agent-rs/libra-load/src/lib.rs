@@ -12,7 +12,7 @@
 //!
 //! The returned value is the number of bytes written to `output`. Loading is
 //! performed entirely in memory:
-//! - Windows: "phantom" DLL load 鈥?`LoadLibraryW` from a temp file that is
+//! - Windows: "phantom" DLL load — `LoadLibraryW` from a temp file that is
 //!   deleted immediately after mapping (no persistent disk footprint).
 //! - Linux: `memfd_create` + `dlopen` (never touches disk).
 
@@ -86,17 +86,25 @@ unsafe fn build_loaded(
 
 #[cfg(target_os = "windows")]
 mod windows {
-    use super::{LoadedModule, build_loaded};
+    use super::{build_loaded, LoadedModule};
     use std::ptr;
 
     extern "system" {
         fn CreateFileW(
-            name: *const u16, access: u32, share: u32, security: *mut u8,
-            disposition: u32, flags: u32, template: *mut u8,
+            name: *const u16,
+            access: u32,
+            share: u32,
+            security: *mut u8,
+            disposition: u32,
+            flags: u32,
+            template: *mut u8,
         ) -> *mut u8;
         fn WriteFile(
-            file: *mut u8, buffer: *const u8, size: u32,
-            written: *mut u32, overlapped: *mut u8,
+            file: *mut u8,
+            buffer: *const u8,
+            size: u32,
+            written: *mut u32,
+            overlapped: *mut u8,
         ) -> i32;
         fn GetTempPathW(buffer_len: u32, buffer: *mut u16) -> u32;
         fn LoadLibraryW(name: *const u16) -> *mut u8;
@@ -148,7 +156,13 @@ mod windows {
         }
 
         let mut written = 0u32;
-        let ok = WriteFile(h_file, bytes.as_ptr(), bytes.len() as u32, &mut written, ptr::null_mut());
+        let ok = WriteFile(
+            h_file,
+            bytes.as_ptr(),
+            bytes.len() as u32,
+            &mut written,
+            ptr::null_mut(),
+        );
         CloseHandle(h_file);
         if ok == 0 || written != bytes.len() as u32 {
             DeleteFileW(wide_path.as_ptr());
@@ -174,11 +188,14 @@ mod windows {
 
 #[cfg(target_os = "linux")]
 mod linux {
-    use super::{LoadedModule, build_loaded};
+    use super::{build_loaded, LoadedModule};
     use std::ffi::CStr;
 
     pub unsafe fn load(bytes: &[u8], export: &str) -> Result<LoadedModule, String> {
-        let fd = libc::memfd_create(b"libra\0".as_ptr() as *const libc::c_char, libc::MFD_CLOEXEC);
+        let fd = libc::memfd_create(
+            b"libra\0".as_ptr() as *const libc::c_char,
+            libc::MFD_CLOEXEC,
+        );
         if fd < 0 {
             return Err("memfd_create failed".into());
         }
@@ -223,7 +240,7 @@ mod linux {
 
 #[cfg(target_os = "macos")]
 mod macos {
-    use super::{LoadedModule, build_loaded};
+    use super::{build_loaded, LoadedModule};
     use std::ffi::CStr;
 
     pub unsafe fn load(bytes: &[u8], export: &str) -> Result<LoadedModule, String> {
@@ -231,17 +248,23 @@ mod macos {
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap_or_default()
             .as_nanos();
-        let tmp = std::env::temp_dir().join(format!("libra_mod_{}_{}.dylib", std::process::id(), nanos));
+        let tmp =
+            std::env::temp_dir().join(format!("libra_mod_{}_{}.dylib", std::process::id(), nanos));
 
         std::fs::write(&tmp, bytes).map_err(|e| e.to_string())?;
-        let path_c = std::ffi::CString::new(tmp.to_str().unwrap_or_default()).map_err(|e| e.to_string())?;
+        let path_c =
+            std::ffi::CString::new(tmp.to_str().unwrap_or_default()).map_err(|e| e.to_string())?;
 
         let handle = libc::dlopen(path_c.as_ptr(), libc::RTLD_NOW);
         let _ = std::fs::remove_file(&tmp);
 
         if handle.is_null() {
             let err = libc::dlerror();
-            let msg = if err.is_null() { "unknown".to_string() } else { CStr::from_ptr(err).to_string_lossy().to_string() };
+            let msg = if err.is_null() {
+                "unknown".to_string()
+            } else {
+                CStr::from_ptr(err).to_string_lossy().to_string()
+            };
             return Err(format!("dlopen failed: {}", msg));
         }
 

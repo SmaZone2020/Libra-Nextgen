@@ -34,13 +34,19 @@ impl Packages {
                 // Present — now dump the list.
                 let (list_args, list_parser): (&[&str], fn(&str) -> Vec<String>) = match probe {
                     "dpkg" => (&["-l", "--no-pager"], Self::parse_dpkg),
-                    "rpm" => (&["-qa", "--qf", "%{NAME}\\t%{VERSION}\\t%{ARCH}\\n"], Self::parse_rpm),
+                    "rpm" => (
+                        &["-qa", "--qf", "%{NAME}\\t%{VERSION}\\t%{ARCH}\\n"],
+                        Self::parse_rpm,
+                    ),
                     "pacman" => (&["-Q"], Self::parse_pacman),
                     "apk" => (&["list", "--installed"], Self::parse_apk),
                     _ => unreachable!(),
                 };
                 let Some(list_out) = run(probe, list_args) else {
-                    return format!(r#"{{"pm":"{}","total":0,"packages":[],"error":"list failed"}}"#, probe);
+                    return format!(
+                        r#"{{"pm":"{}","total":0,"packages":[],"error":"list failed"}}"#,
+                        probe
+                    );
                 };
                 let packages = list_parser(&list_out);
                 return format!(
@@ -63,7 +69,10 @@ impl Packages {
             .filter(|l| l.starts_with("ii") || l.starts_with("hi") || l.starts_with("rc"))
             .filter_map(|l| {
                 let rest = l.trim_start_matches(['i', 'h', 'r', 'c', 'u', ' ']);
-                let parts: Vec<&str> = rest.splitn(5, char::is_whitespace).filter(|s| !s.is_empty()).collect();
+                let parts: Vec<&str> = rest
+                    .splitn(5, char::is_whitespace)
+                    .filter(|s| !s.is_empty())
+                    .collect();
                 if parts.len() < 2 {
                     return None;
                 }
@@ -140,8 +149,14 @@ impl Packages {
 
         let mut packages = Vec::new();
         for hive in [
-            (HKEY_LOCAL_MACHINE, r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall"),
-            (HKEY_LOCAL_MACHINE, r"SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall"),
+            (
+                HKEY_LOCAL_MACHINE,
+                r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall",
+            ),
+            (
+                HKEY_LOCAL_MACHINE,
+                r"SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall",
+            ),
         ] {
             if let Ok(key) = RegKey::predef(hive.0).open_subkey(hive.1) {
                 for sub in key.enum_keys().flatten() {
@@ -159,7 +174,11 @@ impl Packages {
                 }
             }
         }
-        format!(r#"{{"pm":"registry","total":{},"packages":[{}]}}"#, packages.len(), packages.join(","))
+        format!(
+            r#"{{"pm":"registry","total":{},"packages":[{}]}}"#,
+            packages.len(),
+            packages.join(",")
+        )
     }
 }
 

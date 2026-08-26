@@ -1,8 +1,8 @@
-use std::pin::Pin;
+use crate::platform::{IPlatformExecutor, InteractiveShellHandle};
 use std::future::Future;
+use std::pin::Pin;
 use tokio::process::Command;
 use tokio::sync::watch;
-use crate::platform::{IPlatformExecutor, InteractiveShellHandle};
 
 pub struct WindowsExecutor;
 
@@ -21,10 +21,7 @@ impl IPlatformExecutor for WindowsExecutor {
         cfg!(target_os = "windows")
     }
 
-    fn execute(
-        &self,
-        command: &str,
-    ) -> Pin<Box<dyn Future<Output = String> + Send + '_>> {
+    fn execute(&self, command: &str) -> Pin<Box<dyn Future<Output = String> + Send + '_>> {
         let command = command.to_string();
         Box::pin(async move {
             let output = Command::new("cmd.exe")
@@ -39,7 +36,11 @@ impl IPlatformExecutor for WindowsExecutor {
                 Ok(out) => {
                     let stdout = crate::decode_shell_bytes(&out.stdout);
                     let stderr = crate::decode_shell_bytes(&out.stderr);
-                    if stdout.is_empty() { stderr } else { stdout }
+                    if stdout.is_empty() {
+                        stderr
+                    } else {
+                        stdout
+                    }
                 }
                 Err(e) => format!("Failed to start process: {}", e),
             }

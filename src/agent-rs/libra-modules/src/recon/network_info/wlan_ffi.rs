@@ -132,10 +132,7 @@ mod wlan_ffi {
             phClientHandle: *mut HANDLE,
         ) -> DWORD;
 
-        pub fn WlanCloseHandle(
-            hClientHandle: HANDLE,
-            pReserved: *const std::ffi::c_void,
-        ) -> DWORD;
+        pub fn WlanCloseHandle(hClientHandle: HANDLE, pReserved: *const std::ffi::c_void) -> DWORD;
 
         pub fn WlanEnumInterfaces(
             hClientHandle: HANDLE,
@@ -210,17 +207,27 @@ pub(super) fn scan_wifi_wlanapi() -> Result<Vec<WifiApInfo>, String> {
             let mut sec_map: HashMap<String, (String, String)> = HashMap::new();
             let mut net_list_ptr: *mut WLAN_AVAILABLE_NETWORK_LIST = std::ptr::null_mut();
             let flags = FLAG_ADHOC | FLAG_HIDDEN;
-            if WlanGetAvailableNetworkList(handle, guid_ptr, flags, std::ptr::null(), &mut net_list_ptr) == 0
+            if WlanGetAvailableNetworkList(
+                handle,
+                guid_ptr,
+                flags,
+                std::ptr::null(),
+                &mut net_list_ptr,
+            ) == 0
                 && !net_list_ptr.is_null()
             {
                 let net_count = (*net_list_ptr).dwNumberOfItems as usize;
                 for j in 0..net_count {
                     let net = &*((*net_list_ptr).Network.as_ptr().add(j));
                     let ssid_len = net.dot11Ssid.uSSIDLength as usize;
-                    if ssid_len == 0 { continue; }
+                    if ssid_len == 0 {
+                        continue;
+                    }
                     let ssid_bytes = &net.dot11Ssid.ucSSID[..ssid_len];
                     let ssid = String::from_utf8_lossy(ssid_bytes).to_string();
-                    if ssid.is_empty() { continue; }
+                    if ssid.is_empty() {
+                        continue;
+                    }
                     let auth = auth_algo_label(net.dot11DefaultAuthAlgorithm);
                     let enc = cipher_algo_label(net.dot11DefaultCipherAlgorithm);
                     sec_map.entry(ssid).or_insert((auth, enc));
@@ -231,21 +238,33 @@ pub(super) fn scan_wifi_wlanapi() -> Result<Vec<WifiApInfo>, String> {
             // Second pass: collect BSS entries with BSSID, signal, band
             let mut bss_list_ptr: *mut WLAN_BSS_LIST = std::ptr::null_mut();
             if WlanGetNetworkBssList(
-                handle, guid_ptr, std::ptr::null(),
-                1, 0, std::ptr::null(), &mut bss_list_ptr,
-            ) == 0 && !bss_list_ptr.is_null()
+                handle,
+                guid_ptr,
+                std::ptr::null(),
+                1,
+                0,
+                std::ptr::null(),
+                &mut bss_list_ptr,
+            ) == 0
+                && !bss_list_ptr.is_null()
             {
                 let bss_count = (*bss_list_ptr).dwNumberOfItems as usize;
                 for j in 0..bss_count {
                     let bss = &*((*bss_list_ptr).wlanBssEntries.as_ptr().add(j));
                     let ssid_bytes = &bss.dot11Ssid.ucSSID[..bss.dot11Ssid.uSSIDLength as usize];
                     let ssid = String::from_utf8_lossy(ssid_bytes).to_string();
-                    if ssid.is_empty() { continue; }
+                    if ssid.is_empty() {
+                        continue;
+                    }
 
                     let bssid = format!(
                         "{:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X}",
-                        bss.dot11Bssid[0], bss.dot11Bssid[1], bss.dot11Bssid[2],
-                        bss.dot11Bssid[3], bss.dot11Bssid[4], bss.dot11Bssid[5],
+                        bss.dot11Bssid[0],
+                        bss.dot11Bssid[1],
+                        bss.dot11Bssid[2],
+                        bss.dot11Bssid[3],
+                        bss.dot11Bssid[4],
+                        bss.dot11Bssid[5],
                     );
                     let band = freq_to_band_internal(bss.ulChCenterFrequency).to_string();
                     let signal = bss.uLinkQuality;

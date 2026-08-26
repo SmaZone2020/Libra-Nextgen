@@ -90,7 +90,11 @@ impl EtwSuppressor {
                     let mut original = [0u8; 3];
                     std::ptr::copy_nonoverlapping(target, original.as_mut_ptr(), 3);
                     std::ptr::copy_nonoverlapping(ETW_PATCH.as_ptr(), target, 3);
-                    saved.push(SavedPatch { addr: target, original, old_protect });
+                    saved.push(SavedPatch {
+                        addr: target,
+                        original,
+                        old_protect,
+                    });
                 }
                 if saved.is_empty() {
                     return None;
@@ -118,7 +122,12 @@ impl EtwSuppressor {
                     &mut tmp_protect,
                 );
                 std::ptr::copy_nonoverlapping(p.original.as_ptr(), p.addr, p.original.len());
-                VirtualProtect(p.addr as *mut c_void, p.original.len(), p.old_protect, &mut tmp_protect);
+                VirtualProtect(
+                    p.addr as *mut c_void,
+                    p.original.len(),
+                    p.old_protect,
+                    &mut tmp_protect,
+                );
             }
         }
         #[cfg(not(target_os = "windows"))]
@@ -156,12 +165,22 @@ mod tests {
         unsafe {
             let mut suppressor = EtwSuppressor::suppress().expect("suppress failed");
             // patch 后调用应直接返回 0
-            let hr = EtwEventWrite(std::ptr::null_mut(), std::ptr::null_mut(), 0, std::ptr::null_mut());
+            let hr = EtwEventWrite(
+                std::ptr::null_mut(),
+                std::ptr::null_mut(),
+                0,
+                std::ptr::null_mut(),
+            );
             assert_eq!(hr, 0, "EtwEventWrite should be suppressed (hr={hr})");
 
             suppressor.restore();
             // restore 后调用走真实实现（参数无效 → 非 0）
-            let hr2 = EtwEventWrite(std::ptr::null_mut(), std::ptr::null_mut(), 0, std::ptr::null_mut());
+            let hr2 = EtwEventWrite(
+                std::ptr::null_mut(),
+                std::ptr::null_mut(),
+                0,
+                std::ptr::null_mut(),
+            );
             assert_ne!(hr2, 0, "EtwEventWrite should be restored (hr={hr2})");
         }
     }

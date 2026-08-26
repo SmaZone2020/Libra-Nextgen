@@ -17,7 +17,10 @@ fn obfuscated_sleep_roundtrip() {
     let elapsed = start.elapsed();
 
     assert!(ok, "obfuscated sleep should succeed");
-    assert!(elapsed.as_millis() >= 120, "should sleep ~150ms, got {elapsed:?}");
+    assert!(
+        elapsed.as_millis() >= 120,
+        "should sleep ~150ms, got {elapsed:?}"
+    );
 
     // 返回后模块仍可执行（RC4 加密/解密往返成功，否则这里早已崩溃）。
 }

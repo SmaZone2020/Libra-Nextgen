@@ -16,8 +16,8 @@ impl BluetoothScanner {
 
     #[cfg(target_os = "windows")]
     fn scan_windows_blocking() -> String {
-        use windows::Devices::Enumeration::DeviceInformation;
         use windows::Devices::Bluetooth::BluetoothDevice;
+        use windows::Devices::Enumeration::DeviceInformation;
 
         let selector = match BluetoothDevice::GetDeviceSelector() {
             Ok(s) => s,
@@ -39,7 +39,8 @@ impl BluetoothScanner {
             if let Ok(dev_info) = devices.GetAt(i) {
                 let name = dev_info.Name().map(|s| s.to_string()).unwrap_or_default();
                 let id = dev_info.Id().map(|s| s.to_string()).unwrap_or_default();
-                let paired = dev_info.Pairing()
+                let paired = dev_info
+                    .Pairing()
                     .and_then(|p| p.IsPaired())
                     .unwrap_or(false);
 
@@ -89,8 +90,8 @@ impl BluetoothScanner {
 
     #[cfg(target_os = "windows")]
     fn scan_ble_blocking(results: &mut Vec<String>) {
-        use windows::Devices::Enumeration::DeviceInformation;
         use windows::Devices::Bluetooth::BluetoothLEDevice;
+        use windows::Devices::Enumeration::DeviceInformation;
 
         let selector = match BluetoothLEDevice::GetDeviceSelector() {
             Ok(s) => s,
@@ -110,11 +111,14 @@ impl BluetoothScanner {
             if let Ok(dev_info) = devices.GetAt(i) {
                 let name = dev_info.Name().map(|s| s.to_string()).unwrap_or_default();
                 let id = dev_info.Id().map(|s| s.to_string()).unwrap_or_default();
-                let paired = dev_info.Pairing()
+                let paired = dev_info
+                    .Pairing()
                     .and_then(|p| p.IsPaired())
                     .unwrap_or(false);
 
-                let already_exists = results.iter().any(|r| r.contains(&escape(&name)) && !name.is_empty());
+                let already_exists = results
+                    .iter()
+                    .any(|r| r.contains(&escape(&name)) && !name.is_empty());
                 if already_exists {
                     continue;
                 }

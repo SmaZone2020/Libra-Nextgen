@@ -46,7 +46,8 @@ pub unsafe extern "system" fn module_main(
 
 /// Parse the request and execute the command. Returns a JSON result string.
 fn run(input_json: &str) -> String {
-    let parsed: Value = serde_json::from_str(input_json).unwrap_or(Value::Object(Default::default()));
+    let parsed: Value =
+        serde_json::from_str(input_json).unwrap_or(Value::Object(Default::default()));
     let command = parsed
         .get("command")
         .and_then(|v| v.as_str())
@@ -90,17 +91,13 @@ fn execute(command: &str, timeout_secs: u64) -> (bool, String) {
     loop {
         match child.try_wait() {
             Ok(Some(status)) => {
-                let stdout = child
-                    .stdout
-                    .take()
-                    .map(read_all)
-                    .unwrap_or_default();
-                let stderr = child
-                    .stderr
-                    .take()
-                    .map(read_all)
-                    .unwrap_or_default();
-                let output = if stdout.trim().is_empty() { stderr } else { stdout };
+                let stdout = child.stdout.take().map(read_all).unwrap_or_default();
+                let stderr = child.stderr.take().map(read_all).unwrap_or_default();
+                let output = if stdout.trim().is_empty() {
+                    stderr
+                } else {
+                    stdout
+                };
                 return (status.success(), output);
             }
             Ok(None) => {
@@ -137,7 +134,10 @@ mod tests {
         let parsed: Value = serde_json::from_str(&result).unwrap();
 
         assert_eq!(parsed["success"], true);
-        assert!(parsed["output"].as_str().unwrap().contains("hello-from-shell-module"));
+        assert!(parsed["output"]
+            .as_str()
+            .unwrap()
+            .contains("hello-from-shell-module"));
     }
 
     #[test]

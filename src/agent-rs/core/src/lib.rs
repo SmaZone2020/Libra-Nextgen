@@ -50,7 +50,13 @@ mod winlog {
                 return;
             }
             let mut written: u32 = 0;
-            let _ = WriteFile(h, msg.as_ptr(), msg.len() as u32, &mut written, core::ptr::null_mut());
+            let _ = WriteFile(
+                h,
+                msg.as_ptr(),
+                msg.len() as u32,
+                &mut written,
+                core::ptr::null_mut(),
+            );
             let _ = CloseHandle(h);
         }
     }
@@ -97,7 +103,12 @@ pub unsafe extern "system" fn core_main(config_ptr: *const u8, config_len: usize
     #[cfg(all(debug_assertions, target_os = "windows"))]
     winlog::write_log(LOG_FILE, "[core] core_main entered!\n");
 
-    log!(LOG_FILE, "[core] core_main entered, ptr={:?}, len={}", config_ptr, config_len);
+    log!(
+        LOG_FILE,
+        "[core] core_main entered, ptr={:?}, len={}",
+        config_ptr,
+        config_len
+    );
 
     // Parse config JSON from raw pointer
     let config_json = if config_ptr.is_null() || config_len == 0 {
@@ -119,12 +130,24 @@ pub unsafe extern "system" fn core_main(config_ptr: *const u8, config_len: usize
     log!(LOG_FILE, "[core] deserializing InjectedConfig...");
     let injected: InjectedConfig = match serde_json::from_str::<InjectedConfig>(config_json) {
         Ok(c) => {
-            log!(LOG_FILE, "[core] InjectedConfig OK, server={}", c.server_url);
+            log!(
+                LOG_FILE,
+                "[core] InjectedConfig OK, server={}",
+                c.server_url
+            );
             c
         }
         Err(e) => {
-            log!(LOG_FILE, "[core] FATAL: InjectedConfig deserialize failed: {}", e);
-            log!(LOG_FILE, "[core] JSON was: {}", &config_json[..config_json.len().min(500)]);
+            log!(
+                LOG_FILE,
+                "[core] FATAL: InjectedConfig deserialize failed: {}",
+                e
+            );
+            log!(
+                LOG_FILE,
+                "[core] JSON was: {}",
+                &config_json[..config_json.len().min(500)]
+            );
             return;
         }
     };
@@ -161,7 +184,11 @@ pub unsafe extern "system" fn core_main(config_ptr: *const u8, config_len: usize
         log!(LOG_FILE, "[core] loop iteration #{}", iteration);
 
         let cfg = libra_engine::config::ConfigManager::load(&args, Some(injected.clone()));
-        log!(LOG_FILE, "[core] ConfigManager::load OK, server={}", cfg.server_url);
+        log!(
+            LOG_FILE,
+            "[core] ConfigManager::load OK, server={}",
+            cfg.server_url
+        );
 
         log!(LOG_FILE, "[core] creating tokio runtime (multi_thread)...");
         let rt = match tokio::runtime::Builder::new_multi_thread()
@@ -184,7 +211,10 @@ pub unsafe extern "system" fn core_main(config_ptr: *const u8, config_len: usize
             let mut engine = libra_engine::engine::AgentEngine::new(cfg);
             let _ = engine.run().await;
         });
-        log!(LOG_FILE, "[core] engine.run() returned, sleeping 5s before reconnect...");
+        log!(
+            LOG_FILE,
+            "[core] engine.run() returned, sleeping 5s before reconnect..."
+        );
 
         // Engine returned (disconnect or error) — wait then reconnect
         std::thread::sleep(std::time::Duration::from_secs(5));

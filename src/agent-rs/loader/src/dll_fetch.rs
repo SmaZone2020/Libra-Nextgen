@@ -2,11 +2,11 @@
 //! negotiates the AES key over RSA at runtime, then decrypts the DLL with
 //! AES-256-GCM.
 
-use aes_gcm::{Aes256Gcm, Key, KeyInit, Nonce};
 use aes_gcm::aead::Aead;
-use base64::{Engine as _, engine::general_purpose::STANDARD as B64};
-use rsa::{RsaPrivateKey, RsaPublicKey};
+use aes_gcm::{Aes256Gcm, Key, KeyInit, Nonce};
+use base64::{engine::general_purpose::STANDARD as B64, Engine as _};
 use rsa::pkcs8::EncodePublicKey;
+use rsa::{RsaPrivateKey, RsaPublicKey};
 use sha2::Sha256;
 
 const AES_KEY_SIZE: usize = 32;
@@ -69,7 +69,10 @@ pub async fn handshake_core_key(
         .map_err(|e| format!("core key handshake failed: {}", e))?;
 
     if !resp.status().is_success() {
-        return Err(format!("core key handshake returned HTTP {}", resp.status()));
+        return Err(format!(
+            "core key handshake returned HTTP {}",
+            resp.status()
+        ));
     }
 
     let body = resp.text().await.map_err(|e| e.to_string())?;
@@ -85,7 +88,11 @@ pub async fn handshake_core_key(
         .map_err(|e| format!("RSA decryption failed: {}", e))?;
 
     if decrypted.len() != AES_KEY_SIZE {
-        return Err(format!("Invalid AES key length: {} (expected {})", decrypted.len(), AES_KEY_SIZE));
+        return Err(format!(
+            "Invalid AES key length: {} (expected {})",
+            decrypted.len(),
+            AES_KEY_SIZE
+        ));
     }
 
     let mut key = [0u8; AES_KEY_SIZE];
@@ -108,7 +115,8 @@ pub async fn download_core(download_url: &str) -> Result<Vec<u8>, String> {
         .build()
         .map_err(|e| format!("HTTP client error: {}", e))?;
 
-    let resp = client.get(download_url)
+    let resp = client
+        .get(download_url)
         .send()
         .await
         .map_err(|e| format!("HTTP GET failed: {}", e))?;
@@ -125,7 +133,10 @@ pub async fn download_core(download_url: &str) -> Result<Vec<u8>, String> {
 
 /// Decrypt the core DLL using AES-256-GCM.
 /// Expects bytes in format: nonce(12) || ciphertext || tag(16)
-pub fn decrypt_dll(encrypted_bytes: &[u8], aes_key: &[u8; AES_KEY_SIZE]) -> Result<Vec<u8>, String> {
+pub fn decrypt_dll(
+    encrypted_bytes: &[u8],
+    aes_key: &[u8; AES_KEY_SIZE],
+) -> Result<Vec<u8>, String> {
     if encrypted_bytes.len() < AES_NONCE_SIZE + 16 {
         return Err("Encrypted DLL too short".into());
     }
@@ -135,6 +146,7 @@ pub fn decrypt_dll(encrypted_bytes: &[u8], aes_key: &[u8; AES_KEY_SIZE]) -> Resu
 
     let cipher = Aes256Gcm::new(Key::<Aes256Gcm>::from_slice(aes_key));
 
-    cipher.decrypt(nonce, ciphertext_with_tag)
+    cipher
+        .decrypt(nonce, ciphertext_with_tag)
         .map_err(|_| "AES-GCM decryption failed".into())
 }

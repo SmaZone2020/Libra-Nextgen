@@ -33,7 +33,9 @@ fn write_output(s: &str, output: *mut u8, output_cap: usize) -> usize {
     let bytes = s.as_bytes();
     let n = bytes.len().min(output_cap);
     if n > 0 && !output.is_null() {
-        unsafe { std::ptr::copy_nonoverlapping(bytes.as_ptr(), output, n); }
+        unsafe {
+            std::ptr::copy_nonoverlapping(bytes.as_ptr(), output, n);
+        }
     }
     n
 }

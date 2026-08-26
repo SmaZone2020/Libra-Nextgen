@@ -7,16 +7,27 @@ use super::escape;
 // 鈹€鈹€ Search helpers 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 
 #[cfg(target_os = "windows")]
-pub(super) fn search_logins(name: &str, db_path: &str, v10_key: &Option<Vec<u8>>, v20_key: &Option<Vec<u8>>, keyword: &str, items: &mut Vec<String>) {
-    let conn = match rusqlite::Connection::open_with_flags(db_path, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY) {
+pub(super) fn search_logins(
+    name: &str,
+    db_path: &str,
+    v10_key: &Option<Vec<u8>>,
+    v20_key: &Option<Vec<u8>>,
+    keyword: &str,
+    items: &mut Vec<String>,
+) {
+    let conn = match rusqlite::Connection::open_with_flags(
+        db_path,
+        rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY,
+    ) {
         Ok(c) => c,
         Err(_) => return,
     };
 
-    let mut stmt = match conn.prepare("SELECT origin_url, username_value, password_value FROM logins") {
-        Ok(s) => s,
-        Err(_) => return,
-    };
+    let mut stmt =
+        match conn.prepare("SELECT origin_url, username_value, password_value FROM logins") {
+            Ok(s) => s,
+            Err(_) => return,
+        };
 
     let _ = stmt.query_map([], |row| {
         let url: String = row.get(0)?;
@@ -55,53 +66,72 @@ pub(super) fn search_logins(name: &str, db_path: &str, v10_key: &Option<Vec<u8>>
 
 #[cfg(target_os = "windows")]
 pub(super) fn search_history(name: &str, db_path: &str, keyword: &str, items: &mut Vec<String>) {
-    let conn = match rusqlite::Connection::open_with_flags(db_path, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY) {
+    let conn = match rusqlite::Connection::open_with_flags(
+        db_path,
+        rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY,
+    ) {
         Ok(c) => c,
         Err(_) => return,
     };
 
-    let mut stmt = match conn.prepare("SELECT url, title, visit_count FROM urls ORDER BY last_visit_time DESC LIMIT 5000") {
+    let mut stmt = match conn.prepare(
+        "SELECT url, title, visit_count FROM urls ORDER BY last_visit_time DESC LIMIT 5000",
+    ) {
         Ok(s) => s,
         Err(_) => return,
     };
 
-    let _ = stmt.query_map([], |row| {
-        let url: String = row.get(0)?;
-        let title: String = row.get(1)?;
-        let visits: i32 = row.get(2)?;
-        Ok((url, title, visits))
-    }).map(|rows| {
-        for row in rows.flatten() {
-            let (url, title, visits) = row;
+    let _ = stmt
+        .query_map([], |row| {
+            let url: String = row.get(0)?;
+            let title: String = row.get(1)?;
+            let visits: i32 = row.get(2)?;
+            Ok((url, title, visits))
+        })
+        .map(|rows| {
+            for row in rows.flatten() {
+                let (url, title, visits) = row;
 
-            // Match keyword against url, title
-            let haystack = format!("{} {}", url, title).to_lowercase();
-            if !haystack.contains(keyword) { continue; }
+                // Match keyword against url, title
+                let haystack = format!("{} {}", url, title).to_lowercase();
+                if !haystack.contains(keyword) {
+                    continue;
+                }
 
-            items.push(format!(
-                r#"{{"browser":"{}","type":"history","url":"{}","title":"{}","visits":{}}}"#,
-                escape(name),
-                escape(&url),
-                escape(&title),
-                visits
-            ));
-        }
-    });
+                items.push(format!(
+                    r#"{{"browser":"{}","type":"history","url":"{}","title":"{}","visits":{}}}"#,
+                    escape(name),
+                    escape(&url),
+                    escape(&title),
+                    visits
+                ));
+            }
+        });
 }
 
 // 鈹€鈹€ SQLite Readers 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 
 #[cfg(target_os = "windows")]
-pub(super) fn read_logins(name: &str, db_path: &str, v10_key: &Option<Vec<u8>>, v20_key: &Option<Vec<u8>>, items: &mut Vec<String>) {
-    let conn = match rusqlite::Connection::open_with_flags(db_path, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY) {
+pub(super) fn read_logins(
+    name: &str,
+    db_path: &str,
+    v10_key: &Option<Vec<u8>>,
+    v20_key: &Option<Vec<u8>>,
+    items: &mut Vec<String>,
+) {
+    let conn = match rusqlite::Connection::open_with_flags(
+        db_path,
+        rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY,
+    ) {
         Ok(c) => c,
         Err(_) => return,
     };
 
-    let mut stmt = match conn.prepare("SELECT origin_url, username_value, password_value FROM logins") {
-        Ok(s) => s,
-        Err(_) => return,
-    };
+    let mut stmt =
+        match conn.prepare("SELECT origin_url, username_value, password_value FROM logins") {
+            Ok(s) => s,
+            Err(_) => return,
+        };
 
     let _ = stmt.query_map([], |row| {
         let url: String = row.get(0)?;
@@ -141,37 +171,44 @@ pub(super) fn read_logins(name: &str, db_path: &str, v10_key: &Option<Vec<u8>>, 
 
 #[cfg(target_os = "windows")]
 pub(super) fn read_history(name: &str, db_path: &str, items: &mut Vec<String>) {
-    let conn = match rusqlite::Connection::open_with_flags(db_path, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY) {
+    let conn = match rusqlite::Connection::open_with_flags(
+        db_path,
+        rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY,
+    ) {
         Ok(c) => c,
         Err(_) => return,
     };
 
-    let mut stmt = match conn.prepare("SELECT url, title, visit_count FROM urls ORDER BY last_visit_time DESC LIMIT 500") {
+    let mut stmt = match conn
+        .prepare("SELECT url, title, visit_count FROM urls ORDER BY last_visit_time DESC LIMIT 500")
+    {
         Ok(s) => s,
         Err(_) => return,
     };
 
-    let _ = stmt.query_map([], |row| {
-        let url: String = row.get(0)?;
-        let title: String = row.get(1)?;
-        let visits: i32 = row.get(2)?;
-        Ok((url, title, visits))
-    }).map(|rows| {
-        for row in rows.flatten() {
-            let (url, title, visits) = row;
+    let _ = stmt
+        .query_map([], |row| {
+            let url: String = row.get(0)?;
+            let title: String = row.get(1)?;
+            let visits: i32 = row.get(2)?;
+            Ok((url, title, visits))
+        })
+        .map(|rows| {
+            for row in rows.flatten() {
+                let (url, title, visits) = row;
 
-            // Skip entries where url is empty
-            if url.is_empty() {
-                continue;
+                // Skip entries where url is empty
+                if url.is_empty() {
+                    continue;
+                }
+
+                items.push(format!(
+                    r#"{{"browser":"{}","type":"history","url":"{}","title":"{}","visits":{}}}"#,
+                    escape(name),
+                    escape(&url),
+                    escape(&title),
+                    visits
+                ));
             }
-
-            items.push(format!(
-                r#"{{"browser":"{}","type":"history","url":"{}","title":"{}","visits":{}}}"#,
-                escape(name),
-                escape(&url),
-                escape(&title),
-                visits
-            ));
-        }
-    });
+        });
 }

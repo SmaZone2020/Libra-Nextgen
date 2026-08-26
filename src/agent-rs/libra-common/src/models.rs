@@ -393,16 +393,36 @@ pub struct ProfileTransform {
     pub auth_prefix: String,
 }
 
-fn default_entry_path() -> String { "/api".into() }
-fn default_data_key() -> String { "d".into() }
-fn default_ts_key() -> String { "ts".into() }
-fn default_rand_key() -> String { "r".into() }
-fn default_sign_key() -> String { String::new() }
-fn default_token_key() -> String { "sid".into() }
-fn default_padding_min() -> u32 { 0 }
-fn default_padding_max() -> u32 { 64 }
-fn default_ai_path() -> String { "/v1/chat/completions".into() }
-fn default_auth_prefix() -> String { "sk-".into() }
+fn default_entry_path() -> String {
+    "/api".into()
+}
+fn default_data_key() -> String {
+    "d".into()
+}
+fn default_ts_key() -> String {
+    "ts".into()
+}
+fn default_rand_key() -> String {
+    "r".into()
+}
+fn default_sign_key() -> String {
+    String::new()
+}
+fn default_token_key() -> String {
+    "sid".into()
+}
+fn default_padding_min() -> u32 {
+    0
+}
+fn default_padding_max() -> u32 {
+    64
+}
+fn default_ai_path() -> String {
+    "/v1/chat/completions".into()
+}
+fn default_auth_prefix() -> String {
+    "sk-".into()
+}
 
 impl Default for ProfileTransform {
     fn default() -> Self {
@@ -461,7 +481,9 @@ mod tests {
                 media_type: None,
                 serial_number: None,
             }],
-            ram: Some(RamInfo { total_bytes: 16_000_000_000 }),
+            ram: Some(RamInfo {
+                total_bytes: 16_000_000_000,
+            }),
             displays: vec![],
             motherboard_vendor: None,
             bios_version: None,
@@ -469,9 +491,18 @@ mod tests {
 
         let json = serde_json::to_string(&hw).unwrap();
 
-        assert!(json.contains("\"totalBytes\""), "ram should serialize camelCase: {json}");
-        assert!(json.contains("\"sizeBytes\""), "disk should serialize camelCase: {json}");
-        assert!(json.contains("\"physicalCores\""), "cpu should serialize camelCase: {json}");
+        assert!(
+            json.contains("\"totalBytes\""),
+            "ram should serialize camelCase: {json}"
+        );
+        assert!(
+            json.contains("\"sizeBytes\""),
+            "disk should serialize camelCase: {json}"
+        );
+        assert!(
+            json.contains("\"physicalCores\""),
+            "cpu should serialize camelCase: {json}"
+        );
         assert!(!json.contains("\"total_bytes\""));
     }
 }

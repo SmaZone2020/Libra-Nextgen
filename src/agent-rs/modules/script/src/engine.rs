@@ -23,8 +23,8 @@ pub fn execute(
 
     // 1. Bare runtime.
     let runtime = Runtime::new().map_err(|e| format!("runtime init failed: {}", e))?;
-    let context = rquickjs::Context::full(&runtime)
-        .map_err(|e| format!("context init failed: {}", e))?;
+    let context =
+        rquickjs::Context::full(&runtime).map_err(|e| format!("context init failed: {}", e))?;
 
     context.with(|ctx| {
         // 2. Strip escape hatches (a sandboxed script must not eval new code).

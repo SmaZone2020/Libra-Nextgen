@@ -1,8 +1,8 @@
-use std::pin::Pin;
+use crate::platform::{IPlatformExecutor, InteractiveShellHandle};
 use std::future::Future;
+use std::pin::Pin;
 use tokio::process::Command;
 use tokio::sync::watch;
-use crate::platform::{IPlatformExecutor, InteractiveShellHandle};
 
 pub struct LinuxExecutor {
     shell: String,
@@ -30,10 +30,7 @@ impl IPlatformExecutor for LinuxExecutor {
         cfg!(unix)
     }
 
-    fn execute(
-        &self,
-        command: &str,
-    ) -> Pin<Box<dyn Future<Output = String> + Send + '_>> {
+    fn execute(&self, command: &str) -> Pin<Box<dyn Future<Output = String> + Send + '_>> {
         let shell = self.shell.clone();
         let command = command.to_string();
         Box::pin(async move {
@@ -48,7 +45,11 @@ impl IPlatformExecutor for LinuxExecutor {
                 Ok(out) => {
                     let stdout = String::from_utf8_lossy(&out.stdout).to_string();
                     let stderr = String::from_utf8_lossy(&out.stderr).to_string();
-                    if stdout.is_empty() { stderr } else { stdout }
+                    if stdout.is_empty() {
+                        stderr
+                    } else {
+                        stdout
+                    }
                 }
                 Err(e) => format!("Failed to start process: {}", e),
             }

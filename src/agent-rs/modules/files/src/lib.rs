@@ -1,4 +1,4 @@
-//! Files cloud module 鈥?directory listing, read/write, move/copy, archive ops.
+//! Files cloud module — directory listing, read/write, move/copy, archive ops.
 #![allow(non_snake_case)]
 #![allow(clippy::upper_case_acronyms)]
 
@@ -41,7 +41,8 @@ fn dispatch(input: &str) -> String {
         }
         "drives" => {
             let drives = libra_platform::get_executor().get_drives();
-            let escaped: Vec<String> = drives.iter()
+            let escaped: Vec<String> = drives
+                .iter()
                 .map(|d| format!(r#""{}""#, d.replace('\\', "\\\\")))
                 .collect();
             format!(r#"{{"drives":[{}]}}"#, escaped.join(","))
@@ -49,7 +50,10 @@ fn dispatch(input: &str) -> String {
         "read" => file_ops::FileOps::read_file(path),
         "download" => {
             let offset = v.get("offset").and_then(|o| o.as_u64()).unwrap_or(0);
-            let chunk_size = v.get("chunkSize").and_then(|c| c.as_u64()).unwrap_or(2 * 1024 * 1024) as usize;
+            let chunk_size = v
+                .get("chunkSize")
+                .and_then(|c| c.as_u64())
+                .unwrap_or(2 * 1024 * 1024) as usize;
             file_ops::FileOps::download_chunk(path, offset, chunk_size)
         }
         "write" => {
@@ -73,7 +77,10 @@ fn dispatch(input: &str) -> String {
         }
         "compress" => file_ops::FileOps::compress(path),
         "decompress" => {
-            let dest = v.get("destination").and_then(|d| d.as_str()).map(|s| s.to_string());
+            let dest = v
+                .get("destination")
+                .and_then(|d| d.as_str())
+                .map(|s| s.to_string());
             file_ops::FileOps::decompress(path, dest.as_deref())
         }
         "shortcut" => file_ops::FileOps::create_shortcut(path),
@@ -86,7 +93,9 @@ fn write_output(s: &str, output: *mut u8, output_cap: usize) -> usize {
     let bytes = s.as_bytes();
     let n = bytes.len().min(output_cap);
     if n > 0 && !output.is_null() {
-        unsafe { std::ptr::copy_nonoverlapping(bytes.as_ptr(), output, n); }
+        unsafe {
+            std::ptr::copy_nonoverlapping(bytes.as_ptr(), output, n);
+        }
     }
     n
 }

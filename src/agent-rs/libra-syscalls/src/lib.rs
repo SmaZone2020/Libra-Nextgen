@@ -16,23 +16,23 @@
 pub mod types;
 
 #[cfg(windows)]
-mod ffi;
-#[cfg(windows)]
-mod pe;
-#[cfg(windows)]
 mod extract;
 #[cfg(windows)]
-mod table;
+mod ffi;
 #[cfg(windows)]
-mod stub;
+mod hwbp;
 #[cfg(windows)]
 mod invoke;
 #[cfg(windows)]
-mod spoof;
+mod pe;
 #[cfg(windows)]
 mod sleepobf;
 #[cfg(windows)]
-mod hwbp;
+mod spoof;
+#[cfg(windows)]
+mod stub;
+#[cfg(windows)]
+mod table;
 
 #[cfg(windows)]
 pub use extract::{probe_stub, StubProbe};

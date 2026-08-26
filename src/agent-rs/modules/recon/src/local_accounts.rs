@@ -61,7 +61,11 @@ impl LocalAccountEnumerator {
                     let comment = e.usri2_comment.to_string().unwrap_or_default();
                     let enabled = (e.usri2_flags.0 & UF_ACCOUNTDISABLE.0) == 0;
                     let is_admin = admins.contains(&name.to_lowercase());
-                    let groups = if is_admin { r#"["Administrators"]"# } else { "[]" };
+                    let groups = if is_admin {
+                        r#"["Administrators"]"#
+                    } else {
+                        "[]"
+                    };
                     let sid = user_sid(&name);
 
                     accounts.push(format!(
@@ -177,7 +181,8 @@ fn parse_sid(sid_str: &str) -> Option<windows::Win32::Security::PSID> {
 
     let wide: Vec<u16> = sid_str.encode_utf16().chain(std::iter::once(0)).collect();
     unsafe {
-        let mut sid: windows::Win32::Security::PSID = windows::Win32::Security::PSID(std::ptr::null_mut());
+        let mut sid: windows::Win32::Security::PSID =
+            windows::Win32::Security::PSID(std::ptr::null_mut());
         if ConvertStringSidToSidW(PCWSTR(wide.as_ptr()), &mut sid).is_ok() && !sid.0.is_null() {
             Some(sid)
         } else {
@@ -247,7 +252,13 @@ fn local_group_members(group_name: &str) -> Option<Vec<String>> {
         let mut read: u32 = 0;
         let mut total: u32 = 0;
         let mut resume: usize = 0;
-        let name_pcwstr = PCWSTR(group_name.encode_utf16().chain(std::iter::once(0)).collect::<Vec<u16>>().as_ptr());
+        let name_pcwstr = PCWSTR(
+            group_name
+                .encode_utf16()
+                .chain(std::iter::once(0))
+                .collect::<Vec<u16>>()
+                .as_ptr(),
+        );
 
         let status = NetLocalGroupGetMembers(
             None,
@@ -263,7 +274,8 @@ fn local_group_members(group_name: &str) -> Option<Vec<String>> {
             return None;
         }
 
-        let entries = std::slice::from_raw_parts(buf as *const LOCALGROUP_MEMBERS_INFO_2, read as usize);
+        let entries =
+            std::slice::from_raw_parts(buf as *const LOCALGROUP_MEMBERS_INFO_2, read as usize);
         let mut members = Vec::new();
         for e in entries {
             if let Ok(name) = e.lgrmi2_domainandname.to_string() {
@@ -280,14 +292,20 @@ fn local_group_members(group_name: &str) -> Option<Vec<String>> {
 /// NetUserGetInfoW(level 23) → ConvertSidToStringSidW 获取账户 SID 字符串。
 #[cfg(target_os = "windows")]
 fn user_sid(username: &str) -> String {
+    use windows::Win32::Foundation::LocalFree;
     use windows::Win32::NetworkManagement::NetManagement::*;
     use windows::Win32::Security::Authorization::ConvertSidToStringSidW;
-    use windows::Win32::Foundation::LocalFree;
     use windows_core::PCWSTR;
 
     unsafe {
         let mut buf: *mut u8 = std::ptr::null_mut();
-        let name_pcwstr = PCWSTR(username.encode_utf16().chain(std::iter::once(0)).collect::<Vec<u16>>().as_ptr());
+        let name_pcwstr = PCWSTR(
+            username
+                .encode_utf16()
+                .chain(std::iter::once(0))
+                .collect::<Vec<u16>>()
+                .as_ptr(),
+        );
 
         let status = NetUserGetInfo(None, name_pcwstr, 23, &mut buf);
         if status != 0 || buf.is_null() {
@@ -297,13 +315,17 @@ fn user_sid(username: &str) -> String {
         let mut out: windows_core::PWSTR = windows_core::PWSTR::null();
         let sid = info.usri23_user_sid;
         let sid_str = if ConvertSidToStringSidW(sid, &mut out).is_ok() && !out.is_null() {
-            let len = (0..).take_while(|&i| !out.0.add(i).is_null() && *out.0.add(i) != 0).count();
+            let len = (0..)
+                .take_while(|&i| !out.0.add(i).is_null() && *out.0.add(i) != 0)
+                .count();
             String::from_utf16_lossy(std::slice::from_raw_parts(out.0, len))
         } else {
             String::new()
         };
         if !out.is_null() {
-            let _ = LocalFree(windows::Win32::Foundation::HLOCAL(out.0 as *mut core::ffi::c_void));
+            let _ = LocalFree(windows::Win32::Foundation::HLOCAL(
+                out.0 as *mut core::ffi::c_void,
+            ));
         }
         let _ = NetApiBufferFree(Some(buf as *const core::ffi::c_void));
         sid_str

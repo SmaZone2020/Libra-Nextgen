@@ -33,7 +33,11 @@ impl OtherSoftware {
                 r#"{{"wxid":"{}","path":"{}","fileDirs":[{}]}}"#,
                 escape(&name),
                 escape(&entry.path().to_string_lossy()),
-                month_dirs.iter().map(|d| format!("\"{}\"", escape(d))).collect::<Vec<_>>().join(",")
+                month_dirs
+                    .iter()
+                    .map(|d| format!("\"{}\"", escape(d)))
+                    .collect::<Vec<_>>()
+                    .join(",")
             ));
         }
 

@@ -1,15 +1,15 @@
-//! Recon cloud module 鈥?system/process/window/env/lanscan/bluetooth/local accounts.
+//! Recon cloud module — system/process/window/env/lanscan/bluetooth/local accounts.
 #![allow(non_snake_case)]
 #![allow(clippy::upper_case_acronyms)]
 
-mod env_info;
-mod process_info;
-mod window_info;
-mod lan_scan;
 mod bluetooth_scan;
+mod docker;
+mod env_info;
+mod lan_scan;
 mod local_accounts;
 mod packages;
-mod docker;
+mod process_info;
+mod window_info;
 
 use serde_json::Value;
 
@@ -74,7 +74,9 @@ fn write_output(s: &str, output: *mut u8, output_cap: usize) -> usize {
     let bytes = s.as_bytes();
     let n = bytes.len().min(output_cap);
     if n > 0 && !output.is_null() {
-        unsafe { std::ptr::copy_nonoverlapping(bytes.as_ptr(), output, n); }
+        unsafe {
+            std::ptr::copy_nonoverlapping(bytes.as_ptr(), output, n);
+        }
     }
     n
 }

@@ -62,8 +62,9 @@ impl QQClientKey {
             // [4][5] 对每个 uin 取 clientkey + ptsigx
             let mut results = Vec::with_capacity(accounts.len());
             for acc in accounts {
-                let clientkey =
-                    get_clientkey_on_port(&session, port, &acc.uin, &token).await.unwrap_or_default();
+                let clientkey = get_clientkey_on_port(&session, port, &acc.uin, &token)
+                    .await
+                    .unwrap_or_default();
                 let ptsigx = if clientkey.is_empty() {
                     String::new()
                 } else {
@@ -139,7 +140,11 @@ impl QQClientKey {
                     && len <= 10
                     && !name.is_empty()
                     && name.chars().all(|c| c.is_ascii_digit());
-                if is_qq { Some(name) } else { None }
+                if is_qq {
+                    Some(name)
+                } else {
+                    None
+                }
             })
             .collect();
 
@@ -233,8 +238,12 @@ async fn get_uins_on_port(
         .map_err(|e| e.to_string())?;
     let body = res.text().await.map_err(|e| e.to_string())?;
 
-    let json = extract_regex_json(&body, r"var_sso_uin_list=(\[.*?\]);")
-        .ok_or_else(|| format!("pt_get_uins: unexpected body: {}", &body.chars().take(200).collect::<String>()))?;
+    let json = extract_regex_json(&body, r"var_sso_uin_list=(\[.*?\]);").ok_or_else(|| {
+        format!(
+            "pt_get_uins: unexpected body: {}",
+            &body.chars().take(200).collect::<String>()
+        )
+    })?;
     let value: serde_json::Value = serde_json::from_str(&json).map_err(|e| e.to_string())?;
 
     let accounts = value

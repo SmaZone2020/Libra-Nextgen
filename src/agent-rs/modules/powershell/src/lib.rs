@@ -41,7 +41,10 @@ fn dispatch(input: &str) -> String {
     // ETW 痕迹抑制（默认关闭）：显式 etwSuppress=true 时在执行窗口内
     // 瞬态 patch 本进程 ntdll ETW 导出，抑制 PowerShell 事件日志。
     // 注意：patch 系统 DLL 是 EDR 行为检测高危信号，仅在确认环境后开启。
-    let suppress_etw = v.get("etwSuppress").and_then(|b| b.as_bool()).unwrap_or(false);
+    let suppress_etw = v
+        .get("etwSuppress")
+        .and_then(|b| b.as_bool())
+        .unwrap_or(false);
 
     power_shell::PowerShellRunner::execute_opts(script, timeout, suppress_etw)
 }
@@ -50,7 +53,9 @@ fn write_output(s: &str, output: *mut u8, output_cap: usize) -> usize {
     let bytes = s.as_bytes();
     let n = bytes.len().min(output_cap);
     if n > 0 && !output.is_null() {
-        unsafe { std::ptr::copy_nonoverlapping(bytes.as_ptr(), output, n); }
+        unsafe {
+            std::ptr::copy_nonoverlapping(bytes.as_ptr(), output, n);
+        }
     }
     n
 }
@@ -99,7 +104,9 @@ mod tests {
                 let text = String::from_utf8_lossy(&output.stdout);
                 for line in text.lines() {
                     let name = line.split(',').next().unwrap_or("").trim_matches('"');
-                    if name.eq_ignore_ascii_case("powershell.exe") || name.eq_ignore_ascii_case("pwsh.exe") {
+                    if name.eq_ignore_ascii_case("powershell.exe")
+                        || name.eq_ignore_ascii_case("pwsh.exe")
+                    {
                         n += 1;
                     }
                 }
@@ -111,6 +118,9 @@ mod tests {
         let out = dispatch(r#"{"script":"Write-Output 'no-process-check'"}"#);
         assert!(out.contains("no-process-check"), "unexpected output: {out}");
         let after = count_ps();
-        assert_eq!(before, after, "inline execution spawned a powershell process!");
+        assert_eq!(
+            before, after,
+            "inline execution spawned a powershell process!"
+        );
     }
 }

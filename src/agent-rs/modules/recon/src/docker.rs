@@ -37,7 +37,9 @@ impl Docker {
         }
         // /proc/1/cgroup lists the container runtime path on modern systems.
         if let Ok(content) = std::fs::read_to_string("/proc/1/cgroup") {
-            return content.contains("docker") || content.contains("containerd") || content.contains("kubepods");
+            return content.contains("docker")
+                || content.contains("containerd")
+                || content.contains("kubepods");
         }
         false
     }
@@ -54,7 +56,12 @@ impl Docker {
 
     fn list_containers() -> Vec<String> {
         let out = match std::process::Command::new("docker")
-            .args(["ps", "-a", "--format", "{{.ID}}\t{{.Image}}\t{{.Status}}\t{{.Names}}"])
+            .args([
+                "ps",
+                "-a",
+                "--format",
+                "{{.ID}}\t{{.Image}}\t{{.Status}}\t{{.Names}}",
+            ])
             .stdout(std::process::Stdio::piped())
             .stderr(std::process::Stdio::null())
             .output()

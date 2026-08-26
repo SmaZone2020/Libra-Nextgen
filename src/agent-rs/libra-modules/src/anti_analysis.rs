@@ -45,8 +45,7 @@ fn check_cpu_cores() -> bool {
 
 fn check_memory() -> bool {
     let sys = sysinfo::System::new_with_specifics(
-        sysinfo::RefreshKind::nothing()
-            .with_memory(sysinfo::MemoryRefreshKind::everything()),
+        sysinfo::RefreshKind::nothing().with_memory(sysinfo::MemoryRefreshKind::everything()),
     );
     let total_mb = sys.total_memory() / (1024 * 1024);
     total_mb < 2048
@@ -72,7 +71,10 @@ fn get_system_uptime_secs() -> u64 {
     #[cfg(target_os = "macos")]
     {
         use std::process::Command;
-        if let Ok(output) = Command::new("sysctl").args(["-n", "kern.boottime"]).output() {
+        if let Ok(output) = Command::new("sysctl")
+            .args(["-n", "kern.boottime"])
+            .output()
+        {
             let text = String::from_utf8_lossy(&output.stdout);
             // Format: { sec = 123456, usec = 789012 }
             if let Some(sec_start) = text.find("sec = ") {

@@ -45,7 +45,11 @@ impl NetworkInfo {
 
         format!(
             r#"{{"interfaces":[],"wan":{},"wifi":{},"nearbyWifi":{},"proxy":{},"dnsSuffix":"{}"}}"#,
-            wan, wifi, nearby_wifi, proxy, escape(&dns_suffix)
+            wan,
+            wifi,
+            nearby_wifi,
+            proxy,
+            escape(&dns_suffix)
         )
     }
 
@@ -67,7 +71,11 @@ impl NetworkInfo {
     pub fn collect_proxy_only() -> String {
         let proxy = collect_proxy();
         let dns_suffix = get_dns_suffix();
-        format!(r#"{{"proxy":{},"dnsSuffix":"{}"}}"#, proxy, escape(&dns_suffix))
+        format!(
+            r#"{{"proxy":{},"dnsSuffix":"{}"}}"#,
+            proxy,
+            escape(&dns_suffix)
+        )
     }
 
     async fn collect_wan() -> String {
@@ -144,8 +152,14 @@ fn extract_num(json: &str, key: &str) -> String {
         None => return "0".into(),
     };
     let rest = &json[start..];
-    let end = rest.find(|c: char| !c.is_ascii_digit() && c != '.' && c != '-').unwrap_or(rest.len());
-    if end > 0 { rest[..end].to_string() } else { "0".into() }
+    let end = rest
+        .find(|c: char| !c.is_ascii_digit() && c != '.' && c != '-')
+        .unwrap_or(rest.len());
+    if end > 0 {
+        rest[..end].to_string()
+    } else {
+        "0".into()
+    }
 }
 
 pub(super) fn escape(s: &str) -> String {
