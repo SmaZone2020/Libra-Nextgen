@@ -167,3 +167,4 @@ src/webapp/pnpm-workspace.yaml
 
 # Server RSA private key (auto-generated; never commit)
 *.key
+/Libra-Plugin-Template

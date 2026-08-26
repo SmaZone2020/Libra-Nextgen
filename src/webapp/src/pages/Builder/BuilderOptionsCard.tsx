@@ -127,11 +127,13 @@ export function BuilderOptionsCard({ config, set }: BuilderOptionsCardProps) {
               selectedKey={config.platform}
               onSelectionChange={(key) => set('platform', String(key))}
             >
-              <Tabs.List>
-                <Tabs.Tab id="x64">Win x64<Tabs.Indicator /></Tabs.Tab>
-                <Tabs.Tab id="x86" isDisabled>Win x86<Tabs.Indicator /></Tabs.Tab>
-                <Tabs.Tab id="linux-x64">Linux x64<Tabs.Indicator /></Tabs.Tab>
-              </Tabs.List>
+              <Tabs.ListContainer>
+                <Tabs.List>
+                  <Tabs.Tab id="x64">Win x64<Tabs.Indicator /></Tabs.Tab>
+                  <Tabs.Tab id="x86" isDisabled>Win x86<Tabs.Indicator /></Tabs.Tab>
+                  <Tabs.Tab id="linux-x64">Linux x64<Tabs.Indicator /></Tabs.Tab>
+                </Tabs.List>
+              </Tabs.ListContainer>
             </Tabs>
           </div>
           <div>
@@ -140,10 +142,12 @@ export function BuilderOptionsCard({ config, set }: BuilderOptionsCardProps) {
               selectedKey={config.applicationType}
               onSelectionChange={(key) => set('applicationType', String(key))}
             >
-              <Tabs.List>
-                <Tabs.Tab id="Console">{t('builder.consoleApp')}<Tabs.Indicator /></Tabs.Tab>
-                <Tabs.Tab id="Desktop" isDisabled={isLinux}>{t('builder.desktopApp')}<Tabs.Indicator /></Tabs.Tab>
-              </Tabs.List>
+              <Tabs.ListContainer>
+                <Tabs.List>
+                  <Tabs.Tab id="Console">{t('builder.consoleApp')}<Tabs.Indicator /></Tabs.Tab>
+                  <Tabs.Tab id="Desktop" isDisabled={isLinux}>{t('builder.desktopApp')}<Tabs.Indicator /></Tabs.Tab>
+                </Tabs.List>
+              </Tabs.ListContainer>
             </Tabs>
             <p className="text-xs text-default-500 mt-2">
               {t(config.applicationType === 'Desktop' ? 'builder.desktopAppDesc' : 'builder.consoleAppDesc')}
