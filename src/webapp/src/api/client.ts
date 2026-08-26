@@ -20,23 +20,28 @@ function stripTrailingSlash(url: string): string {
   return url.replace(/\/+$/, '');
 }
 
-function deriveHostOrigin(): string {
-  if (typeof window === 'undefined') return '';
-  const { protocol, hostname, port } = window.location;
+/**
+ * Derive the backend origin from the frontend page location.
+ * Pure function (no global access) so it is unit-testable.
+ */
+export function deriveHostOrigin(location: { protocol: string; hostname: string; port: string }): string {
   // 前端本身由后端托管（同源）→ 直接用同源地址
-  if (port === String(DEFAULT_BACKEND_PORT)) {
-    return window.location.origin;
+  if (location.port === String(DEFAULT_BACKEND_PORT)) {
+    return `${location.protocol}//${location.hostname}:${location.port}`;
   }
   // 否则按前端 hostname 推导后端地址（保持协议一致，如 https 部署）
-  return `${protocol}//${hostname}:${DEFAULT_BACKEND_PORT}`;
+  return `${location.protocol}//${location.hostname}:${DEFAULT_BACKEND_PORT}`;
 }
 
 export function getApiOrigin(): string {
   const stored = localStorage.getItem(API_ORIGIN_KEY)?.trim();
   if (stored) return stripTrailingSlash(stored);
   if (BUILTIN_API_ORIGIN) return stripTrailingSlash(BUILTIN_API_ORIGIN);
-  const derived = deriveHostOrigin();
-  if (derived) return derived;
+  const w = (globalThis as { window?: Window }).window;
+  if (w) {
+    const derived = deriveHostOrigin(w.location);
+    if (derived) return derived;
+  }
   return `http://127.0.0.1:${DEFAULT_BACKEND_PORT}`;
 }
 

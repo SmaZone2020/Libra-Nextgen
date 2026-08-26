@@ -161,7 +161,7 @@ export interface ModuleEntry {
   enabled: boolean;
 }
 
-/** 鏋氫妇骞冲彴妯″潡锛堟枃浠跺悕椹卞姩锛屽惈鎻掍欢 dll锛夛細{name, enabled}[]銆?*/
+/** 枚举平台模块（文件名驱动，含插件 dll）：{name, enabled}[]。*/
 export async function listModules(platform: string): Promise<ModuleEntry[]> {
   const response = await fetch(`${apiBase()}/builder/modules?platform=${encodeURIComponent(platform)}`, {
     headers: { Authorization: `Bearer ${getToken()}` },
@@ -171,7 +171,7 @@ export async function listModules(platform: string): Promise<ModuleEntry[]> {
   return data.modules ?? [];
 }
 
-/** 鍚敤/绂佺敤妯″潡锛堥噸鍛藉悕 .dll 鈫?.dll.disable锛夈€?*/
+/** 启用/禁用模块（重命名 .dll → .dll.disable）。*/
 export async function toggleModule(platform: string, name: string, enabled: boolean): Promise<void> {
   const response = await fetch(`${apiBase()}/builder/modules/toggle`, {
     method: 'POST',
@@ -187,7 +187,7 @@ export async function toggleModule(platform: string, name: string, enabled: bool
   }
 }
 
-// 鈹€鈹€ 娴侀噺浼鎸佷箙鍖栧垪琛?鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
+// ── 流量伪装持久化列表 ────────────────────────────────────────────────
 
 export interface BuildListItem {
   id: string;

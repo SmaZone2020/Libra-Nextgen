@@ -255,3 +255,6 @@ catch (Exception ex)
 }
 
 app.Run();
+
+/// <summary>Exposed for WebApplicationFactory-based integration tests.</summary>
+public partial class Program { }

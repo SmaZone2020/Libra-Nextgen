@@ -6,19 +6,42 @@ on:
   pull_request:
 
 jobs:
+  rust:
+    name: Rust (agent-rs)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: src/agent-rs
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo fmt --all --check
+      - run: cargo test --workspace
+
   dotnet:
     name: .NET (service + common)
     runs-on: ubuntu-latest
+    services:
+      mongo:
+        image: mongo:7
+        ports:
+          - 27017:27017
+    env:
+      LIBRA_TEST_MONGO: mongodb://localhost:27017
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: "10.0.x"
       - run: dotnet build src/service.sln -c Release
+      - run: dotnet format src/service.sln --verify-no-changes --no-restore
       - run: dotnet test src/tests/LibraNextgen.Tests/LibraNextgen.Tests.csproj -c Release --no-build
 
   webapp:
-    name: Webapp (build)
+    name: Webapp (build + test)
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -31,4 +54,6 @@ jobs:
           cache: npm
           cache-dependency-path: src/webapp/package-lock.json
       - run: npm ci
+      - run: npm run typecheck
+      - run: npm run test
       - run: npm run build
