@@ -175,6 +175,27 @@ function main(args) {
 | `whoami()` | 当前用户名 |
 | `log(msg)` | 打印到 Agent 日志（控制台日志流可见） |
 | `__platform()` | 返回 `"windows" | "linux" | "macos" | "unknown"`（运行时平台分支用） |
+| `exec.run(program, args, opts)` | **fork-and-run**：独立子进程执行程序并等待结果（JSON 字符串） |
+| `exec.spawn(program, args, opts)` | 脱胎启动后台进程，立即返回 PID（JSON 字符串） |
+
+**exec（fork-and-run，所有平台通用）——执行程序不脏 Agent 进程**：
+
+```js
+// exec.run —— 等结果；子进程崩溃/超时（自动 kill）不影响 Agent 本体
+var r = JSON.parse(exec.run("/bin/sh", ["-c", "echo $MY_VAR"], {
+    env: { "MY_VAR": "value" },   // 可选
+    cwd: "/tmp",                  // 可选
+    timeoutSeconds: 30            // 可选，默认 30
+}));
+// r = { success:true, exitCode:0, stdout:"value\n", stderr:"", timedOut:false }
+
+// exec.spawn —— 脱胎后台进程（守护模式），立即返回 PID
+var p = JSON.parse(exec.spawn("notepad.exe", [], {}));
+// p = { success:true, pid:4321 }
+```
+
+找不到程序返回 `{success:false,error}` 而非抛异常；opts 三个键均可省略。
+同类能力也可走 MCP `execute_process` / `spawn_process`（forkexec 云模块）。
 
 Windows 专属：
 | API | 说明 |

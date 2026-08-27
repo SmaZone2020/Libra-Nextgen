@@ -87,6 +87,29 @@ The sandbox is a bare QuickJS runtime (no `fetch`/`require`/`console`/`eval`; us
 | `fs.read/write/list/exists` | `cmd` / `powershell` | `shell` / `bash` |
 | `proc.list()/kill(pid)` | `reg_query/set/delete` | `uname` / `hostname` |
 | `env.get` / `whoami` / `log` | `ipconfig` / `wmic` / `tasklist` | `ip_route` / `ss` / `dns` |
+| `exec.run/spawn` (fork-and-run) | | |
+
+### exec: run programs in a child process (fork-and-run, all platforms)
+
+`exec.run(program, args, {env, cwd, timeoutSeconds})` executes a program in a
+**separate child process** and waits for the result (Linux = fork+exec,
+Windows = CreateProcessW); `exec.spawn(program, args, {env, cwd})` starts a
+detached background process and returns its PID immediately. The child is
+isolated from the agent: a crash or hang (auto-killed on timeout) cannot take
+the agent down. Returns a JSON string:
+
+```js
+var r = exec.run("/bin/sh", ["-c", "echo $MY_VAR"], {
+    env: { "MY_VAR": "value" }, cwd: "/tmp", timeoutSeconds: 30
+});
+// {"success":true,"exitCode":0,"stdout":"value\n","stderr":"","timedOut":false}
+
+var p = exec.spawn("notepad.exe", [], {});   // {"success":true,"pid":4321}
+```
+
+A missing program returns `{"success":false,"error":"..."}` instead of
+throwing; the same semantics are available as the `forkexec` cloud module
+(MCP `execute_process`/`spawn_process`).
 
 ### native (cdylib)
 
