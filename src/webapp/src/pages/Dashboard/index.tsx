@@ -132,7 +132,7 @@ export default function Dashboard() {
     <div className="space-y-6">
       <div className="grid gap-4 lg:grid-cols-3">
         {!sponsorDismissed && (
-          <Card className="relative flex h-full w-full min-w-0 flex-col overflow-hidden border border-accent/20 bg-linear-to-br from-accent/12 via-surface to-surface-secondary shadow-lg shadow-accent/10 dark:border-accent/30 dark:from-accent/20 dark:via-surface dark:to-accent/8 dark:shadow-accent/5 lg:min-w-[450px]">
+          <Card className="relative flex h-full w-full min-w-[450px] flex-col overflow-hidden border border-accent/20 bg-linear-to-br from-accent/12 via-surface to-surface-secondary shadow-lg shadow-accent/10 dark:border-accent/30 dark:from-accent/20 dark:via-surface dark:to-accent/8 dark:shadow-accent/5">
             <div
               aria-hidden="true"
               className="pointer-events-none absolute -top-12 -right-12 size-40 rounded-full bg-accent/20 blur-3xl dark:bg-accent/30"
