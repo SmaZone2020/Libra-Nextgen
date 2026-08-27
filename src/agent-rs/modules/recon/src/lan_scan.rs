@@ -119,8 +119,6 @@ fn get_local_subnets() -> Vec<(String, String, String)> {
             .output()
         {
             let text = String::from_utf8_lossy(&output.stdout);
-            let mut current_ip = String::new();
-            let mut current_mask = String::new();
 
             for line in text.lines() {
                 let trimmed = line.trim();
@@ -129,16 +127,11 @@ fn get_local_subnets() -> Vec<(String, String, String)> {
                     if parts.len() >= 2 {
                         let addr = parts[1];
                         if let Some(slash) = addr.find('/') {
-                            current_ip = addr[..slash].to_string();
+                            let ip = addr[..slash].to_string();
                             let prefix: u8 = addr[slash + 1..].parse().unwrap_or(24);
                             let mask = prefix_to_mask(prefix);
-                            current_mask = mask;
-                            if !current_ip.is_empty() {
-                                result.push((
-                                    current_ip.clone(),
-                                    current_mask.clone(),
-                                    current_ip.clone(),
-                                ));
+                            if !ip.is_empty() {
+                                result.push((ip.clone(), mask, ip.clone()));
                             }
                         }
                     }

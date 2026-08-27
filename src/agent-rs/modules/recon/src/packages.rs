@@ -24,13 +24,8 @@ impl Packages {
     #[cfg(target_os = "linux")]
     fn collect_linux() -> String {
         // Order matters: try the most common/cheap probes first.
-        for (probe, parser) in [
-            ("dpkg", Self::parse_dpkg as fn(&str) -> Vec<String>),
-            ("rpm", Self::parse_rpm),
-            ("pacman", Self::parse_pacman),
-            ("apk", Self::parse_apk),
-        ] {
-            if let Some(out) = run(probe, &["--version"]) {
+        for probe in ["dpkg", "rpm", "pacman", "apk"] {
+            if run(probe, &["--version"]).is_some() {
                 // Present — now dump the list.
                 let (list_args, list_parser): (&[&str], fn(&str) -> Vec<String>) = match probe {
                     "dpkg" => (&["-l", "--no-pager"], Self::parse_dpkg),
@@ -185,7 +180,7 @@ impl Packages {
 #[cfg(target_os = "linux")]
 fn run(cmd: &str, args: &[&str]) -> Option<String> {
     std::process::Command::new(cmd)
-        .args(args)
+        .args(args.iter().copied())
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::null())
         .output()

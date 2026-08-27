@@ -161,7 +161,7 @@ impl LocalAccountEnumerator {
 
                     // shadow 优先；读不到时用 shell 判断
                     let (enabled, password_required) = match shadow_map.get(name) {
-                        Some((locked, has_password, _)) => (!locked, has_password),
+                        Some((locked, has_password, _)) => (!locked, *has_password),
                         None => (shell != "/usr/sbin/nologin" && shell != "/bin/false", true),
                     };
                     let full_name = gecos.split(',').next().unwrap_or("");

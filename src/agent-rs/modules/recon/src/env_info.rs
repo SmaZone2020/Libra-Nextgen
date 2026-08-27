@@ -16,18 +16,22 @@ impl EnvInfo {
 
     // 环境变量 set/delete 为后续版本保留（当前入口未启用）
     #[allow(dead_code)]
-    pub fn set(name: &str, value: &str, scope: &str) -> bool {
+    pub fn set(name: &str, value: &str, _scope: &str) -> bool {
         #[cfg(target_os = "windows")]
         {
             use std::os::windows::process::CommandExt;
-            let _target = if scope == "system" { "Machine" } else { "User" };
+            let _target = if _scope == "system" {
+                "Machine"
+            } else {
+                "User"
+            };
             let result = std::process::Command::new("setx")
                 .args([name, value, "/m"])
                 .creation_flags(0x08000000)
                 .stdout(std::process::Stdio::null())
                 .stderr(std::process::Stdio::null())
                 .status();
-            if scope != "system" {
+            if _scope != "system" {
                 // For user scope, run without /m
                 let _ = std::process::Command::new("setx")
                     .args([name, value])
