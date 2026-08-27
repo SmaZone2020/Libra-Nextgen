@@ -2235,6 +2235,7 @@ dependencies = [
 name = "shell-module"
 version = "0.1.0"
 dependencies = [
+ "libra-platform",
  "serde_json",
 ]
 

@@ -87,23 +87,33 @@ fn execute(command: &str, timeout_secs: u64) -> (bool, String) {
         Err(e) => return (false, format!("spawn failed: {}", e)),
     };
 
+    // 立即排空两个管道（读线程），再轮询退出状态：
+    //  - 子进程输出超过管道缓冲（64KB/Windows 更小）时会写满阻塞、永不退出，
+    //    若等退出后才读必然死锁到超时；先读则数据边写边收。
+    //  - 按字节读 + 平台解码：Windows 中文系统 cmd 输出 GBK（OEM 代码页），
+    //    严格 UTF-8 解码（read_to_string）会失败导致输出全空。
+    let stdout = child
+        .stdout
+        .take()
+        .map(|f| std::thread::spawn(move || read_all_bytes(f)));
+    let stderr = child
+        .stderr
+        .take()
+        .map(|f| std::thread::spawn(move || read_all_bytes(f)));
+
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(timeout_secs);
+    let mut exit_success = false;
     loop {
         match child.try_wait() {
             Ok(Some(status)) => {
-                let stdout = child.stdout.take().map(read_all).unwrap_or_default();
-                let stderr = child.stderr.take().map(read_all).unwrap_or_default();
-                let output = if stdout.trim().is_empty() {
-                    stderr
-                } else {
-                    stdout
-                };
-                return (status.success(), output);
+                exit_success = status.success();
+                break;
             }
             Ok(None) => {
                 if std::time::Instant::now() >= deadline {
                     let _ = child.kill();
                     let _ = child.wait();
+                    // kill 后管道 EOF，读线程自然结束。
                     return (false, "command timed out".to_string());
                 }
                 std::thread::sleep(std::time::Duration::from_millis(20));
@@ -111,12 +121,23 @@ fn execute(command: &str, timeout_secs: u64) -> (bool, String) {
             Err(e) => return (false, format!("wait failed: {}", e)),
         }
     }
+
+    let out_stdout = stdout.and_then(|h| h.join().ok()).unwrap_or_default();
+    let out_stderr = stderr.and_then(|h| h.join().ok()).unwrap_or_default();
+    let output = if out_stdout.trim().is_empty() {
+        out_stderr
+    } else {
+        out_stdout
+    };
+    (exit_success, output)
 }
 
-fn read_all<R: std::io::Read>(mut r: R) -> String {
-    let mut buf = String::new();
-    let _ = r.read_to_string(&mut buf);
-    buf
+/// Read a pipe to EOF as bytes and decode with the platform encoding
+/// (Windows OEM code page → UTF-8; elsewhere UTF-8 lossy).
+fn read_all_bytes<R: std::io::Read>(mut r: R) -> String {
+    let mut buf = Vec::new();
+    let _ = r.read_to_end(&mut buf);
+    libra_platform::decode_shell_bytes(&buf)
 }
 
 #[cfg(test)]
@@ -150,5 +171,44 @@ mod tests {
         let result = run(&serde_json::json!({ "command": command }).to_string());
         let parsed: Value = serde_json::from_str(&result).unwrap();
         assert_eq!(parsed["success"], false);
+    }
+
+    /// 大输出（> 管道缓冲 64KB）必须完整回显、不能死锁到超时。
+    /// 回归：旧实现等子进程退出后才读管道，写满缓冲即卡死。
+    #[test]
+    fn run_large_output_does_not_deadlock() {
+        #[cfg(target_os = "windows")]
+        let command = "for /L %i in (1,1,10000) do @echo line %i";
+        #[cfg(not(target_os = "windows"))]
+        let command = "seq 1 20000";
+
+        let result = run(&serde_json::json!({
+            "command": command,
+            "timeoutSeconds": 30,
+        }).to_string());
+        let parsed: Value = serde_json::from_str(&result).unwrap();
+        assert_eq!(parsed["success"], true, "output: {}", parsed["output"]);
+        let output = parsed["output"].as_str().unwrap();
+        assert!(output.contains("line 10000") || output.contains("20000"), "unexpected output");
+        assert!(output.lines().count() >= 10000, "truncated: {} lines", output.lines().count());
+    }
+
+    /// Windows 中文系统：cmd 管道输出是 GBK（OEM 代码页 936），必须经
+    /// decode_shell_bytes 转码，否则严格 UTF-8 解码失败 → 输出全空。
+    /// 回归：ipconfig / dir 等中文输出命令零回显。
+    /// Windows 中文系统：cmd 管道输出可能是 GBK（OEM 936）也可能是 UTF-8
+    /// （取决于父进程 console/代码页环境）——两者都必须正确回显。
+    /// 回归：ipconfig / dir 等中文输出命令零回显。
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn run_chinese_output_is_decoded() {
+        let result = run(&serde_json::json!({ "command": "echo 中文输出测试" }).to_string());
+        let parsed: Value = serde_json::from_str(&result).unwrap();
+        assert_eq!(parsed["success"], true, "output: {}", parsed["output"]);
+        assert!(
+            parsed["output"].as_str().unwrap().contains("中文输出测试"),
+            "output: {}",
+            parsed["output"]
+        );
     }
 }

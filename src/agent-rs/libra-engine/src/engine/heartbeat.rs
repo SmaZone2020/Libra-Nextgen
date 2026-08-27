@@ -165,10 +165,18 @@ fn spawn_self() {
 }
 
 fn wrap_result(task_id: &str, output: &str) -> String {
-    // 失败判定：模块/任务层显式返回 JSON 错误对象。之前用 `!output.contains("\"error\"")`
-    // 会把「命令输出本身含 error 字样」的合法结果误判为失败（如 grep error、echo error）。
+    // 失败判定：模块/任务层显式返回 JSON 错误对象，或显式 success:false
+    // （命令执行失败 exit≠0 时 shell 模块返回 {"success":false,...}）。
+    // 之前用 `!output.contains("\"error\"")` 会把「命令输出本身含 error 字样」
+    // 的合法结果误判为失败；只查 error 键又会把 success:false 误标为成功。
     let success = match serde_json::from_str::<serde_json::Value>(output) {
-        Ok(serde_json::Value::Object(map)) => !map.contains_key("error"),
+        Ok(serde_json::Value::Object(map)) => {
+            !map.contains_key("error")
+                && map
+                    .get("success")
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(true)
+        }
         _ => true,
     };
     serde_json::json!({
