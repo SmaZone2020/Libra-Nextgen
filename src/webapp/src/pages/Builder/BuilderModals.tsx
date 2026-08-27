@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button, Modal, ProgressBar, Spinner } from '@heroui/react';
 import { CircleCheck, CircleXmark } from '@gravity-ui/icons';
+import { Stepper } from '../../components/stepper';
 import type { BuildRecordDetail } from '../../types/models';
 import { APP_TYPE_LABEL, PLATFORM_LABEL, STATUS_LABEL } from './constants';
 
@@ -150,31 +151,46 @@ export function BuilderModals({
               </Modal.Heading>
             </Modal.Header>
             <Modal.Body>
-              {/* 横向步骤时间线 */}
-              <div className="flex items-start justify-between gap-2 pb-2">
+              {/* 横向步骤时间线（HeroUI Stepper） */}
+              <Stepper orientation="horizontal" size="md" className="w-full">
                 {BUILD_STAGES.map((def, i) => {
                   const state = stageStates[i]!;
                   const isCurrent = i === currentStage;
+                  const status: 'inactive' | 'active' | 'complete' =
+                    state === 'done' ? 'complete' : state === 'active' ? 'active' : 'inactive';
                   return (
-                    <div key={def.id} className="flex flex-col items-center gap-1.5 flex-1 min-w-0">
-                      <div className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 border-2 transition-colors ${state === 'done' ? 'bg-success border-success text-white' : state === 'failed' ? 'bg-danger border-danger text-white' : isCurrent ? 'border-primary text-primary' : 'border-default-300 text-default-400'}`}>
-                        {state === 'done' ? (
-                          <CircleCheck className="w-4 h-4" />
-                        ) : state === 'failed' ? (
-                          <CircleXmark className="w-4 h-4" />
-                        ) : isCurrent ? (
-                          <Spinner size="sm" />
-                        ) : (
-                          <span className="text-xs">{i + 1}</span>
-                        )}
-                      </div>
-                      <div className={`text-[11px] leading-tight text-center break-words w-full ${isCurrent ? 'text-primary font-medium' : state === 'done' ? 'text-default-700' : state === 'failed' ? 'text-danger' : 'text-default-400'}`}>
-                        {t(def.labelKey)}
-                      </div>
-                    </div>
+                    <Stepper.Step key={def.id} status={status}>
+                      <Stepper.StepButton>
+                        <Stepper.Indicator>
+                          {state === 'done' ? (
+                            <Stepper.Icon><CircleCheck className="w-4 h-4" /></Stepper.Icon>
+                          ) : state === 'failed' ? (
+                            <Stepper.Icon><CircleXmark className="w-4 h-4" /></Stepper.Icon>
+                          ) : isCurrent ? (
+                            <Spinner size="sm" />
+                          ) : (
+                            <Stepper.Icon><span className="text-xs">{i + 1}</span></Stepper.Icon>
+                          )}
+                        </Stepper.Indicator>
+                        <Stepper.Content>
+                          <Stepper.Title>{t(def.labelKey)}</Stepper.Title>
+                        </Stepper.Content>
+                      </Stepper.StepButton>
+                      {i < BUILD_STAGES.length - 1 && (
+                        <Stepper.Separator
+                          progress={
+                            state === 'done' || (failed && isCurrent)
+                              ? 1
+                              : state === 'active'
+                                ? 0.5
+                                : 0
+                          }
+                        />
+                      )}
+                    </Stepper.Step>
                   );
                 })}
-              </div>
+              </Stepper>
 
               {/* 状态明细 */}
               <div className="flex items-center gap-2 text-sm my-3">
