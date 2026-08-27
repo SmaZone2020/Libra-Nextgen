@@ -21,7 +21,8 @@ public class ProxyController : ControllerBase
     /// <summary>任务化 relay：返回 agent 输出 JSON 文本（字符串）。</summary>
     private async Task<string?> RelayAsync(string agentId, object data, CancellationToken ct)
     {
-        return await _relay.RelayAndWaitAsync(agentId, "proxy", data, ct);
+        return await _relay.RelayAndWaitAsync(agentId, "proxy", data, ct,
+            createdBy: User.Identity?.Name ?? "system-relay");
     }
 
     [HttpPost("{agentId}/fetch")]

@@ -23,7 +23,7 @@ public sealed class BuilderTools
             r.CreatedAt,
             r.CompletedAt,
         });
-        return JsonSerializer.Serialize(items);
+        return McpUtils.Limit(JsonSerializer.Serialize(items));
     }
 
     [McpServerTool, Description("Get build status, error and live logs for a specific build")]
@@ -39,7 +39,7 @@ public sealed class BuilderTools
             ? job.GetLogs()
             : null;
 
-        return JsonSerializer.Serialize(new
+        return McpUtils.Limit(JsonSerializer.Serialize(new
         {
             record.Id,
             record.Platform,
@@ -50,6 +50,6 @@ public sealed class BuilderTools
             record.CreatedAt,
             record.CompletedAt,
             liveLogs = logs,
-        });
+        }));
     }
 }

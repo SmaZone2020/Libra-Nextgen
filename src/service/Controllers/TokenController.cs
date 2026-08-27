@@ -25,7 +25,8 @@ public class TokenController : ControllerBase
         string agentId, object data, CancellationToken ct, int timeoutSeconds = 30)
     {
         // 任务化 relay：token 模块 + op。
-        var response = await _relay.RelayAndWaitAsync(agentId, "token", data, ct, TimeSpan.FromSeconds(timeoutSeconds));
+        var response = await _relay.RelayAndWaitAsync(agentId, "token", data, ct,
+            TimeSpan.FromSeconds(timeoutSeconds), createdBy: User.Identity?.Name ?? "system-relay");
         if (response == null)
             return StatusCode(504, new { error = "Agent did not respond in time." });
         return Content(response, "application/json");

@@ -64,7 +64,7 @@ public class TasksController : ControllerBase
             return Forbid();
 
         var username = User.Identity?.Name ?? "unknown";
-        var task = await _taskService.CreateAsync(request, username, ct);
+        var task = await _taskService.CreateAsync(request, username, User.IsInRole("Admin"), ct);
         return CreatedAtAction(nameof(GetById), new { id = task.Id }, task);
     }
 

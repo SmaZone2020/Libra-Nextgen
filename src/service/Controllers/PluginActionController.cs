@@ -85,12 +85,13 @@ public class PluginActionController : ControllerBase
                 entry = def.Module.Entry ?? "main",
                 args = input,
                 features = new string[0],
-            }, ct);
+            }, ct, createdBy: User.Identity?.Name ?? "system-relay");
         }
         else
         {
             // 任务化 relay：native 模块（files/recon/creds/proxy/token/…）
-            result = await _relay.RelayAndWaitAsync(agentId, def.Module.Name, input, ct);
+            result = await _relay.RelayAndWaitAsync(agentId, def.Module.Name, input, ct,
+                createdBy: User.Identity?.Name ?? "system-relay");
         }
 
         if (result == null)

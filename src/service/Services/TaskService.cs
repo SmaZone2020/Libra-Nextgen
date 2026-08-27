@@ -1,4 +1,5 @@
 using System.Linq.Expressions;
+using LibraNextgen.Common.Authorization;
 using LibraNextgen.Common.Models;
 using LibraNextgen.Service.Data;
 using MongoDB.Driver;
@@ -63,8 +64,17 @@ public class TaskService
         return await _tasks.GetByIdAsync(id, ct);
     }
 
-    public async Task<AgentTask> CreateAsync(TaskCreateRequest request, string createdBy, CancellationToken ct = default)
+    /// <summary>
+    /// Create a task. Admin-gated command types (Kill, KillAndClean, Restart,
+    /// LocalAccounts) are rejected for non-admin callers regardless of entry
+    /// point (REST controller or MCP) — this is the single enforcement chokepoint.
+    /// </summary>
+    public async Task<AgentTask> CreateAsync(TaskCreateRequest request, string createdBy, bool isAdmin, CancellationToken ct = default)
     {
+        if (CommandAuthorization.RequiresAdmin(request.CommandType) && !isAdmin)
+            throw new UnauthorizedAccessException(
+                $"command type '{request.CommandType}' requires an Admin");
+
         var task = new AgentTask
         {
             AgentId = request.AgentId,
@@ -110,6 +120,17 @@ public class TaskService
     {
         var update = Builders<AgentTask>.Update.Set(t => t.Status, TaskStatus.Cancelled);
         return await _tasks.UpdateOneAsync(t => t.AgentId == agentId && t.Status == TaskStatus.Pending, update, ct);
+    }
+
+    /// <summary>
+    /// Soft-cancel a single pending task (record is kept for audit/retrospection,
+    /// unlike a hard delete). No-op when the task is not found or already
+    /// dispatched to the agent.
+    /// </summary>
+    public async Task<long> CancelPendingByIdAsync(string id, CancellationToken ct = default)
+    {
+        var update = Builders<AgentTask>.Update.Set(t => t.Status, TaskStatus.Cancelled);
+        return await _tasks.UpdateOneAsync(t => t.Id == id && t.Status == TaskStatus.Pending, update, ct);
     }
 
     public async Task<long> DeleteAsync(string id, CancellationToken ct = default)

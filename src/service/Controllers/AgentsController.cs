@@ -100,7 +100,7 @@ public class AgentsController : ControllerBase
                 CommandType = CommandType.KillAndClean,
                 Command = "kill_and_clean",
                 TimeoutSeconds = 5,
-            }, username, ct);
+            }, username, isAdmin: true, ct);
             count++;
         }
 
