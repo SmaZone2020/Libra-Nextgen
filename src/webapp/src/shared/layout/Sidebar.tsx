@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { ComponentType, MouseEvent, ReactNode, SVGProps } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { Bars, ChevronDown, Xmark } from '@gravity-ui/icons';
+import { LayoutSideContentLeft, ChevronDown } from '@gravity-ui/icons';
 import { Button, Dropdown, Label, Tooltip } from '@heroui/react';
 import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate } from 'react-router-dom';
@@ -69,7 +69,8 @@ export function Sidebar({
         <div className="flex flex-col h-full p-4 overflow-hidden">
           <div
             className={`flex items-center mb-6 transition-all duration-300 ${
-              collapsed ? 'justify-center' : 'justify-between'
+              collapsed ? '' : 'justify-between'
+              //justify-center
             }`}
           >
             <AnimatePresence initial={false}>
@@ -83,7 +84,7 @@ export function Sidebar({
                 >
                   <img
                     alt="icon"
-                    className="h-[60px] w-[60px] pointer-events-none object-cover select-none dark:invert"
+                    className="h-[50px] w-[50px] pointer-events-none object-cover select-none dark:invert"
                     loading="lazy"
                     src="/images/icon.webp"
                   />
@@ -101,7 +102,13 @@ export function Sidebar({
                 onPress={() => onToggle(!collapsed)}
                 className="absolute right-4 top-4 z-10"
               >
-                {collapsed ? <Bars className="w-5 h-5" /> : <Xmark className="w-5 h-5" />}
+                {collapsed ? (        
+                  <img
+                    alt="icon"
+                    className="w-8 h-8 object-cover dark:invert"
+                    loading="lazy"
+                    src="/images/icon2.webp"
+                  />) : <LayoutSideContentLeft className="w-5 h-5" />}
               </Button>
               <Tooltip.Content>
                 <p>{collapsed ? t('nav.expandSidebar') : t('nav.collapseSidebar')}</p>
@@ -146,7 +153,7 @@ export function Sidebar({
             <span className="text-2xl font-bold text-neutral-900 dark:text-neutral-100 libre">{brand}</span>
             <Tooltip delay={0}>
               <Button isIconOnly aria-label="Close sidebar" size="sm" variant="ghost" onPress={onMobileClose}>
-                <Xmark className="w-5 h-5" />
+                <LayoutSideContentLeft className="w-5 h-5" />
               </Button>
               <Tooltip.Content>
                 <p>{t('nav.collapseSidebar')}</p>
