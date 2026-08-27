@@ -3,17 +3,13 @@ import {
   apiBase,
   deriveHostOrigin,
   getApiOrigin,
-  hasCustomApiOrigin,
   pingBackend,
   resolveApiOrigin,
-  setApiOrigin,
   setOnAuthFailed,
   setOnNetworkError,
   setOnNetworkRecovered,
   setToken,
 } from './client';
-
-const ORIGIN_KEY = 'api_origin';
 
 const CONSOLE_WINDOW = {
   location: { protocol: 'http:', hostname: 'console.local', port: '5173' },
@@ -48,24 +44,9 @@ describe('resolveApiOrigin (deterministic, explicit window)', () => {
     vi.unstubAllEnvs();
   });
 
-  it('prefers a stored custom origin and strips trailing slashes', () => {
-    localStorage.setItem(ORIGIN_KEY, 'https://c2.example.com:8443///');
-    expect(resolveApiOrigin(CONSOLE_WINDOW)).toBe('https://c2.example.com:8443');
-    expect(hasCustomApiOrigin()).toBe(true);
-  });
-
   it('uses the build-time VITE_API_BASE when set', () => {
     vi.stubEnv('VITE_API_BASE', 'https://builtin.example.com/');
     expect(resolveApiOrigin(CONSOLE_WINDOW)).toBe('https://builtin.example.com');
-  });
-
-  it('clears the custom origin back to derivation', () => {
-    localStorage.setItem(ORIGIN_KEY, 'https://c2.example.com');
-    setApiOrigin(null);
-    expect(hasCustomApiOrigin()).toBe(false);
-    // No window → fallback; with the console window → derived backend origin.
-    expect(resolveApiOrigin(undefined)).toBe('http://127.0.0.1:5270');
-    expect(resolveApiOrigin(CONSOLE_WINDOW)).toBe('http://console.local:5270');
   });
 
   it('falls back to localhost when window is unavailable', () => {
@@ -75,6 +56,12 @@ describe('resolveApiOrigin (deterministic, explicit window)', () => {
   it('derives from the window location when present', () => {
     expect(resolveApiOrigin(CONSOLE_WINDOW)).toBe('http://console.local:5270');
     expect(`${resolveApiOrigin(CONSOLE_WINDOW)}/api`).toBe('http://console.local:5270/api');
+  });
+
+  it('no longer honors a stored custom api_origin', () => {
+    localStorage.setItem('api_origin', 'https://c2.example.com:8443');
+    // 前端不允许更改请求地址：即使旧版本残留 localStorage 也被忽略。
+    expect(resolveApiOrigin(CONSOLE_WINDOW)).toBe('http://console.local:5270');
   });
 });
 

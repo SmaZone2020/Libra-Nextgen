@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button, Card, Input, Label, ListBox, Modal, Surface, Switch, Tabs, TextField } from '@heroui/react';
 import type { Selection } from '@heroui/react';
@@ -6,21 +6,39 @@ import { Check } from '@gravity-ui/icons';
 import i18n, { switchLang } from '../../i18n';
 import { getStoredTheme, applyTheme, type ThemePreference } from '../../utils/theme';
 import { EVENT_TYPE_IDS, getEnabledEventTypes, setEnabledEventTypes } from '../../utils/eventTypes';
-import { getApiOrigin, setApiOrigin, hasCustomApiOrigin } from '../../api/client';
+import { api } from '../../api/client';
 
 const NOTICE_SOUND_KEY = 'notice_sound';
+
+interface ListenerInfo {
+  host: string;
+  port: number;
+  listenUrl: string;
+}
 
 export default function PreferencesTab() {
   const { t } = useTranslation();
   const [lang, setLang] = useState(() => (i18n.language.startsWith('zh') ? 'zh' : 'en'));
   const [theme, setTheme] = useState<ThemePreference>(getStoredTheme());
   const [sound, setSound] = useState(() => localStorage.getItem(NOTICE_SOUND_KEY) !== 'false');
-  const [apiOrigin, setApiOriginInput] = useState(() => localStorage.getItem('api_origin')?.trim() ?? '');
-  const [apiOriginSaved, setApiOriginSaved] = useState(false);
+  const [port, setPort] = useState('');
+  const [portSaved, setPortSaved] = useState(false);
+  const [portError, setPortError] = useState<string | null>(null);
+  const [listener, setListener] = useState<ListenerInfo | null>(null);
 
   // 事件流事件类型选择
   const [eventModalOpen, setEventModalOpen] = useState(false);
   const [selectedEvents, setSelectedEvents] = useState<Selection>(new Set());
+
+  const loadListener = useCallback(async () => {
+    try {
+      const res = await api.get<ListenerInfo>('/settings/listener');
+      setListener(res);
+      setPort(String(res.port));
+    } catch { /* ignore */ }
+  }, []);
+
+  useEffect(() => { loadListener(); }, [loadListener]);
 
   const openEventModal = () => {
     const enabled = getEnabledEventTypes();
@@ -50,17 +68,22 @@ export default function PreferencesTab() {
     localStorage.setItem(NOTICE_SOUND_KEY, String(checked));
   };
 
-  const saveApiOrigin = () => {
-    setApiOrigin(apiOrigin);
-    setApiOriginSaved(true);
-    setTimeout(() => setApiOriginSaved(false), 2000);
-  };
-
-  const resetApiOrigin = () => {
-    setApiOrigin('');
-    setApiOrigin(null);
-    setApiOriginSaved(true);
-    setTimeout(() => setApiOriginSaved(false), 2000);
+  const savePort = async () => {
+    const value = Number(port.trim());
+    if (!Number.isInteger(value) || value < 1 || value > 65535) {
+      setPortError(t('settings.backendPortInvalid'));
+      return;
+    }
+    setPortError(null);
+    try {
+      const res = await api.put<ListenerInfo>('/settings/listener', { port: value });
+      setListener(res);
+      setPort(String(res.port));
+      setPortSaved(true);
+      setTimeout(() => setPortSaved(false), 2000);
+    } catch (err: unknown) {
+      setPortError(err instanceof Error ? err.message : String(err));
+    }
   };
 
   return (
@@ -86,7 +109,9 @@ export default function PreferencesTab() {
             </Tabs.List>
           </Tabs>
         </div>
+      </Card>
 
+      <Card className="p-6 space-y-6">
         <div className="flex items-center justify-between gap-4">
           <div>
             <h3 className="font-semibold">{t('settings.noticeSound')}</h3>
@@ -98,37 +123,37 @@ export default function PreferencesTab() {
             </Switch.Control>
           </Switch>
         </div>
+      </Card>
 
+      <Card className="p-6 space-y-6">
         <div className="flex items-center justify-between gap-4">
           <div>
-            <h3 className="font-semibold">{t('settings.backendAddress')}</h3>
-            <p className="text-sm text-default-500">{t('settings.backendAddressDesc')}</p>
-            <p className="text-xs text-default-400 mt-1">
-              {t('settings.backendAddressCurrent')}：<code className="font-mono">{getApiOrigin()}</code>
-              {hasCustomApiOrigin() && <span className="ml-2 text-accent">({t('settings.backendAddressCustom')})</span>}
-            </p>
+            <h3 className="font-semibold">{t('settings.backendPort')}</h3>
+            <p className="text-sm text-default-500">{t('settings.backendPortDesc')}</p>
+            {listener && (
+              <p className="text-xs text-default-400 mt-1">
+                {t('settings.backendPortCurrent')}：<code className="font-mono">{listener.listenUrl}</code>
+              </p>
+            )}
           </div>
           <div className="flex flex-col items-end gap-2">
             <TextField
               variant="secondary"
-              className="w-80"
-              value={apiOrigin}
+              className="w-40"
+              value={port}
               onChange={(v) => {
-                setApiOriginInput(v);
-                setApiOriginSaved(false);
+                setPort(v);
+                setPortError(null);
+                setPortSaved(false);
               }}
             >
-              <Label className="sr-only">{t('settings.backendAddress')}</Label>
-              <Input placeholder="http://10.0.0.5:5270" />
+              <Label className="sr-only">{t('settings.backendPort')}</Label>
+              <Input placeholder="5270" inputMode="numeric" />
             </TextField>
-            <div className="flex gap-2">
-              <Button size="sm" variant="secondary" isDisabled={!hasCustomApiOrigin()} onPress={resetApiOrigin}>
-                {t('settings.backendAddressReset')}
-              </Button>
-              <Button size="sm" variant="primary" onPress={saveApiOrigin}>
-                {apiOriginSaved ? t('settings.backendAddressSaved') : t('common.save')}
-              </Button>
-            </div>
+            {portError && <p className="text-xs text-danger">{portError}</p>}
+            <Button size="sm" variant="primary" onPress={savePort}>
+              {portSaved ? t('settings.backendPortSaved') : t('common.save')}
+            </Button>
           </div>
         </div>
 

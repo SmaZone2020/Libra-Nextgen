@@ -3,6 +3,8 @@ using System.Text.Json.Serialization;
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Hosting.Server;
+using Microsoft.AspNetCore.Hosting.Server.Features;
 using Microsoft.IdentityModel.Tokens;
 using Scalar.AspNetCore;
 using LibraNextgen.Common.Models;
@@ -14,6 +16,7 @@ using LibraNextgen.Service.Hubs;
 using LibraNextgen.Service.Middleware;
 using LibraNextgen.Service.Models;
 using LibraNextgen.Service.Services;
+using LibraNextgen.Service.Controllers;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -25,6 +28,13 @@ builder.Services.AddSingleton<MongoIndexBuilder>();
 
 // Beacon authentication (shared secret injected at build time)
 builder.Services.Configure<BeaconSettings>(builder.Configuration.GetSection(BeaconSettings.SectionName));
+
+// 监听端口设置（%APPDATA%\Libra-Nextgen\settings.json，可运行时修改）
+var listenerSettings = ListenerSettingsLoader.Load();
+builder.WebHost.ConfigureKestrel(options =>
+{
+    options.ListenAnyIP(listenerSettings.Port);
+});
 
 builder.Services.AddHttpClient();
 
@@ -192,6 +202,33 @@ builder.Services.AddRateLimiter(options =>
 });
 
 var app = builder.Build();
+
+// 端口修改后的重绑委托（由 SettingsController 触发，Program 在 app 就绪后注册）
+SettingsController.RebindListeners = async (listenUrl, ct) =>
+{
+    var server = app.Services.GetRequiredService<IServer>();
+    var addresses = server.Features.Get<IServerAddressesFeature>();
+    if (addresses == null) return;
+    var previous = addresses.Addresses.ToList();
+    addresses.Addresses.Clear();
+    foreach (var addr in previous)
+    {
+        // 把旧地址的端口替换为新端口（http://*:5270 → http://*:新端口）
+        try
+        {
+            var uri = new Uri(addr);
+            var newAddr = $"{uri.Scheme}://{uri.Host}:{new Uri(listenUrl).Port}";
+            addresses.Addresses.Add(newAddr);
+        }
+        catch
+        {
+            addresses.Addresses.Add(listenUrl);
+        }
+    }
+    if (addresses.Addresses.Count == 0)
+        addresses.Addresses.Add(listenUrl);
+    await Task.CompletedTask;
+};
 
 // 全局异常处理：生产环境统一 JSON 响应（不泄露堆栈/内部细节），dev 保留
 // DeveloperExceptionPage 便于排查。异常必须记录到日志（结构化，含 traceId）。

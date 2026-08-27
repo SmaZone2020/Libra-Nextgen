@@ -1,13 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Button, Input, Label, Modal, TextField } from '@heroui/react';
-import { ArrowRotateLeft, Check } from '@gravity-ui/icons';
+import { Button } from '@heroui/react';
+import { ArrowRotateLeft } from '@gravity-ui/icons';
 import {
   getToken,
   pingBackend,
-  setApiOrigin,
   getApiOrigin,
-  hasCustomApiOrigin,
   setOnNetworkError,
   setOnNetworkRecovered,
   apiBase,
@@ -23,26 +21,21 @@ export function NetworkOverlay() {
   const [gaveUp, setGaveUp] = useState(false);
   const [retryCount, setRetryCount] = useState(0);
   const [countdown, setCountdown] = useState(RETRY_INTERVAL / 1000);
-  const [testingUrl, setTestingUrl] = useState(false);
-  const [urlError, setUrlError] = useState('');
-  const [inputValue, setInputValue] = useState(() => getApiOrigin());
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const targetOriginRef = useRef(getApiOrigin());
 
   const clearTimers = () => {
     if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
     if (countdownRef.current) { clearInterval(countdownRef.current); countdownRef.current = null; }
   };
 
-  const stopOffline = (nextOrigin?: string) => {
+  const stopOffline = () => {
     clearTimers();
     setOffline(false);
     setGaveUp(false);
     setRetryCount(0);
     // 恢复在线后清理恢复回调，避免重复触发
     setOnNetworkRecovered(null);
-    if (nextOrigin) targetOriginRef.current = nextOrigin;
   };
 
   const startRetry = () => {
@@ -90,26 +83,6 @@ export function NetworkOverlay() {
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // 临时切换后端地址：写入 localStorage（api_origin 键），立即重连
-  const switchBackend = async (origin: string) => {
-    const trimmed = origin.trim();
-    setUrlError('');
-    setTestingUrl(true);
-    try {
-      const ok = await pingBackend(trimmed);
-      if (!ok) {
-        setUrlError(t('network.switchFailed'));
-        return;
-      }
-      setApiOrigin(trimmed);
-      setInputValue(trimmed);
-      stopOffline(trimmed);
-      consoleWs.connect();
-    } finally {
-      setTestingUrl(false);
-    }
-  };
-
   if (!offline) return null;
 
   return (
@@ -131,6 +104,9 @@ export function NetworkOverlay() {
             <p className="text-xs text-neutral-400">
               {t('network.attempt', { current: retryCount + 1, total: MAX_RETRIES })}
             </p>
+            <p className="text-xs text-neutral-400">
+              {t('network.backend')}：<code className="font-mono">{getApiOrigin()}</code>
+            </p>
           </div>
         ) : (
           <div className="space-y-4 mb-6">
@@ -141,57 +117,6 @@ export function NetworkOverlay() {
             </Button>
           </div>
         )}
-
-        {/* 断线临时改后端地址（存入浏览器 localStorage，等效首选项设置） */}
-        <div className="border-t border-neutral-200 dark:border-neutral-800 pt-4 text-left">
-          <p className="text-sm font-semibold text-neutral-800 dark:text-neutral-100 mb-2">
-            {t('network.switchBackend')}
-          </p>
-          <TextField
-            variant="secondary"
-            className="w-full"
-            value={inputValue}
-            onChange={(v) => { setInputValue(v); setUrlError(''); }}
-          >
-            <Label className="sr-only">{t('network.backendPlaceholder')}</Label>
-            <Input placeholder={t('network.backendPlaceholder')} />
-          </TextField>
-          {urlError && <p className="mt-1 text-xs text-red-500">{urlError}</p>}
-          <p className="mt-1 text-xs text-neutral-400">
-            {t('network.switchHint')}
-            {hasCustomApiOrigin() && (
-              <span className="ml-1 text-accent">({t('network.switchStored')})</span>
-            )}
-          </p>
-          <div className="mt-3 flex gap-2">
-            <Button
-              size="sm"
-              variant="primary"
-              isDisabled={testingUrl || !inputValue.trim()}
-              onPress={() => void switchBackend(inputValue)}
-            >
-              {testingUrl ? t('network.testing') : (
-                <>
-                  <Check className="w-3 h-3" />
-                  {t('network.apply')}
-                </>
-              )}
-            </Button>
-            {hasCustomApiOrigin() && (
-              <Button
-                size="sm"
-                variant="ghost"
-                onPress={() => {
-                  setApiOrigin(null);
-                  setInputValue(getApiOrigin());
-                  setUrlError('');
-                }}
-              >
-                {t('network.reset')}
-              </Button>
-            )}
-          </div>
-        </div>
       </div>
     </div>
   );

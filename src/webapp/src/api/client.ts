@@ -2,16 +2,15 @@
  * API 基址解析（运行时，非编译期）：
  *
  * 优先级（高 → 低）：
- *   1. 首选项 localStorage `api_origin`（用户在 设置 → 首选项 中显式设置）
- *   2. VITE_API_BASE（构建配置文件，.env / vite define）
- *   3. 前端 Host 推导（默认）：取 window.location.hostname，拼后端默认端口 5270；
+ *   1. VITE_API_BASE（构建配置文件，.env / vite define）
+ *   2. 前端 Host 推导（默认）：取 window.location.hostname，拼后端默认端口 5270；
  *      若前端本身就是后端同源（端口 5270，由后端托管），直接用同源 origin
- *   4. 兜底 http://127.0.0.1:5270
+ *   3. 兜底 http://127.0.0.1:5270
  *
- * 通过 getApiOrigin() 每次调用实时解析，修改首选项后无需刷新即可生效。
+ * 后端监听端口由 设置 → 首选项 修改（服务端设置，非前端可改的请求地址）。
+ * 通过 getApiOrigin() 每次调用实时解析。
  */
 
-const API_ORIGIN_KEY = 'api_origin';
 const DEFAULT_BACKEND_PORT = 5270;
 
 /** Build-time base override; read lazily so tests can stub it per-case. */
@@ -40,18 +39,15 @@ export function deriveHostOrigin(location: { protocol: string; hostname: string;
  * Resolve the API origin with an explicit window handle.
  *
  * Priority (high → low):
- *   1. stored preference (localStorage `api_origin`)
- *   2. build-time VITE_API_BASE
- *   3. derive from the page location (same-origin when served by the backend)
- *   4. fallback http://127.0.0.1:5270
+ *   1. build-time VITE_API_BASE
+ *   2. derive from the page location (same-origin when served by the backend)
+ *   3. fallback http://127.0.0.1:5270
  *
  * Exported so tests can pass a deterministic window regardless of whether
  * the test runner exposes the jsdom global to the module scope (this differs
  * across platforms/versions).
  */
 export function resolveApiOrigin(win?: Window | undefined): string {
-  const stored = localStorage.getItem(API_ORIGIN_KEY)?.trim();
-  if (stored) return stripTrailingSlash(stored);
   const builtin = builtinApiOrigin();
   if (builtin) return stripTrailingSlash(builtin);
   if (win) {
@@ -63,18 +59,6 @@ export function resolveApiOrigin(win?: Window | undefined): string {
 
 export function getApiOrigin(): string {
   return resolveApiOrigin((globalThis as { window?: Window }).window);
-}
-
-/** 用户在首选项中设置自定义后端地址；传空/null 清除 → 恢复默认解析。 */
-export function setApiOrigin(url: string | null | undefined): void {
-  const value = url?.trim();
-  if (value) localStorage.setItem(API_ORIGIN_KEY, stripTrailingSlash(value));
-  else localStorage.removeItem(API_ORIGIN_KEY);
-}
-
-/** 当前是否被首选项覆盖（区别于默认解析）。 */
-export function hasCustomApiOrigin(): boolean {
-  return Boolean(localStorage.getItem(API_ORIGIN_KEY)?.trim());
 }
 
 export function apiBase(): string {
