@@ -68,9 +68,13 @@ export function TrafficChart({ trafficData, agentIds, agentHosts, range, onRange
     <Card className="w-full rounded-2xl">
       <Card.Header>
         <Card.Title className="text-base">{t('dashboard.traffic')}</Card.Title>
-        {/* 时间范围切换：Tabs（14天/7天/3天/今日/12小时） */}
+      </Card.Header>
+      {/* Tabs 与图表横向排列：左侧竖排时间范围 Tabs，右侧图表 */}
+      <Card.Content className="flex flex-row items-stretch gap-4">
         <Tabs
           selectedKey={range}
+          orientation="vertical"
+          className="shrink-0"
           onSelectionChange={(key) => onRangeChange(key as TimeRange)}
         >
           <Tabs.ListContainer>
@@ -84,78 +88,78 @@ export function TrafficChart({ trafficData, agentIds, agentHosts, range, onRange
             </Tabs.List>
           </Tabs.ListContainer>
         </Tabs>
-      </Card.Header>
-      <Card.Content>
-        <ComposedChart data={trafficData} height={300}>
-          <ComposedChart.Grid vertical={false} />
-          <ComposedChart.XAxis dataKey="time" tickMargin={8} />
-          <ComposedChart.YAxis
-            tickFormatter={(v: number) => formatBytes(v, t)}
-            width={60}
-          />
-          {visibleAgentIds.map((id, i) => (
-            <ComposedChart.Line
-              key={id}
-              dataKey={id}
-              dot={false}
-              hide={hidden.has(id)}
-              name={agentHosts[id] ?? id.slice(0, 8)}
-              stroke={AGENT_COLORS[i % AGENT_COLORS.length]}
-              strokeWidth={2}
-              type="monotone"
-              connectNulls
+        <div className="flex min-w-0 flex-1 flex-col">
+          <ComposedChart data={trafficData} height={300}>
+            <ComposedChart.Grid vertical={false} />
+            <ComposedChart.XAxis dataKey="time" tickMargin={8} />
+            <ComposedChart.YAxis
+              tickFormatter={(v: number) => formatBytes(v, t)}
+              width={60}
             />
-          ))}
-          <ComposedChart.Tooltip
-            content={({ active, label, payload }) => {
-              if (!active || !payload?.length) return null;
+            {visibleAgentIds.map((id, i) => (
+              <ComposedChart.Line
+                key={id}
+                dataKey={id}
+                dot={false}
+                hide={hidden.has(id)}
+                name={agentHosts[id] ?? id.slice(0, 8)}
+                stroke={AGENT_COLORS[i % AGENT_COLORS.length]}
+                strokeWidth={2}
+                type="monotone"
+                connectNulls
+              />
+            ))}
+            <ComposedChart.Tooltip
+              content={({ active, label, payload }) => {
+                if (!active || !payload?.length) return null;
 
-              // Hover 时只显示该时间点流量 > 0 的设备
-              const nonzero = payload.filter((p) => Number(p.value) > 0);
-              if (!nonzero.length) return null;
+                // Hover 时只显示该时间点流量 > 0 的设备
+                const nonzero = payload.filter((p) => Number(p.value) > 0);
+                if (!nonzero.length) return null;
 
+                return (
+                  <ChartTooltip>
+                    <ChartTooltip.Header>{label}</ChartTooltip.Header>
+                    {nonzero.map((entry) => (
+                      <ChartTooltip.Item key={String(entry.dataKey)}>
+                        <ChartTooltip.Indicator
+                          color={entry.color ?? entry.fill ?? entry.stroke}
+                        />
+                        <ChartTooltip.Label>{entry.name}</ChartTooltip.Label>
+                        <ChartTooltip.Value>
+                          {formatBytes(Number(entry.value), t)}
+                        </ChartTooltip.Value>
+                      </ChartTooltip.Item>
+                    ))}
+                  </ChartTooltip>
+                );
+              }}
+            />
+          </ComposedChart>
+
+          {/* Agent legend below chart：区间内流量为 0 的设备不显示 */}
+          <div className="flex flex-wrap items-center gap-3 mt-3">
+            {visibleAgentIds.map((id, i) => {
+              const active = !hidden.has(id);
               return (
-                <ChartTooltip>
-                  <ChartTooltip.Header>{label}</ChartTooltip.Header>
-                  {nonzero.map((entry) => (
-                    <ChartTooltip.Item key={String(entry.dataKey)}>
-                      <ChartTooltip.Indicator
-                        color={entry.color ?? entry.fill ?? entry.stroke}
-                      />
-                      <ChartTooltip.Label>{entry.name}</ChartTooltip.Label>
-                      <ChartTooltip.Value>
-                        {formatBytes(Number(entry.value), t)}
-                      </ChartTooltip.Value>
-                    </ChartTooltip.Item>
-                  ))}
-                </ChartTooltip>
+                <Button
+                  key={id}
+                  size="sm"
+                  variant="ghost"
+                  className={`gap-1.5 px-1.5 text-xs ${active ? 'opacity-100' : 'opacity-30'}`}
+                  onPress={() => toggleAgent(id)}
+                >
+                  <span
+                    className="size-3 rounded-full shrink-0"
+                    style={{ backgroundColor: AGENT_COLORS[i % AGENT_COLORS.length] }}
+                  />
+                  <span className={active ? 'text-neutral-600' : 'text-neutral-400 line-through'}>
+                    {agentHosts[id] ?? id.slice(0, 8)}
+                  </span>
+                </Button>
               );
-            }}
-          />
-        </ComposedChart>
-
-        {/* Agent legend below chart：区间内流量为 0 的设备不显示 */}
-        <div className="flex flex-wrap items-center gap-3 mt-3">
-          {visibleAgentIds.map((id, i) => {
-            const active = !hidden.has(id);
-            return (
-            <Button
-              key={id}
-              size="sm"
-              variant="ghost"
-              className={`gap-1.5 px-1.5 text-xs ${active ? 'opacity-100' : 'opacity-30'}`}
-              onPress={() => toggleAgent(id)}
-            >
-                <span
-                  className="size-3 rounded-full shrink-0"
-                  style={{ backgroundColor: AGENT_COLORS[i % AGENT_COLORS.length] }}
-                />
-              <span className={active ? 'text-neutral-600' : 'text-neutral-400 line-through'}>
-                {agentHosts[id] ?? id.slice(0, 8)}
-              </span>
-            </Button>
-            );
-          })}
+            })}
+          </div>
         </div>
       </Card.Content>
     </Card>
