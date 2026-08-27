@@ -93,8 +93,8 @@ export default function PreferencesTab() {
           <h3 className="font-semibold">{t('settings.language')}</h3>
           <Tabs selectedKey={lang} onSelectionChange={(key) => handleLang(String(key))}>
             <Tabs.List>
-              <Tabs.Tab id="zh">{t('settings.languageZh')}<Tabs.Indicator /></Tabs.Tab>
-              <Tabs.Tab id="en">English<Tabs.Indicator /></Tabs.Tab>
+              <Tabs.Tab id="zh" className="w-30">简体中文<Tabs.Indicator /></Tabs.Tab>
+              <Tabs.Tab id="en" className="w-30">English<Tabs.Indicator /></Tabs.Tab>
             </Tabs.List>
           </Tabs>
         </div>
