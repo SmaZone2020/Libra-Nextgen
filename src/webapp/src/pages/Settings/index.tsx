@@ -2,8 +2,8 @@
 
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useParams } from 'react-router-dom';
-import { Button, Chip } from '@heroui/react';
+import { useParams, useNavigate } from 'react-router-dom';
+import { Button, Chip, Tabs } from '@heroui/react';
 import type { ComponentType, SVGProps } from 'react';
 import {
   ChevronRight,
@@ -86,12 +86,13 @@ export function getVisibleSettingRoutes(): SettingRoute[] {
 
 export function SettingDetail() {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const { settingId } = useParams<{ settingId: string }>();
   const route = getVisibleSettingRoutes().find((r) => r.id === settingId);
   if (!route) return null;
   return (
     <div className="space-y-4">
-      <Button variant="ghost" size="sm" onPress={() => window.history.back()}>
+      <Button variant="ghost" size="sm" onPress={() => navigate('/settings')}>
         ← {t('settings.securityBack')}
       </Button>
       {route.render()}
@@ -101,53 +102,71 @@ export function SettingDetail() {
 
 export default function SettingsPage() {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const isAdmin = getStoredUser()?.role === 'Admin';
-  const [activeId, setActiveId] = useState<string | null>(null);
+  const [activeId, setActiveId] = useState<string>('preferences');
 
   const visibleRoutes = SETTING_ROUTES.filter((r) => !r.adminOnly || isAdmin);
-  const active = visibleRoutes.find((r) => r.id === activeId);
-
-  if (active) {
-    return (
-      <div className="space-y-4">
-        <Button variant="ghost" size="sm" onPress={() => setActiveId(null)}>
-          ← {t('settings.securityBack')}
-        </Button>
-        {active.render()}
-      </div>
-    );
-  }
 
   return (
     <div className="space-y-3">
-      <div>
-        <h2 className="text-xl font-semibold">{t('settings.tabsLabel')}</h2>
-        <p className="text-sm text-default-500">{t('settings.securityRoutesDesc')}</p>
+      {/* 移动端：Item Card 路由列表 → /settings/:id */}
+      <div className="sm:hidden">
+        <div>
+          <h2 className="text-xl font-semibold">{t('settings.tabsLabel')}</h2>
+          <p className="text-sm text-default-500">{t('settings.securityRoutesDesc')}</p>
+        </div>
+        <div className="mt-3 flex flex-col gap-3">
+          {visibleRoutes.map((route) => {
+            const Icon = route.icon;
+            return (
+              <button
+                key={route.id}
+                type="button"
+                onClick={() => navigate(`/settings/${route.id}`)}
+                className="flex w-full items-center gap-3 rounded-2xl bg-surface p-4 text-left shadow-surface transition-colors hover:bg-surface-secondary"
+              >
+                <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-default/10 text-foreground">
+                  <Icon className="size-4" />
+                </span>
+                <span className="flex min-w-0 flex-1 flex-col">
+                  <span className="text-sm font-medium text-foreground">{t(route.labelKey)}</span>
+                  <span className="text-xs text-muted">{t(route.descKey)}</span>
+                </span>
+                {route.adminOnly && (
+                  <Chip size="sm" variant="soft">Admin</Chip>
+                )}
+                <ChevronRight className="size-4 shrink-0 text-muted" />
+              </button>
+            );
+          })}
+        </div>
       </div>
-      <div className="flex flex-col gap-3">
-        {visibleRoutes.map((route) => {
-          const Icon = route.icon;
-          return (
-            <button
-              key={route.id}
-              type="button"
-              onClick={() => setActiveId(route.id)}
-              className="flex w-full items-center gap-3 rounded-2xl bg-surface p-4 text-left shadow-surface transition-colors hover:bg-surface-secondary"
-            >
-              <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-default/10 text-foreground">
-                <Icon className="size-4" />
-              </span>
-              <span className="flex min-w-0 flex-1 flex-col">
-                <span className="text-sm font-medium text-foreground">{t(route.labelKey)}</span>
-                <span className="text-xs text-muted">{t(route.descKey)}</span>
-              </span>
-              {route.adminOnly && (
-                <Chip size="sm" variant="soft">Admin</Chip>
-              )}
-              <ChevronRight className="size-4 shrink-0 text-muted" />
-            </button>
-          );
-        })}
+
+      {/* 桌面端：Tabs 竖排切换 */}
+      <div className="hidden sm:block">
+        <Tabs
+          orientation="vertical"
+          selectedKey={activeId}
+          onSelectionChange={(key) => setActiveId(String(key))}
+          className="items-start"
+        >
+          <Tabs.ListContainer className="flex justify-center h-auto self-start">
+            <Tabs.List aria-label={t('settings.tabsLabel')} className="my-0 px-2 w-35">
+              {visibleRoutes.map((route) => (
+                <Tabs.Tab key={route.id} id={route.id}>
+                  {t(route.labelKey)}
+                  <Tabs.Indicator />
+                </Tabs.Tab>
+              ))}
+            </Tabs.List>
+          </Tabs.ListContainer>
+          {visibleRoutes.map((route) => (
+            <Tabs.Panel key={route.id} id={route.id}>
+              {route.render()}
+            </Tabs.Panel>
+          ))}
+        </Tabs>
       </div>
     </div>
   );
