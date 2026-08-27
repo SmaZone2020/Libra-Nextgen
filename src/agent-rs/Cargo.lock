@@ -2121,6 +2121,7 @@ name = "script-module"
 version = "0.1.0"
 dependencies = [
  "libra-common",
+ "libra-platform",
  "libra-psinline",
  "rquickjs",
  "serde_json",

