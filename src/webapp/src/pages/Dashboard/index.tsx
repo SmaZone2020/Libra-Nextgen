@@ -194,7 +194,7 @@ export default function Dashboard() {
       )}
 
       <Modal.Backdrop isOpen={donateOpen} onOpenChange={setDonateOpen}>
-        <Modal.Container size="sm">
+        <Modal.Container size="sm" placement="center">
           <Modal.Dialog>
             <Modal.CloseTrigger />
             <Modal.Header>
