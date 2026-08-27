@@ -60,11 +60,17 @@ export function LocalAccountsTab({ agentId }: Props) {
     setLoading(true);
     setError(null);
     try {
-      const task = await createTask({ agentId, commandType: 'LocalAccounts', command: '' });
+      // 账户枚举在 Windows 上可能较慢（NetUserEnum 全量），任务超时放宽到 90s。
+      const task = await createTask({
+        agentId,
+        commandType: 'LocalAccounts',
+        command: '',
+        timeoutSeconds: 90,
+      });
       const taskId = task.id;
 
-      for (let i = 0; i < 30; i++) {
-        await new Promise((r) => setTimeout(r, 1000));
+      for (let i = 0; i < 90; i++) {
+        await new Promise((r) => setTimeout(r, 1500));
         try {
           const t = await getTask(taskId);
           if (t.status === 'Completed' || t.status === 'Failed') {
@@ -136,13 +142,14 @@ export function LocalAccountsTab({ agentId }: Props) {
             <Table.ScrollContainer>
               <Table.Content
                 aria-label={t('system.localAccounts')}
-                className="min-w-[600px]"
+                className="min-w-[720px]"
               >
                 <Table.Header>
                   <Table.Column isRowHeader>{t('system.accountName')}</Table.Column>
                   <Table.Column>{t('system.description')}</Table.Column>
                   <Table.Column>{t('system.lastLogon')}</Table.Column>
                   <Table.Column>{t('system.administrator')}</Table.Column>
+                  <Table.Column>{t('system.enabled')}</Table.Column>
                 </Table.Header>
                 <Table.Body>
                   {rows.map((a) => (
@@ -155,6 +162,11 @@ export function LocalAccountsTab({ agentId }: Props) {
                         <Table.Cell>
                           <Chip size="sm" variant="soft" color={a.isAdmin ? 'warning' : 'default'}>
                             {a.isAdmin ? t('common.yes') : t('common.no')}
+                          </Chip>
+                        </Table.Cell>
+                        <Table.Cell>
+                          <Chip size="sm" variant="soft" color={a.Enabled ? 'success' : 'danger'}>
+                            {a.Enabled ? t('system.enabled') : t('system.disabled')}
                           </Chip>
                         </Table.Cell>
                       </Table.Row>

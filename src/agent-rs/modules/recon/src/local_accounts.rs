@@ -4,8 +4,9 @@ impl LocalAccountEnumerator {
     pub async fn enumerate() -> String {
         #[cfg(target_os = "windows")]
         {
-            // 原生 netapi32 枚举（无子进程——进程面收敛二期，
-            // powershell.exe / wmic / net 子进程已全部移除）
+            // 原生 netapi32 枚举（无子进程）：NetUserEnum(level 2) 单次取回全部
+            // 账户 + last_logon/acct_expires 等字段，管理员组一次 NetLocalGroupGetMembers。
+            // 不再逐账户 NetUserGetInfo（旧实现每账户一次 RPC，账户多时极慢）。
             Self::enumerate_native()
         }
         #[cfg(not(target_os = "windows"))]
@@ -14,7 +15,7 @@ impl LocalAccountEnumerator {
         }
     }
 
-    /// NetUserEnum + NetLocalGroupGetMembers（netapi32，locale-independent）。
+    /// NetUserEnum(level 2) + NetLocalGroupGetMembers（locale-independent，单次往返）。
     #[cfg(target_os = "windows")]
     fn enumerate_native() -> String {
         use windows::Win32::NetworkManagement::NetManagement::*;
@@ -60,30 +61,45 @@ impl LocalAccountEnumerator {
                     let full_name = e.usri2_full_name.to_string().unwrap_or_default();
                     let comment = e.usri2_comment.to_string().unwrap_or_default();
                     let enabled = (e.usri2_flags.0 & UF_ACCOUNTDISABLE.0) == 0;
+                    let passwd_notreqd = (e.usri2_flags.0 & UF_PASSWD_NOTREQD.0) != 0;
                     let is_admin = admins.contains(&name.to_lowercase());
                     let groups = if is_admin {
                         r#"["Administrators"]"#
                     } else {
                         "[]"
                     };
-                    let sid = user_sid(&name);
+
+                    // level 2 自带字段（DWORD 秒 → 兼容 /Date(ms)/ 的 ISO 字符串）
+                    let last_logon = win_time(e.usri2_last_logon);
+                    let acct_expires = if e.usri2_acct_expires == 0 {
+                        "null".to_string()
+                    } else {
+                        win_time(e.usri2_acct_expires)
+                    };
 
                     accounts.push(format!(
-                        r#"{{"Name":"{}","FullName":"{}","Description":"{}","Enabled":{},"isAdmin":{},"sidValue":"{}","groups":{},"PasswordRequired":false,"UserMayChangePassword":false,"LastLogon":null,"AccountExpires":null,"PasswordLastSet":null,"PasswordExpires":null,"ObjectClass":"User","PrincipalSource":"Local"}}"#,
+                        r#"{{"Name":"{}","FullName":"{}","Description":"{}","Enabled":{},"isAdmin":{},"sidValue":"","groups":{},"PasswordRequired":{},"UserMayChangePassword":true,"LastLogon":{},"AccountExpires":{},"PasswordLastSet":null,"PasswordExpires":null,"ObjectClass":"User","PrincipalSource":"Local","numLogons":{},"badPasswordCount":{},"passwordNotRequired":{}}}"#,
                         escape(&name),
                         escape(&full_name),
                         escape(&comment),
                         enabled,
                         is_admin,
-                        escape(&sid),
-                        groups
+                        groups,
+                        !passwd_notreqd,
+                        last_logon,
+                        acct_expires,
+                        e.usri2_num_logons,
+                        e.usri2_bad_pw_count,
+                        passwd_notreqd
                     ));
                 }
             }
             let _ = NetApiBufferFree(Some(buf as *const core::ffi::c_void));
         }
 
-        format!(r#"{{"accounts":[{}]}}"#, accounts.join(","))
+        let mut out = format!(r#"{{"accounts":[{}]}}"#, accounts.join(","));
+        sort_accounts(&mut out);
+        out
     }
 
     #[cfg(not(target_os = "windows"))]
@@ -91,7 +107,7 @@ impl LocalAccountEnumerator {
         let mut accounts = Vec::new();
         let mut admin_users = std::collections::HashSet::new();
 
-        // Check /etc/group for sudo/wheel membership
+        // /etc/group：sudo/wheel/root 组成员 → 管理员
         if let Ok(content) = std::fs::read_to_string("/etc/group") {
             for line in content.lines() {
                 let parts: Vec<&str> = line.split(':').collect();
@@ -108,33 +124,105 @@ impl LocalAccountEnumerator {
             }
         }
 
+        // /etc/shadow（可选，需 root/可读）：判断锁定与密码状态。
+        // 能读到才使用，读不到降级为 passwd 判断（shell == nologin/false → 禁用）。
+        let shadow = std::fs::read_to_string("/etc/shadow").ok();
+        let mut shadow_map: std::collections::HashMap<String, (bool, bool, bool)> =
+            std::collections::HashMap::new();
+        // (locked, has_password, password_not_required)
+        if let Some(content) = shadow {
+            for line in content.lines() {
+                let parts: Vec<&str> = line.split(':').collect();
+                if parts.len() < 2 || parts[0].is_empty() {
+                    continue;
+                }
+                let pw = parts[1];
+                let locked = pw.starts_with('!') || pw.starts_with('*') || pw.is_empty();
+                let has_password = !pw.is_empty() && !pw.starts_with('!') && pw != "*";
+                shadow_map.insert(
+                    parts[0].to_string(),
+                    (locked, has_password, !has_password && !locked),
+                );
+            }
+        }
+
         if let Ok(content) = std::fs::read_to_string("/etc/passwd") {
             for line in content.lines() {
                 let parts: Vec<&str> = line.split(':').collect();
                 if parts.len() >= 7 {
                     let name = parts[0];
                     let uid: u32 = parts[2].parse().unwrap_or(0);
+                    let gid: u32 = parts[3].parse().unwrap_or(0);
                     let gecos = parts[4];
+                    let home = parts[5];
                     let shell = parts[6];
 
                     let is_admin = uid == 0 || admin_users.contains(name);
-                    let enabled = shell != "/usr/sbin/nologin" && shell != "/bin/false";
+
+                    // shadow 优先；读不到时用 shell 判断
+                    let (enabled, password_required) = match shadow_map.get(name) {
+                        Some((locked, has_password, _)) => (!locked, has_password),
+                        None => (
+                            shell != "/usr/sbin/nologin" && shell != "/bin/false",
+                            true,
+                        ),
+                    };
                     let full_name = gecos.split(',').next().unwrap_or("");
 
                     accounts.push(format!(
-                        r#"{{"Name":"{}","FullName":"{}","Description":"","Enabled":{},"isAdmin":{},"sidValue":"{}","groups":[{}],"PasswordRequired":false,"UserMayChangePassword":false,"LastLogon":null,"AccountExpires":null,"PasswordLastSet":null,"PasswordExpires":null,"ObjectClass":"User","PrincipalSource":"Local"}}"#,
+                        r#"{{"Name":"{}","FullName":"{}","Description":"","Enabled":{},"isAdmin":{},"sidValue":"{}","groups":[{}],"PasswordRequired":{},"UserMayChangePassword":true,"LastLogon":null,"AccountExpires":null,"PasswordLastSet":null,"PasswordExpires":null,"ObjectClass":"User","PrincipalSource":"Local","uid":{},"gid":{},"home":"{}","shell":"{}"}}"#,
                         escape(name),
                         escape(full_name),
                         enabled,
                         is_admin,
                         escape(&format!("S-1-0-{}", uid)),
-                        if is_admin { "\"Administrators\"" } else { "" }
+                        if is_admin { "\"Administrators\"" } else { "" },
+                        password_required,
+                        uid,
+                        gid,
+                        escape(home),
+                        escape(shell)
                     ));
                 }
             }
         }
-        format!(r#"{{"accounts":[{}]}}"#, accounts.join(","))
+
+        let mut out = format!(r#"{{"accounts":[{}]}}"#, accounts.join(","));
+        sort_accounts(&mut out);
+        out
     }
+}
+
+/// 把 JSON 账户数组按（管理员优先、名称升序）重排。
+fn sort_accounts(json: &mut String) {
+    if let Ok(mut v) = serde_json::from_str::<serde_json::Value>(json) {
+        if let Some(arr) = v.get_mut("accounts").and_then(|a| a.as_array_mut()) {
+            arr.sort_by(|a, b| {
+                let admin_a = a.get("isAdmin").and_then(|x| x.as_bool()).unwrap_or(false);
+                let admin_b = b.get("isAdmin").and_then(|x| x.as_bool()).unwrap_or(false);
+                admin_b
+                    .cmp(&admin_a)
+                    .then_with(|| {
+                        a.get("Name")
+                            .and_then(|x| x.as_str())
+                            .unwrap_or("")
+                            .to_lowercase()
+                            .cmp(&b.get("Name").and_then(|x| x.as_str()).unwrap_or("").to_lowercase())
+                    })
+            });
+        }
+        *json = v.to_string();
+    }
+}
+
+/// DWORD 秒（自 1970-01-01）→ 兼容 /Date(ms)/ 的 JSON 字符串；0 → null。
+#[cfg(target_os = "windows")]
+fn win_time(secs: u32) -> String {
+    if secs == 0 || secs == u32::MAX {
+        return "null".to_string();
+    }
+    let ms = (secs as i64) * 1000;
+    format!(r#""/Date({})/""#, ms)
 }
 
 fn escape(s: &str) -> String {
@@ -286,48 +374,5 @@ fn local_group_members(group_name: &str) -> Option<Vec<String>> {
         }
         let _ = NetApiBufferFree(Some(buf as *const core::ffi::c_void));
         Some(members)
-    }
-}
-
-/// NetUserGetInfoW(level 23) → ConvertSidToStringSidW 获取账户 SID 字符串。
-#[cfg(target_os = "windows")]
-fn user_sid(username: &str) -> String {
-    use windows::Win32::Foundation::LocalFree;
-    use windows::Win32::NetworkManagement::NetManagement::*;
-    use windows::Win32::Security::Authorization::ConvertSidToStringSidW;
-    use windows_core::PCWSTR;
-
-    unsafe {
-        let mut buf: *mut u8 = std::ptr::null_mut();
-        let name_pcwstr = PCWSTR(
-            username
-                .encode_utf16()
-                .chain(std::iter::once(0))
-                .collect::<Vec<u16>>()
-                .as_ptr(),
-        );
-
-        let status = NetUserGetInfo(None, name_pcwstr, 23, &mut buf);
-        if status != 0 || buf.is_null() {
-            return String::new();
-        }
-        let info = &*(buf as *const USER_INFO_23);
-        let mut out: windows_core::PWSTR = windows_core::PWSTR::null();
-        let sid = info.usri23_user_sid;
-        let sid_str = if ConvertSidToStringSidW(sid, &mut out).is_ok() && !out.is_null() {
-            let len = (0..)
-                .take_while(|&i| !out.0.add(i).is_null() && *out.0.add(i) != 0)
-                .count();
-            String::from_utf16_lossy(std::slice::from_raw_parts(out.0, len))
-        } else {
-            String::new()
-        };
-        if !out.is_null() {
-            let _ = LocalFree(windows::Win32::Foundation::HLOCAL(
-                out.0 as *mut core::ffi::c_void,
-            ));
-        }
-        let _ = NetApiBufferFree(Some(buf as *const core::ffi::c_void));
-        sid_str
     }
 }
