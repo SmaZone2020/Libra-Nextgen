@@ -1,221 +1,134 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Button, Card, Input, Label, Modal, Spinner, Tabs, Table, TextField } from '@heroui/react';
-import { listAccessKeys, createAccessKey, deleteAccessKey } from '../../api/accessKeys';
-import type { AccessKeyItem, AccessKeyCreateResponse } from '../../api/accessKeys';
-import { useDialog } from '../../hooks/useDialog';
+import { Button, Chip } from '@heroui/react';
+import type { ComponentType, SVGProps } from 'react';
+import {
+  ChevronRight,
+  Globe,
+  Key,
+  Lock,
+  Person,
+  ShieldKeyhole,
+  SlidersVertical,
+} from '@gravity-ui/icons';
 import { getStoredUser } from '../../api/auth';
+import type { ReactNode } from 'react';
 import AccountTab from './AccountTab';
 import PreferencesTab from './PreferencesTab';
 import RiskPolicyTab from './RiskPolicyTab';
 import McpTab from './McpTab';
+import SecurityTab from './SecurityTab';
+import AccessKeysTab from './AccessKeysTab';
 
-function AccessKeysTab() {
+export interface SettingRoute {
+  id: string;
+  labelKey: string;
+  descKey: string;
+  icon: ComponentType<SVGProps<SVGSVGElement>>;
+  adminOnly?: boolean;
+  render: () => ReactNode;
+}
+
+const ROUTES: SettingRoute[] = [
+  {
+    id: 'preferences',
+    labelKey: 'settings.preferencesTab',
+    descKey: 'settings.preferencesDesc',
+    icon: SlidersVertical,
+    render: () => <PreferencesTab />,
+  },
+  {
+    id: 'security',
+    labelKey: 'settings.securityTab',
+    descKey: 'settings.securityDesc',
+    icon: ShieldKeyhole,
+    render: () => <SecurityTab />,
+  },
+  {
+    id: 'accessKeys',
+    labelKey: 'settings.accessKeysTab',
+    descKey: 'settings.accessKeysDesc',
+    icon: Key,
+    render: () => <AccessKeysTab />,
+  },
+  {
+    id: 'account',
+    labelKey: 'settings.accountTab',
+    descKey: 'settings.accountDesc',
+    icon: Person,
+    adminOnly: true,
+    render: () => <AccountTab />,
+  },
+  {
+    id: 'mcp',
+    labelKey: 'mcp.title',
+    descKey: 'settings.mcpDesc',
+    icon: Globe,
+    adminOnly: true,
+    render: () => <McpTab />,
+  },
+  {
+    id: 'riskPolicy',
+    labelKey: 'riskPolicy.title',
+    descKey: 'settings.riskPolicyDesc',
+    icon: Lock,
+    adminOnly: true,
+    render: () => <RiskPolicyTab />,
+  },
+];
+
+export default function SettingsPage() {
   const { t } = useTranslation();
-  const { confirm, DialogComponent } = useDialog();
-  const [keys, setKeys] = useState<AccessKeyItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [createOpen, setCreateOpen] = useState(false);
-  const [newName, setNewName] = useState('');
-  const [newExpires, setNewExpires] = useState('');
-  const [creating, setCreating] = useState(false);
-  const [createdKey, setCreatedKey] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
+  const isAdmin = getStoredUser()?.role === 'Admin';
+  const [activeId, setActiveId] = useState<string | null>(null);
 
-  const loadKeys = useCallback(async () => {
-    try {
-      const items = await listAccessKeys();
-      setKeys(Array.isArray(items) ? items : []);
-    } catch { /* ignore */ }
-    finally { setLoading(false); }
-  }, []);
+  const visibleRoutes = ROUTES.filter((r) => !r.adminOnly || isAdmin);
+  const active = visibleRoutes.find((r) => r.id === activeId);
 
-  useEffect(() => { loadKeys(); }, [loadKeys]);
-
-  const handleCreate = async () => {
-    if (!newName.trim()) return;
-    setCreating(true);
-    try {
-      const resp: AccessKeyCreateResponse = await createAccessKey({
-        name: newName.trim(),
-        expiresAt: newExpires || undefined,
-      });
-      setCreatedKey(resp.key);
-      await loadKeys();
-    } catch { /* ignore */ }
-    finally { setCreating(false); }
-  };
-
-  const handleDelete = async (id: string) => {
-    const result = await confirm(t('settings.deleteConfirm'));
-    if (!result.confirmed) return;
-    try {
-      await deleteAccessKey(id);
-      await loadKeys();
-    } catch { /* ignore */ }
-  };
-
-  const handleCopy = (text: string) => {
-    navigator.clipboard.writeText(text);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-
-  const closeCreateModal = () => {
-    setCreateOpen(false);
-    setNewName('');
-    setNewExpires('');
-    setCreatedKey(null);
-    setCopied(false);
-  };
-
-  if (loading) {
+  if (active) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <Spinner size="lg" />
+      <div className="space-y-4">
+        <Button variant="ghost" size="sm" onPress={() => setActiveId(null)}>
+          ← {t('settings.securityBack')}
+        </Button>
+        {active.render()}
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
-      <Card className="p-6">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold">{t('settings.accessKeys')}</h2>
-          <Button variant="primary" size="sm" onPress={() => setCreateOpen(true)}>
-            {t('settings.createKey')}
-          </Button>
-        </div>
-        <Table>
-          <Table.ScrollContainer>
-            <Table.Content aria-label={t('settings.accessKeys')} className="min-w-[800px]">
-              <Table.Header>
-                <Table.Column isRowHeader>{t('settings.name')}</Table.Column>
-                <Table.Column>{t('settings.key')}</Table.Column>
-                <Table.Column>{t('settings.createdAt')}</Table.Column>
-                <Table.Column>{t('settings.expiresAt')}</Table.Column>
-                <Table.Column>{t('settings.lastUsedAt')}</Table.Column>
-                <Table.Column>{t('settings.actions')}</Table.Column>
-              </Table.Header>
-              <Table.Body renderEmptyState={() => (
-                <div className="py-8 text-center text-default-400">{t('settings.noKeys')}</div>
-              )}>
-                {keys.map((k) => (
-                  <Table.Row key={k.id} id={k.id}>
-                    <Table.Cell>{k.name}</Table.Cell>
-                    <Table.Cell className="font-mono text-xs">{k.keyPreview}...</Table.Cell>
-                    <Table.Cell>{new Date(k.createdAt).toLocaleDateString()}</Table.Cell>
-                    <Table.Cell>
-                      {k.expiresAt ? new Date(k.expiresAt).toLocaleDateString() : '-'}
-                    </Table.Cell>
-                    <Table.Cell>
-                      {k.lastUsedAt ? new Date(k.lastUsedAt).toLocaleDateString() : '-'}
-                    </Table.Cell>
-                    <Table.Cell>
-                      <Button size="sm" variant="danger" onPress={() => handleDelete(k.id)}>
-                        {t('settings.delete')}
-                      </Button>
-                    </Table.Cell>
-                  </Table.Row>
-                ))}
-              </Table.Body>
-            </Table.Content>
-          </Table.ScrollContainer>
-        </Table>
-      </Card>
-      <Modal.Backdrop isOpen={createOpen} onOpenChange={(open) => { if (!open) closeCreateModal(); }}>
-        <Modal.Container size="sm">
-          <Modal.Dialog>
-            <Modal.CloseTrigger />
-            {createdKey ? (
-              <>
-                <Modal.Header>
-                  <Modal.Heading>{t('settings.keyCreated')}</Modal.Heading>
-                </Modal.Header>
-                <Modal.Body>
-                  <p className="text-sm text-default-500 mb-3">{t('settings.keyCreatedHint')}</p>
-                  <div className="flex items-center gap-2">
-                    <TextField variant="secondary" className="flex-1">
-                      <Label className="sr-only">{t('settings.key')}</Label>
-                      <Input variant="secondary" readOnly value={createdKey} className="font-mono text-xs" />
-                    </TextField>
-                    <Button size="sm" variant="secondary" onPress={() => handleCopy(createdKey)}>
-                      {copied ? t('settings.copied') : t('settings.copy')}
-                    </Button>
-                  </div>
-                </Modal.Body>
-                <Modal.Footer>
-                  <Button variant="primary" onPress={closeCreateModal}>
-                    {t('settings.done')}
-                  </Button>
-                </Modal.Footer>
-              </>
-            ) : (
-              <>
-                <Modal.Header>
-                  <Modal.Heading>{t('settings.createKey')}</Modal.Heading>
-                </Modal.Header>
-                <Modal.Body>
-                  <div className="space-y-4">
-                    <TextField variant="secondary" value={newName} onChange={setNewName}>
-                      <Label>{t('settings.name')}</Label>
-                      <Input variant="secondary" placeholder="My AI Client" />
-                    </TextField>
-                    <TextField variant="secondary" value={newExpires} onChange={setNewExpires}>
-                      <Label>{t('settings.expiresAt')}</Label>
-                      <Input variant="secondary" type="date" />
-                    </TextField>
-                  </div>
-                </Modal.Body>
-                <Modal.Footer>
-                  <Button variant="ghost" onPress={closeCreateModal}>
-                    {t('common.cancel')}
-                  </Button>
-                  <Button variant="primary" isPending={creating} onPress={handleCreate}>
-                    {t('settings.create')}
-                  </Button>
-                </Modal.Footer>
-              </>
-            )}
-          </Modal.Dialog>
-        </Modal.Container>
-      </Modal.Backdrop>
-      {DialogComponent}
-    </div>
-  );
-}
-
-export default function SettingsPage() {
-  const { t } = useTranslation();
-  const [tab, setTab] = useState<string>('preferences');
-  const isAdmin = getStoredUser()?.role === 'Admin';
-
-  return (
     <div className="space-y-3">
-      <Tabs
-        orientation="vertical"
-        selectedKey={tab}
-        onSelectionChange={(key) => setTab(String(key))}
-        className="items-start"
-      >
-        <Tabs.ListContainer className="flex justify-center h-auto self-start">
-          <Tabs.List aria-label={t('settings.tabsLabel')} className="my-0 px-2 w-35">
-            <Tabs.Tab id="preferences">{t('settings.preferencesTab')}<Tabs.Indicator /></Tabs.Tab>
-            <Tabs.Tab id="accessKeys">{t('settings.accessKeysTab')}<Tabs.Indicator /></Tabs.Tab>
-            {isAdmin && <Tabs.Tab id="mcp">{t('mcp.title')}<Tabs.Indicator /></Tabs.Tab>}
-            {isAdmin && <Tabs.Tab id="riskPolicy">{t('riskPolicy.title')}<Tabs.Indicator /></Tabs.Tab>}
-            {isAdmin && <Tabs.Tab id="account">{t('settings.accountTab')}<Tabs.Indicator /></Tabs.Tab>}
-          </Tabs.List>
-        </Tabs.ListContainer>
-
-        <Tabs.Panel id="preferences"><PreferencesTab /></Tabs.Panel>
-        <Tabs.Panel id="accessKeys"><AccessKeysTab /></Tabs.Panel>
-        {isAdmin && <Tabs.Panel id="mcp"><McpTab /></Tabs.Panel>}
-        {isAdmin && <Tabs.Panel id="riskPolicy"><RiskPolicyTab /></Tabs.Panel>}
-        {isAdmin && <Tabs.Panel id="account"><AccountTab /></Tabs.Panel>}
-      </Tabs>
+      <div>
+        <h2 className="text-xl font-semibold">{t('settings.tabsLabel')}</h2>
+        <p className="text-sm text-default-500">{t('settings.securityRoutesDesc')}</p>
+      </div>
+      <div className="flex flex-col gap-3">
+        {visibleRoutes.map((route) => {
+          const Icon = route.icon;
+          return (
+            <button
+              key={route.id}
+              type="button"
+              onClick={() => setActiveId(route.id)}
+              className="flex w-full items-center gap-3 rounded-2xl bg-surface p-4 text-left shadow-surface transition-colors hover:bg-surface-secondary"
+            >
+              <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-default/10 text-foreground">
+                <Icon className="size-4" />
+              </span>
+              <span className="flex min-w-0 flex-1 flex-col">
+                <span className="text-sm font-medium text-foreground">{t(route.labelKey)}</span>
+                <span className="text-xs text-muted">{t(route.descKey)}</span>
+              </span>
+              {route.adminOnly && (
+                <Chip size="sm" variant="soft">Admin</Chip>
+              )}
+              <ChevronRight className="size-4 shrink-0 text-muted" />
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }

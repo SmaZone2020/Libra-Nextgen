@@ -114,3 +114,33 @@ export function getPackages(agentId: string): Promise<PackagesResult> {
 export function getDocker(agentId: string): Promise<DockerResult> {
   return api.post<DockerResult>(`/system/${agentId}/docker`);
 }
+
+// ── 服务端设置（监听/安全） ──────────────────────────────────────────────
+
+export interface ListenerInfo {
+  host: string;
+  port: number;
+  bindLoopbackOnly: boolean;
+  listenUrl: string;
+}
+
+export interface SecurityInfo {
+  openLan: boolean;
+  allowedOrigins: string[];
+}
+
+export function getListener(): Promise<ListenerInfo> {
+  return api.get<ListenerInfo>('/settings/listener');
+}
+
+export function updateListener(req: { port: number; bindLoopbackOnly?: boolean }): Promise<ListenerInfo> {
+  return api.put<ListenerInfo>('/settings/listener', req);
+}
+
+export function getSecurity(): Promise<SecurityInfo> {
+  return api.get<SecurityInfo>('/settings/security');
+}
+
+export function updateSecurity(req: { openLan?: boolean; allowedOrigins?: string[] }): Promise<SecurityInfo> {
+  return api.put<SecurityInfo>('/settings/security', req);
+}
