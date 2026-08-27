@@ -72,6 +72,31 @@ public static class RiskClassifier
         return null;
     }
 
+    /// <summary>
+    /// Maps an MCP tool name to its canonical risk action key so MCP tool calls
+    /// are audited with the same risk classification as REST endpoints.
+    /// Returns null for read-only or non-agent tools (not audited).
+    /// </summary>
+    public static string? ClassifyMcpTool(string? toolName) => toolName switch
+    {
+        "delete_agent" => RiskActions.AgentDelete,
+        "get_rdp_credentials" or "get_ssh_keys" or "get_wechat_data" or "get_browser_data" => RiskActions.Credentials,
+        "scan_ai_tokens" => RiskActions.Ai,
+        "list_directory" => RiskActions.FileList,
+        "get_drives" => RiskActions.FileDrives,
+        "delete_file" => RiskActions.FileDelete,
+        "rename_file" => RiskActions.FileRename,
+        "move_file" => RiskActions.FileMove,
+        "copy_file" => RiskActions.FileCopy,
+        "execute_shell" or "execute_powershell" => RiskActions.Shell,
+        "get_processes" => RiskActions.SystemProcesses,
+        "kill_process" => RiskActions.SystemProcessKill,
+        "get_network_info" or "scan_wifi" => RiskActions.SystemNetwork,
+        "scan_lan" => RiskActions.SystemLanScan,
+        "create_task" => RiskActions.TaskCreate,
+        _ => null,
+    };
+
     private static string? ClassifyTask(string? body)
     {
         if (string.IsNullOrWhiteSpace(body))

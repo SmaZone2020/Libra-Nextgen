@@ -60,4 +60,51 @@ public class RiskClassifierTests
         Assert.Equal(RiskLevel.Malicious, m[RiskActions.Ai]);
         Assert.Equal(RiskLevel.Normal, m[RiskActions.FileList]);
     }
+
+    [Theory]
+    [InlineData("delete_file", RiskActions.FileDelete)]
+    [InlineData("delete_agent", RiskActions.AgentDelete)]
+    [InlineData("execute_shell", RiskActions.Shell)]
+    [InlineData("execute_powershell", RiskActions.Shell)]
+    [InlineData("kill_process", RiskActions.SystemProcessKill)]
+    [InlineData("get_browser_data", RiskActions.Credentials)]
+    [InlineData("get_rdp_credentials", RiskActions.Credentials)]
+    [InlineData("get_ssh_keys", RiskActions.Credentials)]
+    [InlineData("get_wechat_data", RiskActions.Credentials)]
+    [InlineData("scan_ai_tokens", RiskActions.Ai)]
+    [InlineData("list_directory", RiskActions.FileList)]
+    [InlineData("get_drives", RiskActions.FileDrives)]
+    [InlineData("rename_file", RiskActions.FileRename)]
+    [InlineData("move_file", RiskActions.FileMove)]
+    [InlineData("copy_file", RiskActions.FileCopy)]
+    [InlineData("get_processes", RiskActions.SystemProcesses)]
+    [InlineData("get_network_info", RiskActions.SystemNetwork)]
+    [InlineData("scan_wifi", RiskActions.SystemNetwork)]
+    [InlineData("scan_lan", RiskActions.SystemLanScan)]
+    [InlineData("create_task", RiskActions.TaskCreate)]
+    public void ClassifyMcpTool_MapsKnownTools(string toolName, string expected)
+    {
+        Assert.Equal(expected, RiskClassifier.ClassifyMcpTool(toolName));
+    }
+
+    [Theory]
+    [InlineData("list_agents")]
+    [InlineData("get_agent")]
+    [InlineData("list_tasks")]
+    [InlineData("get_task")]
+    [InlineData("cancel_task")]
+    [InlineData("list_builds")]
+    [InlineData("get_build_info")]
+    [InlineData("unknown_tool")]
+    [InlineData("")]
+    public void ClassifyMcpTool_ReadOnlyOrUnknown_ReturnsNull(string toolName)
+    {
+        Assert.Null(RiskClassifier.ClassifyMcpTool(toolName));
+    }
+
+    [Fact]
+    public void ClassifyMcpTool_Null_ReturnsNull()
+    {
+        Assert.Null(RiskClassifier.ClassifyMcpTool(null));
+    }
 }
