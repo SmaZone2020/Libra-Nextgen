@@ -77,9 +77,11 @@ builder.Services.AddSingleton<BuilderBuildService>();
 builder.Services.AddScoped<PluginService>();
 builder.Services.AddHostedService<HeartbeatMonitor>();
 
-// MCP Server
+// MCP Server — stateless: 每次请求独立鉴权（AccessKey），无需服务端会话状态；
+// 避免客户端必须先用 initialize 建会话才能调用工具。
+builder.Services.AddHttpContextAccessor();
 builder.Services.AddMcpServer()
-    .WithHttpTransport()
+    .WithHttpTransport(options => options.Stateless = true)
     .WithToolsFromAssembly();
 
 // Auth
@@ -173,6 +175,19 @@ builder.Services.AddRateLimiter(options =>
             QueueLimit = 0,
         });
     });
+    // MCP 按访问 key 身份限流（未认证请求退回按 IP）：防失控 LLM 循环/泄露 key 刷任务。
+    options.AddPolicy("mcp", context =>
+    {
+        var key = context.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
+                  ?? context.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+        return RateLimitPartition.GetFixedWindowLimiter(key, _ => new FixedWindowRateLimiterOptions
+        {
+            PermitLimit = 120,
+            Window = TimeSpan.FromMinutes(1),
+            QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+            QueueLimit = 0,
+        });
+    });
     options.RejectionStatusCode = 429;
 });
 
@@ -221,14 +236,16 @@ app.UseMiddleware<BeaconEntryMiddleware>();
 app.UseMiddleware<ProfileFingerprintMiddleware>();
 app.UseRouting();
 app.UseCors("CorsSignalR");
-app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
+// 限流必须在认证之后：MCP 的 "mcp" 策略按 access-key 身份分区，
+// auth 策略按 IP 分区（不受顺序影响）。
+app.UseRateLimiter();
 app.UseMiddleware<PermissionMiddleware>();
 app.UseMiddleware<AuditMiddleware>();
 app.MapControllers();
 app.UseMiddleware<McpToggleMiddleware>();
-app.MapMcp("/mcp").RequireAuthorization("McpPolicy");
+app.MapMcp("/mcp").RequireAuthorization("McpPolicy").RequireRateLimiting("mcp");
 WebSocketHandler.Map(app);
 
 // Ensure MongoDB indexes exist before serving traffic (best-effort).

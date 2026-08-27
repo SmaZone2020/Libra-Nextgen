@@ -26,9 +26,18 @@ public class McpService
 
     public async Task LoadAsync(CancellationToken ct = default)
     {
-        var config = await _collection.Find(FilterDefinition<McpConfig>.Empty).FirstOrDefaultAsync(ct);
-        if (config != null)
-            _enabled = config.Enabled;
+        try
+        {
+            var config = await _collection.Find(FilterDefinition<McpConfig>.Empty).FirstOrDefaultAsync(ct);
+            _enabled = config?.Enabled ?? true;
+        }
+        catch
+        {
+            // Fail closed: 开关状态读不到（如 Mongo 不可用）时禁用 MCP，
+            // 而不是默认开启这个高风险的攻击面。
+            _enabled = false;
+            throw;
+        }
     }
 
     public async Task SetEnabledAsync(bool enabled, CancellationToken ct = default)
