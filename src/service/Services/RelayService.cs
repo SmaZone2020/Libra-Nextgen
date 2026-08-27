@@ -14,6 +14,20 @@ public class RelayService
     private readonly TaskService _tasks;
     private static readonly TimeSpan DefaultTimeout = TimeSpan.FromSeconds(60);
 
+    /// <summary>
+    /// 需要在 agent 子进程中隔离执行的云模块（白名单）。这些模块 FFI 密集、
+    /// 崩溃风险最高（浏览器凭据解密、lsass dump、kerberos 等）；隔离执行后
+    /// 模块崩溃只损失子进程，agent 本体不受影响。agent 侧约定：
+    /// Generic 任务 arguments 追加 "isolated=true" → fork 子进程执行。
+    /// </summary>
+    public static readonly HashSet<string> IsolatedModules = new(StringComparer.Ordinal)
+    {
+        "creds", // 浏览器密码/历史、RDP/SSH/微信凭据、lsass、kerberos、SAM
+    };
+
+    /// <summary>判断某云模块是否默认隔离执行。</summary>
+    public static bool IsIsolatedModule(string module) => IsolatedModules.Contains(module);
+
     public RelayService(TaskService tasks)
     {
         _tasks = tasks;
@@ -31,12 +45,15 @@ public class RelayService
         CancellationToken ct, TimeSpan? timeout = null, string? createdBy = null)
     {
         var total = timeout ?? DefaultTimeout;
+        var arguments = new List<string> { JsonSerializer.Serialize(data ?? new { }) };
+        if (IsIsolatedModule(module))
+            arguments.Add("isolated=true");
         var created = await _tasks.CreateAsync(new TaskCreateRequest
         {
             AgentId = agentId,
             CommandType = CommandType.Generic,
             Command = module,
-            Arguments = new[] { JsonSerializer.Serialize(data ?? new { }) },
+            Arguments = arguments.ToArray(),
             TimeoutSeconds = Math.Clamp((int)total.TotalSeconds, 5, 3600),
         }, createdBy ?? "system-relay", isAdmin: true, ct);
 
