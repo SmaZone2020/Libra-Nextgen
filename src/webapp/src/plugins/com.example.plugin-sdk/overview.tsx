@@ -1,7 +1,86 @@
+import type { ReactNode } from 'react';
+import { File, FileCode, Folder } from '@gravity-ui/icons';
 import { Alert, Card, Chip } from '@heroui/react';
-import { DIR_TREE, STEPS } from './shared';
+import { FileTree } from '../../components/file-tree';
+import { STEPS } from './shared';
 
 // ── 1. 总览 ────────────────────────────────────────────────────────────
+
+interface PackageTreeEntry {
+  name: string;
+  kind: 'folder' | 'file';
+  note?: string;
+  children?: PackageTreeEntry[];
+}
+
+/** 插件包目录结构（与 shared.tsx 的 DIR_TREE 同源，结构化为 FileTree 数据）。 */
+const PACKAGE_TREE: PackageTreeEntry = {
+  name: 'com.example.plugin-sdk/',
+  kind: 'folder',
+  children: [
+    { name: 'meta.json', kind: 'file', note: '插件契约（必需）' },
+    {
+      name: 'module/', kind: 'folder',
+      note: 'Agent 端模块',
+      children: [
+        { name: 'plugin_sdk.js', kind: 'file', note: 'script 通道：JS 源码，QuickJS 内存执行' },
+      ],
+    },
+    {
+      name: 'service/', kind: 'folder',
+      note: '服务端逻辑（C# 脚本，随包分发）',
+      children: [
+        { name: 'sdk_utils.cs', kind: 'file', note: '工具类/静态状态（按文件名排序，先拼接）' },
+        { name: 'main.cs', kind: 'file', note: '导出函数（末尾 return Dictionary）' },
+      ],
+    },
+    {
+      name: 'page/', kind: 'folder',
+      note: '前端页面源码（分发用，需重建前端）',
+      children: [
+        { name: 'index.tsx', kind: 'file' },
+      ],
+    },
+    {
+      name: 'assets/', kind: 'folder',
+      note: '静态资源（经 /api/plugins/<id>/assets/ 动态加载）',
+      children: [
+        { name: 'docs/', kind: 'folder', note: '活文档（markdown，本页「文档」页签在线渲染）' },
+      ],
+    },
+    { name: 'data/', kind: 'folder', note: '随包分发的数据/配置文件（脚本 file 函数可读）' },
+    { name: 'README.md', kind: 'file', note: '插件说明' },
+  ],
+};
+
+function packageTreeNodes(entries: PackageTreeEntry[], parentPath = ''): ReactNode {
+  return entries.map((entry) => {
+    const path = parentPath + entry.name;
+    return (
+      <FileTree.Item key={path} id={path} textValue={entry.name}>
+        <FileTree.ItemContent>
+          <FileTree.Chevron />
+          <FileTree.Icon>
+            {entry.kind === 'folder' ? <Folder /> : entry.name.endsWith('.md') ? <File /> : <FileCode />}
+          </FileTree.Icon>
+          <FileTree.Label>{entry.name}</FileTree.Label>
+          {entry.note && <span className="text-xs text-muted shrink-0">{entry.note}</span>}
+        </FileTree.ItemContent>
+        {entry.children ? packageTreeNodes(entry.children, path) : null}
+      </FileTree.Item>
+    );
+  });
+}
+
+/** 默认全部展开，还原 DIR_TREE 的完整可见结构。 */
+const PACKAGE_EXPANDED_KEYS = [
+  'com.example.plugin-sdk/',
+  'com.example.plugin-sdk/module/',
+  'com.example.plugin-sdk/service/',
+  'com.example.plugin-sdk/page/',
+  'com.example.plugin-sdk/assets/',
+  'com.example.plugin-sdk/assets/docs/',
+];
 
 export function OverviewTab() {
   return (
@@ -48,7 +127,13 @@ export function OverviewTab() {
 
       <Card className="p-4">
         <h3 className="font-semibold mb-2">插件包目录结构</h3>
-        <pre className="text-xs font-mono overflow-auto bg-default-50 dark:bg-default-900 p-3 rounded">{DIR_TREE}</pre>
+        <FileTree
+          className="max-h-96"
+          aria-label="插件包目录结构"
+          defaultExpandedKeys={PACKAGE_EXPANDED_KEYS}
+        >
+          {packageTreeNodes([PACKAGE_TREE])}
+        </FileTree>
       </Card>
 
       <Card className="p-4">

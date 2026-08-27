@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Alert, Skeleton, Tabs } from '@heroui/react';
+import { FileCode, Folder } from '@gravity-ui/icons';
+import { Alert, Skeleton } from '@heroui/react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { FileTree } from '../../components/file-tree';
 import { DOC_FILES, assetUrl } from './shared';
 
 /**
@@ -88,41 +90,72 @@ export function DocsTab() {
         </Alert.Content>
       </Alert>
 
-      <Tabs className="w-full" orientation="vertical" variant="secondary" selectedKey={docId} onSelectionChange={(k) => { if (k) setDocId(String(k)); }}>
-        <Tabs.ListContainer>
-          <Tabs.List aria-label="活文档目录">
-            {DOC_FILES.map((d) => (
-              <Tabs.Tab key={d.id} id={d.id}>
-                <span className="font-mono">{d.id}</span> {d.label}
-                <Tabs.Indicator />
-              </Tabs.Tab>
-            ))}
-          </Tabs.List>
-        </Tabs.ListContainer>
+      <div className="flex flex-row items-start gap-4">
+        <FileTree
+          className="w-64 shrink-0"
+          aria-label="活文档目录"
+          selectionMode="single"
+          selectedKeys={[docId]}
+          defaultExpandedKeys={['assets', 'assets/docs']}
+          onSelectionChange={(keys) => {
+            const key = [...keys][0];
+            if (typeof key === 'string' && DOC_FILES.some((d) => d.id === key)) {
+              setDocId(key);
+            }
+          }}
+        >
+          <FileTree.Item id="assets" textValue="assets">
+            <FileTree.ItemContent>
+              <FileTree.Chevron />
+              <FileTree.Icon><Folder /></FileTree.Icon>
+              <FileTree.Label>assets/</FileTree.Label>
+            </FileTree.ItemContent>
+            <FileTree.Item id="assets/docs" textValue="docs">
+              <FileTree.ItemContent>
+                <FileTree.Chevron />
+                <FileTree.Icon><Folder /></FileTree.Icon>
+                <FileTree.Label>docs/</FileTree.Label>
+              </FileTree.ItemContent>
+              {DOC_FILES.map((d) => (
+                <FileTree.Item key={d.id} id={d.id} textValue={d.label}>
+                  <FileTree.ItemContent>
+                    <FileTree.Chevron />
+                    <FileTree.Icon><FileCode /></FileTree.Icon>
+                    <FileTree.Label>
+                      <span className="font-mono text-xs">{d.id}</span> {d.label}
+                    </FileTree.Label>
+                  </FileTree.ItemContent>
+                </FileTree.Item>
+              ))}
+            </FileTree.Item>
+          </FileTree.Item>
+        </FileTree>
 
-        {DOC_FILES.map((d) => (
-          <Tabs.Panel key={d.id} id={d.id} className="px-4 min-w-0">
-            <h3 className="mb-2 font-semibold">{d.id} · {d.label}</h3>
-            <p className="text-sm text-muted mb-3">
-              来源：<code className="font-mono text-xs">assets/docs/{d.file.replace('docs/', '')}</code>
-            </p>
-            {loading && (
-              <div className="space-y-2">
-                <Skeleton className="h-8 rounded-lg w-1/2" />
-                <Skeleton className="h-5 rounded-lg" />
-                <Skeleton className="h-5 rounded-lg w-3/4" />
-                <Skeleton className="h-5 rounded-lg w-1/2" />
-              </div>
-            )}
-            {err && <p className="text-danger text-sm">{err}（服务端未重启/插件未启用/包内缺 docs？）</p>}
-            {md !== null && !loading && (
-              <article className={MD_STYLE}>
-                <ReactMarkdown remarkPlugins={[remarkGfm]}>{md}</ReactMarkdown>
-              </article>
-            )}
-          </Tabs.Panel>
-        ))}
-      </Tabs>
+        <div className="min-w-0 flex-1">
+          {DOC_FILES.filter((d) => d.id === docId).map((d) => (
+            <div key={d.id}>
+              <h3 className="mb-2 font-semibold">{d.id} · {d.label}</h3>
+              <p className="text-sm text-muted mb-3">
+                来源：<code className="font-mono text-xs">assets/docs/{d.file.replace('docs/', '')}</code>
+              </p>
+              {loading && (
+                <div className="space-y-2">
+                  <Skeleton className="h-8 rounded-lg w-1/2" />
+                  <Skeleton className="h-5 rounded-lg" />
+                  <Skeleton className="h-5 rounded-lg w-3/4" />
+                  <Skeleton className="h-5 rounded-lg w-1/2" />
+                </div>
+              )}
+              {err && <p className="text-danger text-sm">{err}（服务端未重启/插件未启用/包内缺 docs？）</p>}
+              {md !== null && !loading && (
+                <article className={MD_STYLE}>
+                  <ReactMarkdown remarkPlugins={[remarkGfm]}>{md}</ReactMarkdown>
+                </article>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }
