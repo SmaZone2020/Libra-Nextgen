@@ -18,12 +18,20 @@ export default function AboutPage() {
   return (
     <div className="max-w-3xl mx-auto space-y-10 py-4">
       <div className="flex flex-col items-center justify-center gap-4 select-none pointer-events-none">
-        <img
-          alt="icon"
-          className="size-40 object-cover dark:invert"
-          loading="lazy"
-          src="/images/icon2.webp"
-        />
+        <div className="flex gap-4">
+          <img
+            alt="icon"
+            className="size-50 object-cover dark:invert"
+            loading="lazy"
+            src="/images/icon.webp"
+          />
+          <img
+            alt="icon"
+            className="size-50 object-cover dark:invert"
+            loading="lazy"
+            src="/images/icon2.webp"
+          />
+        </div>
         <p className="text-4xl font-bold whitespace-nowrap text-neutral-900 dark:text-neutral-100 libre">
           Libra Nextgen
         </p>
