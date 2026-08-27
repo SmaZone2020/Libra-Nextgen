@@ -81,7 +81,11 @@ function PageHeader({ pluginLabels }: { pluginLabels: Map<string, string> }) {
         {pluginName ? pluginName : t(keys![0])}
       </h1>
       <p className="mt-0.5 text-sm text-neutral-600 dark:text-neutral-400">
-        {pluginName ? t('plugins.desc') : t(keys![1])}
+        {location.pathname !== '/plugins' 
+          ? ""
+            : pluginName 
+              ? t('plugins.desc') 
+              : t(keys![1])}
       </p>
     </motion.div>
   );
