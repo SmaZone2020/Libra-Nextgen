@@ -162,6 +162,14 @@ export default {
         today: '今日',
         '12h': '12小时',
       },
+
+      sponsor: {
+        badge: '推荐',
+        title: '你喜欢这个项目吗？',
+        description: '解锁面向成长型产品的团队工作流与洞察。',
+        upgrade: '立即升级',
+        compare: '对比方案',
+      },
     },
     agents: {
       all: '全部',

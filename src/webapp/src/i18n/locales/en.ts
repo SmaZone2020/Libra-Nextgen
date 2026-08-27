@@ -163,6 +163,14 @@ export default {
         today: 'Today',
         '12h': '12h',
       },
+
+      sponsor: {
+        badge: 'Recommended',
+        title: 'Do you like this project?',
+        description: 'Unlock team workflows and insights built for growing products.',
+        upgrade: 'Upgrade now',
+        compare: 'Compare plans',
+      },
     },
     agents: {
       all: 'All',

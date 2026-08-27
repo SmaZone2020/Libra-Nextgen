@@ -1,11 +1,19 @@
+'use client';
+
 import { useTranslation } from 'react-i18next';
 import { KPI } from '../../components/kpi';
 
 interface StatsCardsProps {
   stats: { agents: number; online: number; tasks: number; pending: number };
+  /**
+   * 与赞助卡片并排时使用 2x2 紧凑布局；
+   * 未开启时保持原 4 列布局。
+   */
+  compact?: boolean;
+  className?: string;
 }
 
-export function StatsCards({ stats }: StatsCardsProps) {
+export function StatsCards({ stats, compact = false, className }: StatsCardsProps) {
   const { t } = useTranslation();
   const cards = [
     { title: t('dashboard.totalAgents'), value: stats.agents, trend: 'up' as const },
@@ -15,7 +23,13 @@ export function StatsCards({ stats }: StatsCardsProps) {
   ];
 
   return (
-    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+    <div
+      className={
+        compact
+          ? `grid grid-cols-1 gap-3 sm:grid-cols-2${className ? ` ${className}` : ''}`
+          : `grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4${className ? ` ${className}` : ''}`
+      }
+    >
       {cards.map((c) => (
         <KPI key={c.title}>
           <KPI.Header>
