@@ -3,11 +3,12 @@
  *
  * 优先级（高 → 低）：
  *   1. VITE_API_BASE（构建配置文件，.env / vite define）
- *   2. 前端 Host 推导（默认）：取 window.location.hostname，拼后端默认端口 5270；
- *      若前端本身就是后端同源（端口 5270，由后端托管），直接用同源 origin
+ *   2. 前端 Host 推导（默认）：取 window.location.host（host + port），
+ *      若前端本身就是后端同源（端口 5270，由后端托管），直接用同源 origin；
+ *      否则用 window.location.host 的主机名拼后端默认端口 5270
  *   3. 兜底 http://127.0.0.1:5270
  *
- * 后端监听端口由 设置 → 首选项 修改（服务端设置，非前端可改的请求地址）。
+ * 后端监听端口由 设置 → 安全 修改（服务端设置，非前端可改的请求地址）。
  * 通过 getApiOrigin() 每次调用实时解析。
  */
 
