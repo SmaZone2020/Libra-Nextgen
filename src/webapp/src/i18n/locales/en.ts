@@ -166,10 +166,9 @@ export default {
 
       sponsor: {
         badge: 'Recommended',
-        title: 'Do you like this project?',
-        description: 'Unlock team workflows and insights built for growing products.',
-        upgrade: 'Upgrade now',
-        compare: 'Compare plans',
+        title: 'Buy me a coffee',
+        description: 'If this project helps you, consider supporting it ☕',
+        upgrade: 'Sponsor',
       },
     },
     agents: {

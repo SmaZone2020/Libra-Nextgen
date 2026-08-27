@@ -130,9 +130,9 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-6">
-      <div className="grid items-start gap-6 lg:grid-cols-3">
+      <div className="grid gap-6 lg:grid-cols-3">
         {!sponsorDismissed && (
-          <Card className="relative w-full overflow-hidden border border-accent/20 bg-linear-to-br from-accent/12 via-surface to-surface-secondary shadow-lg shadow-accent/10 dark:border-accent/30 dark:from-accent/20 dark:via-surface dark:to-accent/8 dark:shadow-accent/5">
+          <Card className="relative flex h-full w-full flex-col overflow-hidden border border-accent/20 bg-linear-to-br from-accent/12 via-surface to-surface-secondary shadow-lg shadow-accent/10 dark:border-accent/30 dark:from-accent/20 dark:via-surface dark:to-accent/8 dark:shadow-accent/5">
             <div
               aria-hidden="true"
               className="pointer-events-none absolute -top-12 -right-12 size-40 rounded-full bg-accent/20 blur-3xl dark:bg-accent/30"
@@ -165,10 +165,12 @@ export default function Dashboard() {
                 </div>
               </div>
             </Card.Header>
-            <Card.Footer className="relative flex-col gap-2 sm:flex-row">
-              <Button className="w-full shadow-md shadow-accent/20">{t('dashboard.sponsor.upgrade')}</Button>
-              <Button className="w-full" variant="secondary">
-                {t('dashboard.sponsor.compare')}
+            <Card.Footer className="relative mt-auto flex-col gap-2 sm:flex-row">
+              <Button className="w-full shadow-md shadow-accent/20">
+                {t('dashboard.sponsor.upgrade')}
+              </Button>
+              <Button className="w-full" variant="secondary" onPress={dismissSponsor}>
+                {t('common.close')}
               </Button>
             </Card.Footer>
           </Card>

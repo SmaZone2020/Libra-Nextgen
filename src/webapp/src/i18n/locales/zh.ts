@@ -165,10 +165,9 @@ export default {
 
       sponsor: {
         badge: '推荐',
-        title: '你喜欢这个项目吗？',
-        description: '解锁面向成长型产品的团队工作流与洞察。',
-        upgrade: '立即升级',
-        compare: '对比方案',
+        title: '请我喝杯咖啡',
+        description: '如果这个项目对你有帮助，欢迎赞助支持 ☕',
+        upgrade: '去赞助',
       },
     },
     agents: {
