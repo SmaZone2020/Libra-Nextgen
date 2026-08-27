@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Button, Card } from '@heroui/react';
+import { Button, Card, Tabs } from '@heroui/react';
 import { ComposedChart } from '../../components/composed-chart';
 import { ChartTooltip } from '../../components/chart-tooltip';
 
@@ -68,18 +68,22 @@ export function TrafficChart({ trafficData, agentIds, agentHosts, range, onRange
     <Card className="w-full rounded-2xl">
       <Card.Header>
         <Card.Title className="text-base">{t('dashboard.traffic')}</Card.Title>
-        <div className="flex items-center gap-1">
-          {RANGES.map(r => (
-            <Button
-              key={r.key}
-              size="sm"
-              variant={range === r.key ? 'primary' : 'ghost'}
-              onPress={() => onRangeChange(r.key)}
-            >
-              {t(r.i18nKey)}
-            </Button>
-          ))}
-        </div>
+        {/* 时间范围切换：Tabs（14天/7天/3天/今日/12小时） */}
+        <Tabs
+          selectedKey={range}
+          onSelectionChange={(key) => onRangeChange(key as TimeRange)}
+        >
+          <Tabs.ListContainer>
+            <Tabs.List aria-label={t('dashboard.trafficRange')}>
+              {RANGES.map((r) => (
+                <Tabs.Tab key={r.key} id={r.key}>
+                  {t(r.i18nKey)}
+                  <Tabs.Indicator />
+                </Tabs.Tab>
+              ))}
+            </Tabs.List>
+          </Tabs.ListContainer>
+        </Tabs>
       </Card.Header>
       <Card.Content>
         <ComposedChart data={trafficData} height={300}>

@@ -140,6 +140,9 @@ export default {
     },
     dashboard: {
       traffic: '流量',
+      trafficRange: '时间范围',
+      systemDistribution: '系统分布',
+      systemRadarAgents: 'Agent 数量',
       totalAgents: 'Agent 总数',
       online: '在线',
       totalTasks: '任务总数',

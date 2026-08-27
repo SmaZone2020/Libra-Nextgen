@@ -140,6 +140,9 @@ export default {
     },
     dashboard: {
       traffic: 'Traffic',
+      trafficRange: 'Time range',
+      systemDistribution: 'System Distribution',
+      systemRadarAgents: 'Agents',
       totalAgents: 'Total Agents',
       online: 'Online',
       totalTasks: 'Total Tasks',

@@ -3,6 +3,7 @@ import { getAgentTraffic } from '../../api/agents';
 import { getTasks } from '../../api/tasks';
 import { StatsCards } from './StatsCards';
 import { TrafficChart, RANGES } from './TrafficChart';
+import { SystemDistributionChart } from './SystemDistributionChart';
 import { TopologyGraph } from './TopologyGraph';
 import { useAgent } from '../../contexts/AgentContext';
 import type { TimeRange } from './TrafficChart';
@@ -104,7 +105,11 @@ export default function Dashboard() {
     <div className="space-y-6">
       <StatsCards stats={stats} />
 
-      <TopologyGraph agents={agents} />
+      {/* 系统分布（饼图）与拓扑图共享一行：左=系统分布，右=拓扑图 */}
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+        <SystemDistributionChart agents={agents} />
+        <TopologyGraph agents={agents} />
+      </div>
 
       {agentIds.length > 0 && (
         <TrafficChart
