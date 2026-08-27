@@ -1,7 +1,7 @@
 <div align="center">
-  <p><b>简体中文</b> | <a href="README_en.md">English</a></p>
+  <img src="/assets/icon.webp" width="300"/>
   <h1>Libra-Nextgen</h1>
-  
+
   面向企业级红蓝对抗的现代化 **C2（Command & Control）框架**
   
   ![.NET](https://img.shields.io/badge/.NET-C172D7?style=flat-square&logo=.net&logoColor=black)
@@ -14,6 +14,9 @@
   ![Release](https://img.shields.io/github/v/release/SmaZone2020/Libra-Nextgen?style=flat-square)
   ![CI](https://github.com/SmaZone2020/Libra-Nextgen/actions/workflows/ci.yml/badge.svg)
 
+
+  <p><b>简体中文</b> | <a href="README_en.md">English</a></p>
+  
 </div>
 
 ## 架构
@@ -68,10 +71,10 @@ cd src/webapp && npm install && npm run dev
 | 主题 | 内容 |
 | --- | --- |
 | [插件开发教程](docs/zh/插件开发.md) | meta.json 契约、zip 结构、JS/native 双通道、前端 `usePluginHost`、示例插件 |
-| [部署手册](docs/部署手册.md) | 环境变量（`LIBRA_SERVER_KEY`/`LIBRA_BUILDS_DIR`）、MongoDB 认证、nginx/TLS、Builder 构建、云载模块与插件 stage |
+| [部署手册](docs/部署手册.md) | MongoDB 认证、nginx/TLS、Builder 构建、云载模块与插件 stage |
 | [平台支持矩阵](docs/平台支持矩阵.md) | 各平台实测记录（构建命令/结果/结论） |
 | [操作手册](docs/zh/操作手册.md) | Agent 上线、插件市场/上传/Git 导入、Shell/文件/MCP 使用、审计与风险策略 |
-| [LLM 插件开发指南](docs/LLM-插件开发指南.md) | 面向 LLM 的插件开发指引（契约/通道/打包） |
+| [LLM 插件开发指南](docs/LLM-插件开发指南.md) | 面向 LLM 的插件开发指引 |
 
 ## 相关仓库
 
