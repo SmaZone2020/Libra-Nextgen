@@ -11,7 +11,7 @@ import { TopologyGraph } from './TopologyGraph';
 import { useAgent } from '../../contexts/AgentContext';
 import type { TimeRange } from './TrafficChart';
 import { Button, Card } from '@heroui/react';
-import { Heart, Xmark } from '@gravity-ui/icons';
+import { Check, Heart } from '@gravity-ui/icons';
 
 const SPONSOR_DISMISSED_KEY = 'dashboard_sponsor_dismissed';
 
@@ -130,9 +130,9 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-6">
-      <div className="grid gap-6 lg:grid-cols-3">
+      <div className="grid gap-4 lg:grid-cols-3">
         {!sponsorDismissed && (
-          <Card className="relative flex h-full w-full flex-col overflow-hidden border border-accent/20 bg-linear-to-br from-accent/12 via-surface to-surface-secondary shadow-lg shadow-accent/10 dark:border-accent/30 dark:from-accent/20 dark:via-surface dark:to-accent/8 dark:shadow-accent/5">
+          <Card className="relative flex h-full w-full min-w-0 flex-col overflow-hidden border border-accent/20 bg-linear-to-br from-accent/12 via-surface to-surface-secondary shadow-lg shadow-accent/10 dark:border-accent/30 dark:from-accent/20 dark:via-surface dark:to-accent/8 dark:shadow-accent/5 lg:min-w-[450px]">
             <div
               aria-hidden="true"
               className="pointer-events-none absolute -top-12 -right-12 size-40 rounded-full bg-accent/20 blur-3xl dark:bg-accent/30"
@@ -141,36 +141,39 @@ export default function Dashboard() {
               aria-hidden="true"
               className="pointer-events-none absolute -bottom-8 -left-8 size-28 rounded-full bg-accent/10 blur-2xl dark:bg-accent/20"
             />
-            <Button
-              isIconOnly
-              aria-label={t('common.close')}
-              className="absolute top-2 right-2 z-10"
-              size="sm"
-              variant="ghost"
-              onPress={dismissSponsor}
-            >
-              <Xmark aria-hidden="true" className="size-4" />
-            </Button>
             <Card.Header className="relative gap-3">
-              <span className="w-fit rounded-full bg-accent/15 px-2.5 py-0.5 text-xs font-medium tracking-wide text-accent dark:bg-accent/25 dark:text-accent-soft-foreground">
-                {t('dashboard.sponsor.badge')}
-              </span>
               <div className="flex items-start gap-3">
-                <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-accent/15 text-accent dark:bg-accent/20 dark:text-accent-soft-foreground">
-                  <Heart aria-hidden="true" className="size-5" />
+                <div className="flex size-32 shrink-0 items-center justify-center">
+                  <img
+                    alt="icon"
+                    className="pointer-events-none h-full w-full object-cover select-none dark:invert"
+                    loading="lazy"
+                    src="/images/icon2.webp"
+                  />
                 </div>
                 <div className="flex flex-col gap-1">
-                  <Card.Title>{t('dashboard.sponsor.title')}</Card.Title>
-                  <Card.Description>{t('dashboard.sponsor.description')}</Card.Description>
+                  <div className="flex items-center gap-4">
+                    <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-accent/15 text-accent dark:bg-accent/20 dark:text-accent-soft-foreground">
+                      <Heart aria-hidden="true" className="size-5" />
+                    </div>
+                    <div>
+                      <Card.Title>{t('dashboard.sponsor.title')}</Card.Title>
+                      <Card.Description>{t('dashboard.sponsor.description')}</Card.Description>
+                    </div>
+                  </div>
+                  <li className="flex items-center gap-2 text-sm text-muted">
+                    <Check aria-hidden="true" className="size-4 shrink-0 text-accent" />
+                    更多优质的插件
+                  </li>
                 </div>
               </div>
             </Card.Header>
-            <Card.Footer className="relative mt-auto flex-col gap-2 sm:flex-row">
+            <Card.Footer className="relative mb-auto gap-2 flex-row">
+              <Button className="w-full bg-warning" onPress={dismissSponsor}>
+                {t('dashboard.sponsor.star')}
+              </Button>
               <Button className="w-full shadow-md shadow-accent/20">
                 {t('dashboard.sponsor.upgrade')}
-              </Button>
-              <Button className="w-full" variant="secondary" onPress={dismissSponsor}>
-                {t('common.close')}
               </Button>
             </Card.Footer>
           </Card>
@@ -178,7 +181,7 @@ export default function Dashboard() {
         <StatsCards
           stats={stats}
           compact={!sponsorDismissed}
-          className={sponsorDismissed ? 'lg:col-span-3' : 'lg:col-span-2'}
+          className={sponsorDismissed ? 'min-w-0 lg:col-span-3' : 'min-w-0 lg:col-span-2'}
         />
       </div>
 

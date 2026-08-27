@@ -165,9 +165,10 @@ export default {
 
       sponsor: {
         badge: '推荐',
-        title: '请我喝杯咖啡',
-        description: '如果这个项目对你有帮助，欢迎赞助支持 ☕',
+        title: '支持我们的工作',
+        description: '如果你喜欢这个项目, 可以为我们点个Star或参与赞助 ☕',
         upgrade: '去赞助',
+        star: '去Star',
       },
     },
     agents: {

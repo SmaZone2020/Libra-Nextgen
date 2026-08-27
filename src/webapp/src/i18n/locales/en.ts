@@ -166,9 +166,10 @@ export default {
 
       sponsor: {
         badge: 'Recommended',
-        title: 'Buy me a coffee',
-        description: 'If this project helps you, consider supporting it ☕',
+        title: 'Support our work',
+        description: 'If you like this project, you can give us a Star or contribute to support us ☕',
         upgrade: 'Sponsor',
+        star: 'Star',
       },
     },
     agents: {
