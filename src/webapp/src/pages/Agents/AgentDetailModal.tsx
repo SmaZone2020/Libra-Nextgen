@@ -42,9 +42,6 @@ export function AgentDetailModal({ isOpen, onOpenChange, agent, loading }: Agent
 
   const infoFields: [string, string][] = agent ? [
     [t('agents.ip'), agent.ipAddress],
-    [t('agents.publicIp'), agent.geo?.publicIp || '—'],
-    [t('agents.region'), agent.geo?.region || '—'],
-    [t('agents.isp'), agent.geo?.isp ? `${agent.geo.isp} (${agent.geo.llc || ''})` : '—'],
     [t('agents.os'), agent.osVersion],
     [t('agents.arch'), agent.arch],
     [t('agents.user'), agent.userName],

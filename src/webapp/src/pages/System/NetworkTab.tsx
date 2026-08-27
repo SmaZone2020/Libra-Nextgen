@@ -272,47 +272,6 @@ export function NetworkTab({ agentId }: NetworkTabProps) {
         )}
       </Card>
 
-      {/* WAN */}
-      <Card className="p-4 rounded-xl">
-        <h3 className="text-sm font-semibold text-neutral-700 mb-3">{t('system.wan')}</h3>
-        {wanLoading ? <LoadingSpinner /> : wan ? (
-          <div className="space-y-1">
-            <div className="flex justify-between text-sm">
-              <span className="text-default-500">{t('system.publicIp')}</span>
-              <span className="font-mono">{wan.publicIp ?? '—'}</span>
-            </div>
-            <div className="flex justify-between text-sm">
-              <span className="text-default-500">{t('system.gateway')}</span>
-              <span className="font-mono">{wan.gateway ?? '—'}</span>
-            </div>
-            {wan.region && (
-              <div className="flex justify-between text-sm">
-                <span className="text-default-500">{t('system.region')}</span>
-                <span className="text-default-700">{wan.region}</span>
-              </div>
-            )}
-            {wan.isp && (
-              <div className="flex justify-between text-sm">
-                <span className="text-default-500">{t('system.isp')}</span>
-                <span className="text-default-700">{wan.isp}{wan.llc ? ` (${wan.llc})` : ''}</span>
-              </div>
-            )}
-            {wan.asn && (
-              <div className="flex justify-between text-sm">
-                <span className="text-default-500">{t('system.asn')}</span>
-                <span className="font-mono">{wan.asn}</span>
-              </div>
-            )}
-            {(wan.latitude !== 0 || wan.longitude !== 0) && (
-              <div className="flex justify-between text-sm">
-                <span className="text-default-500">{t('system.coordinates')}</span>
-                <span className="font-mono text-default-500">{wan.latitude?.toFixed(4)}, {wan.longitude?.toFixed(4)}</span>
-              </div>
-            )}
-          </div>
-        ) : null}
-      </Card>
-
       {/* Proxy */}
       <Card className="p-4 rounded-xl">
         <h3 className="text-sm font-semibold text-neutral-700 mb-3">{t('system.proxySettings')}</h3>
