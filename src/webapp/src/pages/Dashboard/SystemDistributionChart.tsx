@@ -76,9 +76,9 @@ export function classifyOs(osVersion: string): string {
 // ── 饼图卡片 ─────────────────────────────────────────────────────────
 
 const PIE_COLORS = [
-  '#3b82f6', '#ef4444', '#22c55e', '#f59e0b',
-  '#8b5cf6', '#06b6d4', '#ec4899', '#84cc16',
-  '#f97316', '#14b8a6', '#a855f7', '#64748b',
+  '#60a5fa', '#67e8f9', '#4ade80', '#fbbf24',
+  '#a78bfa', '#f87171', '#f472b6', '#a3e635',
+  '#fb923c', '#2dd4bf', '#c084fc', '#94a3b8',
 ];
 
 interface SystemDistributionChartProps {
@@ -121,6 +121,10 @@ export function SystemDistributionChart({ agents }: SystemDistributionChartProps
                 nameKey="category"
                 innerRadius={55}
                 outerRadius={90}
+                paddingAngle={6}
+                cornerRadius={9}
+                fill="none"
+                stroke="black"
               >
                 {data.map((d, i) => (
                   <PieChart.Cell

@@ -147,8 +147,8 @@ export function TopologyGraph({ agents }: { agents: AgentListItem[] }) {
   return (
     <Card>
       <Card.Header className="flex items-center justify-between">
-        <Card.Title>{t('nav.topology.title')}</Card.Title>
-        <div className="flex items-center gap-3 text-xs text-neutral-400">
+        <Card.Title className="text-base">{t('nav.topology.title')}</Card.Title>
+        <div className="flex items-center gap-3 text-xs text-neutral-400 mt-2">
           <span className="flex items-center gap-1.5">
             <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block" />
             {t('nav.topology.online')} {online}
@@ -161,13 +161,14 @@ export function TopologyGraph({ agents }: { agents: AgentListItem[] }) {
       </Card.Header>
       <Card.Content className="pt-0">
         {agents.length === 0 ? (
-          <div className="flex items-center justify-center h-[320px] text-neutral-500">
+          <div className="flex items-center justify-center h-[240px] text-neutral-500">
             {t('nav.topology.noAgents')}
           </div>
         ) : (
-          <div ref={ref} className="w-full h-[320px]" />
+          <div ref={ref} className="w-full h-[240px]" />
         )}
       </Card.Content>
+      <Card.Footer className="flex items-center justify-end text-xs text-neutral-400"></Card.Footer>
     </Card>
   );
 }

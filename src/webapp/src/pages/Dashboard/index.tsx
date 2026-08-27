@@ -148,11 +148,11 @@ export default function Dashboard() {
             </div>
           </Card.Header>
           <Card.Footer className="mb-auto ml-auto flex gap-2">
-            <Button variant="secondary" isIconOnly className="transition-all duration-200 hover:w-24 overflow-hidden group">
+            <Button variant="secondary" isIconOnly className="transition-all duration-200 hover:w-26 overflow-hidden group rounded-[15px]">
               <StarFill className='size-5 text-[#E3B341]'/>
               <span className="ml-1 hidden group-hover:block transition-opacity duration-200 whitespace-nowrap">{t('dashboard.sponsor.star')}</span>
             </Button>
-            <Button variant="secondary" isIconOnly className="transition-all duration-200 hover:w-24 overflow-hidden group">
+            <Button variant="secondary" isIconOnly className="transition-all duration-200 hover:w-28 overflow-hidden group rounded-[15px]">
               <Heart className='size-5 text-[#FF4BBE]'/>
               <span className="ml-1 hidden group-hover:block transition-opacity duration-200 whitespace-nowrap">{t('dashboard.sponsor.upgrade')}</span>
             </Button>
