@@ -161,11 +161,11 @@ export function TopologyGraph({ agents }: { agents: AgentListItem[] }) {
       </Card.Header>
       <Card.Content className="pt-0">
         {agents.length === 0 ? (
-          <div className="flex items-center justify-center h-[440px] text-neutral-500">
+          <div className="flex items-center justify-center h-[320px] text-neutral-500">
             {t('nav.topology.noAgents')}
           </div>
         ) : (
-          <div ref={ref} className="w-full h-[440px]" />
+          <div ref={ref} className="w-full h-[320px]" />
         )}
       </Card.Content>
     </Card>

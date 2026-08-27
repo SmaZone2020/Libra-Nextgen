@@ -114,15 +114,13 @@ export function SystemDistributionChart({ agents }: SystemDistributionChartProps
           </p>
         ) : (
           <>
-            <PieChart height={280}>
+            <PieChart height={220}>
               <PieChart.Pie
                 data={data}
                 dataKey="count"
                 nameKey="category"
                 innerRadius={55}
                 outerRadius={90}
-                paddingAngle={2}
-                strokeWidth={1}
               >
                 {data.map((d, i) => (
                   <PieChart.Cell
@@ -161,11 +159,11 @@ export function SystemDistributionChart({ agents }: SystemDistributionChartProps
             </PieChart>
 
             {/* 分类图例：色点 + 名称 + 数量（占比） */}
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 mt-3">
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 mt-3 mx-auto">
               {data.map((d, i) => {
                 const pct = total > 0 ? Math.round((d.count / total) * 100) : 0;
                 return (
-                  <span key={d.category} className="flex items-center gap-1.5 text-xs text-neutral-600">
+                  <span key={d.category} className="flex items-center gap-1.5 text-sm text-neutral-600">
                     <span
                       className="size-2.5 rounded-full"
                       style={{ backgroundColor: PIE_COLORS[i % PIE_COLORS.length] }}
