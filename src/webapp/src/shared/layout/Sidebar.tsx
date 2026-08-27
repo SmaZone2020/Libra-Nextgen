@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import type { ComponentType, MouseEvent, ReactNode, SVGProps } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { Bars, ChevronDown, Xmark } from '@gravity-ui/icons';
-import { Button, Tooltip } from '@heroui/react';
+import { Button, Dropdown, Label, Tooltip } from '@heroui/react';
 import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate } from 'react-router-dom';
 
@@ -114,7 +114,7 @@ export function Sidebar({
             transition={{ layout: { staggerChildren: 0.05 } }}
           >
             {items.map((item) => (
-              <DesktopNavItem key={item.label} item={item} collapsed={collapsed} onExpand={() => onToggle(true)} />
+              <DesktopNavItem key={item.label} item={item} collapsed={collapsed} />
             ))}
           </motion.nav>
 
@@ -123,7 +123,7 @@ export function Sidebar({
             className="pt-4 border-t border-neutral-200 dark:border-neutral-800 w-full space-y-2 overflow-y-auto overflow-x-hidden"
           >
             {bottomItems?.map((item) => (
-              <DesktopNavItem key={item.label} item={item} collapsed={collapsed} onExpand={() => onToggle(true)} />
+              <DesktopNavItem key={item.label} item={item} collapsed={collapsed} />
             ))}
           </motion.div>
         </div>
@@ -173,7 +173,7 @@ export function Sidebar({
 
 // ── Desktop item ────────────────────────────────────────────────────────
 
-function DesktopNavItem({ item, collapsed, onExpand }: { item: NavItem; collapsed: boolean; onExpand: () => void }) {
+function DesktopNavItem({ item, collapsed }: { item: NavItem; collapsed: boolean }) {
   const { t } = useTranslation();
   const location = useLocation();
   const navigate = useNavigate();
@@ -197,9 +197,10 @@ function DesktopNavItem({ item, collapsed, onExpand }: { item: NavItem; collapse
     const navigable = !!item.to;
     const handlePress = () => {
       if (collapsed) {
-        setOpen(true);
-        onExpand();
-      } else if (navigable) {
+        // 收缩态：点击由外层 Dropdown 接管，弹出子项菜单（不展开侧边栏）。
+        return;
+      }
+      if (navigable) {
         if (item.to) navigate(item.to);
       } else {
         setOpen((v) => !v);
@@ -208,31 +209,56 @@ function DesktopNavItem({ item, collapsed, onExpand }: { item: NavItem; collapse
     const handleChevron = (e: MouseEvent) => {
       e.stopPropagation();
       if (collapsed) {
-        setOpen(true);
-        onExpand();
-      } else {
-        setOpen((v) => !v);
+        return;
       }
+      setOpen((v) => !v);
     };
     return (
       <div className="flex flex-col">
         <motion.div layout className="flex items-center">
-          <Tooltip delay={0} isDisabled={!collapsed}>
-            <Button
-              isIconOnly={collapsed}
-              size="lg"
-              variant={groupActive ? 'primary' : 'ghost'}
-              className={`flex-1 justify-start px-3 mr-1 transition-all duration-300 ${groupActive ? 'rounded-[15px]' : ''}`}
-              onPress={handlePress}
-            >
-              <item.icon className="w-5 h-5 shrink-0" />
-              <span
-                className="overflow-hidden whitespace-nowrap transition-all duration-300 font-medium flex-1 text-left"
-                style={{ maxWidth: collapsed ? 0 : '14rem', opacity: collapsed ? 0 : 1 }}
+          {collapsed ? (
+            <Dropdown>
+              <Button
+                isIconOnly
+                size="lg"
+                variant={groupActive ? 'primary' : 'ghost'}
+                className={`transition-all duration-300 ${groupActive ? 'rounded-[15px]' : ''}`}
+                aria-label={label}
               >
-                {label}
-              </span>
-              {!collapsed && (
+                <item.icon className="w-5 h-5 shrink-0" />
+              </Button>
+              <Dropdown.Popover>
+                <Dropdown.Menu
+                  aria-label={label}
+                  onAction={(key) => navigate(String(key))}
+                >
+                  {item.children!.map((child) => {
+                    const childLabel = t(child.label);
+                    return (
+                      <Dropdown.Item key={child.to} id={child.to} textValue={childLabel}>
+                        <child.icon className="size-4 shrink-0 text-muted" />
+                        <Label>{childLabel}</Label>
+                      </Dropdown.Item>
+                    );
+                  })}
+                </Dropdown.Menu>
+              </Dropdown.Popover>
+            </Dropdown>
+          ) : (
+            <Tooltip delay={0}>
+              <Button
+                size="lg"
+                variant={groupActive ? 'primary' : 'ghost'}
+                className={`flex-1 justify-start px-3 mr-1 transition-all duration-300 ${groupActive ? 'rounded-[15px]' : ''}`}
+                onPress={handlePress}
+              >
+                <item.icon className="w-5 h-5 shrink-0" />
+                <span
+                  className="overflow-hidden whitespace-nowrap transition-all duration-300 font-medium flex-1 text-left"
+                  style={{ maxWidth: collapsed ? 0 : '14rem', opacity: collapsed ? 0 : 1 }}
+                >
+                  {label}
+                </span>
                 <span
                   onClick={handleChevron}
                   onPointerDown={(e) => e.stopPropagation()}
@@ -252,10 +278,10 @@ function DesktopNavItem({ item, collapsed, onExpand }: { item: NavItem; collapse
                     <ChevronDown className="w-4 h-4" />
                   </motion.span>
                 </span>
-              )}
-            </Button>
-            <Tooltip.Content placement="right">{label}</Tooltip.Content>
-          </Tooltip>
+              </Button>
+              <Tooltip.Content placement="right">{label}</Tooltip.Content>
+            </Tooltip>
+          )}
           <AnimatePresence>
             {groupActive && !collapsed && (
               <motion.div
