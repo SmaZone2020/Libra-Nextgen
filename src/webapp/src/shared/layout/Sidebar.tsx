@@ -48,7 +48,7 @@ function isGroupActive(item: NavItem, pathname: string): boolean {
 }
 
 export function Sidebar({
-  brand = 'HeroUI',
+  brand = 'Libra Nextgen',
   collapsed,
   items,
   bottomItems,
@@ -66,7 +66,7 @@ export function Sidebar({
         transition-all duration-300 ease-in-out bg-white border-r border-neutral-200 dark:bg-neutral-900 dark:border-neutral-800
         ${collapsed ? 'w-18' : 'w-64'}`}
       >
-        <div className="flex flex-col h-full p-4 overflow-y-auto">
+        <div className="flex flex-col h-full p-4 overflow-hidden">
           <div
             className={`flex items-center mb-6 transition-all duration-300 ${
               collapsed ? 'justify-center' : 'justify-between'
@@ -75,25 +75,31 @@ export function Sidebar({
             <AnimatePresence initial={false}>
               {!collapsed && (
                 <motion.div
-                  animate={{ opacity: 1, width: 'auto' }}
-                  exit={{ opacity: 0, width: 0 }}
-                  initial={{ opacity: 0, width: 0 }}
-                  transition={{ duration: 0.25, ease: 'easeInOut' }}
-                  className="overflow-hidden"
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                  initial={{ opacity: 0, height: 0 }}
+                  transition={{ duration: 0.3, ease: [0.25, 0.1, 0.25, 1] }}
+                  className="flex items-center gap-2 overflow-hidden whitespace-nowrap"
                 >
-                  <span className="text-2xl font-bold whitespace-nowrap block text-neutral-900 dark:text-neutral-100 mx-auto libre">
+                  <img
+                    alt="icon"
+                    className="h-[60px] w-[60px] pointer-events-none object-cover select-none dark:invert"
+                    loading="lazy"
+                    src="/images/icon.webp"
+                  />
+                  <span className="text-2xl font-bold whitespace-nowrap text-neutral-900 dark:text-neutral-100 libre">
                     {brand}
                   </span>
                 </motion.div>
               )}
             </AnimatePresence>
-            <Tooltip delay={0}>
+            <Tooltip delay={0} >
               <Button
                 isIconOnly
                 aria-label="Toggle sidebar"
-                size="sm"
                 variant="ghost"
                 onPress={() => onToggle(!collapsed)}
+                className="absolute right-4 top-4 z-10"
               >
                 {collapsed ? <Bars className="w-5 h-5" /> : <Xmark className="w-5 h-5" />}
               </Button>
@@ -104,8 +110,7 @@ export function Sidebar({
           </div>
 
           <motion.nav
-            layout
-            className="flex-1 flex flex-col gap-1"
+            className={`flex-1 flex flex-col gap-1 overflow-y-auto overflow-x-hidden ${collapsed ? 'mt-4' : ''}`}
             transition={{ layout: { staggerChildren: 0.05 } }}
           >
             {items.map((item) => (
@@ -115,7 +120,7 @@ export function Sidebar({
 
           <motion.div
             layout
-            className="pt-4 border-t border-neutral-200 dark:border-neutral-800 w-full space-y-2"
+            className="pt-4 border-t border-neutral-200 dark:border-neutral-800 w-full space-y-2 overflow-y-auto overflow-x-hidden"
           >
             {bottomItems?.map((item) => (
               <DesktopNavItem key={item.label} item={item} collapsed={collapsed} onExpand={() => onToggle(true)} />
@@ -136,7 +141,7 @@ export function Sidebar({
           transition-transform duration-300 ease-in-out bg-white border-r border-neutral-200 dark:bg-neutral-900 dark:border-neutral-800
           w-64 ${mobileOpen ? 'translate-x-0' : '-translate-x-full'}`}
       >
-        <div className="flex flex-col h-full p-4 overflow-y-auto">
+        <div className="flex flex-col h-full p-4 overflow-hidden">
           <div className="flex items-center justify-between mb-6">
             <span className="text-2xl font-bold text-neutral-900 dark:text-neutral-100 libre">{brand}</span>
             <Tooltip delay={0}>
@@ -149,13 +154,13 @@ export function Sidebar({
             </Tooltip>
           </div>
 
-          <nav className="flex-1 flex flex-col gap-1">
+          <nav className="flex-1 flex flex-col gap-1 overflow-y-auto">
             {items.map((item) => (
               <MobileNavItem key={item.label} item={item} onNavigate={onMobileClose} />
             ))}
           </nav>
 
-          <div className="pt-4 border-t border-neutral-200 dark:border-neutral-800 space-y-2">
+          <div className="pt-4 border-t border-neutral-200 dark:border-neutral-800 space-y-2 overflow-y-auto">
             {bottomItems?.map((item) => (
               <MobileNavItem key={item.label} item={item} onNavigate={onMobileClose} />
             ))}
@@ -457,3 +462,4 @@ function MobileNavItem({ item, onNavigate }: { item: NavItem; onNavigate: () => 
     </div>
   );
 }
+
