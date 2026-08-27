@@ -1,4 +1,5 @@
 import { useTranslation } from 'react-i18next';
+import Markdown from 'react-markdown';
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -16,6 +17,26 @@ export default function AboutPage() {
 
   return (
     <div className="max-w-3xl mx-auto space-y-10 py-4">
+      <div className="flex flex-col items-center justify-center gap-4 select-none pointer-events-none">
+        <img
+          alt="icon"
+          className="size-40 object-cover dark:invert"
+          loading="lazy"
+          src="/images/icon2.webp"
+        />
+        <p className="text-4xl font-bold whitespace-nowrap text-neutral-900 dark:text-neutral-100 libre">
+          Libra Nextgen
+        </p>
+        <div className='flex items-center gap-2'>
+          <img src="https://img.shields.io/badge/.NET-C172D7?style=flat-square&logo=.net&logoColor=black" alt=".NET"/>
+          <img src="https://img.shields.io/badge/Rust-FFFFFF?style=flat-square&logo=rust&logoColor=black" alt="Rust"/>
+          <img src="https://img.shields.io/badge/TypeScript-3178C6?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript"/>
+          <img src="https://img.shields.io/badge/React-61DAFB?style=flat-square&logo=react&logoColor=black" alt="React"/>
+          <img src="https://img.shields.io/badge/HeroUI-000000?style=flat-square&logo=heroui&logoColor=white" alt="HeroUI"/>
+          <img src="https://img.shields.io/badge/MongoDB-21BF3E?style=flat-square&logo=mongodb&logoColor=white" alt="MongoDB"/>
+          <img src="https://img.shields.io/github/v/release/SmaZone2020/Libra-Nextgen?style=flat-square" alt="Release"/>
+        </div>
+      </div>
 
       {/* License */}
       <Section title={t('about.licenseTitle')}>
@@ -63,7 +84,7 @@ export default function AboutPage() {
       <Section title={t('about.applicableLawTitle')}>
         <p>{t('about.applicableLawP1')}</p>
 
-        <h3 className="text-base font-medium text-neutral-800 !mt-5">{t('about.lawCnTitle')}</h3>
+        <h3 className="text-base font-medium text-neutral-800 dark:text-neutral-400 !mt-5">{t('about.lawCnTitle')}</h3>
         <ul className="list-disc pl-6 space-y-1 text-neutral-600 dark:text-neutral-400">
           <li>{t('about.lawCnLi1')}</li>
           <li>{t('about.lawCnLi2')}</li>
@@ -71,7 +92,7 @@ export default function AboutPage() {
           <li>{t('about.lawCnLi4')}</li>
         </ul>
 
-        <h3 className="text-base font-medium text-neutral-800 !mt-5">{t('about.lawIntlTitle')}</h3>
+        <h3 className="text-base font-medium text-neutral-800 dark:text-neutral-400 !mt-5">{t('about.lawIntlTitle')}</h3>
         <ul className="list-disc pl-6 space-y-1 text-neutral-600 dark:text-neutral-400">
           <li>{t('about.lawIntlLi1')}</li>
           <li>{t('about.lawIntlLi2')}</li>
