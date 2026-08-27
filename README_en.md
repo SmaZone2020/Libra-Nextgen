@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="/assets/icon.webp" width="300"/>
+  <img src="/assets/hero.png" width="300"/>
   <h1>Libra-Nextgen</h1>
 
   

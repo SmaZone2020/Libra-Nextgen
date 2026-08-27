@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="/assets/icon.webp" width="300"/>
+  <img src="/assets/hero.png" width="300"/>
   <h1>Libra-Nextgen</h1>
 
   面向企业级红蓝对抗的现代化 **C2（Command & Control）框架**
