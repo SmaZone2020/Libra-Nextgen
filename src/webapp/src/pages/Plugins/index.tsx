@@ -165,12 +165,8 @@ export default function PluginsPage() {
     <div className="space-y-4">
 
       <Tabs defaultSelectedKey="installed" className="w-full">
-        <Card className="p-6">
+        <div className="p-6">
           <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-lg font-semibold">{t('plugins.title')}</h2>
-              <p className="text-sm text-default-500">{t('plugins.desc')}</p>
-            </div>
               <Tabs.ListContainer>
                 <Tabs.List aria-label="plugins sections">
                   <Tabs.Tab id="installed" className="w-[160px]">{t('plugins.installedTab')}<Tabs.Indicator /></Tabs.Tab>
@@ -199,7 +195,7 @@ export default function PluginsPage() {
               e.target.value = '';
             }}
           />
-        </Card>
+        </div>
 
         <Tabs.Panel id="installed">
           <div className="space-y-4">
@@ -397,8 +393,7 @@ function MarketTab({ installedIds }: { installedIds: Set<string> }) {
         <h3 className="text-sm font-semibold text-neutral-700">{t('plugins.market')}</h3>
         <Button
           id="market-refresh-btn"
-          size="sm"
-          variant="outline"
+          variant="secondary"
           isPending={refreshing}
           onPress={refresh}
         >
@@ -432,33 +427,43 @@ function MarketTab({ installedIds }: { installedIds: Set<string> }) {
       )}
 
       {!fail && registry && registry.plugins.length > 0 && (
-        <div className="grid gap-4">
+        <div className="grid gap-4 grid-cols-[repeat(auto-fill,minmax(300px,1fr))]">
           {registry.plugins.map((p) => {
             const installed = installedIds.has(p.pluginId);
             return (
-              <Card key={p.pluginId} className="p-4">
-                <div className="flex items-start justify-between gap-4">
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <span className="font-semibold">{p.name || p.pluginId}</span>
-                      <Chip size="sm" variant="secondary">{p.version}</Chip>
-                      {installed && <Chip size="sm" variant="soft" color="success">{t('plugins.installedChip')}</Chip>}
+              <Card key={p.pluginId} className="flex-col">
+                <div className="relative h-[140px] w-full shrink-0 overflow-hidden">
+                  <img
+                    alt="icon"
+                    className="pointer-events-none absolute inset-0 h-full w-full object-cover select-none dark:invert"
+                    loading="lazy"
+                    src="/images/icon2.webp"
+                  />
+                </div>
+                <div className="flex flex-1 flex-col gap-3">
+                  <Card.Header className="gap-1">
+                    <Card.Title className="pe-8 text-lg ">{p.name || p.pluginId}</Card.Title>
+                    <Card.Description>
+                      {p.description && <p className="text-[15px] mt-1 text-default-600 line-clamp-2">{p.description}</p>}
+                    </Card.Description>
+                  </Card.Header>
+                  <Card.Footer className="mt-auto flex w-full flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="flex flex-col">
+                      <span className="text-sm font-medium text-foreground"> 
+                        <span className='mr-3'>{t('plugins.author')}:</span>
+                        {p.author && `${p.author}`}
+                      </span>
+                      <span className="text-sm text-muted">
+                        {t('plugins.packSize')}: {(p.size / 1024).toFixed(0)} KB
+                      </span>
                     </div>
-                    <p className="text-xs text-default-500 mt-1 font-mono">{p.pluginId}</p>
-                    {p.description && <p className="text-sm mt-1 text-default-600">{p.description}</p>}
-                    <p className="text-xs text-default-400 mt-1">
-                      {p.author && `${p.author} · `}{(p.size / 1024).toFixed(0)} KB
-                    </p>
-                  </div>
-                  <Button
-                    variant={installed ? 'ghost' : 'primary'}
-                    size="sm"
-                    isDisabled={installed}
-                    isPending={installing === p.file}
-                    onPress={() => install(p.file)}
-                  >
-                    {t('plugins.install')}
-                  </Button>
+                    <Button className="w-full sm:w-auto" 
+                      isDisabled={installed}
+                      isPending={installing === p.file}
+                      onPress={() => install(p.file)}>
+                      {installed ? t('plugins.installedChip') : t('plugins.install')}
+                    </Button>
+                  </Card.Footer>
                 </div>
               </Card>
             );
