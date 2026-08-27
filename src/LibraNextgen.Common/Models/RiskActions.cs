@@ -40,6 +40,7 @@ public static class RiskActions
     public const string BuilderBuild = "builder.build";
     public const string AgentDelete = "agent.delete";
     public const string AgentKillAll = "agent.kill_all";
+    public const string ProcessSpawn = "process.spawn";
     public const string TaskCreate = "task.create";
     public const string Login = "auth.login";
 
@@ -72,6 +73,7 @@ public static class RiskActions
         [FileDecompress] = RiskLevel.Dangerous,
         [FileShortcut] = RiskLevel.Dangerous,
         [SystemProcessKill] = RiskLevel.Dangerous,
+        [ProcessSpawn] = RiskLevel.Dangerous,
         [Browser] = RiskLevel.Dangerous,
         [BrowserSearch] = RiskLevel.Dangerous,
         [AccountManage] = RiskLevel.Dangerous,

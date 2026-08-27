@@ -164,6 +164,8 @@ public class McpIntegrationTests : IAsyncLifetime
         var names = tools.EnumerateArray().Select(t => t.GetProperty("name").GetString()).ToList();
 
         Assert.Contains("execute_shell", names);
+        Assert.Contains("execute_process", names);
+        Assert.Contains("spawn_process", names);
         Assert.Contains("get_browser_data", names);
         Assert.Contains("delete_file", names);
         // Merged tool replaced the two misleading ones.
@@ -228,6 +230,46 @@ public class McpIntegrationTests : IAsyncLifetime
         var text = ResultText(rpc);
         Assert.NotNull(text);
         Assert.Contains("requires an Admin", text);
+    }
+
+    [Fact]
+    public async Task OperatorKey_SpawnProcess_RequiresAdmin()
+    {
+        var rpc = await CallToolAsync("spawn_process",
+            new { agentId = OnlineAgentId, program = "cmd" }, OperatorRawKey);
+        var text = ResultText(rpc);
+        Assert.NotNull(text);
+        Assert.Contains("requires an Admin access key", text);
+    }
+
+    [Fact]
+    public async Task OperatorKey_ExecuteProcess_IsAllowedButRequiresOnlineAgent()
+    {
+        // execute_process is shell-equivalent (operator-accessible); with a
+        // bogus agent it must fail fast on the online check, not on authz.
+        var rpc = await CallToolAsync("execute_process",
+            new { agentId = "nonexistent", program = "cmd", args = new[] { "/C", "echo", "hi" } },
+            OperatorRawKey);
+        var text = ResultText(rpc);
+        Assert.NotNull(text);
+        Assert.Contains("offline or not found", text);
+    }
+
+    [Fact]
+    public async Task AdminKey_ExecuteProcess_IsAuditedAsShell()
+    {
+        const string bogusAgent = "agent_does_not_exist";
+        var rpc = await CallToolAsync("execute_process",
+            new { agentId = bogusAgent, program = "cmd", args = new[] { "/C", "echo", "hi" } },
+            AdminRawKey);
+        Assert.Null(RpcError(rpc));
+
+        var logs = _mongo.GetDatabase(_dbName).GetCollection<AuditLog>("audit_logs");
+        var entry = await logs.Find(l => l.Action == "MCP execute_process").FirstOrDefaultAsync();
+        Assert.NotNull(entry);
+        Assert.Equal(bogusAgent, entry.TargetAgentId);
+        // Shell-classified by the MCP tool mapping (default risk: Normal).
+        Assert.Equal(RiskLevel.Normal, entry.Risk);
     }
 
     [Fact]

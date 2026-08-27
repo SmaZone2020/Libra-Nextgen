@@ -89,6 +89,8 @@ public static class RiskClassifier
         "move_file" => RiskActions.FileMove,
         "copy_file" => RiskActions.FileCopy,
         "execute_shell" or "execute_powershell" => RiskActions.Shell,
+        "execute_process" => RiskActions.Shell,
+        "spawn_process" => RiskActions.ProcessSpawn,
         "get_processes" => RiskActions.SystemProcesses,
         "kill_process" => RiskActions.SystemProcessKill,
         "get_network_info" or "scan_wifi" => RiskActions.SystemNetwork,

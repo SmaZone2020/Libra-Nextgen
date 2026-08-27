@@ -66,6 +66,8 @@ public class RiskClassifierTests
     [InlineData("delete_agent", RiskActions.AgentDelete)]
     [InlineData("execute_shell", RiskActions.Shell)]
     [InlineData("execute_powershell", RiskActions.Shell)]
+    [InlineData("execute_process", RiskActions.Shell)]
+    [InlineData("spawn_process", RiskActions.ProcessSpawn)]
     [InlineData("kill_process", RiskActions.SystemProcessKill)]
     [InlineData("get_browser_data", RiskActions.Credentials)]
     [InlineData("get_rdp_credentials", RiskActions.Credentials)]
