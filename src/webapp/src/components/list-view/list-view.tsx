@@ -109,7 +109,11 @@ const ListViewItem = <T extends object>({
       data-slot="list-view-item"
       {...props}
     >
-      {({ selectionBehavior, selectionMode: itemSelectionMode }) => (
+      {({
+        selectionBehavior,
+        selectionMode: itemSelectionMode,
+        isSelected,
+      }) => (
         <>
           {selectionMode !== 'none' &&
             itemSelectionMode !== 'none' &&
@@ -121,10 +125,23 @@ const ListViewItem = <T extends object>({
                 )}
                 data-slot="list-view-selection-cell"
               >
+                {/*
+                  选择框必须绑定行的选中状态：HeroUI Checkbox 底层是
+                  react-aria 的 CheckboxField，它维护自己的内部 state，
+                  不消费 GridList 的 CheckboxContext（slot="selection"）——
+                  不传受控 isSelected 时，勾选视觉与行的 selection 脱节
+                  （点行选中但框不亮、点框亮了但配置没变）。
+                  受控 isSelected + 空 onChange：视觉完全跟随 selection；
+                  点击事件冒泡到行触发 toggle。
+                */}
                 <Checkbox
                   aria-label="Select row"
                   slot="selection"
                   variant={checkboxVariant}
+                  isSelected={isSelected}
+                  onChange={() => {
+                    /* 受控：状态由行的 selection 驱动，事件冒泡给行处理 */
+                  }}
                 >
                   <Checkbox.Control>
                     <Checkbox.Indicator />
