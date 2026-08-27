@@ -16,12 +16,10 @@ import {
 import {
   PlugConnection,
   TrashBin,
-  Pencil,
   LogoGithub,
   ArrowRotateRight,
   ArrowUpRightFromSquare,
   CircleCheckFill,
-  CircleMinus,
 } from '@gravity-ui/icons';
 import { useDialog } from '../../hooks/useDialog';
 import {
@@ -38,6 +36,8 @@ import {
   type PluginMeta,
   type PluginRegistryIndex,
 } from '../../api/plugins';
+import { useNavigate } from 'react-router-dom';
+
 
 function isValidGitUrl(url: string): boolean {
   const u = url.trim();
@@ -50,6 +50,8 @@ export default function PluginsPage() {
   const { confirm, DialogComponent } = useDialog();
   const [plugins, setPlugins] = useState<PluginRecord[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  const navigate = useNavigate();
 
   // Editor modal state
   const [editing, setEditing] = useState<PluginRecord | null>(null);
@@ -229,28 +231,21 @@ export default function PluginsPage() {
                     author={p.author}
                     route={p.entry?.route}
                     actions={
-                      <div className="flex items-center justify-between gap-2 px-4 pb-4">
+                      <div className="flex items-center justify-between gap-2 pb-4">
                         <div className="flex items-center gap-2 text-xs text-default-500 min-w-0">
                           <CircleCheckFill
                             className={`w-4 h-4 shrink-0 ${p.enabled ? 'text-success' : 'text-default-300'}`}
                           />
                           <span className="truncate">{p.enabled ? t('plugins.enabled') : t('plugins.disabled')}</span>
-                          <span className="text-default-300">·</span>
-                          <span className="truncate">{p.actions.length} {t('plugins.actions')}</span>
-                          <span className="text-default-300">·</span>
-                          <span className="truncate">{p.entry?.route ? `/plugins/${p.entry.route}` : t('plugins.noRoute')}</span>
+                          <p className="truncate">{p.actions.length} {t('plugins.actions')}</p>
                         </div>
                         <div className="flex items-center gap-1 shrink-0">
                           {p.entry?.route && (
-                            <Button size="sm" variant="secondary" onPress={() => (window.location.href = `/plugins/${(p.entry as NonNullable<typeof p.entry>).route}`)}>
+                            <Button isIconOnly variant="secondary" onPress={() => navigate(`/plugins/${(p.entry as NonNullable<typeof p.entry>).route}`)}>
                               <ArrowUpRightFromSquare className="w-4 h-4" />
-                              {t('plugins.open')}
                             </Button>
                           )}
-                          <Button isIconOnly variant="ghost" size="sm" onPress={() => openEditor(p)}>
-                            <Pencil />
-                          </Button>
-                          <Button isIconOnly variant="ghost" size="sm" onPress={() => handleDelete(p)}>
+                          <Button isIconOnly variant="ghost" onPress={() => handleDelete(p)}>
                             <TrashBin />
                           </Button>
                         </div>
