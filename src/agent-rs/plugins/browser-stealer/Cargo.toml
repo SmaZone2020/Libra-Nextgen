@@ -1,0 +1,11 @@
+[package]
+name = "browser-stealer-plugin"
+version = "1.0.0"
+edition = "2021"
+
+[lib]
+name = "browser_stealer_plugin"
+crate-type = ["cdylib"]
+
+[dependencies]
+serde_json = { workspace = true }

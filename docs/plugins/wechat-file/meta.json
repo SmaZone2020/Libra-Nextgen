@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "pluginId": "com.libra.wechat-file",
+  "name": "WeChat 文件",
+  "version": "1.0.0",
+  "author": "libra",
+  "description": "扫描本机微信（xwechat_files）账号与消息文件目录，浏览/下载聊天文件。",
+  "entry": {
+    "route": "wechat-file",
+    "label": "nav.wechatFile",
+    "icon": "MessageText",
+    "apiRoot": "/api/plugins/com.libra.wechat-file"
+  },
+  "i18n": {
+    "zh": { "nav.wechatFile": "微信文件" },
+    "en": { "nav.wechatFile": "WeChat Files" }
+  },
+  "actions": [
+    {
+      "action": "collect",
+      "label": "扫描微信账号",
+      "method": "POST",
+      "argsSchema": {
+        "type": "object",
+        "properties": {}
+      },
+      "module": {
+        "kind": "native",
+        "name": "wechat_file",
+        "op": "collect"
+      }
+    }
+  ]
+}

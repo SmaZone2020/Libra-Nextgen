@@ -1,0 +1,14 @@
+{
+  "name": "libra-plugin-template",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Libra-Nextgen plugin development scaffold (meta + agent JS + service C# + page + zero-dep pack)",
+  "scripts": {
+    "pack": "node pack.mjs",
+    "pack:list": "node pack.mjs --list"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

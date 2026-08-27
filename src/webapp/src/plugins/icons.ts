@@ -12,6 +12,7 @@ import {
   Server,
   Magnifier,
   Rocket,
+  Comments,
 } from '@gravity-ui/icons';
 
 /**
@@ -34,6 +35,7 @@ export const PLUGIN_ICONS: Record<string, ComponentType<SVGProps<SVGSVGElement>>
   Server,
   Magnifier,
   Rocket,
+  Comments,
 };
 
 /** Resolve an icon name to a component, falling back to Puzzle. */

@@ -195,6 +195,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "browser-stealer-plugin"
+version = "1.0.0"
+dependencies = [
+ "serde_json",
+]
+
+[[package]]
 name = "bumpalo"
 version = "3.20.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2929,6 +2936,13 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "52f5ee44c96cf55f1b349600768e3ece3a8f26010c05265ab73f945bb1a2eb9d"
 dependencies = [
  "rustls-pki-types",
+]
+
+[[package]]
+name = "wechat-file-plugin"
+version = "1.0.0"
+dependencies = [
+ "serde_json",
 ]
 
 [[package]]
