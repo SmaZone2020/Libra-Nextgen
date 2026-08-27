@@ -2,13 +2,13 @@
 
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useParams } from 'react-router-dom';
 import { Button, Chip } from '@heroui/react';
 import type { ComponentType, SVGProps } from 'react';
 import {
   ChevronRight,
   Globe,
   Key,
-  Lock,
   Person,
   ShieldKeyhole,
   SlidersVertical,
@@ -31,7 +31,7 @@ export interface SettingRoute {
   render: () => ReactNode;
 }
 
-const ROUTES: SettingRoute[] = [
+export const SETTING_ROUTES: SettingRoute[] = [
   {
     id: 'preferences',
     labelKey: 'settings.preferencesTab',
@@ -73,18 +73,38 @@ const ROUTES: SettingRoute[] = [
     id: 'riskPolicy',
     labelKey: 'riskPolicy.title',
     descKey: 'settings.riskPolicyDesc',
-    icon: Lock,
+    icon: ShieldKeyhole,
     adminOnly: true,
     render: () => <RiskPolicyTab />,
   },
 ];
+
+export function getVisibleSettingRoutes(): SettingRoute[] {
+  const isAdmin = getStoredUser()?.role === 'Admin';
+  return SETTING_ROUTES.filter((r) => !r.adminOnly || isAdmin);
+}
+
+export function SettingDetail() {
+  const { t } = useTranslation();
+  const { settingId } = useParams<{ settingId: string }>();
+  const route = getVisibleSettingRoutes().find((r) => r.id === settingId);
+  if (!route) return null;
+  return (
+    <div className="space-y-4">
+      <Button variant="ghost" size="sm" onPress={() => window.history.back()}>
+        ← {t('settings.securityBack')}
+      </Button>
+      {route.render()}
+    </div>
+  );
+}
 
 export default function SettingsPage() {
   const { t } = useTranslation();
   const isAdmin = getStoredUser()?.role === 'Admin';
   const [activeId, setActiveId] = useState<string | null>(null);
 
-  const visibleRoutes = ROUTES.filter((r) => !r.adminOnly || isAdmin);
+  const visibleRoutes = SETTING_ROUTES.filter((r) => !r.adminOnly || isAdmin);
   const active = visibleRoutes.find((r) => r.id === activeId);
 
   if (active) {

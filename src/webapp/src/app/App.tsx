@@ -17,7 +17,7 @@ import SoftwareDataPage from '../pages/SoftwareData';
 import ProxyBrowserPage from '../pages/ProxyBrowser';
 import BuilderPage from '../pages/Builder';
 import AboutPage from '../pages/About';
-import SettingsPage from '../pages/Settings';
+import SettingsPage, { SettingDetail } from '../pages/Settings';
 import PluginsPage from '../pages/Plugins';
 import { useRegisteredPlugins } from '../plugins/registry';
 import { resolvePluginIcon } from '../plugins/icons';
@@ -60,6 +60,12 @@ const PAGE_META_KEYS: Record<string, [string, string]> = {
   '/about': ['pageMeta.about.label', 'pageMeta.about.subtitle'],
   '/settings': ['pageMeta.settings.label', 'pageMeta.settings.subtitle'],
   '/plugins': ['pageMeta.plugins.label', 'pageMeta.plugins.subtitle'],
+  '/settings/preferences': ['pageMeta.settings.label', 'pageMeta.settings.subtitle'],
+  '/settings/security': ['pageMeta.settings.label', 'pageMeta.settings.subtitle'],
+  '/settings/accessKeys': ['pageMeta.settings.label', 'pageMeta.settings.subtitle'],
+  '/settings/account': ['pageMeta.settings.label', 'pageMeta.settings.subtitle'],
+  '/settings/mcp': ['pageMeta.settings.label', 'pageMeta.settings.subtitle'],
+  '/settings/riskPolicy': ['pageMeta.settings.label', 'pageMeta.settings.subtitle'],
 };
 
 function PageHeader({ pluginLabels }: { pluginLabels: Map<string, string> }) {
@@ -363,7 +369,12 @@ function AuthenticatedLayout({
               variant="ghost"
               onPress={() => setMobileSidebarOpen(true)}
             >
-              <Bars className="w-5 h-5" />
+              <img
+                alt="icon"
+                className="w-8 h-8 object-cover dark:invert"
+                loading="lazy"
+                src="/images/icon2.webp"
+              />
             </Button>
             <div className="flex-1 min-w-0">
               <PageHeader pluginLabels={pluginLabels} />
@@ -432,6 +443,7 @@ function AuthenticatedLayout({
                 <Route path="/proxy" element={<ProxyBrowserPage />} />
                 <Route path="/builder" element={<BuilderPage />} />
                 <Route path="/settings" element={<SettingsPage />} />
+                <Route path="/settings/:settingId" element={<SettingDetail />} />
                 <Route path="/plugins" element={<PluginsPage />} />
                 <Route path="/about" element={<AboutPage />} />
                 {registeredPlugins.map((p) => {
