@@ -248,7 +248,7 @@ export function ServiceTab() {
 
       {/* 结果模态框 */}
       <Modal.Backdrop isOpen={modal !== null} onOpenChange={(open) => { if (!open) setModal(null); }}>
-        <Modal.Container size="lg">
+        <Modal.Container placement="center" size="lg">
           <Modal.Dialog>
             <Modal.CloseTrigger />
             <Modal.Header>

@@ -395,7 +395,7 @@ export default function FileManagerPage() {
 
       <Modal state={dlModal}>
         <Modal.Backdrop isDismissable={dl?.status !== 'downloading'} isKeyboardDismissDisabled={dl?.status === 'downloading'}>
-          <Modal.Container>
+          <Modal.Container placement="center">
             <Modal.Dialog className="sm:max-w-[420px]">
               {dl && (
                 <>

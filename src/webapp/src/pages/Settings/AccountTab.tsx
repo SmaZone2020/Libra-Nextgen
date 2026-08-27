@@ -239,7 +239,7 @@ export default function AccountTab() {
 
       {/* Create/Edit Modal */}
       <Modal.Backdrop isOpen={modalOpen} onOpenChange={(open) => { if (!open) setModalOpen(false); }}>
-        <Modal.Container size="lg">
+        <Modal.Container placement="center" size="lg">
           <Modal.Dialog>
             <Modal.CloseTrigger />
             <Modal.Header>
@@ -351,7 +351,7 @@ export default function AccountTab() {
 
       {/* Change Password Modal */}
       <Modal.Backdrop isOpen={pwModalOpen} onOpenChange={(open) => { if (!open) { setPwModalOpen(false); setPwError(null); } }}>
-        <Modal.Container size="sm">
+        <Modal.Container placement="center" size="sm">
           <Modal.Dialog>
             <Modal.CloseTrigger />
             <Modal.Header>

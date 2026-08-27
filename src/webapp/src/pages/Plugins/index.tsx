@@ -275,7 +275,7 @@ export default function PluginsPage() {
 
       {/* Editor modal */}
       <Modal.Backdrop isOpen={editing !== null} onOpenChange={(open) => { if (!open) closeEditor(); }}>
-        <Modal.Container size="lg">
+        <Modal.Container placement="center" size="lg">
           <Modal.Dialog>
             <Modal.CloseTrigger />
             <Modal.Header>
@@ -308,7 +308,7 @@ export default function PluginsPage() {
 
       {/* Git import modal */}
       <Modal.Backdrop isOpen={gitOpen} onOpenChange={(open) => { if (!open) setGitOpen(false); }}>
-        <Modal.Container size="md">
+        <Modal.Container placement="center" size="md">
           <Modal.Dialog>
             <Modal.CloseTrigger />
             <Modal.Header>

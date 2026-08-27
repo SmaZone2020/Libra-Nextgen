@@ -59,7 +59,7 @@ export function BuilderDownloadModal({ record, onClose }: BuilderDownloadModalPr
 
   return (
     <Modal.Backdrop isOpen onOpenChange={(open) => { if (!open) onClose(); }}>
-      <Modal.Container size="lg">
+      <Modal.Container placement="center" size="lg">
         <Modal.Dialog>
           <Modal.CloseTrigger />
           <Modal.Header>

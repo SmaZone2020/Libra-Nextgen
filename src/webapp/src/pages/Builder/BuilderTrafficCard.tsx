@@ -132,7 +132,7 @@ export function BuilderTrafficCard({ lists, onAddItem, onToggleItem, onDeleteIte
       {/* 增加项模态框 */}
       <Modal isOpen={!!activeGroup} onOpenChange={(open) => { if (!open) setActiveGroup(null); }}>
         <Modal.Backdrop>
-          <Modal.Container>
+          <Modal.Container placement="center">
             <Modal.Dialog className="sm:max-w-md">
               <Modal.Header>
                 <Modal.Heading>{activeGroup ? t(activeGroup.titleKey) : ''}</Modal.Heading>

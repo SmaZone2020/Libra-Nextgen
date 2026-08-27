@@ -157,7 +157,7 @@ export function EnvTab({ agentId }: EnvTabProps) {
       </ContextMenu>
 
       <Modal.Backdrop isOpen={modalOpen} onOpenChange={setModalOpen}>
-        <Modal.Container size="md">
+        <Modal.Container placement="center" size="md">
           <Modal.Dialog>
             <Modal.CloseTrigger />
             <Modal.Header>

@@ -53,7 +53,7 @@ export function AgentDetailModal({ isOpen, onOpenChange, agent, loading }: Agent
 
   return (
     <Modal.Backdrop isOpen={isOpen} onOpenChange={onOpenChange}>
-      <Modal.Container size="lg">
+      <Modal.Container placement="center" size="lg">
         <Modal.Dialog>
           <Modal.CloseTrigger />
           <Modal.Header>

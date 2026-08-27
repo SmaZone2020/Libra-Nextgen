@@ -236,7 +236,7 @@ export function RDPTab({ agentId }: RDPTabProps) {
 
       <Modal state={modalState}>
         <Modal.Backdrop>
-          <Modal.Container>
+          <Modal.Container placement="center">
             <Modal.Dialog className="sm:max-w-[560px]">
               <Modal.CloseTrigger />
               {selected && (

@@ -169,7 +169,7 @@ export default function PreferencesTab() {
       </Card>
 
       <Modal.Backdrop isOpen={eventModalOpen} onOpenChange={(open) => { if (!open) setEventModalOpen(false); }}>
-        <Modal.Container size="sm">
+        <Modal.Container placement="center" size="sm">
           <Modal.Dialog>
             <Modal.Header>
               <Modal.Heading>{t('settings.selectEvents')}</Modal.Heading>

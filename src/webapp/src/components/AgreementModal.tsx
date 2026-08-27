@@ -12,7 +12,7 @@ export function AgreementModal({ onAccept, onDecline }: AgreementModalProps) {
 
   return (
     <Modal.Backdrop isOpen isDismissable={false} onOpenChange={(open) => { if (!open) onDecline(); }}>
-      <Modal.Container size="lg">
+      <Modal.Container placement="center" size="lg">
         <Modal.Dialog>
           <Modal.Header>
             <Modal.Heading>{t('agreement.title')}</Modal.Heading>

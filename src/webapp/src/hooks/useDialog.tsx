@@ -42,7 +42,7 @@ export function useDialog() {
 
   const DialogComponent = state ? (
     <Modal.Backdrop isOpen isDismissable={false} onOpenChange={(open) => { if (!open) handleClose(false); }}>
-      <Modal.Container size="sm">
+      <Modal.Container placement="center" size="sm">
         <Modal.Dialog>
           <Modal.Header>
             <Modal.Heading>{state.title}</Modal.Heading>

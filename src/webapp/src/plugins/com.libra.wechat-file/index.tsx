@@ -201,7 +201,7 @@ export default function WeChatFilePage() {
       {/* File detail modal */}
       <Modal state={modalState}>
         <Modal.Backdrop>
-          <Modal.Container>
+          <Modal.Container placement="center">
             <Modal.Dialog className="sm:max-w-[400px]">
               <Modal.CloseTrigger />
               {selectedFile && (() => {

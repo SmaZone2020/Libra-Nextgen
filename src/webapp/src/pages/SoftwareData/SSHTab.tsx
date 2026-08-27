@@ -191,7 +191,7 @@ export function SSHTab({ agentId }: SSHTabProps) {
 
       <Modal state={modalState}>
         <Modal.Backdrop>
-          <Modal.Container>
+          <Modal.Container placement="center">
             <Modal.Dialog className="sm:max-w-[640px]">
               <Modal.CloseTrigger />
               {selected && (

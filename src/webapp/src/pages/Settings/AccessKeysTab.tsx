@@ -121,7 +121,7 @@ export default function AccessKeysTab() {
         </Table>
       </Card>
       <Modal.Backdrop isOpen={createOpen} onOpenChange={(open) => { if (!open) closeCreateModal(); }}>
-        <Modal.Container size="sm">
+        <Modal.Container placement="center" size="sm">
           <Modal.Dialog>
             <Modal.CloseTrigger />
             {createdKey ? (

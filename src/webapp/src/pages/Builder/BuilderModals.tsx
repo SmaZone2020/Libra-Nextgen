@@ -149,7 +149,7 @@ export function BuilderModals({
         isDismissable={!building}
         onOpenChange={(open) => { if (!open && !building) onCloseLogs(); }}
       >
-        <Modal.Container size="lg">
+        <Modal.Container placement="center" size="lg">
           <Modal.Dialog>
             {!building && <Modal.CloseTrigger />}
             <Modal.Header>
@@ -241,7 +241,7 @@ export function BuilderModals({
 
       {/* Delete Template Confirm Modal */}
       <Modal.Backdrop isOpen={!!templateToDelete} onOpenChange={(open) => { if (!open) onCancelDeleteTemplate(); }}>
-        <Modal.Container size="sm">
+        <Modal.Container placement="center" size="sm">
           <Modal.Dialog>
             <Modal.Header>
               <Modal.Heading>{t('builder.deleteTemplate')}</Modal.Heading>
@@ -259,7 +259,7 @@ export function BuilderModals({
 
       {/* Info Modal */}
       <Modal.Backdrop isOpen={!!selectedRecord} onOpenChange={() => onCloseInfo()}>
-        <Modal.Container size="md">
+        <Modal.Container placement="center" size="md">
           <Modal.Dialog>
             <Modal.CloseTrigger />
             <Modal.Header>
