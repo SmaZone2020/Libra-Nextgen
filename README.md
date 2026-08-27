@@ -31,15 +31,42 @@ Agent 采用 **Bootstrapper + 云载模块**：loader 反射加载加密最小�
 
 ## 快速开始
 
-环境：Rust 1.80+ · .NET SDK 10 · Node.js 20+ · MongoDB 7.0+。
+### 1. 安装环境
+
+| 依赖 | 版本 | 安装 | 说明 |
+| --- | --- | --- | --- |
+| **MongoDB** | 7.0+ | 官网下载安装包 / `winget install MongoDB.Server` / Docker | 数据存储，**必须先启动**。本机默认连接串 `mongodb://localhost:27017`，启动后可用 `mongod --dbpath <数据目录>` 运行；Docker：`docker run -d -p 27017:27017 --name libra-mongo mongo:7` |
+| **.NET SDK** | 10.0（LTS） | <https://dotnet.microsoft.com/download>（Linux 用 dotnet-install 脚本） | 运行 Server（`src/service`），`dotnet --version` 应输出 10.x |
+| **Node.js** | 20+（含 npm） | <https://nodejs.org>（推荐 LTS） | 运行 Console（`src/webapp`） |
+| **Rust**（可选） | 1.80+ | <https://rustup.rs> | 仅在用 Builder 页**在线构建 Agent 载荷**时需要；Windows 需 MSVC 工具链（VS Build Tools），Linux 交叉构建需 `cargo-zigbuild` |
+
+> Windows 安装后请**重新打开终端**再执行下面的命令，确保 PATH 生效；安装完成后分别用 `mongod --version` / `dotnet --version` / `node --version` / `cargo --version` 验证。
+
+### 2. 启动 Server（后端 API，端口 5270）
 
 ```bash
-# 1. Server（http://localhost:5270）
-cd src/service && dotnet run
-# 2. Console（http://localhost:5173，首次访问 /setup 建管理员）
-cd src/webapp && npm install && npm run dev
-# 3. 载荷：Console 的 Builder 页在线构建 Win/Linux 载荷（交叉构建需 zig 工具链）
+cd src/service
+dotnet run
 ```
+
+- 首次启动自动连接 MongoDB 并建库建索引；库名 `libra_nextgen`，可参考 [部署手册](docs/部署手册.md) 的 `MongoDB__*` 环境变量覆盖连接串
+- 监听地址/端口可在「设置 → 安全」里修改（默认 `0.0.0.0:5270`，仅本机回环调试可开启 loopback）
+
+### 3. 启动 Console（前端，端口 5173）
+
+```bash
+cd src/webapp
+npm install   # 首次或依赖变更后执行
+npm run dev
+```
+
+浏览器打开 <http://localhost:5173>，首次访问会进入 `/setup` 创建管理员账户，登录后即可使用。
+
+> 前端默认按页面地址自动推导后端地址（`localhost:5173` → `localhost:5270`），无需额外配置；仅当后端与前端不在同一主机时才需在 `src/webapp/.env` 设置 `VITE_API_BASE`（见 [部署手册](docs/部署手册.md)）。
+
+### 4. 生成并运行 Agent 载荷（可选，需要 Rust）
+
+Console 的 **Builder** 页在线构建 Windows/Linux 载荷（交叉构建需 zig 工具链），在目标机器运行产物即自动上线。内置 Agent 端模块（shell/recon/creds/files 等）按需从 Server 下载、内存加载。
 
 插件安装途径：**上传**（zip 包）/ **从 Git 导入**（[插件开发脚手架](https://github.com/SmaZone2020/Libra-Plugin-Template)）/ **插件市场**（[Libra-Plugins](https://github.com/SmaZone2020/Libra-Plugins) 官方仓库在线安装）。
 

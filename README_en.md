@@ -33,16 +33,42 @@ The Agent uses a **Bootstrapper + cloud modules** architecture: the loader refle
 
 ## Quick Start
 
-Requirements: Rust 1.80+ · .NET SDK 10 · Node.js 20+ · MongoDB 7.0+.
+### 1. Install the Environment
+
+| Dependency | Version | Install | Notes |
+| --- | --- | --- | --- |
+| **MongoDB** | 7.0+ | Official installer / `winget install MongoDB.Server` / Docker | Data store — **must be running first**. Default local connection string `mongodb://localhost:27017`; run it with `mongod --dbpath <data-dir>`, or Docker: `docker run -d -p 27017:27017 --name libra-mongo mongo:7` |
+| **.NET SDK** | 10.0 (LTS) | <https://dotnet.microsoft.com/download> (dotnet-install script on Linux) | Runs the Server (`src/service`); `dotnet --version` should print 10.x |
+| **Node.js** | 20+ (with npm) | <https://nodejs.org> (LTS recommended) | Runs the Console (`src/webapp`) |
+| **Rust** (optional) | 1.80+ | <https://rustup.rs> | Only needed to **build Agent payloads online** in the Builder; Windows requires the MSVC toolchain (VS Build Tools), Linux cross-builds need `cargo-zigbuild` |
+
+> On Windows, reopen your terminal after installing so the PATH updates; verify each tool with `mongod --version` / `dotnet --version` / `node --version` / `cargo --version`.
+
+### 2. Start the Server (backend API, port 5270)
 
 ```bash
-# 1. Server (http://localhost:5270)
-cd src/service && dotnet run
-# 2. Console (http://localhost:5173; create the admin on first visit to /setup)
-cd src/webapp && npm install && npm run dev
-# 3. Payloads: build Win/Linux payloads online from the Console Builder page
-#    (cross-builds need the zig toolchain)
+cd src/service
+dotnet run
 ```
+
+- On first start it connects to MongoDB, creates the database and indexes (database name `libra_nextgen`; see the [Deployment Manual](docs/部署手册.md) for `MongoDB__*` overrides)
+- Listen address/port can be changed under Settings → Security (default `0.0.0.0:5270`; enable loopback-only for local-only debugging)
+
+### 3. Start the Console (frontend, port 5173)
+
+```bash
+cd src/webapp
+npm install   # first time or after dependency changes
+npm run dev
+```
+
+Open <http://localhost:5173> in the browser — the first visit goes to `/setup` to create the admin account, then sign in.
+
+> The frontend derives the backend address from the page location by default (`localhost:5173` → `localhost:5270`), so no extra config is needed; only when the backend lives on a different host set `VITE_API_BASE` in `src/webapp/.env` (see the [Deployment Manual](docs/部署手册.md)).
+
+### 4. Build & Run an Agent Payload (optional, requires Rust)
+
+Build Windows/Linux payloads online in the Console **Builder** page (cross-builds need the zig toolchain); run the artifact on the target and it registers automatically. Agent-side modules (shell/recon/creds/files etc.) are downloaded on demand from the Server and executed in memory.
 
 Plugin installation: **Upload** (zip) / **Import from Git** (e.g. the [plugin scaffold repo](https://github.com/SmaZone2020/Libra-Plugin-Template)) / **Plugin Market** (the [Libra-Plugins](https://github.com/SmaZone2020/Libra-Plugins) official repository, online install).
 
