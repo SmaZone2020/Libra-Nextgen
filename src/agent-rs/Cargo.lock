@@ -1220,6 +1220,7 @@ name = "libra-platform"
 version = "0.1.0"
 dependencies = [
  "hex",
+ "libc",
  "libra-common",
  "portable-pty",
  "serde",
