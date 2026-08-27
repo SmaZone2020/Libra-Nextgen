@@ -179,12 +179,23 @@ export async function getPluginRegistry(options?: { force?: boolean }): Promise<
   return data;
 }
 
+/** Resolve a registry entry's `file` (repo-root-relative or absolute CI path)
+ *  into a download URL against the market base. */
+export function resolvePluginRegistryUrl(file: string): string {
+  // Legacy index entries store an absolute CI path
+  // (/home/runner/work/Libra-Plugins/Libra-Plugins/plugins/<id>/<name>.zip).
+  // Fall back to the repo-relative plugins/<id>/<name>.zip form so those
+  // archives still resolve against the market base.
+  const segments = file.split('/');
+  const lastThree = segments.filter(Boolean).slice(-3);
+  const rel = lastThree.length >= 2 ? lastThree.join('/') : file;
+  return `${PLUGIN_MARKET_BASE}/${rel.split('/').map(encodeURIComponent).join('/')}`;
+}
+
 /** Download a marketplace archive from GitHub raw and import it. */
 export async function installPluginFromRegistry(file: string): Promise<PluginRecord> {
-  // `file` is repo-root-relative (plugins/<id>/<name>.zip) — encode only the
-  // path segments so the slash structure survives URL encoding.
-const fileUrl = file.split('/').slice(-3).map(encodeURIComponent).join('/');
-  const res = await fetch(`${PLUGIN_MARKET_BASE}/${fileUrl}`);
+  const fileUrl = resolvePluginRegistryUrl(file);
+  const res = await fetch(fileUrl);
   if (!res.ok) throw new Error(`Download failed: ${res.status}`);
   const blob = await res.blob();
   const fileName = file.split('/').pop() ?? 'plugin.zip';

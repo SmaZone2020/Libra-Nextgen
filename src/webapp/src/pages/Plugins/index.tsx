@@ -13,7 +13,16 @@ import {
   Label,
   Input,
 } from '@heroui/react';
-import { PlugConnection, TrashBin, Pencil, LogoGithub, ArrowRotateRight } from '@gravity-ui/icons';
+import {
+  PlugConnection,
+  TrashBin,
+  Pencil,
+  LogoGithub,
+  ArrowRotateRight,
+  ArrowUpRightFromSquare,
+  CircleCheckFill,
+  CircleMinus,
+} from '@gravity-ui/icons';
 import { useDialog } from '../../hooks/useDialog';
 import {
   listPlugins,
@@ -166,14 +175,14 @@ export default function PluginsPage() {
 
       <Tabs defaultSelectedKey="installed" className="w-full">
         <div className="p-6">
-          <div className="flex items-center justify-between">
-              <Tabs.ListContainer>
+          <div className="flex items-center justify-between flex-wrap gap-4 sm:flex sm:gap-0">
+              <Tabs.ListContainer className="sm:w-auto">
                 <Tabs.List aria-label="plugins sections">
                   <Tabs.Tab id="installed" className="w-[160px]">{t('plugins.installedTab')}<Tabs.Indicator /></Tabs.Tab>
                   <Tabs.Tab id="market" className="w-[160px]">{t('plugins.market')}<Tabs.Indicator /></Tabs.Tab>
                 </Tabs.List>
               </Tabs.ListContainer>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 w-full sm:w-auto sm:justify-end">
               <Button onPress={() => fileRef.current?.click()}>
                 <PlugConnection />
                 {t('plugins.import')}
@@ -210,38 +219,54 @@ export default function PluginsPage() {
                 {t('plugins.empty')}
               </Card>
             ) : (
-              <div className="grid gap-4">
+              <div className="grid gap-4 grid-cols-[repeat(auto-fill,minmax(300px,1fr))]">
                 {plugins!.map((p) => (
-                  <Card key={p.id} className="p-4">
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2">
-                          <span className="font-semibold">{p.name || p.pluginId}</span>
-                          <Chip size="sm" variant="secondary">{p.version}</Chip>
-                          <Chip size="sm" color={p.enabled ? 'success' : 'default'}>
-                            {p.enabled ? t('plugins.enabled') : t('plugins.disabled')}
-                          </Chip>
+                  <PluginCard
+                    key={p.id}
+                    name={p.name || p.pluginId}
+                    description={p.description}
+                    version={p.version}
+                    author={p.author}
+                    route={p.entry?.route}
+                    actions={
+                      <div className="flex items-center justify-between gap-2 px-4 pb-4">
+                        <div className="flex items-center gap-2 text-xs text-default-500 min-w-0">
+                          <CircleCheckFill
+                            className={`w-4 h-4 shrink-0 ${p.enabled ? 'text-success' : 'text-default-300'}`}
+                          />
+                          <span className="truncate">{p.enabled ? t('plugins.enabled') : t('plugins.disabled')}</span>
+                          <span className="text-default-300">·</span>
+                          <span className="truncate">{p.actions.length} {t('plugins.actions')}</span>
+                          <span className="text-default-300">·</span>
+                          <span className="truncate">{p.entry?.route ? `/plugins/${p.entry.route}` : t('plugins.noRoute')}</span>
                         </div>
-                        <p className="text-xs text-default-500 mt-1 font-mono">{p.pluginId}</p>
-                        {p.description && <p className="text-sm mt-1 text-default-600">{p.description}</p>}
-                        <p className="text-xs text-default-400 mt-1">
-                          {p.author && `${p.author} · `}{p.actions.length} {t('plugins.actions')} · {p.entry?.route ? `/plugins/${p.entry.route}` : t('plugins.noRoute')}
-                        </p>
+                        <div className="flex items-center gap-1 shrink-0">
+                          {p.entry?.route && (
+                            <Button size="sm" variant="secondary" onPress={() => (window.location.href = `/plugins/${(p.entry as NonNullable<typeof p.entry>).route}`)}>
+                              <ArrowUpRightFromSquare className="w-4 h-4" />
+                              {t('plugins.open')}
+                            </Button>
+                          )}
+                          <Button isIconOnly variant="ghost" size="sm" onPress={() => openEditor(p)}>
+                            <Pencil />
+                          </Button>
+                          <Button isIconOnly variant="ghost" size="sm" onPress={() => handleDelete(p)}>
+                            <TrashBin />
+                          </Button>
+                        </div>
                       </div>
-
-                      <div className="flex items-center gap-2 shrink-0">
+                    }
+                    footer={
+                      <div className="flex w-full items-center justify-between gap-2">
+                        <span className="text-sm text-muted">
+                          {t('plugins.installedAt')}: {new Date(p.installedAt).toLocaleString()}
+                        </span>
                         <Switch isSelected={p.enabled} onChange={(v) => handleToggle(p, v)}>
                           <Switch.Control><Switch.Thumb /></Switch.Control>
                         </Switch>
-                        <Button isIconOnly variant="ghost" size="sm" onPress={() => openEditor(p)}>
-                          <Pencil />
-                        </Button>
-                        <Button isIconOnly variant="ghost" size="sm" onPress={() => handleDelete(p)}>
-                          <TrashBin />
-                        </Button>
                       </div>
-                    </div>
-                  </Card>
+                    }
+                  />
                 ))}
               </div>
             )}
@@ -431,25 +456,17 @@ function MarketTab({ installedIds }: { installedIds: Set<string> }) {
           {registry.plugins.map((p) => {
             const installed = installedIds.has(p.pluginId);
             return (
-              <Card key={p.pluginId} className="flex-col">
-                <div className="relative h-[140px] w-full shrink-0 overflow-hidden">
-                  <img
-                    alt="icon"
-                    className="pointer-events-none absolute inset-0 h-full w-full object-cover select-none dark:invert"
-                    loading="lazy"
-                    src="/images/icon2.webp"
-                  />
-                </div>
-                <div className="flex flex-1 flex-col gap-3">
-                  <Card.Header className="gap-1">
-                    <Card.Title className="pe-8 text-lg ">{p.name || p.pluginId}</Card.Title>
-                    <Card.Description>
-                      {p.description && <p className="text-[15px] mt-1 text-default-600 line-clamp-2">{p.description}</p>}
-                    </Card.Description>
-                  </Card.Header>
-                  <Card.Footer className="mt-auto flex w-full flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <PluginCard
+                key={p.pluginId}
+                name={p.name || p.pluginId}
+                description={p.description}
+                version={p.version}
+                author={p.author}
+                hasRoute={false}
+                footer={
+                  <>
                     <div className="flex flex-col">
-                      <span className="text-sm font-medium text-foreground"> 
+                      <span className="text-sm font-medium text-foreground">
                         <span className='mr-3'>{t('plugins.author')}:</span>
                         {p.author && `${p.author}`}
                       </span>
@@ -457,19 +474,77 @@ function MarketTab({ installedIds }: { installedIds: Set<string> }) {
                         {t('plugins.packSize')}: {(p.size / 1024).toFixed(0)} KB
                       </span>
                     </div>
-                    <Button className="w-full sm:w-auto" 
+                    <Button className="w-full sm:w-auto"
                       isDisabled={installed}
                       isPending={installing === p.file}
                       onPress={() => install(p.file)}>
                       {installed ? t('plugins.installedChip') : t('plugins.install')}
                     </Button>
-                  </Card.Footer>
-                </div>
-              </Card>
+                  </>
+                }
+              />
             );
           })}
         </div>
       )}
     </div>
+  );
+}
+
+// ── 插件卡片（插件市场 / 已安装 共用）───────────────────────────────
+interface PluginCardProps {
+  name: string;
+  description?: string;
+  version?: string;
+  author?: string;
+  /** 插件前端路由（/plugins/<route>），提供时展示「有页面」徽标与「打开」按钮。 */
+  route?: string;
+  /** 是否展示「有页面」徽标（插件市场条目没有 entry 元数据，可显式关闭）。 */
+  hasRoute?: boolean;
+  /** 卡片底部操作区（按钮、状态、统计等）。 */
+  footer?: React.ReactNode;
+  /** 覆盖默认的标题行右侧区域（如启用开关/操作按钮）。 */
+  actions?: React.ReactNode;
+}
+
+function PluginCard({ name, description, version, author, route, hasRoute = true, footer, actions }: PluginCardProps) {
+  const { t } = useTranslation();
+  return (
+    <Card className="flex-col">
+      <div className="relative h-[140px] w-full shrink-0 overflow-hidden">
+        <img
+          alt="icon"
+          className="pointer-events-none absolute inset-0 h-full w-full object-cover select-none dark:invert"
+          loading="lazy"
+          src="/images/icon2.webp"
+        />
+      </div>
+      <div className="flex flex-1 flex-col gap-3">
+        <Card.Header className="gap-1">
+          <div className="flex flex-wrap items-center gap-2 pe-8">
+            <Card.Title className="text-lg">{name}</Card.Title>
+            {version && <Chip size="sm" variant="secondary">{version}</Chip>}
+            {hasRoute && route && (
+              <Chip size="sm" color="accent" variant="soft" className="gap-1">
+                <ArrowUpRightFromSquare className="w-3 h-3" />
+                {t('plugins.hasPage')}
+              </Chip>
+            )}
+          </div>
+          <Card.Description>
+            {description && <p className="text-[15px] mt-1 text-default-600 line-clamp-2">{description}</p>}
+            <p className="text-xs text-default-400 mt-1">
+              {author && `${t('plugins.author')}: ${author}`}
+            </p>
+          </Card.Description>
+        </Card.Header>
+        {footer !== undefined && (
+          <Card.Footer className="mt-auto flex w-full flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
+            {footer}
+          </Card.Footer>
+        )}
+      </div>
+      {actions}
+    </Card>
   );
 }
