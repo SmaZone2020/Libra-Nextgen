@@ -29,9 +29,6 @@ public static class RiskActions
     public const string FileDecompress = "file.decompress";
     public const string FileShortcut = "file.shortcut";
     public const string Shell = "shell.command";
-    public const string Wechat = "othersoft.wechat";
-    public const string Browser = "othersoft.browser";
-    public const string BrowserSearch = "othersoft.browser.search";
     public const string Ai = "othersoft.ai";
     public const string Credentials = "credentials";
     public const string Proxy = "proxy.fetch";
@@ -52,7 +49,6 @@ public static class RiskActions
         [SystemEnv] = RiskLevel.Safe,
         [SystemNetwork] = RiskLevel.Safe,
         [SystemLanScan] = RiskLevel.Safe,
-        [Wechat] = RiskLevel.Safe,
         [FileList] = RiskLevel.Normal,
         [FileRead] = RiskLevel.Normal,
         [FileDrives] = RiskLevel.Normal,
@@ -74,8 +70,6 @@ public static class RiskActions
         [FileShortcut] = RiskLevel.Dangerous,
         [SystemProcessKill] = RiskLevel.Dangerous,
         [ProcessSpawn] = RiskLevel.Dangerous,
-        [Browser] = RiskLevel.Dangerous,
-        [BrowserSearch] = RiskLevel.Dangerous,
         [AccountManage] = RiskLevel.Dangerous,
         [AccessKeyManage] = RiskLevel.Dangerous,
         [BuilderBuild] = RiskLevel.Dangerous,

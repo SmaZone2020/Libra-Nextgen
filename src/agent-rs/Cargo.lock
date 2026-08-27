@@ -198,7 +198,12 @@ dependencies = [
 name = "browser-stealer-plugin"
 version = "1.0.0"
 dependencies = [
+ "aes-gcm",
+ "base64",
+ "chacha20poly1305",
+ "rusqlite",
  "serde_json",
+ "uuid",
 ]
 
 [[package]]

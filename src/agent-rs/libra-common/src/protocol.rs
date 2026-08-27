@@ -131,9 +131,6 @@ pub mod ws_type {
     pub const SYSTEM_DOCKER: &str = "system.docker";
 
     // Other software
-    pub const OTHERSOFT_WECHAT: &str = "othersoft.wechat";
-    pub const OTHERSOFT_BROWSER: &str = "othersoft.browser";
-    pub const OTHERSOFT_BROWSER_SEARCH: &str = "othersoft.browser.search";
     pub const OTHERSOFT_AI: &str = "othersoft.ai";
     pub const OTHERSOFT_SSH: &str = "othersoft.ssh";
     pub const OTHERSOFT_RDP: &str = "othersoft.rdp";

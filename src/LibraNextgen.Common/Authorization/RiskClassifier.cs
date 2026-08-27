@@ -51,10 +51,7 @@ public static class RiskClassifier
 
         if (path.StartsWith("/api/othersoft"))
         {
-            if (path.EndsWith("/wechat")) return RiskActions.Wechat;
             if (path.EndsWith("/ai")) return RiskActions.Ai;
-            if (path.Contains("/browser/search")) return RiskActions.BrowserSearch;
-            if (path.Contains("/browser")) return RiskActions.Browser;
             return null;
         }
 
@@ -80,7 +77,7 @@ public static class RiskClassifier
     public static string? ClassifyMcpTool(string? toolName) => toolName switch
     {
         "delete_agent" => RiskActions.AgentDelete,
-        "get_rdp_credentials" or "get_ssh_keys" or "get_wechat_data" or "get_browser_data" => RiskActions.Credentials,
+        "get_rdp_credentials" or "get_ssh_keys" => RiskActions.Credentials,
         "scan_ai_tokens" => RiskActions.Ai,
         "list_directory" => RiskActions.FileList,
         "get_drives" => RiskActions.FileDrives,

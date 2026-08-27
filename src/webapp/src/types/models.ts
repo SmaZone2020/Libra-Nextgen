@@ -305,51 +305,6 @@ export interface DockerResult {
 
 // ── Software Data types ─────────────────────────────────────────────
 
-export interface WeChatAccount {
-  wxid: string;
-  fileDirs: string[];
-  path: string;
-}
-
-export interface WeChatResult {
-  accounts: WeChatAccount[];
-}
-
-// ── Browser Stealer types ────────────────────────────────────────────
-
-export interface BrowserPassword {
-  browser: string;
-  profile: string;
-  url: string;
-  username: string;
-  password: string;
-  version?: string;
-}
-
-export interface BrowserHistory {
-  browser: string;
-  profile: string;
-  url: string;
-  title: string;
-  visits: number;
-  lastVisit: number;
-}
-
-export type BrowserDataType = 'passwords' | 'history';
-
-export interface BrowserPagedResult<T> {
-  total: number;
-  offset: number;
-  limit: number;
-  items: T[];
-  errors: string[];
-}
-
-export interface BrowserSearchResult<T> {
-  total: number;
-  items: T[];
-}
-
 // ── SSH Key Scanner types ─────────────────────────────────────────────
 
 export type SshKeyCategory = 'private-key' | 'public-key' | 'authorized-keys' | 'known-hosts' | 'config' | 'other';

