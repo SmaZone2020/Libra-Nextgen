@@ -313,6 +313,14 @@ pub(crate) fn spawn(cfg: &SpawnConfig) -> Result<PlatformSpawn, ProcessError> {
             reaper: reaper(),
         }
         .wait();
+        // 释放管道读端（不创建 File，直接 close），避免 IO Safety 认为
+        // fd 所有权在父进程被重复关闭。
+        if cfg.capture_stdout {
+            close_fd(out_pipe[0]);
+        }
+        if cfg.capture_stderr {
+            close_fd(err_pipe[0]);
+        }
         return Err(ProcessError::new(format!(
             "child failed to exec: {}",
             std::io::Error::from_raw_os_error(errno)
