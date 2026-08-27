@@ -32,12 +32,18 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center">
-      <Card className="w-full max-w-sm p-6">
+    <div className="min-h-screen flex flex-col items-center justify-center">
+      <div className="mb-4 flex flex-col items-center justify-center">
+        <img
+          alt="icon"
+          className="w-34 h-34 object-cover dark:invert select-none pointer-events-none mb-2"
+          loading="lazy"
+          src="/images/icon2.webp"
+        />
+        <p className="mx-auto text-[32px] libre">Libra-Nextgen</p>
+      </div>
+      <Card className="w-full max-w-sm p-6" >
         <form onSubmit={handleSubmit}>
-          <Card.Header className="mb-6">
-            <Card.Title className="mx-auto text-[28px] libre">Libra-Nextgen</Card.Title>
-          </Card.Header>
           <Card.Content className="flex flex-col gap-4">
             {error && (
               <div className="bg-danger-50 border border-danger text-danger px-4 py-2 rounded-medium text-sm">

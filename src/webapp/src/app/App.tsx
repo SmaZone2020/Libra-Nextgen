@@ -371,7 +371,7 @@ function AuthenticatedLayout({
             >
               <img
                 alt="icon"
-                className="w-8 h-8 object-cover dark:invert"
+                className="w-8 h-8 object-cover dark:invert select-none pointer-events-none"
                 loading="lazy"
                 src="/images/icon2.webp"
               />

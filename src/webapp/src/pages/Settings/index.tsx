@@ -112,10 +112,6 @@ export default function SettingsPage() {
     <div className="space-y-3">
       {/* 移动端：Item Card 路由列表 → /settings/:id */}
       <div className="sm:hidden">
-        <div>
-          <h2 className="text-xl font-semibold">{t('settings.tabsLabel')}</h2>
-          <p className="text-sm text-default-500">{t('settings.securityRoutesDesc')}</p>
-        </div>
         <div className="mt-3 flex flex-col gap-3">
           {visibleRoutes.map((route) => {
             const Icon = route.icon;
