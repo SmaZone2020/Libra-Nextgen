@@ -171,6 +171,8 @@ export default {
         description: 'If you like this project, you can give us a Star or contribute to support us ☕',
         upgrade: 'Sponsor',
         star: 'Star',
+        donateTitle: 'Support us',
+        donateDesc: 'Scan with WeChat or Alipay to support us ☕',
         benefits: {
           plugins: 'More quality plugins',
           consulting: 'Better technical consultation',

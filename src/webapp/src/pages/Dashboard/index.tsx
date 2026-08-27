@@ -10,14 +10,17 @@ import { SystemDistributionChart } from './SystemDistributionChart';
 import { TopologyGraph } from './TopologyGraph';
 import { useAgent } from '../../contexts/AgentContext';
 import type { TimeRange } from './TrafficChart';
-import { Button, Card } from '@heroui/react';
+import { Button, Card, Modal } from '@heroui/react';
 import { Check, Heart, StarFill } from '@gravity-ui/icons';
+
+const GITHUB_REPO_URL = 'https://github.com/SmaZone2020/Libra-Nextgen';
 
 export default function Dashboard() {
   const { t } = useTranslation();
   // Use shared agent context (real-time via WebSocket)
   const { agents } = useAgent();
 
+  const [donateOpen, setDonateOpen] = useState(false);
   const [trafficData, setTrafficData] = useState<Record<string, number | string>[]>([]);
   const [agentIds, setAgentIds] = useState<string[]>([]);
   const [agentHosts, setAgentHosts] = useState<Record<string, string>>({});
@@ -148,11 +151,21 @@ export default function Dashboard() {
             </div>
           </Card.Header>
           <Card.Footer className="mb-auto ml-auto flex gap-2">
-            <Button variant="secondary" isIconOnly className="transition-all duration-200 hover:w-26 overflow-hidden group rounded-[15px]">
+            <Button
+              variant="secondary"
+              isIconOnly
+              className="transition-all duration-200 hover:w-26 overflow-hidden group rounded-[15px]"
+              onPress={() => window.open(GITHUB_REPO_URL, '_blank', 'noopener,noreferrer')}
+            >
               <StarFill className='size-5 text-[#E3B341]'/>
               <span className="ml-1 hidden group-hover:block transition-opacity duration-200 whitespace-nowrap">{t('dashboard.sponsor.star')}</span>
             </Button>
-            <Button variant="secondary" isIconOnly className="transition-all duration-200 hover:w-28 overflow-hidden group rounded-[15px]">
+            <Button
+              variant="secondary"
+              isIconOnly
+              className="transition-all duration-200 hover:w-28 overflow-hidden group rounded-[15px]"
+              onPress={() => setDonateOpen(true)}
+            >
               <Heart className='size-5 text-[#FF4BBE]'/>
               <span className="ml-1 hidden group-hover:block transition-opacity duration-200 whitespace-nowrap">{t('dashboard.sponsor.upgrade')}</span>
             </Button>
@@ -179,6 +192,27 @@ export default function Dashboard() {
           onRangeChange={setRange}
         />
       )}
+
+      <Modal.Backdrop isOpen={donateOpen} onOpenChange={setDonateOpen}>
+        <Modal.Container size="sm">
+          <Modal.Dialog>
+            <Modal.CloseTrigger />
+            <Modal.Header>
+              <Modal.Heading>{t('dashboard.sponsor.donateTitle')}</Modal.Heading>
+            </Modal.Header>
+            <Modal.Body>
+              <div className="flex flex-col items-center gap-4">
+                <img
+                  alt={t('dashboard.sponsor.donateTitle')}
+                  className="size-64 rounded-2xl border border-default-200 object-contain dark:border-default-800"
+                  src="/images/payqr.png"
+                />
+                <p className="text-sm text-default-500">{t('dashboard.sponsor.donateDesc')}</p>
+              </div>
+            </Modal.Body>
+          </Modal.Dialog>
+        </Modal.Container>
+      </Modal.Backdrop>
     </div>
   );
 }

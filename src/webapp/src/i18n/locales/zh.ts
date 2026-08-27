@@ -170,6 +170,8 @@ export default {
         description: '如果你喜欢这个项目, 可以为我们点个Star或参与赞助 ☕',
         upgrade: '去赞助',
         star: '去Star',
+        donateTitle: '赞赏支持',
+        donateDesc: '使用微信或支付宝扫码赞赏，感谢支持 ☕',
         benefits: {
           plugins: '更多的优质插件',
           consulting: '更好的技术咨询',
