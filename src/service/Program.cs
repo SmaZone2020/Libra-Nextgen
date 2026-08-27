@@ -33,7 +33,10 @@ builder.Services.Configure<BeaconSettings>(builder.Configuration.GetSection(Beac
 var listenerSettings = ListenerSettingsLoader.Load();
 builder.WebHost.ConfigureKestrel(options =>
 {
-    options.ListenAnyIP(listenerSettings.Port);
+    if (listenerSettings.BindLoopbackOnly)
+        options.ListenLocalhost(listenerSettings.Port);
+    else
+        options.ListenAnyIP(listenerSettings.Port);
 });
 
 builder.Services.AddHttpClient();
@@ -158,16 +161,35 @@ builder.Services.AddOpenApi("v1", options =>
 
 // WebSocket middleware is enabled via app.UseWebSockets()
 
-// CORS — allow only configured origins (JWT is header-based, no credentials needed).
+// CORS — 内网/局域网/本机全域开放；仅本机回环监听时收窄到配置来源。
+var listenerSettings2 = ListenerSettingsLoader.Load();
+var securitySettings = SecuritySettingsLoader.Load();
 var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? [];
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("CorsSignalR", policy =>
     {
-        if (allowedOrigins.Length > 0)
-            policy.WithOrigins(allowedOrigins).AllowAnyHeader().AllowAnyMethod();
-        else
+        if (listenerSettings2.BindLoopbackOnly)
+        {
+            // 仅本机回环：只有配置的来源（开发机）允许跨域；未配置则默认全放。
+            if (allowedOrigins.Length > 0)
+                policy.WithOrigins(allowedOrigins).AllowAnyHeader().AllowAnyMethod();
+            else
+                policy.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod();
+        }
+        else if (securitySettings.OpenLan)
+        {
+            // 局域网/内网开放：任意来源可访问（内网对抗控制台）。
             policy.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod();
+        }
+        else
+        {
+            // 关闭局域网开放：仅配置的来源（开发机）允许跨域。
+            if (allowedOrigins.Length > 0)
+                policy.WithOrigins(allowedOrigins).AllowAnyHeader().AllowAnyMethod();
+            else
+                policy.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod();
+        }
     });
 });
 
@@ -213,11 +235,14 @@ SettingsController.RebindListeners = async (listenUrl, ct) =>
     addresses.Addresses.Clear();
     foreach (var addr in previous)
     {
-        // 把旧地址的端口替换为新端口（http://*:5270 → http://*:新端口）
+        // 把旧地址的端口/主机替换为新设置（http://*:5270 → http://*:新端口，
+        // 仅本机绑定则回退 127.0.0.1）。
         try
         {
             var uri = new Uri(addr);
-            var newAddr = $"{uri.Scheme}://{uri.Host}:{new Uri(listenUrl).Port}";
+            var newUri = new Uri(listenUrl);
+            var host = newUri.Host;
+            var newAddr = $"http://{host}:{newUri.Port}";
             addresses.Addresses.Add(newAddr);
         }
         catch
