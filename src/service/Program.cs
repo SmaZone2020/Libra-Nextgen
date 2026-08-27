@@ -225,34 +225,29 @@ builder.Services.AddRateLimiter(options =>
 
 var app = builder.Build();
 
-// 端口修改后的重绑委托（由 SettingsController 触发，Program 在 app 就绪后注册）
-SettingsController.RebindListeners = async (listenUrl, ct) =>
+// 端口修改后的重绑委托（由 SettingsController 触发）。
+// Kestrel 启动后 IServerAddressesFeature.Addresses 不可再改（会抛
+// "cannot be modified after the server has started"），因此改为自重启：
+// 后台任务先触发进程退出，再由外部守护（systemd 服务 / scripts 里的
+// start 脚本）重启加载新端口。设置已先持久化到 settings.json，重启后生效。
+SettingsController.RebindListeners = (listenUrl, ct) =>
 {
-    var server = app.Services.GetRequiredService<IServer>();
-    var addresses = server.Features.Get<IServerAddressesFeature>();
-    if (addresses == null) return;
-    var previous = addresses.Addresses.ToList();
-    addresses.Addresses.Clear();
-    foreach (var addr in previous)
+    _ = Task.Run(async () =>
     {
-        // 把旧地址的端口/主机替换为新设置（http://*:5270 → http://*:新端口，
-        // 仅本机绑定则回退 127.0.0.1）。
+        await Task.Delay(1500, ct);
+        var logger = app.Services.GetRequiredService<ILoggerFactory>()
+            .CreateLogger("ListenerRebind");
+        logger.LogInformation("Listener changed to {Url} — restarting service", listenUrl);
         try
         {
-            var uri = new Uri(addr);
-            var newUri = new Uri(listenUrl);
-            var host = newUri.Host;
-            var newAddr = $"http://{host}:{newUri.Port}";
-            addresses.Addresses.Add(newAddr);
+            Environment.Exit(0);
         }
-        catch
+        catch (Exception ex)
         {
-            addresses.Addresses.Add(listenUrl);
+            logger.LogError(ex, "Failed to trigger graceful shutdown");
         }
-    }
-    if (addresses.Addresses.Count == 0)
-        addresses.Addresses.Add(listenUrl);
-    await Task.CompletedTask;
+    }, ct);
+    return Task.CompletedTask;
 };
 
 // 全局异常处理：生产环境统一 JSON 响应（不泄露堆栈/内部细节），dev 保留
