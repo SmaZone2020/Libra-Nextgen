@@ -159,7 +159,6 @@ export function BuilderModals({
               </Modal.Heading>
             </Modal.Header>
             <Modal.Body>
-              {/* 横向步骤时间线（HeroUI Stepper，currentStep 受控；分隔线自动计算） */}
               <Stepper orientation="horizontal" size="md" currentStep={stepperStep} className="w-full">
                 {BUILD_STAGES.map((def, i) => {
                   const state = stageStates[i]!;
@@ -168,14 +167,12 @@ export function BuilderModals({
                     <Stepper.Step key={def.id}>
                       <Stepper.StepButton>
                         <Stepper.Indicator>
-                          {state === 'done' ? (
-                            <Stepper.Icon><CircleCheck className="w-4 h-4" /></Stepper.Icon>
-                          ) : state === 'failed' ? (
-                            <Stepper.Icon><CircleXmark className="w-4 h-4" /></Stepper.Icon>
-                          ) : isCurrent ? (
-                            <Spinner size="sm" />
+                          {isCurrent ? (
+                            <Stepper.Icon className='text-primary'>
+                              <span className="block w-2 h-2 rounded-full bg-current animate-pulse" />
+                            </Stepper.Icon>
                           ) : (
-                            <Stepper.Icon><span className="text-xs">{i + 1}</span></Stepper.Icon>
+                            <Stepper.Icon className='text-default'><span className="text-xs">{i + 1}</span></Stepper.Icon>
                           )}
                         </Stepper.Indicator>
                         <Stepper.Content>
