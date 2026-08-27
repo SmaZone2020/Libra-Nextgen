@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Button, Card, Input } from '@heroui/react';
 import { ArrowLeft, ArrowRight, ArrowRotateLeft, ArrowRightToSquare, Plus } from '@gravity-ui/icons';
 import { useAgent } from '../../contexts/AgentContext';
+import { AgentRequired } from '../../components/AgentRequired';
 import { buildProxyUrl } from '../../api/proxy';
 
 interface TabSession {
@@ -94,11 +95,7 @@ export default function ProxyBrowserPage() {
   };
 
   if (!agentId) {
-    return (
-      <div className="text-center text-neutral-500 py-12">
-        {t('proxyBrowser.selectAgent')}
-      </div>
-    );
+    return <AgentRequired />;
   }
 
   return (

@@ -6,6 +6,7 @@ import type { FileEntry } from '../../api/files';
 import { PathBar } from './PathBar';
 import { FileList, isArchive } from './FileList';
 import { useAgent } from '../../contexts/AgentContext';
+import { AgentRequired } from '../../components/AgentRequired';
 import { useDialog } from '../../hooks/useDialog';
 import { joinPath, getParentPath } from '../../utils/path';
 
@@ -353,11 +354,7 @@ export default function FileManagerPage() {
   }, []);
 
   if (!agentId) {
-    return (
-      <div className="flex items-center justify-center py-20 text-neutral-500 text-sm select-none">
-        {t('fileManager.selectAgent')}
-      </div>
-    );
+    return <AgentRequired />;
   }
 
   return (

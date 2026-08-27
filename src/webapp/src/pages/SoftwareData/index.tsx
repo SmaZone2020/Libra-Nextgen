@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Tabs } from '@heroui/react';
 import { useAgent } from '../../contexts/AgentContext';
+import { AgentRequired } from '../../components/AgentRequired';
 import { useAgentPlatform } from '../../hooks/useAgentPlatform';
 import { SSHTab } from './SSHTab';
 import { RDPTab } from './RDPTab';
@@ -23,11 +24,7 @@ export default function SoftwareDataPage() {
   ].filter((tb) => !tb.windowsOnly || isWindows);
 
   if (!agentId) {
-    return (
-      <div className="flex items-center justify-center min-h-[60vh] text-neutral-500">
-        {t('othersoft.selectAgent')}
-      </div>
-    );
+    return <AgentRequired />;
   }
 
   const activeTab = tabs.some((tb) => tb.id === tab) ? tab : tabs[0]!.id;

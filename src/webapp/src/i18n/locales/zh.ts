@@ -3,8 +3,6 @@ export default {
     nav: {
       dashboard: '仪表盘',
       agents: '设备列表',
-      screen: '屏幕监控',
-      media: '系统媒体',
       shell: '远程终端',
       explorer: '文件浏览',
       system: '系统信息',
@@ -38,8 +36,6 @@ export default {
     pageMeta: {
       dashboard: { label: '仪表盘', subtitle: '概览' },
       agents: { label: '设备列表', subtitle: 'Agent 列表' },
-      screen: { label: '屏幕监控', subtitle: '实时画面' },
-      media: { label: '系统媒体', subtitle: '系统媒体' },
       shell: { label: '远程终端', subtitle: '远程终端' },
       explorer: { label: '文件浏览', subtitle: '文件浏览器' },
       system: { label: '系统信息', subtitle: '远程系统信息' },
@@ -47,9 +43,9 @@ export default {
       othersoft: { label: '软件数据', subtitle: '第三方软件数据窃取' },
       proxyBrowser: { label: '反向代理', subtitle: '通过设备浏览网页' },
       builder: { label: '构建载荷', subtitle: '生成定制化 Agent 载荷' },
-      about: { label: '关于', subtitle: '开源协议、免责声明与法律信息' },
+      about: { label: '关于', subtitle: '关于 Libra-Nextgen' },
       settings: { label: '设置', subtitle: '系统设置' },
-      plugins: { label: '插件', subtitle: '插件管理' },
+      plugins: { label: '插件', subtitle: '上传、编辑、启用或禁用插件' },
     },
     common: {
       connect: '连接',
@@ -65,8 +61,7 @@ export default {
       stop: '停止',
       edit: '编辑',
       rename: '重命名',
-      move: '移动',
-      copy: '复制',
+      move: '移动',      copy: '复制',
       download: '下载',
       logout: '退出登录',
       selectAgent: '选择设备...',
@@ -79,6 +74,10 @@ export default {
       ok: '正常',
       fail: '失败',
       byteUnits: { B: 'B', KB: 'KB', MB: 'MB', GB: 'GB', TB: 'TB' },
+    },
+    agentRequired: {
+      title: '请先选择设备',
+      desc: '选择一个在线 Agent 后开始使用',
     },
     plugins: {
       title: '插件管理',

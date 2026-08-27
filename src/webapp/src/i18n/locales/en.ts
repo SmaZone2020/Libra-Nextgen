@@ -3,8 +3,6 @@ export default {
     nav: {
       dashboard: 'Dashboard',
       agents: 'Agents',
-      screen: 'Screen',
-      media: 'Media',
       shell: 'Shell',
       explorer: 'Explorer',
       system: 'System',
@@ -38,8 +36,6 @@ export default {
     pageMeta: {
       dashboard: { label: 'Dashboard', subtitle: 'Overview' },
       agents: { label: 'Agents', subtitle: 'Agent list' },
-      screen: { label: 'Screen', subtitle: 'Real-time display' },
-      media: { label: 'Media', subtitle: 'Camera & Microphone' },
       shell: { label: 'Shell', subtitle: 'Remote terminal' },
       explorer: { label: 'Explorer', subtitle: 'File browser' },
       system: { label: 'System', subtitle: 'Remote system info' },
@@ -79,6 +75,10 @@ export default {
       ok: 'OK',
       fail: 'FAIL',
       byteUnits: { B: 'B', KB: 'KB', MB: 'MB', GB: 'GB', TB: 'TB' },
+    },
+    agentRequired: {
+      title: 'Select an agent first',
+      desc: 'Pick an online agent to get started',
     },
     plugins: {
       title: 'Plugin Management',

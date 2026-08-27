@@ -4,6 +4,7 @@ import Terminal from '../../components/terminal';
 import type { TerminalHandle } from '../../components/terminal';
 import { createTask, getTask } from '../../api/tasks';
 import { useAgent } from '../../contexts/AgentContext';
+import { AgentRequired } from '../../components/AgentRequired';
 import { unwrapTaskOutput } from './taskOutput';
 
 /**
@@ -93,14 +94,7 @@ export default function ShellPage() {
 
   return (
     <div className="space-y-3">
-      {!agentId && (
-        <div
-          className="flex items-center justify-center text-neutral-500 text-sm select-none"
-          style={{ height: 'calc(100vh - 240px)', minHeight: 400 }}
-        >
-          {t('shell.selectAgent')}
-        </div>
-      )}
+      {!agentId && <AgentRequired />}
 
       {agentId && (
         <Terminal

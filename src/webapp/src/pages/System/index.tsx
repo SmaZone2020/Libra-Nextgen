@@ -9,6 +9,7 @@ import { NetworkTab } from './NetworkTab';
 import { PackagesTab } from './PackagesTab';
 import { DockerTab } from './DockerTab';
 import { useAgent } from '../../contexts/AgentContext';
+import { AgentRequired } from '../../components/AgentRequired';
 import { useAgentPlatform } from '../../hooks/useAgentPlatform';
 
 export default function SystemPage() {
@@ -35,11 +36,7 @@ export default function SystemPage() {
   });
 
   if (!agentId) {
-    return (
-      <div className="flex items-center justify-center py-20 text-neutral-500 text-sm select-none">
-        {t('system.selectAgent')}
-      </div>
-    );
+    return <AgentRequired />;
   }
 
   // If the currently selected tab is hidden for this platform, fall back.
