@@ -316,7 +316,12 @@ mod isolated_tests {
     use super::*;
 
     /// Fake module entry that returns a fixed JSON payload.
-    extern "system" fn fake_ok(_input: *const u8, _input_len: usize, out: *mut u8, cap: usize) -> usize {
+    extern "system" fn fake_ok(
+        _input: *const u8,
+        _input_len: usize,
+        out: *mut u8,
+        cap: usize,
+    ) -> usize {
         let payload = b"{\"success\":true,\"value\":42}";
         let n = payload.len().min(cap);
         unsafe { std::ptr::copy_nonoverlapping(payload.as_ptr(), out, n) };

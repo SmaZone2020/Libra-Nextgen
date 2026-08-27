@@ -358,7 +358,9 @@ fn read_pipe(reader: Option<&mut std::fs::File>) -> Result<Vec<u8>, ProcessError
 
 impl std::fmt::Debug for SpawnedProcess {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("SpawnedProcess").field("pid", &self.pid).finish()
+        f.debug_struct("SpawnedProcess")
+            .field("pid", &self.pid)
+            .finish()
     }
 }
 

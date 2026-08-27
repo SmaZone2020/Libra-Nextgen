@@ -236,7 +236,10 @@ fn parse_opts(opts: &Object) -> (Vec<(String, String)>, Option<String>, u64) {
 
 /// Spawn, drain both pipes on worker threads, wait with a timeout, kill on
 /// timeout. Returns a JSON result string (same shape as the forkexec module).
-fn run_with_timeout(exe: &mut libra_platform::process::ProcessExecutor, timeout_secs: u64) -> String {
+fn run_with_timeout(
+    exe: &mut libra_platform::process::ProcessExecutor,
+    timeout_secs: u64,
+) -> String {
     let mut child = match exe.spawn() {
         Ok(c) => c,
         Err(e) => {
@@ -251,11 +254,14 @@ fn run_with_timeout(exe: &mut libra_platform::process::ProcessExecutor, timeout_
         .take_stderr()
         .map(|f| std::thread::spawn(move || read_all(f)));
 
-    let (timed_out, status) = match child.wait_timeout(std::time::Duration::from_secs(timeout_secs)) {
+    let (timed_out, status) = match child.wait_timeout(std::time::Duration::from_secs(timeout_secs))
+    {
         Ok(Some(status)) => (false, status),
         Ok(None) => {
             let _ = child.kill();
-            let status = child.wait().unwrap_or(libra_platform::process::ExitStatus::new(130));
+            let status = child
+                .wait()
+                .unwrap_or(libra_platform::process::ExitStatus::new(130));
             (true, status)
         }
         Err(e) => {

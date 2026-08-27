@@ -92,13 +92,24 @@ fn collect(browser_type: &str, search: bool, keyword: &str, offset: usize, limit
     }
 
     if search {
-        format!(r#"{{"total":{},"items":[{}]}}"#, all_items.len(), all_items.join(","))
+        format!(
+            r#"{{"total":{},"items":[{}]}}"#,
+            all_items.len(),
+            all_items.join(",")
+        )
     } else {
         let total = all_items.len();
-        let page: Vec<_> = all_items.into_iter().skip(offset).take(if limit == 0 { 250 } else { limit }).collect();
+        let page: Vec<_> = all_items
+            .into_iter()
+            .skip(offset)
+            .take(if limit == 0 { 250 } else { limit })
+            .collect();
         format!(
             r#"{{"total":{},"offset":{},"limit":{},"items":[{}]}}"#,
-            total, offset, limit, page.join(",")
+            total,
+            offset,
+            limit,
+            page.join(",")
         )
     }
 }

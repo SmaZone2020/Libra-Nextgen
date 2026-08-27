@@ -20,8 +20,8 @@ use std::os::windows::io::{FromRawHandle, RawHandle};
 
 use windows::core::{PCWSTR, PWSTR};
 use windows::Win32::Foundation::{
-    CloseHandle, GENERIC_READ, GENERIC_WRITE, HANDLE, HANDLE_FLAG_INHERIT, INVALID_HANDLE_VALUE,
-    SetHandleInformation, WAIT_TIMEOUT,
+    CloseHandle, SetHandleInformation, GENERIC_READ, GENERIC_WRITE, HANDLE, HANDLE_FLAG_INHERIT,
+    INVALID_HANDLE_VALUE, WAIT_TIMEOUT,
 };
 use windows::Win32::Storage::FileSystem::{
     CreateFileW, FILE_CREATION_DISPOSITION, FILE_FLAGS_AND_ATTRIBUTES, FILE_SHARE_MODE,
@@ -113,14 +113,11 @@ pub(crate) fn spawn(cfg: &SpawnConfig) -> Result<PlatformSpawn, ProcessError> {
     };
 
     // ---- working directory ----
-    let cwd_wide: Option<Vec<u16>> = cfg
-        .cwd
-        .as_ref()
-        .map(|c| {
-            let mut w: Vec<u16> = c.encode_wide().collect();
-            w.push(0);
-            w
-        });
+    let cwd_wide: Option<Vec<u16>> = cfg.cwd.as_ref().map(|c| {
+        let mut w: Vec<u16> = c.encode_wide().collect();
+        w.push(0);
+        w
+    });
 
     // ---- capture pipes (write ends inheritable, read ends not) ----
     let mut out_read = INVALID_HANDLE_VALUE;
@@ -142,8 +139,16 @@ pub(crate) fn spawn(cfg: &SpawnConfig) -> Result<PlatformSpawn, ProcessError> {
         cb: std::mem::size_of::<STARTUPINFOW>() as u32,
         dwFlags: STARTUPINFOW_FLAGS(STARTF_USESTDHANDLES.0),
         hStdInput: nul_in,
-        hStdOutput: if cfg.capture_stdout { out_write } else { nul_out },
-        hStdError: if cfg.capture_stderr { err_write } else { nul_out },
+        hStdOutput: if cfg.capture_stdout {
+            out_write
+        } else {
+            nul_out
+        },
+        hStdError: if cfg.capture_stderr {
+            err_write
+        } else {
+            nul_out
+        },
         ..Default::default()
     };
 
@@ -216,7 +221,9 @@ pub(crate) fn spawn(cfg: &SpawnConfig) -> Result<PlatformSpawn, ProcessError> {
         pid: pi.dwProcessId,
         stdout,
         stderr,
-        child: WindowsChild { handle: pi.hProcess },
+        child: WindowsChild {
+            handle: pi.hProcess,
+        },
     })
 }
 
@@ -265,7 +272,9 @@ fn quote_arg(arg: &OsStr) -> Vec<u16> {
     if s.is_empty() {
         return vec!['"' as u16, '"' as u16];
     }
-    let needs_quote = s.iter().any(|&c| c == ' ' as u16 || c == '\t' as u16 || c == '"' as u16);
+    let needs_quote = s
+        .iter()
+        .any(|&c| c == ' ' as u16 || c == '\t' as u16 || c == '"' as u16);
     if !needs_quote {
         return s;
     }
@@ -333,7 +342,10 @@ mod tests {
         assert!(out.status.success());
         let stdout = String::from_utf8_lossy(&out.stdout).to_lowercase();
         let expected = dir.to_string_lossy().to_lowercase();
-        assert!(stdout.contains(expected.trim_end_matches('\\')), "cd -> {stdout}");
+        assert!(
+            stdout.contains(expected.trim_end_matches('\\')),
+            "cd -> {stdout}"
+        );
     }
 
     #[test]
@@ -345,7 +357,9 @@ mod tests {
 
     #[test]
     fn try_wait_while_running_then_wait() {
-        let mut child = cmd(&["ping", "-n", "2", "127.0.0.1", ">nul"]).spawn().unwrap();
+        let mut child = cmd(&["ping", "-n", "2", "127.0.0.1", ">nul"])
+            .spawn()
+            .unwrap();
         let _ = child.try_wait().unwrap();
         let status = child.wait().unwrap();
         assert!(status.success());
@@ -373,7 +387,13 @@ mod tests {
     fn quote_arg_handles_spaces_and_quotes() {
         assert_eq!(
             quote_arg(OsStr::new("plain")),
-            vec![b'p' as u16, b'l' as u16, b'a' as u16, b'i' as u16, b'n' as u16]
+            vec![
+                b'p' as u16,
+                b'l' as u16,
+                b'a' as u16,
+                b'i' as u16,
+                b'n' as u16
+            ]
         );
         let quoted = quote_arg(OsStr::new("C:\\Program Files\\x"));
         assert_eq!(quoted[0], '"' as u16);

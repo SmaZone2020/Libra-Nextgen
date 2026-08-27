@@ -185,12 +185,20 @@ mod tests {
         let result = run(&serde_json::json!({
             "command": command,
             "timeoutSeconds": 30,
-        }).to_string());
+        })
+        .to_string());
         let parsed: Value = serde_json::from_str(&result).unwrap();
         assert_eq!(parsed["success"], true, "output: {}", parsed["output"]);
         let output = parsed["output"].as_str().unwrap();
-        assert!(output.contains("line 10000") || output.contains("20000"), "unexpected output");
-        assert!(output.lines().count() >= 10000, "truncated: {} lines", output.lines().count());
+        assert!(
+            output.contains("line 10000") || output.contains("20000"),
+            "unexpected output"
+        );
+        assert!(
+            output.lines().count() >= 10000,
+            "truncated: {} lines",
+            output.lines().count()
+        );
     }
 
     /// Windows 中文系统：cmd 管道输出是 GBK（OEM 代码页 936），必须经

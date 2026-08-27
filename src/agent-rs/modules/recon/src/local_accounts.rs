@@ -162,10 +162,7 @@ impl LocalAccountEnumerator {
                     // shadow 优先；读不到时用 shell 判断
                     let (enabled, password_required) = match shadow_map.get(name) {
                         Some((locked, has_password, _)) => (!locked, has_password),
-                        None => (
-                            shell != "/usr/sbin/nologin" && shell != "/bin/false",
-                            true,
-                        ),
+                        None => (shell != "/usr/sbin/nologin" && shell != "/bin/false", true),
                     };
                     let full_name = gecos.split(',').next().unwrap_or("");
 
@@ -200,15 +197,18 @@ fn sort_accounts(json: &mut String) {
             arr.sort_by(|a, b| {
                 let admin_a = a.get("isAdmin").and_then(|x| x.as_bool()).unwrap_or(false);
                 let admin_b = b.get("isAdmin").and_then(|x| x.as_bool()).unwrap_or(false);
-                admin_b
-                    .cmp(&admin_a)
-                    .then_with(|| {
-                        a.get("Name")
-                            .and_then(|x| x.as_str())
-                            .unwrap_or("")
-                            .to_lowercase()
-                            .cmp(&b.get("Name").and_then(|x| x.as_str()).unwrap_or("").to_lowercase())
-                    })
+                admin_b.cmp(&admin_a).then_with(|| {
+                    a.get("Name")
+                        .and_then(|x| x.as_str())
+                        .unwrap_or("")
+                        .to_lowercase()
+                        .cmp(
+                            &b.get("Name")
+                                .and_then(|x| x.as_str())
+                                .unwrap_or("")
+                                .to_lowercase(),
+                        )
+                })
             });
         }
         *json = v.to_string();

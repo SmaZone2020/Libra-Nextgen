@@ -172,10 +172,7 @@ fn wrap_result(task_id: &str, output: &str) -> String {
     let success = match serde_json::from_str::<serde_json::Value>(output) {
         Ok(serde_json::Value::Object(map)) => {
             !map.contains_key("error")
-                && map
-                    .get("success")
-                    .and_then(|v| v.as_bool())
-                    .unwrap_or(true)
+                && map.get("success").and_then(|v| v.as_bool()).unwrap_or(true)
         }
         _ => true,
     };

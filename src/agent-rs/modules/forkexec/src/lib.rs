@@ -94,7 +94,11 @@ fn build_executor(v: &Value) -> Result<ProcessExecutor, String> {
             }
         }
     }
-    if let Some(cwd) = v.get("cwd").and_then(|c| c.as_str()).filter(|c| !c.is_empty()) {
+    if let Some(cwd) = v
+        .get("cwd")
+        .and_then(|c| c.as_str())
+        .filter(|c| !c.is_empty())
+    {
         exe.current_dir(cwd);
     }
     Ok(exe)
@@ -252,7 +256,10 @@ mod tests {
         // Windows reports a localized ERROR_FILE_NOT_FOUND; Linux reports
         // "not found in PATH" — either way spawn must fail with a message.
         let error = out["error"].as_str().unwrap();
-        assert!(error.contains("failed") || error.contains("not found"), "{error}");
+        assert!(
+            error.contains("failed") || error.contains("not found"),
+            "{error}"
+        );
     }
 
     #[test]

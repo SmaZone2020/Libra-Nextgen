@@ -99,7 +99,10 @@ impl Reaper {
 
     /// Remove and return the recorded status, if the reaper already collected it.
     fn take(&self, pid: pid_t) -> Option<i32> {
-        self.state.lock().ok().and_then(|mut s| s.statuses.remove(&pid))
+        self.state
+            .lock()
+            .ok()
+            .and_then(|mut s| s.statuses.remove(&pid))
     }
 }
 
@@ -203,7 +206,11 @@ pub(crate) fn spawn(cfg: &SpawnConfig) -> Result<PlatformSpawn, ProcessError> {
     let envp = build_envp(&cfg.envs)?;
     let envp_ptrs: Vec<*const c_char> = envp.iter().map(|c| c.as_ptr()).collect();
 
-    let cwd = cfg.cwd.as_ref().map(|c| to_cstring(c.as_os_str())).transpose()?;
+    let cwd = cfg
+        .cwd
+        .as_ref()
+        .map(|c| to_cstring(c.as_os_str()))
+        .transpose()?;
 
     // Capture pipes (O_CLOEXEC: never leak into the exec'd image).
     let mut out_pipe = [-1; 2];
@@ -324,7 +331,12 @@ pub(crate) fn spawn(cfg: &SpawnConfig) -> Result<PlatformSpawn, ProcessError> {
     })
 }
 
-fn cleanup_pipes(out_pipe: &[c_int; 2], err_pipe: &[c_int; 2], errno_pipe: Option<&[c_int; 2]>, err_fd: RawFd) {
+fn cleanup_pipes(
+    out_pipe: &[c_int; 2],
+    err_pipe: &[c_int; 2],
+    errno_pipe: Option<&[c_int; 2]>,
+    err_fd: RawFd,
+) {
     close_fd(out_pipe[0]);
     close_fd(out_pipe[1]);
     close_fd(err_pipe[0]);
@@ -421,9 +433,8 @@ fn close_range_except(keep: RawFd, snapshot: &[RawFd]) {
     {
         if keep < 3 {
             // No reserved fd: close everything >= 3 in one call.
-            if unsafe {
-                libc::syscall(libc::SYS_close_range, 3usize, u32::MAX as usize, 0usize)
-            } == 0
+            if unsafe { libc::syscall(libc::SYS_close_range, 3usize, u32::MAX as usize, 0usize) }
+                == 0
             {
                 return;
             }
@@ -519,7 +530,9 @@ fn to_cstring(s: &OsStr) -> Result<CString, ProcessError> {
 }
 
 /// Build "K=V" envp entries: parent environment merged with overrides.
-fn build_envp(envs: &[(std::ffi::OsString, std::ffi::OsString)]) -> Result<Vec<CString>, ProcessError> {
+fn build_envp(
+    envs: &[(std::ffi::OsString, std::ffi::OsString)],
+) -> Result<Vec<CString>, ProcessError> {
     let mut merged: std::collections::BTreeMap<std::ffi::OsString, std::ffi::OsString> =
         std::env::vars_os().collect();
     for (k, v) in envs {
@@ -580,7 +593,10 @@ mod tests {
 
     #[test]
     fn spawn_captures_stdout() {
-        let out = ProcessExecutor::new("/bin/echo").arg("hello").output().unwrap();
+        let out = ProcessExecutor::new("/bin/echo")
+            .arg("hello")
+            .output()
+            .unwrap();
         assert!(out.status.success());
         assert_eq!(out.stdout, b"hello\n");
     }
@@ -645,12 +661,12 @@ mod tests {
 
     #[test]
     fn detached_process_is_reaped_and_waitable() {
-        let mut child = sh(&["-c", "sleep 0.2"])
-            .detached(true)
-            .spawn()
-            .unwrap();
+        let mut child = sh(&["-c", "sleep 0.2"]).detached(true).spawn().unwrap();
         let status = child.wait_timeout(Duration::from_secs(3)).unwrap();
-        assert!(status.is_some(), "detached child should be reaped and waitable");
+        assert!(
+            status.is_some(),
+            "detached child should be reaped and waitable"
+        );
         assert!(status.unwrap().success());
     }
 
@@ -681,6 +697,8 @@ mod tests {
     }
 
     fn open_fd_count() -> usize {
-        std::fs::read_dir("/proc/self/fd").map(|d| d.count()).unwrap_or(0)
+        std::fs::read_dir("/proc/self/fd")
+            .map(|d| d.count())
+            .unwrap_or(0)
     }
 }
