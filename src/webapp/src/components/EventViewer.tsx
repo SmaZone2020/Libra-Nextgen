@@ -98,8 +98,8 @@ export function EventViewer() {
           )}
         </Button>
         <Drawer.Backdrop>
-          <Drawer.Content placement="right" className="w-96 max-w-[90vw]">
-            <Drawer.Dialog>
+          <Drawer.Content placement="left" >
+            <Drawer.Dialog className='sm:w-[70%] w-full'>
               <Drawer.Header>
                 <Drawer.Heading>{t('eventViewer.title')}</Drawer.Heading>
               </Drawer.Header>
