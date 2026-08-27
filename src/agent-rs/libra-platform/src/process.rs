@@ -303,6 +303,16 @@ impl SpawnedProcess {
         self.stderr.as_mut()
     }
 
+    /// Take ownership of the stdout pipe (for draining on another thread).
+    pub fn take_stdout(&mut self) -> Option<std::fs::File> {
+        self.stdout.take()
+    }
+
+    /// Take ownership of the stderr pipe (for draining on another thread).
+    pub fn take_stderr(&mut self) -> Option<std::fs::File> {
+        self.stderr.take()
+    }
+
     /// Block until the child exits and return its status. Safe to call from a
     /// blocking context (module tasks run on the blocking pool).
     pub fn wait(&mut self) -> Result<ExitStatus, ProcessError> {
