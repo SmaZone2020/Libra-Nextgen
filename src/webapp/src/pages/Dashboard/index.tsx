@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { getAgentTraffic } from '../../api/agents';
 import { getTasks } from '../../api/tasks';
@@ -11,25 +11,13 @@ import { TopologyGraph } from './TopologyGraph';
 import { useAgent } from '../../contexts/AgentContext';
 import type { TimeRange } from './TrafficChart';
 import { Button, Card } from '@heroui/react';
-import { Check, Heart } from '@gravity-ui/icons';
-
-const SPONSOR_DISMISSED_KEY = 'dashboard_sponsor_dismissed';
-
-function readSponsorDismissed(): boolean {
-  if (typeof window === 'undefined') return false;
-  try {
-    return localStorage.getItem(SPONSOR_DISMISSED_KEY) === '1';
-  } catch {
-    return false;
-  }
-}
+import { Check, Heart, StarFill } from '@gravity-ui/icons';
 
 export default function Dashboard() {
   const { t } = useTranslation();
   // Use shared agent context (real-time via WebSocket)
   const { agents } = useAgent();
 
-  const [sponsorDismissed, setSponsorDismissed] = useState(readSponsorDismissed);
   const [trafficData, setTrafficData] = useState<Record<string, number | string>[]>([]);
   const [agentIds, setAgentIds] = useState<string[]>([]);
   const [agentHosts, setAgentHosts] = useState<Record<string, string>>({});
@@ -37,15 +25,6 @@ export default function Dashboard() {
   const [taskStats, setTaskStats] = useState({ tasks: 0, pending: 0 });
 
   const rangeCfg = useMemo(() => RANGES.find(r => r.key === range)!, [range]);
-
-  const dismissSponsor = useCallback(() => {
-    setSponsorDismissed(true);
-    try {
-      localStorage.setItem(SPONSOR_DISMISSED_KEY, '1');
-    } catch {
-      // ignore storage errors (private mode etc.)
-    }
-  }, []);
 
   // Compute stats from real-time agents
   const stats = useMemo(() => ({
@@ -130,62 +109,62 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-6">
-      <div className="grid gap-4 lg:grid-cols-3">
-        {!sponsorDismissed && (
-          <Card className="relative flex h-full w-full min-w-[450px] flex-col overflow-hidden border border-accent/20 bg-linear-to-br from-accent/12 via-surface to-surface-secondary shadow-lg shadow-accent/10 dark:border-accent/30 dark:from-accent/20 dark:via-surface dark:to-accent/8 dark:shadow-accent/5">
-            <div
-              aria-hidden="true"
-              className="pointer-events-none absolute -top-12 -right-12 size-40 rounded-full bg-accent/20 blur-3xl dark:bg-accent/30"
-            />
-            <div
-              aria-hidden="true"
-              className="pointer-events-none absolute -bottom-8 -left-8 size-28 rounded-full bg-accent/10 blur-2xl dark:bg-accent/20"
-            />
-            <Card.Header className="relative gap-3">
-              <div className="flex items-start gap-3">
-                <div className="flex size-32 shrink-0 items-center justify-center">
-                  <img
-                    alt="icon"
-                    className="pointer-events-none h-full w-full object-cover select-none dark:invert"
-                    loading="lazy"
-                    src="/images/icon2.webp"
-                  />
+      <div className="grid gap-3 lg:grid-cols-[minmax(0,450px)_minmax(0,1fr)_minmax(0,1fr)]">
+        <Card className="relative flex h-full w-full flex-col overflow-hidden border border-accent/20 bg-linear-to-br from-accent/12 via-surface to-surface-secondary shadow-lg shadow-accent/10 dark:border-accent/30 dark:from-accent/20 dark:via-surface dark:to-accent/8 dark:shadow-accent/5">
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute -top-12 -right-12 size-40 rounded-full bg-accent/20 blur-3xl dark:bg-accent/30"
+          />
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute -bottom-8 -left-8 size-28 rounded-full bg-accent/10 blur-2xl dark:bg-accent/20"
+          />
+          <Card.Header className="relative gap-3">
+            <div className="flex items-start gap-3">
+              <div className="flex size-32 shrink-0 items-center justify-center">
+                <img
+                  alt="icon"
+                  className="pointer-events-none h-full w-full object-cover select-none dark:invert"
+                  loading="lazy"
+                  src="/images/icon2.webp"
+                />
+              </div>
+              <div className="flex flex-col gap-1">
+                <div>
+                  <Card.Title>{t('dashboard.sponsor.title')}</Card.Title>
+                  <Card.Description>{t('dashboard.sponsor.description')}</Card.Description>
                 </div>
-                <div className="flex flex-col gap-1">
-                  <div className="flex items-center gap-4">
-                    <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-accent/15 text-accent dark:bg-accent/20 dark:text-accent-soft-foreground">
-                      <Heart aria-hidden="true" className="size-5" />
-                    </div>
-                    <div>
-                      <Card.Title>{t('dashboard.sponsor.title')}</Card.Title>
-                      <Card.Description>{t('dashboard.sponsor.description')}</Card.Description>
-                    </div>
-                  </div>
+                <ul className="flex flex-col gap-1.5">
                   <li className="flex items-center gap-2 text-sm text-muted">
                     <Check aria-hidden="true" className="size-4 shrink-0 text-accent" />
-                    更多优质的插件
+                    {t('dashboard.sponsor.benefits.plugins')}
                   </li>
-                </div>
+                  <li className="flex items-center gap-2 text-sm text-muted">
+                    <Check aria-hidden="true" className="size-4 shrink-0 text-accent" />
+                    {t('dashboard.sponsor.benefits.consulting')}
+                  </li>
+                </ul>
               </div>
-            </Card.Header>
-            <Card.Footer className="relative mb-auto gap-2 flex-row">
-              <Button className="w-full bg-warning" onPress={dismissSponsor}>
-                {t('dashboard.sponsor.star')}
-              </Button>
-              <Button className="w-full shadow-md shadow-accent/20">
-                {t('dashboard.sponsor.upgrade')}
-              </Button>
-            </Card.Footer>
-          </Card>
-        )}
+            </div>
+          </Card.Header>
+          <Card.Footer className="mb-auto ml-auto flex gap-2">
+            <Button variant="secondary" isIconOnly className="transition-all duration-200 hover:w-24 overflow-hidden group">
+              <StarFill className='size-5 text-[#E3B341]'/>
+              <span className="ml-1 hidden group-hover:block transition-opacity duration-200 whitespace-nowrap">{t('dashboard.sponsor.star')}</span>
+            </Button>
+            <Button variant="secondary" isIconOnly className="transition-all duration-200 hover:w-24 overflow-hidden group">
+              <Heart className='size-5 text-[#FF4BBE]'/>
+              <span className="ml-1 hidden group-hover:block transition-opacity duration-200 whitespace-nowrap">{t('dashboard.sponsor.upgrade')}</span>
+            </Button>
+          </Card.Footer>
+        </Card>
         <StatsCards
           stats={stats}
-          compact={!sponsorDismissed}
-          className={sponsorDismissed ? 'min-w-0 lg:col-span-3' : 'min-w-0 lg:col-span-2'}
+          compact
+          className="min-w-0 lg:col-span-2"
         />
       </div>
 
-      {/* 系统分布（饼图）与拓扑图共享一行：左=系统分布，右=拓扑图 */}
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
         <SystemDistributionChart agents={agents} />
         <TopologyGraph agents={agents} />

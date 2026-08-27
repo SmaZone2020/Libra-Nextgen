@@ -169,6 +169,10 @@ export default {
         description: '如果你喜欢这个项目, 可以为我们点个Star或参与赞助 ☕',
         upgrade: '去赞助',
         star: '去Star',
+        benefits: {
+          plugins: '更多的优质插件',
+          consulting: '更好的技术咨询',
+        },
       },
     },
     agents: {

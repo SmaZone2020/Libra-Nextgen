@@ -170,6 +170,10 @@ export default {
         description: 'If you like this project, you can give us a Star or contribute to support us ☕',
         upgrade: 'Sponsor',
         star: 'Star',
+        benefits: {
+          plugins: 'More quality plugins',
+          consulting: 'Better technical consultation',
+        },
       },
     },
     agents: {
