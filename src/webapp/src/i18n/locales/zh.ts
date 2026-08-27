@@ -78,6 +78,7 @@ export default {
     agentRequired: {
       title: '请先选择设备',
       desc: '选择一个在线 Agent 后开始使用',
+      noOnlineAgent: '暂无在线设备',
     },
     plugins: {
       title: '插件管理',
@@ -741,7 +742,6 @@ export default {
       preferencesTab: '首选项',
       language: '语言',
       theme: '主题',
-      languageZh: '中文',
       themeLight: '浅色',
       themeDark: '深色',
       themeSystem: '系统',

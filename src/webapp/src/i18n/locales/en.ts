@@ -79,6 +79,7 @@ export default {
     agentRequired: {
       title: 'Select an agent first',
       desc: 'Pick an online agent to get started',
+      noOnlineAgent: 'No online agents',
     },
     plugins: {
       title: 'Plugin Management',
@@ -742,7 +743,6 @@ export default {
       preferencesTab: 'Preferences',
       language: 'Language',
       theme: 'Theme',
-      languageZh: 'Chinese',
       themeLight: 'Light',
       themeDark: 'Dark',
       themeSystem: 'System',
