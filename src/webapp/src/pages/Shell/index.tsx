@@ -4,6 +4,7 @@ import Terminal from '../../components/terminal';
 import type { TerminalHandle } from '../../components/terminal';
 import { createTask, getTask } from '../../api/tasks';
 import { useAgent } from '../../contexts/AgentContext';
+import { unwrapTaskOutput } from './taskOutput';
 
 /**
  * 命令式 Shell（零 WS 架构）：输入命令 → 创建 Shell 任务（SSE 推送执行）→
@@ -39,8 +40,10 @@ export default function ShellPage() {
         const cur = await getTask(task.id);
         if (cur.status === 'Completed' || cur.status === 'Failed' || cur.status === 'Cancelled') {
           done = true;
-          const out = cur.output ?? cur.error ?? '';
-          if (out.trim()) print(out);
+          // task.output 是嵌套 JSON（agent wrap_result 原样存储模块输出），
+          // 先解包出内层文本再上终端。
+          const text = unwrapTaskOutput(cur.output ?? cur.error ?? '');
+          if (text.trim()) print(text);
           print('\r\n');
         }
       }
