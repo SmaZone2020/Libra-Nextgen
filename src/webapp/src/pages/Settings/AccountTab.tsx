@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Button, Card, Chip, Input, Label, Modal, Spinner, Switch, TextField } from '@heroui/react';
+import { Button, Card, Checkbox, CheckboxGroup, Chip, Description, Input, Label, Modal, Spinner, Switch, Tabs, TextField } from '@heroui/react';
 import { getAccountStatus, listAccounts, createAccount, updateAccount, deleteAccount, changePassword } from '../../api/account';
 import { getStoredUser } from '../../api/auth';
 import type { AccountListItem, UserPermissions } from '../../types/models';
@@ -11,8 +11,6 @@ const PAGE_OPTIONS: { key: string; labelKey: string }[] = [
   { key: 'agents', labelKey: 'nav.agents' },
   { key: 'shell', labelKey: 'nav.shell' },
   { key: 'files', labelKey: 'nav.explorer' },
-  { key: 'screen', labelKey: 'nav.screen' },
-  { key: 'media', labelKey: 'nav.media' },
   { key: 'system', labelKey: 'nav.system' },
   { key: 'othersoft', labelKey: 'nav.softwareData' },
   { key: 'proxy', labelKey: 'nav.proxyBrowser' },
@@ -24,9 +22,8 @@ const PAGE_OPTIONS: { key: string; labelKey: string }[] = [
 const ACTION_OPTIONS = [
   'shell.command', 'file.list', 'file.read', 'file.write', 'file.delete',
   'file.mkdir', 'file.rename', 'file.move', 'file.copy', 'file.compress', 'file.decompress',
-  'screen.monitor', 'media.camera', 'media.mic',
   'system.info', 'system.processes', 'system.process.kill', 'system.network',
-  'othersoft.ai', 'credentials',
+  'credentials',
   'proxy.fetch',
 ];
 
@@ -242,7 +239,7 @@ export default function AccountTab() {
 
       {/* Create/Edit Modal */}
       <Modal.Backdrop isOpen={modalOpen} onOpenChange={(open) => { if (!open) setModalOpen(false); }}>
-        <Modal.Container size="sm">
+        <Modal.Container size="lg">
           <Modal.Dialog>
             <Modal.CloseTrigger />
             <Modal.Header>
@@ -267,22 +264,20 @@ export default function AccountTab() {
                 )}
                 <div className="space-y-2">
                   <Label>{t('settings.account.role')}</Label>
-                  <div className="flex gap-2">
-                    <Button
-                      variant={formRole === 'Operator' ? 'primary' : 'ghost'}
-                      size="sm"
-                      onPress={() => setFormRole('Operator')}
-                    >
-                      {t('settings.account.roleOperator')}
-                    </Button>
-                    <Button
-                      variant={formRole === 'Admin' ? 'primary' : 'ghost'}
-                      size="sm"
-                      onPress={() => setFormRole('Admin')}
-                    >
-                      {t('settings.account.roleAdmin')}
-                    </Button>
-                  </div>
+                  <Tabs className="w-full max-w-md">
+                    <Tabs.ListContainer>
+                      <Tabs.List aria-label="选项">
+                        <Tabs.Tab onPress={() => setFormRole('Admin')} id="roleAdmin">
+                          {t('settings.account.roleAdmin')}
+                          <Tabs.Indicator />
+                        </Tabs.Tab>
+                        <Tabs.Tab onPress={() => setFormRole('Operator')} id="roleOperator">
+                          {t('settings.account.roleOperator')}
+                          <Tabs.Indicator />
+                        </Tabs.Tab>
+                      </Tabs.List>
+                    </Tabs.ListContainer>
+                  </Tabs>
                 </div>
 
                 <div className="space-y-3 border-t border-default-200 pt-3">
@@ -296,34 +291,46 @@ export default function AccountTab() {
                   {!formFullAccess && (
                     <div className="space-y-4">
                       <div>
-                        <Label className="text-xs text-default-500">{t('settings.account.allowedPages')}</Label>
-                        <div className="grid grid-cols-2 gap-1 mt-1">
-                          {PAGE_OPTIONS.map((p) => (
-                            <label key={p.key} className="flex items-center gap-2 text-sm cursor-pointer">
-                              <Input variant="secondary"
-                                type="checkbox"
-                                checked={formPages.includes(p.key)}
-                                onChange={(e) => setFormPages((prev) => e.target.checked ? [...prev, p.key] : prev.filter((x) => x !== p.key))}
-                              />
-                              {t(p.labelKey)}
-                            </label>
-                          ))}
-                        </div>
+                        <CheckboxGroup
+                          name="allowedPages"
+                          value={formPages}
+                          onChange={(vals) => setFormPages([...vals])}
+                        >
+                          <Label>{t('settings.account.allowedPages')}</Label>
+                          <div className="grid grid-cols-3 gap-1 mt-1 h-40 overflow-y-auto">
+                            {PAGE_OPTIONS.map((p) => (
+                              <Checkbox value={p.key}>
+                                <Checkbox.Content className="flex flex-row items-center gap-2">
+                                  <Checkbox.Control className='bg-default'>
+                                    <Checkbox.Indicator />
+                                  </Checkbox.Control>
+                                  {t(p.labelKey)}
+                                </Checkbox.Content>
+                              </Checkbox>
+                            ))}
+                          </div>
+                        </CheckboxGroup>
                       </div>
                       <div>
-                        <Label className="text-xs text-default-500">{t('settings.account.allowedActions')}</Label>
-                        <div className="grid grid-cols-2 gap-1 mt-1">
-                          {ACTION_OPTIONS.map((a) => (
-                            <label key={a} className="flex items-center gap-2 text-sm cursor-pointer">
-                              <Input variant="secondary"
-                                type="checkbox"
-                                checked={formActions.includes(a)}
-                                onChange={(e) => setFormActions((prev) => e.target.checked ? [...prev, a] : prev.filter((x) => x !== a))}
-                              />
-                              {t(`riskPolicy.labels.${a}`)}
-                            </label>
-                          ))}
-                        </div>
+                        <CheckboxGroup
+                          name="allowedActions"
+                          value={formActions}
+                          onChange={(vals) => setFormActions([...vals])}
+                        >
+                          <Label>{t('settings.account.allowedActions')}</Label>
+                          <div className="grid grid-cols-3 gap-1 mt-1 h-40 overflow-y-auto">
+                            {ACTION_OPTIONS.map((a) => (
+                              <Checkbox key={a} value={a}>
+                                <Checkbox.Content className="flex flex-row items-center gap-2">
+                                  <Checkbox.Control className='bg-default'>
+                                    <Checkbox.Indicator />
+                                  </Checkbox.Control>
+                                  {t(`riskPolicy.labels.${a}`)}
+                                </Checkbox.Content>
+                              </Checkbox>
+                            ))}
+                          </div>
+                        </CheckboxGroup>
                       </div>
                     </div>
                   )}
