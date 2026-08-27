@@ -9,6 +9,7 @@ import {
   StepperStep,
   StepperStepButton,
   StepperTitle,
+  useStepperStep,
 } from './stepper';
 
 export { stepperVariants } from './stepper.styles';
@@ -36,6 +37,7 @@ export {
   StepperStep,
   StepperStepButton,
   StepperTitle,
+  useStepperStep,
 };
 
 export type {

@@ -112,6 +112,14 @@ export function BuilderModals({
   const failed = !building && !buildSucceeded && logs.length > 0;
   const currentStage = building ? (stageOrder.length > 0 ? stageOrder[stageOrder.length - 1]! : -1) : -1;
 
+  // 受控 currentStep：构建中 = 当前阶段；失败 = 最后出现的阶段（指示器/分隔线终止于此）；
+  // 成功 = 全部完成。
+  const stepperStep = useMemo(() => {
+    if (failed) return stageOrder.length > 0 ? stageOrder[stageOrder.length - 1]! : 0;
+    if (building) return currentStage >= 0 ? currentStage : 0;
+    return BUILD_STAGES.length;
+  }, [failed, building, currentStage, stageOrder]);
+
   const stageStates = useMemo<StageState[]>(() => {
     const states: StageState[] = BUILD_STAGES.map(() => 'pending');
     // 已出现 = done（失败时最后一个出现 = failed）
@@ -151,15 +159,13 @@ export function BuilderModals({
               </Modal.Heading>
             </Modal.Header>
             <Modal.Body>
-              {/* 横向步骤时间线（HeroUI Stepper） */}
-              <Stepper orientation="horizontal" size="md" className="w-full">
+              {/* 横向步骤时间线（HeroUI Stepper，currentStep 受控；分隔线自动计算） */}
+              <Stepper orientation="horizontal" size="md" currentStep={stepperStep} className="w-full">
                 {BUILD_STAGES.map((def, i) => {
                   const state = stageStates[i]!;
                   const isCurrent = i === currentStage;
-                  const status: 'inactive' | 'active' | 'complete' =
-                    state === 'done' ? 'complete' : state === 'active' ? 'active' : 'inactive';
                   return (
-                    <Stepper.Step key={def.id} status={status}>
+                    <Stepper.Step key={def.id}>
                       <Stepper.StepButton>
                         <Stepper.Indicator>
                           {state === 'done' ? (
@@ -176,17 +182,7 @@ export function BuilderModals({
                           <Stepper.Title>{t(def.labelKey)}</Stepper.Title>
                         </Stepper.Content>
                       </Stepper.StepButton>
-                      {i < BUILD_STAGES.length - 1 && (
-                        <Stepper.Separator
-                          progress={
-                            state === 'done' || (failed && isCurrent)
-                              ? 1
-                              : state === 'active'
-                                ? 0.5
-                                : 0
-                          }
-                        />
-                      )}
+                      <Stepper.Separator />
                     </Stepper.Step>
                   );
                 })}
