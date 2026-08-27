@@ -1,6 +1,8 @@
+'use client';
+
 import { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Button, Card, Input, Label, Modal, Spinner, Tabs, TextField } from '@heroui/react';
+import { Button, Card, Input, Label, Modal, Spinner, Tabs, Table, TextField } from '@heroui/react';
 import { listAccessKeys, createAccessKey, deleteAccessKey } from '../../api/accessKeys';
 import type { AccessKeyItem, AccessKeyCreateResponse } from '../../api/accessKeys';
 import { useDialog } from '../../hooks/useDialog';
@@ -86,47 +88,42 @@ function AccessKeysTab() {
             {t('settings.createKey')}
           </Button>
         </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-default-200">
-                <th className="text-left py-2 px-3">{t('settings.name')}</th>
-                <th className="text-left py-2 px-3">{t('settings.key')}</th>
-                <th className="text-left py-2 px-3">{t('settings.createdAt')}</th>
-                <th className="text-left py-2 px-3">{t('settings.expiresAt')}</th>
-                <th className="text-left py-2 px-3">{t('settings.lastUsedAt')}</th>
-                <th className="text-left py-2 px-3">{t('settings.actions')}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {keys.map((k) => (
-                <tr key={k.id} className="border-b border-default-100">
-                  <td className="py-2 px-3">{k.name}</td>
-                  <td className="py-2 px-3 font-mono text-xs">{k.keyPreview}...</td>
-                  <td className="py-2 px-3">{new Date(k.createdAt).toLocaleDateString()}</td>
-                  <td className="py-2 px-3">
-                    {k.expiresAt ? new Date(k.expiresAt).toLocaleDateString() : '-'}
-                  </td>
-                  <td className="py-2 px-3">
-                    {k.lastUsedAt ? new Date(k.lastUsedAt).toLocaleDateString() : '-'}
-                  </td>
-                  <td className="py-2 px-3">
-                    <Button size="sm" variant="danger" onPress={() => handleDelete(k.id)}>
-                      {t('settings.delete')}
-                    </Button>
-                  </td>
-                </tr>
-              ))}
-              {keys.length === 0 && (
-                <tr>
-                  <td colSpan={6} className="py-8 text-center text-default-400">
-                    {t('settings.noKeys')}
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+        <Table>
+          <Table.ScrollContainer>
+            <Table.Content aria-label={t('settings.accessKeys')} className="min-w-[800px]">
+              <Table.Header>
+                <Table.Column isRowHeader>{t('settings.name')}</Table.Column>
+                <Table.Column>{t('settings.key')}</Table.Column>
+                <Table.Column>{t('settings.createdAt')}</Table.Column>
+                <Table.Column>{t('settings.expiresAt')}</Table.Column>
+                <Table.Column>{t('settings.lastUsedAt')}</Table.Column>
+                <Table.Column>{t('settings.actions')}</Table.Column>
+              </Table.Header>
+              <Table.Body renderEmptyState={() => (
+                <div className="py-8 text-center text-default-400">{t('settings.noKeys')}</div>
+              )}>
+                {keys.map((k) => (
+                  <Table.Row key={k.id} id={k.id}>
+                    <Table.Cell>{k.name}</Table.Cell>
+                    <Table.Cell className="font-mono text-xs">{k.keyPreview}...</Table.Cell>
+                    <Table.Cell>{new Date(k.createdAt).toLocaleDateString()}</Table.Cell>
+                    <Table.Cell>
+                      {k.expiresAt ? new Date(k.expiresAt).toLocaleDateString() : '-'}
+                    </Table.Cell>
+                    <Table.Cell>
+                      {k.lastUsedAt ? new Date(k.lastUsedAt).toLocaleDateString() : '-'}
+                    </Table.Cell>
+                    <Table.Cell>
+                      <Button size="sm" variant="danger" onPress={() => handleDelete(k.id)}>
+                        {t('settings.delete')}
+                      </Button>
+                    </Table.Cell>
+                  </Table.Row>
+                ))}
+              </Table.Body>
+            </Table.Content>
+          </Table.ScrollContainer>
+        </Table>
       </Card>
       <Modal.Backdrop isOpen={createOpen} onOpenChange={(open) => { if (!open) closeCreateModal(); }}>
         <Modal.Container size="sm">

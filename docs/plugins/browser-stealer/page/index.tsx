@@ -1,5 +1,7 @@
+'use client';
+
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Accordion, Button, Chip, Dropdown, Input, Label, Skeleton, Tabs, TextField } from '@heroui/react';
+import { Accordion, Button, Chip, Dropdown, Input, Label, Skeleton, Tabs, Table, TextField } from '@heroui/react';
 import { ArrowDownToLine, ArrowRotateLeft, ChevronDown, Eye, EyeSlash, Globe, Magnifier } from '@gravity-ui/icons';
 import { usePluginHost } from '../../hooks/usePluginHost';
 
@@ -372,26 +374,30 @@ export default function BrowserStealerPage() {
                     </Accordion.Heading>
                     <Accordion.Panel>
                       <Accordion.Body>
-                        <table className="w-full text-sm">
-                          <thead>
-                            <tr className="border-b border-neutral-200 dark:border-neutral-700">
-                              <th className="text-left py-1.5 px-2">来源</th>
-                              <th className="text-left py-1.5 px-2">URL</th>
-                              <th className="text-left py-1.5 px-2">用户名</th>
-                              <th className="text-left py-1.5 px-2">密码</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {items.map((p) => (
-                              <tr key={p.key} className="border-b border-neutral-100 dark:border-neutral-800">
-                                <td className="py-1.5 px-2"><Chip size="sm" variant="soft">{p.browser}</Chip></td>
-                                <td className="py-1.5 px-2 max-w-[300px] truncate font-mono text-xs" title={p.url}>{p.url}</td>
-                                <td className="py-1.5 px-2">{p.username}</td>
-                                <td className="py-1.5 px-2 font-mono">{showAllPasswords ? p.password : '••••••••'}</td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
+                        <Table>
+                          <Table.ScrollContainer>
+                            <Table.Content aria-label="浏览器密码" className="min-w-[640px]">
+                              <Table.Header>
+                                <Table.Column isRowHeader>来源</Table.Column>
+                                <Table.Column>URL</Table.Column>
+                                <Table.Column>用户名</Table.Column>
+                                <Table.Column>密码</Table.Column>
+                              </Table.Header>
+                              <Table.Body>
+                                {items.map((p) => (
+                                  <Table.Row key={p.key} id={p.key}>
+                                    <Table.Cell><Chip size="sm" variant="soft">{p.browser}</Chip></Table.Cell>
+                                    <Table.Cell className="max-w-[300px] truncate font-mono text-xs">
+                                      <span title={p.url}>{p.url}</span>
+                                    </Table.Cell>
+                                    <Table.Cell>{p.username}</Table.Cell>
+                                    <Table.Cell className="font-mono">{showAllPasswords ? p.password : '••••••••'}</Table.Cell>
+                                  </Table.Row>
+                                ))}
+                              </Table.Body>
+                            </Table.Content>
+                          </Table.ScrollContainer>
+                        </Table>
                       </Accordion.Body>
                     </Accordion.Panel>
                   </Accordion.Item>
@@ -420,26 +426,32 @@ export default function BrowserStealerPage() {
                     </Accordion.Heading>
                     <Accordion.Panel>
                       <Accordion.Body>
-                        <table className="w-full text-sm">
-                          <thead>
-                            <tr className="border-b border-neutral-200 dark:border-neutral-700">
-                              <th className="text-left py-1.5 px-2">标题</th>
-                              <th className="text-left py-1.5 px-2">URL</th>
-                              <th className="text-left py-1.5 px-2">访问次数</th>
-                              <th className="text-left py-1.5 px-2">来源</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {items.map((h) => (
-                              <tr key={h.key} className="border-b border-neutral-100 dark:border-neutral-800">
-                                <td className="py-1 px-2 max-w-[250px] truncate" title={h.title}>{h.title || '-'}</td>
-                                <td className="py-1 px-2 max-w-[300px] truncate font-mono text-xs" title={h.url}>{h.url}</td>
-                                <td className="py-1 px-2">{h.visits}</td>
-                                <td className="py-1 px-2"><Chip size="sm" variant="soft">{h.browser}</Chip></td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
+                        <Table>
+                          <Table.ScrollContainer>
+                            <Table.Content aria-label="浏览器历史记录" className="min-w-[640px]">
+                              <Table.Header>
+                                <Table.Column isRowHeader>标题</Table.Column>
+                                <Table.Column>URL</Table.Column>
+                                <Table.Column>访问次数</Table.Column>
+                                <Table.Column>来源</Table.Column>
+                              </Table.Header>
+                              <Table.Body>
+                                {items.map((h) => (
+                                  <Table.Row key={h.key} id={h.key}>
+                                    <Table.Cell className="max-w-[250px] truncate">
+                                      <span title={h.title}>{h.title || '-'}</span>
+                                    </Table.Cell>
+                                    <Table.Cell className="max-w-[300px] truncate font-mono text-xs">
+                                      <span title={h.url}>{h.url}</span>
+                                    </Table.Cell>
+                                    <Table.Cell>{h.visits}</Table.Cell>
+                                    <Table.Cell><Chip size="sm" variant="soft">{h.browser}</Chip></Table.Cell>
+                                  </Table.Row>
+                                ))}
+                              </Table.Body>
+                            </Table.Content>
+                          </Table.ScrollContainer>
+                        </Table>
                       </Accordion.Body>
                     </Accordion.Panel>
                   </Accordion.Item>

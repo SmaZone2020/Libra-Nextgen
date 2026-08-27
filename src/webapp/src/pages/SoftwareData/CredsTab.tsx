@@ -1,6 +1,8 @@
+'use client';
+
 import { useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Button, Chip, Input, Label, TextField } from '@heroui/react';
+import { Button, Chip, Input, Label, Table, TextField } from '@heroui/react';
 import { dumpLsass, klist, saveSam, type KlistTicket } from '../../api/othersoft';
 
 function Action({ loading, onClick, children, variant = 'ghost' }: {
@@ -75,30 +77,30 @@ export function CredsTab({ agentId }: { agentId: string }) {
           <div className="text-sm text-neutral-400">{t('othersoft.klistDesc')}</div>
           <Action loading={busy === 'klist'} onClick={doKlist}>{t('othersoft.queryTickets')}</Action>
         </div>
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-neutral-800 text-neutral-400">
-              <th className="text-left py-1.5 px-2">SPN</th>
-              <th className="text-left py-1.5 px-2">{t('othersoft.domain')}</th>
-              <th className="text-left py-1.5 px-2">{t('othersoft.expires')}</th>
-              <th className="text-left py-1.5 px-2">{t('othersoft.encryption')}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {tickets.length === 0 ? (
-              <tr>
-                <td colSpan={4} className="text-center text-neutral-500 py-6">{t('othersoft.noTickets')}</td>
-              </tr>
-            ) : tickets.map((t, i) => (
-              <tr key={i} className="border-b border-neutral-900">
-                <td className="py-1.5 px-2">{t.server || '-'}</td>
-                <td className="py-1.5 px-2"><Chip size="sm" variant="soft">{t.realm || '-'}</Chip></td>
-                <td className="py-1.5 px-2">{t.end ? new Date(t.end / 10000 - 11644473600000).toLocaleString() : '-'}</td>
-                <td className="py-1.5 px-2">{String(t.encryption)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <Table>
+          <Table.ScrollContainer>
+            <Table.Content aria-label={t('othersoft.klistDesc')} className="min-w-[640px]">
+              <Table.Header>
+                <Table.Column isRowHeader>SPN</Table.Column>
+                <Table.Column>{t('othersoft.domain')}</Table.Column>
+                <Table.Column>{t('othersoft.expires')}</Table.Column>
+                <Table.Column>{t('othersoft.encryption')}</Table.Column>
+              </Table.Header>
+              <Table.Body renderEmptyState={() => (
+                <div className="py-6 text-center text-neutral-500">{t('othersoft.noTickets')}</div>
+              )}>
+                {tickets.map((ticket, i) => (
+                  <Table.Row key={i} id={i}>
+                    <Table.Cell>{ticket.server || '-'}</Table.Cell>
+                    <Table.Cell><Chip size="sm" variant="soft">{ticket.realm || '-'}</Chip></Table.Cell>
+                    <Table.Cell>{ticket.end ? new Date(ticket.end / 10000 - 11644473600000).toLocaleString() : '-'}</Table.Cell>
+                    <Table.Cell>{String(ticket.encryption)}</Table.Cell>
+                  </Table.Row>
+                ))}
+              </Table.Body>
+            </Table.Content>
+          </Table.ScrollContainer>
+        </Table>
       </div>
 
       <div className="space-y-2">

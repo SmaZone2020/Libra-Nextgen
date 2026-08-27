@@ -1,6 +1,8 @@
+'use client';
+
 import { useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Button, Card, Chip, Input, Label, TextField } from '@heroui/react';
+import { Button, Card, Chip, Input, Label, Table, TextField } from '@heroui/react';
 import {
   impersonateToken, listTokens, makeToken, revertToken, stealToken, type TokenItem,
 } from '../../api/token';
@@ -99,36 +101,34 @@ export function TokenTab({ agentId }: { agentId: string }) {
       </Card>
       {message && <div className="text-sm text-neutral-500">{message}</div>}
 
-      <table className="w-full text-sm">
-        <thead>
-          <tr className="border-b border-neutral-800 text-neutral-400">
-            <th className="text-left py-1.5 px-2">ID</th>
-            <th className="text-left py-1.5 px-2">PID</th>
-            <th className="text-left py-1.5 px-2">{t('othersoft.user')}</th>
-            <th className="text-left py-1.5 px-2">{t('othersoft.action')}</th>
-          </tr>
-        </thead>
-        <tbody>
-          {tokens.length === 0 ? (
-            <tr>
-              <td colSpan={4} className="text-center text-neutral-500 py-8">
-                {t('othersoft.noTokens')}
-              </td>
-            </tr>
-          ) : tokens.map((item) => (
-            <tr key={`${item.pid}-${item.id}`} className="border-b border-neutral-900">
-              <td className="py-1.5 px-2">{String(item.id)}</td>
-              <td className="py-1.5 px-2"><Chip size="sm" variant="soft">{String(item.pid)}</Chip></td>
-              <td className="py-1.5 px-2">{item.username}</td>
-              <td className="py-1.5 px-2">
-                <Action loading={busy === 'impersonate'} onClick={() => doImpersonate(item)} variant="primary">
-                  {t('othersoft.impersonate')}
-                </Action>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      <Table>
+        <Table.ScrollContainer>
+          <Table.Content aria-label="Token 列表" className="min-w-[560px]">
+            <Table.Header>
+              <Table.Column isRowHeader>ID</Table.Column>
+              <Table.Column>PID</Table.Column>
+              <Table.Column>{t('othersoft.user')}</Table.Column>
+              <Table.Column>{t('othersoft.action')}</Table.Column>
+            </Table.Header>
+            <Table.Body renderEmptyState={() => (
+              <div className="py-8 text-center text-neutral-500">{t('othersoft.noTokens')}</div>
+            )}>
+              {tokens.map((item) => (
+                <Table.Row key={`${item.pid}-${item.id}`} id={`${item.pid}-${item.id}`}>
+                  <Table.Cell>{String(item.id)}</Table.Cell>
+                  <Table.Cell><Chip size="sm" variant="soft">{String(item.pid)}</Chip></Table.Cell>
+                  <Table.Cell>{item.username}</Table.Cell>
+                  <Table.Cell>
+                    <Action loading={busy === 'impersonate'} onClick={() => doImpersonate(item)} variant="primary">
+                      {t('othersoft.impersonate')}
+                    </Action>
+                  </Table.Cell>
+                </Table.Row>
+              ))}
+            </Table.Body>
+          </Table.Content>
+        </Table.ScrollContainer>
+      </Table>
     </div>
   );
 }
