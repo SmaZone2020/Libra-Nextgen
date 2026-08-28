@@ -971,6 +971,7 @@ export default {
       usedTool: 'Used tool',
       sources: '{{count}} sources',
       editMessage: 'Edit message',
+      deleteMessage: 'Delete message',
       good: 'Good response',
       bad: 'Bad response',
       regenerate: 'Regenerate',

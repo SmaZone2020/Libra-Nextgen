@@ -970,6 +970,7 @@ export default {
       usedTool: '已调用工具',
       sources: '{{count}} 个来源',
       editMessage: '编辑消息',
+      deleteMessage: '删除消息',
       good: '回答不错',
       bad: '回答不佳',
       regenerate: '重新生成',

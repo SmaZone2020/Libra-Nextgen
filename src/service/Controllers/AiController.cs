@@ -107,6 +107,24 @@ public class AiController : ControllerBase
         return ok ? Ok(new { renamed = true }) : NotFound(new { error = "session not found" });
     }
 
+    /// <summary>编辑会话中的一条用户消息内容（仅限 user 消息）。</summary>
+    [HttpPut("sessions/{id}/messages/{messageId}")]
+    public async Task<IActionResult> EditMessage(string id, string messageId, [FromBody] AiEditMessageReq req, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(req.Content))
+            return BadRequest(new { error = "content is required" });
+        var ok = await _ai.EditMessageAsync(id, UserId, messageId, req.Content, ct);
+        return ok ? Ok(new { edited = true }) : BadRequest(new { error = "message not found or not editable" });
+    }
+
+    /// <summary>删除会话中的一条消息（用户消息或 AI 消息）。</summary>
+    [HttpDelete("sessions/{id}/messages/{messageId}")]
+    public async Task<IActionResult> DeleteMessage(string id, string messageId, CancellationToken ct)
+    {
+        var ok = await _ai.DeleteMessageAsync(id, UserId, messageId, ct);
+        return ok ? Ok(new { deleted = true }) : NotFound(new { error = "message not found" });
+    }
+
     /// <summary>分支会话：复制为带 -fork 后缀的新会话（含完整消息历史）。</summary>
     [HttpPost("sessions/{id}/fork")]
     public async Task<IActionResult> ForkSession(string id, CancellationToken ct)
@@ -248,6 +266,11 @@ public class AiSessionReq
 public class AiRenameReq
 {
     public string? Title { get; set; }
+}
+
+public class AiEditMessageReq
+{
+    public string? Content { get; set; }
 }
 
 public class AiMcpReq

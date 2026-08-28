@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Button, Chip, Tooltip } from '@heroui/react';
+import { Button, Chip, TextArea, Tooltip } from '@heroui/react';
 import {
   ChainOfThought,
   ChatLoader,
@@ -16,6 +16,7 @@ import {
   StreamMarkdown,
   TextShimmer,
 } from '../../vendor/ui-pro';
+import { TrashBin } from '../../vendor/ui-pro/components/icons';
 import type {
   AiMessage,
   AiSource,
@@ -31,7 +32,10 @@ export interface AiThreadMessageProps {
   pendingApproval?: AiToolCall | null;
   onCopy: (text: string) => void;
   onRegenerate: () => void;
-  onEdit: () => void;
+  /** 编辑用户消息：messageId + 新内容。 */
+  onEdit: (messageId: string, content: string) => void;
+  /** 删除消息（用户消息或 AI 消息）：messageId。 */
+  onDelete: (messageId: string) => void;
   onFeedback: (good: boolean) => void;
   onApprove: (toolCallId: string) => void;
   onReject: (toolCallId: string) => void;
@@ -114,6 +118,7 @@ export function AiThreadMessage({
   onCopy,
   onRegenerate,
   onEdit,
+  onDelete,
   onFeedback,
   onApprove,
   onReject,
@@ -122,6 +127,15 @@ export function AiThreadMessage({
   const reasoning = message.reasoning;
   const toolCalls = message.toolCalls;
   const sources = message.sources;
+
+  // 用户消息原地编辑态。
+  const [isEditing, setIsEditing] = useState(false);
+  const [draft, setDraft] = useState('');
+  const editRef = useRef<HTMLTextAreaElement | null>(null);
+
+  useEffect(() => {
+    if (isEditing) editRef.current?.focus();
+  }, [isEditing]);
 
   // 流式进行中：工具调用逐个渲染（真实 tool_call 事件已实时到位，无需假占位）。
   // pendingApproval 去重：审批挂起时它已随 tool_call 进入 streamingTools，避免同工具渲染两次。
@@ -137,21 +151,70 @@ export function AiThreadMessage({
       <ChatMessagePrimitive.User>
         <ChatMessagePrimitive.Bubble>
           <ChatMessagePrimitive.Content>
-            <Markdown>{message.content}</Markdown>
+            {isEditing ? (
+              <div className="flex flex-col gap-2">
+                <TextArea
+                  ref={editRef}
+                  value={draft}
+                  onChange={(e) => setDraft(e.target.value)}
+                  aria-label={t('ai.editMessage')}
+                  autoFocus
+                  rows={2}
+                />
+                <div className="flex justify-end gap-2">
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onPress={() => {
+                      setIsEditing(false);
+                      setDraft('');
+                    }}
+                  >
+                    {t('common.cancel')}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="primary"
+                    isDisabled={!draft.trim()}
+                    onPress={() => {
+                      const next = draft.trim();
+                      if (next) onEdit(message.id, next);
+                      setIsEditing(false);
+                    }}
+                  >
+                    {t('common.save')}
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <Markdown>{message.content}</Markdown>
+            )}
           </ChatMessagePrimitive.Content>
         </ChatMessagePrimitive.Bubble>
-        <ChatMessageActions>
-          <ChatMessageActions.Copy
-            aria-label={t('common.copy')}
-            tooltip={t('common.copy')}
-            onPress={() => onCopy(message.content)}
-          />
-          <ChatMessageActions.Edit
-            aria-label={t('ai.editMessage')}
-            tooltip={t('ai.editMessage')}
-            onPress={onEdit}
-          />
-        </ChatMessageActions>
+        {!isEditing && (
+          <ChatMessageActions>
+            <ChatMessageActions.Copy
+              aria-label={t('common.copy')}
+              tooltip={t('common.copy')}
+              onPress={() => onCopy(message.content)}
+            />
+            <ChatMessageActions.Edit
+              aria-label={t('ai.editMessage')}
+              tooltip={t('ai.editMessage')}
+              onPress={() => {
+                setDraft(message.content);
+                setIsEditing(true);
+              }}
+            />
+            <ChatMessagePrimitive.Action
+              aria-label={t('ai.deleteMessage')}
+              tooltip={t('ai.deleteMessage')}
+              onPress={() => onDelete(message.id)}
+            >
+              <TrashBin className="size-4" />
+            </ChatMessagePrimitive.Action>
+          </ChatMessageActions>
+        )}
       </ChatMessagePrimitive.User>
     );
   }
@@ -251,6 +314,13 @@ export function AiThreadMessage({
               tooltip={t('ai.regenerate')}
               onPress={onRegenerate}
             />
+            <ChatMessagePrimitive.Action
+              aria-label={t('ai.deleteMessage')}
+              tooltip={t('ai.deleteMessage')}
+              onPress={() => onDelete(message.id)}
+            >
+              <TrashBin className="size-4" />
+            </ChatMessagePrimitive.Action>
           </ChatMessageActions>
         )}
       </ChatMessagePrimitive.Body>

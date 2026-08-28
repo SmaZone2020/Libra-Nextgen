@@ -269,6 +269,42 @@ public class AiService
         return r.ModifiedCount > 0 || r.MatchedCount > 0;
     }
 
+    /// <summary>编辑会话中的一条用户消息内容（原地更新，保留消息 ID 与时间戳）。</summary>
+    public async Task<bool> EditMessageAsync(
+        string sessionId, string userId, string messageId, string content, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(content)) return false;
+
+        var session = await Sessions.Find(x => x.Id == sessionId && x.UserId == userId).FirstOrDefaultAsync(ct);
+        if (session == null) return false;
+
+        var msg = session.Messages.FirstOrDefault(m => m.Id == messageId);
+        if (msg == null) return false;
+        // 仅允许编辑用户消息（AI 消息不可直接改写）。
+        if (msg.Role != "user") return false;
+
+        msg.Content = content.Trim();
+        session.UpdatedAt = DateTime.UtcNow;
+        await SaveSessionAsync(session, ct);
+        return true;
+    }
+
+    /// <summary>删除会话中的一条消息（用户消息或 AI 消息均可）。</summary>
+    public async Task<bool> DeleteMessageAsync(
+        string sessionId, string userId, string messageId, CancellationToken ct = default)
+    {
+        var session = await Sessions.Find(x => x.Id == sessionId && x.UserId == userId).FirstOrDefaultAsync(ct);
+        if (session == null) return false;
+
+        var idx = session.Messages.FindIndex(m => m.Id == messageId);
+        if (idx < 0) return false;
+
+        session.Messages.RemoveAt(idx);
+        session.UpdatedAt = DateTime.UtcNow;
+        await SaveSessionAsync(session, ct);
+        return true;
+    }
+
     /// <summary>复制会话为分支：深拷贝消息，标题追加 -fork。</summary>
     public async Task<AiSession?> ForkSessionAsync(string id, string userId, string userName, CancellationToken ct = default)
     {

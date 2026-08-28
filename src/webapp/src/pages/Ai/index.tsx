@@ -7,6 +7,8 @@ import { Button } from '@heroui/react';
 import { ArrowLeft, BarsDescendingAlignLeft } from '@gravity-ui/icons';
 import {
   createAiSession,
+  deleteAiMessage,
+  editAiMessage,
   getAiProviders,
   getAiSession,
   getAiSessions,
@@ -388,17 +390,68 @@ export default function AiPage() {
     if (lastUser) void send(lastUser.content);
   }, [session, send]);
 
-  const handleEditMessage = useCallback(() => {
-    if (!session || session.messages.length === 0) return;
-    const lastUser = [...session.messages].reverse().find((m) => m.role === 'user');
-    if (!lastUser) return;
-    const el = document.querySelector('[data-slot="prompt-input-textarea"]') as HTMLTextAreaElement | null;
-    if (el) {
-      el.focus();
-      el.value = lastUser.content;
-      el.dispatchEvent(new Event('input', { bubbles: true }));
-    }
-  }, [session]);
+  const handleEditMessage = useCallback(
+    async (messageId: string, content: string) => {
+      if (!activeId || !session) return;
+      const id = activeId;
+      // 本地先更新 UI（乐观更新），失败再回滚。
+      const prev = session;
+      setSession((s) =>
+        s
+          ? {
+              ...s,
+              messages: s.messages.map((m) =>
+                m.id === messageId ? { ...m, content } : m,
+              ),
+            }
+          : s,
+      );
+      try {
+        await editAiMessage(id, messageId, content);
+        setSessions((list) =>
+          list.map((s) =>
+            s.id === id
+              ? {
+                  ...s,
+                  messages: s.messages.map((m) =>
+                    m.id === messageId ? { ...m, content } : m,
+                  ),
+                }
+              : s,
+          ),
+        );
+      } catch (e) {
+        setSession(prev);
+        alert(e instanceof Error ? e.message : String(e));
+      }
+    },
+    [activeId, session],
+  );
+
+  const handleDeleteMessage = useCallback(
+    async (messageId: string) => {
+      if (!activeId || !session) return;
+      const id = activeId;
+      const prev = session;
+      setSession((s) =>
+        s ? { ...s, messages: s.messages.filter((m) => m.id !== messageId) } : s,
+      );
+      try {
+        await deleteAiMessage(id, messageId);
+        setSessions((list) =>
+          list.map((s) =>
+            s.id === id
+              ? { ...s, messages: s.messages.filter((m) => m.id !== messageId) }
+              : s,
+          ),
+        );
+      } catch (e) {
+        setSession(prev);
+        alert(e instanceof Error ? e.message : String(e));
+      }
+    },
+    [activeId, session],
+  );
 
   const handleCopy = useCallback((text: string) => {
     void navigator.clipboard?.writeText(text).catch(() => undefined);
@@ -477,7 +530,8 @@ export default function AiPage() {
                     isStreaming={false}
                     onCopy={handleCopy}
                     onRegenerate={() => void handleRegenerate()}
-                    onEdit={handleEditMessage}
+                    onEdit={(messageId, content) => void handleEditMessage(messageId, content)}
+                    onDelete={(messageId) => void handleDeleteMessage(messageId)}
                     onFeedback={handleFeedback}
                     onApprove={(id) => {
                       // 对话流中批准：先重新打开模态框选择许可时长。
@@ -506,6 +560,7 @@ export default function AiPage() {
                   onCopy={handleCopy}
                   onRegenerate={() => undefined}
                   onEdit={() => undefined}
+                  onDelete={() => undefined}
                   onFeedback={() => undefined}
                   onApprove={(id) => {
                     // 对话流中批准：重新打开模态框选择许可时长。

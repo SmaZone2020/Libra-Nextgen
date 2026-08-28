@@ -159,6 +159,16 @@ export async function renameAiSession(id: string, title: string): Promise<void> 
   await api.put<void>(`/ai/sessions/${id}/rename`, { title });
 }
 
+/** 编辑会话中的一条用户消息内容（仅限 user 消息）。 */
+export async function editAiMessage(id: string, messageId: string, content: string): Promise<void> {
+  await api.put<void>(`/ai/sessions/${id}/messages/${messageId}`, { content });
+}
+
+/** 删除会话中的一条消息（用户消息或 AI 消息）。 */
+export async function deleteAiMessage(id: string, messageId: string): Promise<void> {
+  await api.delete<void>(`/ai/sessions/${id}/messages/${messageId}`);
+}
+
 /** 分支会话：复制为带 -fork 后缀的新会话（含完整消息历史）。 */
 export async function forkAiSession(id: string): Promise<AiSession> {
   return api.post<AiSession>(`/ai/sessions/${id}/fork`);
