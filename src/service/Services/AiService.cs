@@ -538,10 +538,14 @@ public class AiService
         }
         finally
         {
-            state.Cts.Dispose();
             state.Finished = true;
-            // 停止后不清理 _runs（保留以便前端查询状态），由 RunChatAsync 结束时统一移除。
-            _runs.TryRemove(session.Id, out _);
+            // 挂起审批时保留运行态：ResolveApprovalAsync 需要从 _runs 恢复续跑，
+            // 只有真正结束（无待审批调用）才移除，避免 /chat/action 找不到 state 而静默失败。
+            if (state.PendingToolCall == null)
+            {
+                state.Cts.Dispose();
+                _runs.TryRemove(session.Id, out _);
+            }
         }
     }
 
@@ -1112,10 +1116,19 @@ public class AiService
 
         var pending = state.ToolCalls.FirstOrDefault(t => t.Id == toolCallId);
         if (pending == null) return;
+
+        // 先取出挂起元数据（kind/requiredTier），再清空 PendingToolCall，
+        // 否则下方 escalation 分支永远读不到 kind。
+        var pendingKind = state.PendingToolCall["kind"]?.GetValue<string>() ?? "";
+        var requiredTier = state.PendingToolCall["requiredTier"]?.GetValue<int>() ?? (int)JustitiaTier.Imperium;
         state.PendingToolCall = null;
 
         var provider = await GetProviderAsync(state.ProviderId, includeKey: true, ct);
-        if (provider == null) return;
+        if (provider == null)
+        {
+            CleanupRunIfFinished(state, sessionId);
+            return;
+        }
 
         // 已预置 assistant tool_calls 消息，补 tool 结果。
         if (state.LlmMessages.LastOrDefault(m => m["role"]?.GetValue<string>() == "assistant" && m["tool_calls"] != null) is JsonObject asst)
@@ -1141,13 +1154,13 @@ public class AiService
             await onEvent(JsonSerializer.Serialize(new { type = "tool_result", toolCallId, toolName = pending.ToolName, output = rejection, state = "error" }, JsonOpts));
             state.AssistantText += "\n\n[操作已被拒绝]\n\n";
             await ChatLoopAsync(state, provider, onEvent, ct);
+            CleanupRunIfFinished(state, sessionId);
             return;
         }
 
         // 批准 → 若是档位提升请求（escalation），临时提升本次运行档位后执行。
-        if (state.PendingToolCall?["kind"]?.GetValue<string>() == "escalation")
+        if (pendingKind == "escalation")
         {
-            var requiredTier = state.PendingToolCall["requiredTier"]?.GetValue<int>() ?? (int)JustitiaTier.Imperium;
             state.JustitiaTier = (JustitiaTier)Math.Max((int)state.JustitiaTier, requiredTier);
         }
 
@@ -1162,6 +1175,18 @@ public class AiService
         await onEvent(JsonSerializer.Serialize(new { type = "tool_result", toolCallId, toolName = pending.ToolName, output, state = pending.State }, JsonOpts));
         state.LlmMessages.Add(new JsonObject { ["role"] = "tool", ["tool_call_id"] = toolCallId, ["content"] = output });
         await ChatLoopAsync(state, provider, onEvent, ct);
+        CleanupRunIfFinished(state, sessionId);
+    }
+
+    /// <summary>续跑结束后若没有新的待审批调用，释放 CTS 并从运行表移除。</summary>
+    private void CleanupRunIfFinished(AiRunState state, string sessionId)
+    {
+        if (state.PendingToolCall == null)
+        {
+            state.Cts?.Dispose();
+            state.Finished = true;
+            _runs.TryRemove(sessionId, out _);
+        }
     }
 
     /// <summary>停止当前运行。</summary>

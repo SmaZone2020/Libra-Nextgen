@@ -123,13 +123,12 @@ export function AiThreadMessage({
   const toolCalls = message.toolCalls;
   const sources = message.sources;
 
-  // 流式进行中：工具调用逐个渲染，未完成的显示为 running。
+  // 流式进行中：工具调用逐个渲染（真实 tool_call 事件已实时到位，无需假占位）。
+  // pendingApproval 去重：审批挂起时它已随 tool_call 进入 streamingTools，避免同工具渲染两次。
   const streamingTools =
     isStreaming && pendingApproval
-      ? [...(toolCalls ?? []), pendingApproval]
-      : isStreaming && !pendingApproval
-        ? [...(toolCalls ?? []), { id: 'running-tool', toolName: '…', argsText: '{}', state: 'running' } as AiToolCall]
-        : null;
+      ? [...(toolCalls ?? []).filter((x) => x.id !== pendingApproval.id), pendingApproval]
+      : null;
 
   const renderedToolCalls = streamingTools ?? toolCalls ?? [];
 
