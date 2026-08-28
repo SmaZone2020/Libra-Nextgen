@@ -1291,7 +1291,17 @@ public class AiService
         // 批准 → 执行。
         pending.State = "running";
         await onEvent(JsonSerializer.Serialize(new { type = "tool_call", toolCall = new { id = toolCallId, toolName = pending.ToolName, argsText = pending.ArgsText, state = "running" } }, JsonOpts));
-        var output = await InvokeToolAsync(pending.ToolName, JsonNode.Parse(pending.ArgsText) as JsonObject ?? new JsonObject(), ct);
+        string output;
+        try
+        {
+            output = await InvokeToolAsync(pending.ToolName, JsonNode.Parse(pending.ArgsText) as JsonObject ?? new JsonObject(), ct);
+        }
+        catch (Exception ex)
+        {
+            // 兜底：工具执行异常转成结构化错误，绝不能炸掉 SSE 流。
+            _logger.LogWarning(ex, "AI tool {Tool} threw unhandled exception after approval", pending.ToolName);
+            output = McpUtils.Error($"tool '{pending.ToolName}' failed: {ex.Message}");
+        }
         var isError = output.Contains("\"error\"", StringComparison.Ordinal);
         pending.State = isError ? "error" : "output-available";
         pending.Output = output;
