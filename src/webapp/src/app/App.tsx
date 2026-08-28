@@ -405,7 +405,7 @@ function AuthenticatedLayout({
           </div>
 
           {/* Mobile: agent selector row */}
-          <div className="hidden sm:block ">
+          <div className="block sm:hidden">
             <AgentSelector />
           </div>
 

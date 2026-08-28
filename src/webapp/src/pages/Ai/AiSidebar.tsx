@@ -117,7 +117,7 @@ export function AiSidebar({ activeSessionId, refreshKey = 0, onSelectSession, on
 
   return (
     <div className="flex h-full min-h-0 p-0 flex-col overflow-hidden">
-      <div className="p-3 flex items-center gap-2">
+      <div className="py-3 sm:p-3 flex items-center gap-2">
         <Input
           className="flex-1 min-w-0"
           placeholder={t('ai.searchSessions')}
@@ -143,7 +143,7 @@ export function AiSidebar({ activeSessionId, refreshKey = 0, onSelectSession, on
       </div>
 
       {/* 会话列表 */}
-      <div className="min-h-0 flex-1 overflow-y-auto pb-3">
+      <div className="min-h-0 flex-1 overflow-y-auto pb-3 sm:px-3 px-0">
         {loading ? (
           <div className="flex justify-center py-8">
             <Spinner size="sm" />

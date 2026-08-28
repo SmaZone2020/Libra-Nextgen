@@ -151,12 +151,139 @@
   transform: scale(0.985);
 }
 
+/* ── 提示词输入框：最高档时四周线条环绕流动 + 光影 ── */
+
+.aurora-input {
+  --aurora-speed: 7s;
+  --aurora-rotate-duration: 6s;
+  --aurora-pulse-duration: 2.6s;
+  --aurora-glow-1: rgba(99, 102, 241, 0.55);
+  --aurora-glow-2: rgba(168, 85, 247, 0.45);
+  --aurora-glow-3: rgba(34, 211, 238, 0.4);
+  position: relative;
+  isolation: isolate;
+  border-radius: calc(var(--radius, 0.5rem) * 2);
+  transition: box-shadow 500ms var(--ease-out, ease-out);
+  /* 静态细环（激活后由 aurora-pulse 接管） */
+  box-shadow: 0 0 0 1px color-mix(in oklab, var(--color-accent, #6366f1) 18%, transparent);
+}
+
+/* 环绕流动的 conic 光带：贴着输入框四周的线条 */
+.aurora-input::before {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  z-index: -1;
+  pointer-events: none;
+  border-radius: inherit;
+  padding: 1.5px;
+  background: conic-gradient(
+    from var(--aurora-angle),
+    transparent 0deg,
+    var(--aurora-glow-1) 60deg,
+    transparent 120deg,
+    var(--aurora-glow-2) 200deg,
+    transparent 260deg,
+    var(--aurora-glow-3) 320deg,
+    transparent 360deg
+  );
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  mask-composite: exclude;
+  opacity: 0;
+  transition: opacity 500ms var(--ease-smooth, ease-out);
+}
+
+/* 外圈光晕（光影） */
+.aurora-input::after {
+  content: '';
+  position: absolute;
+  inset: -30%;
+  z-index: -2;
+  pointer-events: none;
+  background: conic-gradient(
+    from var(--aurora-angle),
+    transparent 0deg,
+    var(--aurora-glow-1) 55deg,
+    transparent 110deg,
+    var(--aurora-glow-2) 175deg,
+    transparent 230deg,
+    var(--aurora-glow-3) 285deg,
+    transparent 340deg,
+    var(--aurora-glow-1) 360deg
+  );
+  filter: blur(30px);
+  opacity: 0;
+  transition: opacity 500ms var(--ease-smooth, ease-out);
+}
+
+.aurora-input--active {
+  animation: aurora-pulse var(--aurora-pulse-duration) ease-in-out infinite alternate;
+}
+
+.aurora-input--active::before {
+  opacity: 0.9;
+  animation: aurora-rotate var(--aurora-speed) linear infinite;
+}
+
+.aurora-input--active::after {
+  opacity: 0.45;
+  animation: aurora-rotate var(--aurora-rotate-duration) linear infinite;
+}
+
+/* ── 档位名文字：渐变流光（浅色/深色适配） ── */
+
+.aurora-text {
+  /* 浅色模式：饱和极光色 */
+  --aurora-text-a: #6366f1;
+  --aurora-text-b: #a855f7;
+  --aurora-text-c: #22d3ee;
+  background-image: linear-gradient(
+    90deg,
+    var(--aurora-text-a),
+    var(--aurora-text-b),
+    var(--aurora-text-c),
+    var(--aurora-text-b),
+    var(--aurora-text-a)
+  );
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+  animation: aurora-text-flow 3s linear infinite;
+}
+
+.dark .aurora-text {
+  /* 深色模式：更亮的极光色，保证对比度 */
+  --aurora-text-a: #818cf8;
+  --aurora-text-b: #c084fc;
+  --aurora-text-c: #67e8f9;
+}
+
+@keyframes aurora-text-flow {
+  to {
+    background-position: 200% center;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .aurora-justitia--active::before,
   .aurora-justitia--active::after {
     animation: none;
   }
   .aurora-justitia--active {
+    animation: none;
+  }
+  .aurora-input--active,
+  .aurora-input--active::before,
+  .aurora-input--active::after,
+  .aurora-text {
     animation: none;
   }
 }

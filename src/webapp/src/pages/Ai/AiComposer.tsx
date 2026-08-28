@@ -280,6 +280,7 @@ export function AiComposer({
         onValueChange={setValue}
         onStop={onStop}
         onSubmit={handleSubmit}
+        className={permission === 3 ? 'aurora-input aurora-input--active' : undefined}
       >
         <PromptInput.Shell>
           <PromptInput.Content>
@@ -339,7 +340,7 @@ export function AiComposer({
                   isDisabled={isGenerating}
                   className="h-9 w-[140px] shrink-0 gap-1"
                 >
-                  <span className="text-sm font-medium">
+                  <span className={`text-sm font-medium ${permission === 3 ? 'aurora-text' : ''}`}>
                     {JUSTITIA_TIERS[permission]?.name}
                   </span>
                   <ChevronDown className="size-3.5 shrink-0 text-muted" />
@@ -347,12 +348,10 @@ export function AiComposer({
                 <Popover.Content className="p-0" offset={10}>
                   <Popover.Dialog className="p-0 rounded-[30px]">
                     <Popover.Arrow className="fill-accent/30" />
-                    <PressableFeedback.Root
-                      className={`aurora-justitia w-full ${permission === 3 ? 'aurora-justitia--active' : ''}`}
-                      isDisabled={isGenerating}
+                    <div
+                      className={`w-full ${permission === 3 ? 'aurora-justitia aurora-justitia--active' : ''}`}
                     >
-                      <PressableFeedback.Ripple />
-                      <div className="aurora-inner flex flex-col gap-3 p-4 ">
+                      <div className={`${permission === 3 ? 'aurora-inner' : ''} flex flex-col gap-3 p-4`}>
                         <Popover.Heading className="text-sm font-medium text-foreground">
                           {t('ai.adjustJustitia')}
                         </Popover.Heading>
@@ -388,7 +387,7 @@ export function AiComposer({
                           </div>
                         </div>
                       </div>
-                    </PressableFeedback.Root>
+                    </div>
                   </Popover.Dialog>
                 </Popover.Content>
               </Popover>

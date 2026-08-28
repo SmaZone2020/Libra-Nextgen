@@ -60,7 +60,7 @@ export function AiSidebarSessionRow({
       {renaming ? (
         <div className="flex items-center gap-1 select-none">
           <Input
-            className="flex-1 min-w-0 max-w-[180px] mr-1"
+            className="flex-1 min-w-0 sm:max-w-[170px] max-w-[150px]"
             autoFocus
             value={renameValue}
             onClick={(e) => e.stopPropagation()}
@@ -71,7 +71,8 @@ export function AiSidebarSessionRow({
             }}
           />
           <Button
-            className="aspect-square rounded-[15px]"
+            className="rounded-[15px]"
+            size="sm"
             variant="ghost"
             isIconOnly
             onPress={onCancelRename}

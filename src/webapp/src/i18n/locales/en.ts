@@ -203,7 +203,7 @@ export default {
       destroyConfirm: 'Destroy this agent? It will remove persistence and exit the process. This cannot be undone.',
       restartFailed: 'Failed to send restart task (admin permission may be required)',
       destroyFailed: 'Failed to send destroy task (admin permission may be required)',
-      noAgents: 'No agents connected.',
+      noAgents: 'No online agents',
       agentFilters: 'Agent filters',
       details: 'Agent Details',
       detailsFailed: 'Failed to load agent details.',
