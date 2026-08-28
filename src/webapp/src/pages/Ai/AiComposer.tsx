@@ -28,6 +28,21 @@ function BrandIcon({ name, className = 'size-5' }: { name: string; className?: s
   );
 }
 
+/** 0/100 区间 → 最近档位下标（档位点 0/33/66/100）。 */
+function nearestTierIndex(v: number): number {
+  const pts = [0, 33, 66, 100];
+  let best = 0;
+  let bestDist = Infinity;
+  for (let i = 0; i < pts.length; i++) {
+    const d = Math.abs(v - pts[i]!);
+    if (d < bestDist) {
+      bestDist = d;
+      best = i;
+    }
+  }
+  return best;
+}
+
 export interface AiComposerProps {
   providers: AiProvider[];
   activeProviderId: string | null;
@@ -179,7 +194,7 @@ export function AiComposer({
                     </ListBox>
 
                     {/* 列 2：模型厂商（无厂商时隐藏） */}
-                    {vendors && (
+                    {vendors.length > 1 && (
                       <ListBox
                         aria-label={t('ai.vendorAll')}
                         selectionMode="single"
@@ -188,7 +203,7 @@ export function AiComposer({
                           const k = [...keys][0];
                           if (k) setVendorKey(String(k));
                         }}
-                        className="w-28 shrink-0 overflow-y-auto border-r border-default-200 py-1 dark:border-default-800"
+                        className="max-w-46 shrink-0 overflow-y-auto border-r border-default-200 py-1 dark:border-default-800"
                       >
                         {vendors.map((vendor) => (
                           <ListBox.Item
@@ -213,7 +228,7 @@ export function AiComposer({
                         const k = [...keys][0];
                         if (k) handleModelSelect(String(k));
                       }}
-                      className="min-w-[200px] flex-1 overflow-y-auto py-1"
+                      className="max-w-46 flex-1 overflow-y-auto py-1"
                     >
                       {vendorModels.map((m) => {
                         const parsed = parseModelLabel(m);
@@ -232,7 +247,7 @@ export function AiComposer({
                               <BrandIcon name={parsed.name} className="size-5" />
                             )}
                             <div className="flex min-w-0 flex-col">
-                              <Label className="flex items-center gap-1.5">
+                              <Label className="flex min-w-0 items-center gap-1.5">
                                 <span className="truncate">{titleCaseWords(parsed.name)}</span>
                                 {parsed.isLatest && (
                                   <Chip color="accent" variant="primary" size="sm" className="shrink-0 text-white">
@@ -283,24 +298,44 @@ export function AiComposer({
                 <Popover.Dialog>
                   <Popover.Arrow />
                   <Popover.Heading>{t('ai.adjustJustitia')}</Popover.Heading>
-                  <div className="flex flex-col items-center gap-3 pb-1">
+                  <div className="flex flex-col items-center gap-3 pb-1 mt-3">
                     <CellSlider
-                      maxValue={3}
+                      maxValue={100}
                       minValue={0}
                       step={1}
                       variant="secondary"
-                      value={permission}
+                      value={permission * (100 / 3)}
                       onChange={(v) => {
                         const val = Array.isArray(v) ? v[0] ?? 0 : v;
-                        const tier = JUSTITIA_TIERS[val];
+                        // 拖动中实时吸附到最近档位（0/33/66/100），松开后由 onChangeEnd 最终确认。
+                        const idx = nearestTierIndex(val);
+                        const tier = JUSTITIA_TIERS[idx];
+                        if (tier) onTierChange(tier.key);
+                      }}
+                      onChangeEnd={(v) => {
+                        const val = Array.isArray(v) ? v[0] ?? 0 : v;
+                        const idx = nearestTierIndex(val);
+                        const tier = JUSTITIA_TIERS[idx];
                         if (tier) onTierChange(tier.key);
                       }}
                     >
                       <CellSlider.Track>
-                        <CellSlider.Fill className="transition-[width] duration-300 ease-out" />
-                        <CellSlider.Thumb className="transition-[translate,left] duration-300 ease-out" />
+                        <CellSlider.Fill className="transition-[width] duration-200 ease-out" />
+                        <CellSlider.Thumb className="transition-[translate,left] duration-200 ease-out" />
                       </CellSlider.Track>
                     </CellSlider>
+                    <div className="flex w-full justify-between px-0.5 text-[11px] text-muted">
+                      {JUSTITIA_TIERS.map((tier) => (
+                        <span
+                          key={tier.key}
+                          className={`transition-colors duration-200 ${
+                            tier.key === justitiaTier ? 'font-medium text-accent' : ''
+                          }`}
+                        >
+                          {tier.name}
+                        </span>
+                      ))}
+                    </div>
                   </div>
                 </Popover.Dialog>
               </Popover.Content>

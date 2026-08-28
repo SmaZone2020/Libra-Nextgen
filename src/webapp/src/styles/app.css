@@ -58,3 +58,30 @@ html {
   color: #ffffff;
   background: #2563eb;
 }
+
+/* ── 弹出层列表滚动条美化（保留滚动功能，隐藏视觉条） ── */
+[data-slot="popover"] ::-webkit-scrollbar,
+[data-slot="modal-container"] ::-webkit-scrollbar,
+[data-slot="listbox"] ::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+[data-slot="popover"] ::-webkit-scrollbar-thumb,
+[data-slot="modal-container"] ::-webkit-scrollbar-thumb,
+[data-slot="listbox"] ::-webkit-scrollbar-thumb {
+  border-radius: 9999px;
+  background: color-mix(in oklab, var(--color-muted, #737373) 35%, transparent);
+}
+
+[data-slot="popover"] ::-webkit-scrollbar-thumb:hover,
+[data-slot="modal-container"] ::-webkit-scrollbar-thumb:hover,
+[data-slot="listbox"] ::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in oklab, var(--color-muted, #737373) 55%, transparent);
+}
+
+[data-slot="popover"] ::-webkit-scrollbar-track,
+[data-slot="modal-container"] ::-webkit-scrollbar-track,
+[data-slot="listbox"] ::-webkit-scrollbar-track {
+  background: transparent;
+}
