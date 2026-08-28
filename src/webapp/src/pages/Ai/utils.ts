@@ -32,13 +32,13 @@ export function parseModelLabel(raw: string): {
   return { name: s, isFree, isLatest, isBatch };
 }
 
-/** 连字符/下划线转空格，每词首字母大写：`deepseek-ai` → `Deepseek AI`。 */
 export function titleCaseWords(s: string): string {
   return s
     .split(/[-_\s]+/)
     .filter(Boolean)
     .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-    .join(' ');
+    .join(' ')
+    .replaceAll("Latest","");
 }
 
 /** 触发器中展示的模型名：隐藏厂商前缀与 :free/:batch 后缀，并按单词美化。 */

@@ -25,3 +25,4 @@ export * from './components/prompt-suggestion';
 export * from './components/text-shimmer';
 export * from './components/cell-slider';
 export * from './components/context-menu';
+export * from './components/pressable-feedback';

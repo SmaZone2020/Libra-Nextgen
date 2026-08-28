@@ -14,7 +14,7 @@ import {
   useOverlayState,
 } from '@heroui/react';
 import { ChevronDown, PaperPlane, Shield, Sparkles } from '@gravity-ui/icons';
-import { PromptInput, CellSlider } from '../../vendor/ui-pro';
+import { PromptInput, CellSlider, PressableFeedback } from '../../vendor/ui-pro';
 import type { AiProvider } from '../../api/ai';
 import { resolveModelIcon } from './modelIcons';
 import { formatModelDisplay, parseModelLabel, titleCaseWords } from './utils';
@@ -122,7 +122,7 @@ function ProviderModelMenu({
           const k = [...keys][0];
           if (k) onModelSelect(String(k));
         }}
-        className="max-w-56 flex-1 overflow-y-auto scrollbar-thin py-1"
+        className="max-w-60 flex-1 overflow-y-auto scrollbar-thin py-1"
       >
         {vendorModels.map((m) => {
           const parsed = parseModelLabel(m);
@@ -141,24 +141,24 @@ function ProviderModelMenu({
                 <BrandIcon name={parsed.name} className="size-5" />
               )}
               <div className="flex min-w-0 flex-col">
-                <Label className="flex min-w-0 items-center gap-1.5">
-                  <span className="truncate">{titleCaseWords(parsed.name)}</span>
+                <span className="truncate">{titleCaseWords(parsed.name)}</span>
+                <div className='space-x-2 -mt-1'>
+                  {parsed.isFree && (
+                    <Description className="text-[11px] text-success">
+                      {t('ai.free')}
+                    </Description>
+                  )}
                   {parsed.isLatest && (
-                    <Chip color="accent" variant="primary" size="sm" className="shrink-0 text-white">
-                      <Chip.Label>{t('ai.latest')}</Chip.Label>
-                    </Chip>
+                    <Description className="text-[11px] text-accent">
+                      {t('ai.latest')}
+                    </Description>
                   )}
                   {parsed.isBatch && (
-                    <Chip color="accent" variant="primary" size="sm" className="shrink-0 text-white">
-                      <Chip.Label>{t('ai.batch')}</Chip.Label>
-                    </Chip>
+                    <Description className="text-[11px] text-warning">
+                      {t('ai.batch')}
+                    </Description>
                   )}
-                </Label>
-                {parsed.isFree && (
-                  <Description className="text-[11px] text-success">
-                    {t('ai.free')}
-                  </Description>
-                )}
+                </div>
               </div>
               <ListBox.ItemIndicator />
             </ListBox.Item>
