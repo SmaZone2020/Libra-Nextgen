@@ -122,7 +122,7 @@ function ProviderModelMenu({
           const k = [...keys][0];
           if (k) onModelSelect(String(k));
         }}
-        className="max-w-46 flex-1 overflow-y-auto scrollbar-thin py-1"
+        className="max-w-56 flex-1 overflow-y-auto scrollbar-thin py-1"
       >
         {vendorModels.map((m) => {
           const parsed = parseModelLabel(m);
@@ -290,7 +290,6 @@ export function AiComposer({
           </PromptInput.Content>
           <PromptInput.Toolbar>
             <PromptInput.ToolbarStart>
-              {/* 供应商 + 模型：桌面 Popover 三列 */}
               <div className="hidden sm:block">
                 <Popover isOpen={modelMenuOpen} onOpenChange={setModelMenuOpen}>
                   <Popover.Trigger>
@@ -319,7 +318,6 @@ export function AiComposer({
                 </Popover>
               </div>
 
-              {/* 供应商 + 模型：移动端按钮（打开 Drawer） */}
               <div className="sm:hidden">
                 <Button
                   aria-label={t('ai.providerModel')}
@@ -402,12 +400,12 @@ export function AiComposer({
       <Drawer state={mobileDrawer}>
         <Drawer.Backdrop isDismissable>
           <Drawer.Content placement="bottom">
-            <Drawer.Dialog>
-              <Drawer.Header>
+            <Drawer.Dialog className='px-0'>
+              <Drawer.Header className='px-5'>
                 <Drawer.Heading>{t('ai.providerModel')}</Drawer.Heading>
                 <Drawer.CloseTrigger />
               </Drawer.Header>
-              <Drawer.Body>
+              <Drawer.Body className='px-0'>
                 <Accordion className="w-full">
                   {providers.map((p) => {
                     const expanded = p.id === activeProvider?.id;
@@ -434,7 +432,7 @@ export function AiComposer({
                             }}
                           >
                             <BrandIcon name={p.name} className="size-5" />
-                            <span className="min-w-0 flex-1 truncate">{p.name}</span>
+                            <span className="min-w-0 flex-1 truncate ml-2">{p.name}</span>
                             <Accordion.Indicator>
                               <ChevronDown className="size-4" />
                             </Accordion.Indicator>
@@ -442,8 +440,7 @@ export function AiComposer({
                         </Accordion.Heading>
                         <Accordion.Panel>
                           <Accordion.Body>
-                            {/* 厂商列（有厂商才显示） + 模型列 */}
-                            <div className="flex max-h-[260px] overflow-hidden">
+                            <div className="flex max-h-[300px] overflow-hidden">
                               {pVendors.length > 1 && (
                                 <ListBox
                                   aria-label={t('ai.vendorAll')}
@@ -453,7 +450,7 @@ export function AiComposer({
                                     const k = [...keys][0];
                                     if (k) setVendorKey(String(k));
                                   }}
-                                  className="w-28 shrink-0 overflow-y-auto scrollbar-thin border-r border-default-200 py-1 dark:border-default-800"
+                                  className="w-36 shrink-0 overflow-y-auto scrollbar-thin border-r border-default-200 py-1 dark:border-default-800"
                                 >
                                   {pVendors.map((vendor) => (
                                     <ListBox.Item
@@ -535,7 +532,7 @@ export function AiComposer({
                   })}
                 </Accordion>
               </Drawer.Body>
-              <Drawer.Footer>
+              <Drawer.Footer className='px-5'>
                 <Button slot="close" variant="secondary" onPress={mobileDrawer.close}>
                   {t('common.cancel')}
                 </Button>

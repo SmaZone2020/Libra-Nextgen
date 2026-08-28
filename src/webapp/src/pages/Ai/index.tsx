@@ -20,7 +20,7 @@ import {
   type AiToolCall,
 } from '../../api/ai';
 import { ChatConversation, PromptSuggestion } from '../../vendor/ui-pro';
-import { AiSidebar } from './AiSidebar';
+import { AiSidebar, AiSidebarDrawer } from './AiSidebar';
 import { AiThreadMessage } from './AiThreadMessage';
 import { AiComposer } from './AiComposer';
 import { loadJustitiaTier, saveJustitiaTier, type JustitiaTierKey } from './justitia';
@@ -37,6 +37,8 @@ export default function AiPage() {
   const [loading, setLoading] = useState(true);
 
   const [streaming, setStreaming] = useState<StreamingState>('idle');
+  // 移动端会话列表 Drawer 开关。
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   // Justitia 档位（浏览器持久化，随 SSE 请求提交）。
   const [justitiaTier, setJustitiaTier] = useState<JustitiaTierKey>(() => loadJustitiaTier());
   const [streamingText, setStreamingText] = useState('');
@@ -398,14 +400,18 @@ export default function AiPage() {
 
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         <div className="flex shrink-0 items-center gap-2 border-b border-default-200 px-3 py-2 md:hidden dark:border-default-800">
-          <Button isIconOnly size="sm" variant="ghost" aria-label={t('ai.back')} onPress={() => navigate('/')}>
+          {/* 左侧按钮：打开会话列表 Drawer（替代原供应商徽章） */}
+          <Button
+            isIconOnly
+            size="sm"
+            variant="ghost"
+            aria-label={t('ai.sessions')}
+            onPress={() => setMobileSidebarOpen(true)}
+          >
             <ArrowLeft className="size-4" />
           </Button>
           <span className="min-w-0 flex-1 truncate text-sm font-medium">
             {session?.title || t('ai.title')}
-          </span>
-          <span className="shrink-0 rounded-full bg-default/60 px-2.5 py-0.5 text-xs text-foreground">
-            {activeProvider?.name ?? t('ai.unknownProvider')}
           </span>
         </div>
 
@@ -512,6 +518,16 @@ export default function AiPage() {
           </div>
         </div>
       </div>
+
+      {/* 移动端会话列表 Drawer（左侧按钮打开） */}
+      <AiSidebarDrawer
+        open={mobileSidebarOpen}
+        onOpenChange={setMobileSidebarOpen}
+        activeSessionId={activeId}
+        refreshKey={sidebarRefreshKey}
+        onSelectSession={selectSession}
+        onNewSession={() => void handleNewSession()}
+      />
     </div>
   );
 }

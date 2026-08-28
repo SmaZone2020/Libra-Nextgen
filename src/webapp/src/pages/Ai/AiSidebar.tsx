@@ -3,17 +3,16 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
-import { Button, Input, Spinner, Dropdown, Label} from '@heroui/react';
-import { CodeFork, SquarePlus, TrashBin, Pencil, Xmark, EllipsisVertical } from '@gravity-ui/icons';
+import { Button, Drawer, Input, Spinner, useOverlayState } from '@heroui/react';
+import { SquarePlus } from '@gravity-ui/icons';
 import {
   deleteAiSession,
-  forkAiSession,
   getAiProviders,
   getAiSessions,
-  renameAiSession,
   type AiProvider,
   type AiSession,
 } from '../../api/ai';
+import { AiSidebarSessionRow } from './AiSidebarSessionRow';
 
 export interface AiSidebarProps {
   activeSessionId: string | null;
@@ -33,7 +32,7 @@ export function AiSidebar({ activeSessionId, refreshKey = 0, onSelectSession, on
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState('');
   const [deleting, setDeleting] = useState(false);
-  const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -79,6 +78,11 @@ export function AiSidebar({ activeSessionId, refreshKey = 0, onSelectSession, on
     }
   };
 
+  const startRename = (session: AiSession) => {
+    setRenamingId(session.id);
+    setRenameValue(session.title);
+  };
+
   const handleRename = async (session: AiSession) => {
     const title = renameValue.trim();
     if (!title) {
@@ -86,6 +90,7 @@ export function AiSidebar({ activeSessionId, refreshKey = 0, onSelectSession, on
       return;
     }
     try {
+      const { renameAiSession } = await import('../../api/ai');
       await renameAiSession(session.id, title);
       await load();
     } catch (e) {
@@ -97,8 +102,8 @@ export function AiSidebar({ activeSessionId, refreshKey = 0, onSelectSession, on
   const handleFork = async (session: AiSession) => {
     setDeleting(true);
     try {
+      const { forkAiSession } = await import('../../api/ai');
       const fork = await forkAiSession(session.id);
-      setOpenDropdownId(null);
       await load();
       onSelectSession(fork.id);
     } catch (e) {
@@ -144,106 +149,30 @@ export function AiSidebar({ activeSessionId, refreshKey = 0, onSelectSession, on
           </div>
         ) : filtered.length === 0 ? (
           <div className="px-3 py-8 text-center text-xs text-muted">
-            None
+            {query ? t('common.noResults') : t('ai.noSessions')}
           </div>
         ) : (
           <div className="flex flex-col gap-0.5">
-            {filtered.map((session) => {
-              const active = session.id === activeSessionId;
-              return (
-                <div
-                  key={session.id}
-                  className={`group flex cursor-pointer select-none items-center gap-2 rounded-[20px] px-4 py-2 transition-colors ${
-                    active
-                      ? 'bg-accent text-white'
-                      : 'text-foreground hover:bg-default/60'
-                  }`}
-                  onClick={() => onSelectSession(session.id)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') onSelectSession(session.id);
-                  }}
-                  role="button"
-                  tabIndex={0}
-                >
-                {renamingId === session.id ? (
-                  <div className="flex items-center gap-1 select-none">
-                    <Input
-                      className="flex-1 min-w-0 max-w-[180px] mr-1"
-                      autoFocus
-                      value={renameValue}
-                      onClick={(e) => e.stopPropagation()}
-                      onChange={(e) => setRenameValue(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') void handleRename(session);
-                        if (e.key === 'Escape') setRenamingId(null);
-                      }}
-                    />
-                    <Button
-                      className="aspect-square rounded-[15px]"
-                      variant="ghost"
-                      isIconOnly
-                      onPress={() => {
-                        setRenamingId(null);
-                      }}
-                    >
-                      <Xmark className="size-4" />
-                    </Button>
-                  </div>
-                  ) : (
-                    <div className="flex min-w-0 flex-1 flex-col">
-                      <span className="truncate text-sm font-medium">
-                        {session.title || t('ai.untitled')}
-                      </span>
-                      <span
-                        className={`truncate text-[11px] ${
-                          active ? 'text-primary-foreground/70' : 'text-muted'
-                        }`}
-                      >
-                        {providerName(session.providerId)} · {session.model}
-                      </span>
-                    </div>
-                  )}
-                  {renamingId !== session.id && (
-                    <div className={`hidden shrink-0 items-center gap-0.5 group-hover:flex ${openDropdownId === session.id ? '!flex' : ''}`}>
-                      <Dropdown
-                        isOpen={openDropdownId === session.id}
-                        onOpenChange={(open) => setOpenDropdownId(open ? session.id : null)}
-                      >
-                        <Button 
-                          variant="ghost"
-                          isIconOnly 
-                          size='sm'
-                          className={`aspect-square rounded-[15px]  ${active ? 'text-white hover:text-accent active:bg-white/20' : 'text-accent'}`}>
-                          <EllipsisVertical className="size-4" />
-                        </Button>
-                        <Dropdown.Popover>
-                          <Dropdown.Menu>
-                            <Dropdown.Item id="save-file" textValue={t('ai.renameSession')}
-                              onPress={() => {
-                              setRenamingId(session.id);
-                              setRenameValue(session.title);
-                            }}>
-                              <Pencil className="size-4 shrink-0 text-muted" />
-                              <Label>{t('ai.renameSession')}</Label>
-                            </Dropdown.Item>
-                            <Dropdown.Item id="fork-file" textValue={t('ai.forkSession')}
-                              onPress={() => void handleFork(session)}>
-                              <CodeFork className="size-4 shrink-0 text-muted" />
-                              <Label>{t('ai.forkSession')}</Label>
-                            </Dropdown.Item>
-                            <Dropdown.Item id="delete-file" textValue={t('ai.deleteSession')} variant="danger"
-                              onPress={() => void handleDelete(session)}>
-                              <TrashBin className="size-4 shrink-0 text-danger" />
-                              <Label>{t('ai.deleteSession')}</Label>
-                            </Dropdown.Item>
-                          </Dropdown.Menu>
-                        </Dropdown.Popover>
-                      </Dropdown>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
+            {filtered.map((session) => (
+              <AiSidebarSessionRow
+                key={session.id}
+                session={session}
+                active={session.id === activeSessionId}
+                renaming={renamingId === session.id}
+                renameValue={renameValue}
+                deleting={deleting}
+                providerName={providerName(session.providerId)}
+                menuOpen={openMenuId === session.id}
+                onMenuOpenChange={(open) => setOpenMenuId(open ? session.id : null)}
+                onSelect={() => onSelectSession(session.id)}
+                onStartRename={() => startRename(session)}
+                onRenameValueChange={setRenameValue}
+                onConfirmRename={() => void handleRename(session)}
+                onCancelRename={() => setRenamingId(null)}
+                onFork={() => void handleFork(session)}
+                onDelete={() => void handleDelete(session)}
+              />
+            ))}
           </div>
         )}
       </div>
@@ -261,5 +190,33 @@ export function AiSidebar({ activeSessionId, refreshKey = 0, onSelectSession, on
         </div>
       )}
     </div>
+  );
+}
+
+/** 移动端会话列表 Drawer（顶栏左侧按钮打开，可切换会话）。 */
+export function AiSidebarDrawer({
+  open,
+  onOpenChange,
+  ...sidebarProps
+}: AiSidebarProps & { open: boolean; onOpenChange: (open: boolean) => void }) {
+  const { t } = useTranslation();
+  const state = useOverlayState({ isOpen: open, onOpenChange });
+
+  return (
+    <Drawer state={state}>
+      <Drawer.Backdrop isDismissable>
+        <Drawer.Content placement="left">
+          <Drawer.Dialog>
+            <Drawer.Header>
+              <Drawer.Heading>{t('ai.title')}</Drawer.Heading>
+              <Drawer.CloseTrigger />
+            </Drawer.Header>
+            <Drawer.Body className="p-0">
+              <AiSidebar {...sidebarProps} />
+            </Drawer.Body>
+          </Drawer.Dialog>
+        </Drawer.Content>
+      </Drawer.Backdrop>
+    </Drawer>
   );
 }
