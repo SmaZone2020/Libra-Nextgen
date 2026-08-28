@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using LibraNextgen.Common.Models;
 using LibraNextgen.Service.Services;
 using Microsoft.AspNetCore.Http;
@@ -18,11 +19,22 @@ public static class McpUtils
     /// <summary>Cap for a single tool response (avoids blowing up the MCP transport).</summary>
     public const int MaxOutputBytes = 1024 * 1024;
 
+    /// <summary>
+    /// 统一序列化选项：camelCase + 枚举转字符串。
+    /// 与 REST API 的 JsonStringEnumConverter 对齐——否则 AgentStatus/TaskStatus
+    /// 会被序列化成数字（Online=0, Offline=1），LLM 会把 0 当成“离线”、1 当成
+    /// “在线”，导致在线/离线状态反转。
+    /// </summary>
+    public static readonly JsonSerializerOptions JsonOpts = new(JsonSerializerDefaults.Web)
+    {
+        Converters = { new JsonStringEnumConverter(JsonNamingPolicy.CamelCase) },
+    };
+
     public static string Error(string message) =>
-        JsonSerializer.Serialize(new { error = message });
+        JsonSerializer.Serialize(new { error = message }, JsonOpts);
 
     public static string Ok(object value) =>
-        JsonSerializer.Serialize(value);
+        JsonSerializer.Serialize(value, JsonOpts);
 
     /// <summary>
     /// Identity of the access-key caller for the current MCP request.

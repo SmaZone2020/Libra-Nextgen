@@ -29,7 +29,7 @@ public sealed class TaskTools
             _ => null
         };
         var tasks = await taskService.GetAllAsync(statusFilter, agentId, page, pageSize, ct);
-        return McpUtils.Limit(JsonSerializer.Serialize(tasks));
+        return McpUtils.Limit(JsonSerializer.Serialize(tasks, McpUtils.JsonOpts));
     }
 
     [McpServerTool, Description("Get task details by ID")]
@@ -40,7 +40,7 @@ public sealed class TaskTools
     {
         var task = await taskService.GetByIdAsync(taskId, ct);
         if (task == null) return McpUtils.Error($"task '{taskId}' not found");
-        return McpUtils.Limit(JsonSerializer.Serialize(task));
+        return McpUtils.Limit(JsonSerializer.Serialize(task, McpUtils.JsonOpts));
     }
 
     [McpServerTool, Description("Create a new task for an agent (fire-and-forget; use execute_shell to wait for the result). Admin-gated command types are enforced server-side")]
@@ -82,7 +82,7 @@ public sealed class TaskTools
             return McpUtils.Error(ex.Message);
         }
 
-        return JsonSerializer.Serialize(new { task.Id, task.Status });
+        return JsonSerializer.Serialize(new { task.Id, task.Status }, McpUtils.JsonOpts);
     }
 
     [McpServerTool, Description("Cancel a pending task (soft cancel; the record is kept for audit)")]

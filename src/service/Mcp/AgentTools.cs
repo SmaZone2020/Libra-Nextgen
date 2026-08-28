@@ -23,7 +23,7 @@ public sealed class AgentTools
             : status == "Offline" ? AgentStatus.Offline : null;
 
         var agents = await agentService.GetAllAsync(status: filter, ct: ct);
-        return McpUtils.Limit(JsonSerializer.Serialize(agents));
+        return McpUtils.Limit(JsonSerializer.Serialize(agents, McpUtils.JsonOpts));
     }
 
     [McpServerTool, Description("Get detailed information about a specific agent")]
@@ -34,7 +34,7 @@ public sealed class AgentTools
     {
         var agent = await agentService.GetByIdAsync(agentId, ct);
         if (agent == null) return McpUtils.Error($"agent '{agentId}' not found");
-        return McpUtils.Limit(JsonSerializer.Serialize(agent));
+        return McpUtils.Limit(JsonSerializer.Serialize(agent, McpUtils.JsonOpts));
     }
 
     [McpServerTool, Description("Delete/remove an agent from the system (requires Admin). Cancels its pending tasks and revokes its session key; a live agent process keeps running until its next heartbeat fails")]
