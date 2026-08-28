@@ -51,6 +51,14 @@ export default function AiPage() {
   const [pendingApproval, setPendingApproval] = useState<AiToolCall | null>(null);
   const [streamError, setStreamError] = useState<string | null>(null);
 
+  // 新建会话偏好（浏览器持久化）：供应商与模型默认值。
+  const [prefProviderId, setPrefProviderId] = useState<string | null>(() =>
+    localStorage.getItem('ai.prefProviderId'),
+  );
+  const [prefModel, setPrefModel] = useState<string | null>(() =>
+    localStorage.getItem('ai.prefModel'),
+  );
+
   const abortRef = useRef<AbortController | null>(null);
   const pendingSessionIdRef = useRef<string | null>(null);
   const sidebarRefreshKeyRef = useRef(0);
@@ -95,11 +103,18 @@ export default function AiPage() {
     () => providers.filter((p) => p.enabled && p.models.length > 0),
     [providers],
   );
-  const activeProvider = useMemo(
-    () => providers.find((p) => p.id === (session?.providerId ?? enabledProviders[0]?.id)),
-    [providers, session, enabledProviders],
-  );
-  const activeModel = session?.model ?? activeProvider?.defaultModel ?? activeProvider?.models[0] ?? '';
+  // 有会话时用会话的供应商/模型；空态（新消息）时用浏览器偏好，回退第一个可用供应商。
+  const activeProvider = useMemo(() => {
+    const id = session?.providerId ?? prefProviderId ?? enabledProviders[0]?.id ?? null;
+    return providers.find((p) => p.id === id) ?? enabledProviders[0] ?? null;
+  }, [providers, session, prefProviderId, enabledProviders]);
+  const activeModel = useMemo(() => {
+    if (session?.model) return session.model;
+    const provider = activeProvider;
+    if (!provider) return '';
+    if (prefModel && provider.models.includes(prefModel)) return prefModel;
+    return provider.defaultModel || provider.models[0] || '';
+  }, [session, activeProvider, prefModel]);
 
   const selectSession = useCallback(
     (id: string) => {
@@ -135,15 +150,26 @@ export default function AiPage() {
   }, [activeId, navigate]);
 
   const handleSelectProvider = (providerId: string) => {
-    if (!session) return;
     const p = providers.find((x) => x.id === providerId);
     if (!p) return;
-    setSession((prev) => prev ? { ...prev, providerId, model: p.defaultModel || p.models[0] || '' } : prev);
+    const defaultModel = p.defaultModel || p.models[0] || '';
+    // 持久化偏好，供下次新建会话读取。
+    setPrefProviderId(providerId);
+    localStorage.setItem('ai.prefProviderId', providerId);
+    setPrefModel(defaultModel || null);
+    if (defaultModel) localStorage.setItem('ai.prefModel', defaultModel);
+    else localStorage.removeItem('ai.prefModel');
+    if (session) {
+      setSession((prev) => prev ? { ...prev, providerId, model: defaultModel } : prev);
+    }
   };
 
   const handleSelectModel = (model: string) => {
-    if (!session) return;
-    setSession((prev) => prev ? { ...prev, model } : prev);
+    setPrefModel(model);
+    localStorage.setItem('ai.prefModel', model);
+    if (session) {
+      setSession((prev) => prev ? { ...prev, model } : prev);
+    }
   };
 
   const handleStreamEvent = useCallback(
@@ -230,14 +256,14 @@ export default function AiPage() {
       let target = session;
 
       if (!target && !targetId) {
-        // 空态首条消息：此时才真正创建会话。
-        const provider = enabledProviders[0];
+        // 空态首条消息：此时才真正创建会话（用浏览器偏好的供应商/模型）。
+        const provider = activeProvider ?? enabledProviders[0];
         if (!provider) {
           navigate('/settings/ai');
           return;
         }
         try {
-          const s = await createAiSession(provider.id, provider.defaultModel || provider.models[0] || '');
+          const s = await createAiSession(provider.id, activeModel || provider.defaultModel || provider.models[0] || '');
           target = s;
           targetId = s.id;
           setSessions((prev) => [s, ...prev]);
@@ -283,7 +309,7 @@ export default function AiPage() {
         setStreaming((s) => (s === 'approval' ? s : 'idle'));
       }
     },
-    [activeId, enabledProviders, handleStreamEvent, navigate, session, streaming],
+    [activeId, activeModel, activeProvider, handleStreamEvent, navigate, session, streaming],
   );
 
   const handleStop = useCallback(() => {
@@ -567,7 +593,7 @@ function AiComposer({
             </Select>
             <Select
               aria-label={t('ai.model')}
-              selectedKey={activeModel || undefined}
+              selectedKey={activeModel || (activeProvider?.models[0] || undefined)}
               onSelectionChange={(key) => {
                 if (key) onSelectModel(String(key));
               }}
