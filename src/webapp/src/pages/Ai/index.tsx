@@ -36,20 +36,26 @@ import { AiThreadMessage } from './AiThreadMessage';
 
 type StreamingState = 'idle' | 'streaming' | 'approval';
 
-/** 解析模型名显示信息：`deepseek-ai/deepseek-v4-flash:free` → 厂商/名称/是否免费。
- *  仅影响显示；选中值仍使用原始模型 id（含 / 与 :free 后缀）。 */
-function parseModelLabel(raw: string): { vendor?: string; name: string; isFree: boolean } {
+/** 解析模型名显示信息：`deepseek-ai/deepseek-v4-flash:free` → 厂商/名称/是否免费/是否最新版。
+ *  OpenRouter 的 `~` 前缀表示该厂商模型的最新版别名（`~openai/gpt-4o-latest`），
+ *  `~` 仅影响显示归类；选中值仍使用原始模型 id（含 /、~ 与 :free 后缀）。 */
+function parseModelLabel(raw: string): { vendor?: string; name: string; isFree: boolean; isLatest: boolean } {
   let s = raw;
   let isFree = false;
+  let isLatest = false;
   if (s.endsWith(':free')) {
     isFree = true;
     s = s.slice(0, -':free'.length);
   }
+  if (s.startsWith('~')) {
+    isLatest = true;
+    s = s.slice(1);
+  }
   const slash = s.indexOf('/');
   if (slash > 0) {
-    return { vendor: s.slice(0, slash), name: s.slice(slash + 1), isFree };
+    return { vendor: s.slice(0, slash), name: s.slice(slash + 1), isFree, isLatest };
   }
-  return { name: s, isFree };
+  return { name: s, isFree, isLatest };
 }
 
 /** 连字符/下划线转空格，每词首字母大写：`deepseek-ai` → `Deepseek AI`。 */
@@ -578,18 +584,34 @@ function AiComposer({
   const activeProvider = providers.find((p) => p.id === activeProviderId) ?? providers[0];
 
   // 模型按厂商分组（vendor/model 前缀；无前缀归「全部」）。
+  // OpenRouter 的 `~vendor/model` 最新版别名并入对应厂商，且组内置顶。
   const modelGroups = useMemo(() => {
     const map = new Map<string, string[]>();
     for (const m of activeProvider?.models ?? []) {
-      const vendor = parseModelLabel(m).vendor ?? '';
+      const parsed = parseModelLabel(m);
+      if (!parsed.name) continue;
+      const vendor = parsed.vendor ?? '';
       const list = map.get(vendor) ?? [];
       list.push(m);
       map.set(vendor, list);
     }
+    // 组内排序：最新版（~ 前缀）置顶，其余按名称。
+    for (const list of map.values()) {
+      list.sort((a, b) => {
+        const la = parseModelLabel(a);
+        const lb = parseModelLabel(b);
+        if (la.isLatest !== lb.isLatest) return la.isLatest ? -1 : 1;
+        return la.name.localeCompare(lb.name);
+      });
+    }
     return map;
   }, [activeProvider]);
 
-  const vendors = useMemo(() => [...modelGroups.keys()], [modelGroups]);
+  // 厂商列按 a-z 排序。
+  const vendors = useMemo(
+    () => [...modelGroups.keys()].sort((a, b) => a.localeCompare(b)),
+    [modelGroups],
+  );
   // 当前厂商：手动选择优先，否则从当前模型推断。
   const currentVendor = vendors.includes(vendorKey)
     ? vendorKey
@@ -708,7 +730,18 @@ function AiComposer({
                                 : 'text-foreground hover:bg-default/60'
                             }`}
                           >
-                            <span className="min-w-0 flex-1 truncate">{titleCaseWords(parsed.name)}</span>
+                            <span className="min-w-0 flex-1 truncate">
+                              {parsed.isLatest ? (
+                                <>
+                                  {titleCaseWords(parsed.name)}{' '}
+                                  <span className="text-[10px] uppercase tracking-wide text-accent">
+                                    {t('ai.latest')}
+                                  </span>
+                                </>
+                              ) : (
+                                titleCaseWords(parsed.name)
+                              )}
+                            </span>
                             {parsed.isFree && (
                               <Chip
                                 color="success"

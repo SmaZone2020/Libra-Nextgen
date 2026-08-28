@@ -984,6 +984,7 @@ export default {
       vendorAll: 'All',
       noModels: 'No models for this vendor',
       free: 'Free',
+      latest: 'Latest',
     },
   },
 };

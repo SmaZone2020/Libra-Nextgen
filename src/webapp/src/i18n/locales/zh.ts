@@ -983,6 +983,7 @@ export default {
       vendorAll: '全部',
       noModels: '该厂商暂无模型',
       free: '免费',
+      latest: '最新版',
     },
   },
 };
