@@ -31,6 +31,13 @@ interface SidebarProps {
   onMobileClose: () => void;
 }
 
+/** 叶子项激活判断：精确匹配，或 /ai 等“详情子路由”前缀匹配（/ai/xxx 保持高亮）。 */
+function isLeafActive(item: NavItem, pathname: string): boolean {
+  if (pathname === item.to) return true;
+  // 导航项自身是父级路由（如 /ai），其下的详情子路由同样视为激活。
+  return item.to.length > 1 && pathname.startsWith(item.to + '/');
+}
+
 /** Recursively collect the routes contained by an item (incl. its children and
  *  the item's own `to` when it is a navigable group). */
 function collectRoutes(item: NavItem): string[] {
@@ -340,7 +347,7 @@ function DesktopNavItem({ item, collapsed }: { item: NavItem; collapsed: boolean
   }
 
   // Leaf item
-  const isActive = location.pathname === item.to;
+  const isActive = isLeafActive(item, location.pathname);
   const label = t(item.label);
   return (
     <motion.div layout className="flex items-center">
@@ -478,7 +485,7 @@ function MobileNavItem({ item, onNavigate }: { item: NavItem; onNavigate: () => 
   }
 
   // Leaf
-  const isActive = location.pathname === item.to;
+  const isActive = isLeafActive(item, location.pathname);
   const label = t(item.label);
   return (
     <div className="flex items-center">

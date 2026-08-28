@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { Button, Input, Tooltip, Spinner } from '@heroui/react';
-import { Magnifier, SquarePlus, TrashBin, Pencil } from '@gravity-ui/icons';
+import { Magnifier, SquarePlus, TrashBin, Pencil, Xmark } from '@gravity-ui/icons';
 import {
   deleteAiSession,
   getAiProviders,
@@ -136,9 +136,9 @@ export function AiSidebar({ activeSessionId, onSelectSession, onNewSession }: Ai
               return (
                 <div
                   key={session.id}
-                  className={`group flex cursor-pointer items-center gap-2 rounded-xl px-3 py-2 transition-colors ${
+                  className={`group flex cursor-pointer items-center gap-2 rounded-[20px] px-3 py-2 transition-colors ${
                     active
-                      ? 'bg-primary text-primary-foreground'
+                      ? 'bg-accent text-white'
                       : 'text-foreground hover:bg-default/60'
                   }`}
                   onClick={() => onSelectSession(session.id)}
@@ -151,7 +151,7 @@ export function AiSidebar({ activeSessionId, onSelectSession, onNewSession }: Ai
                 {renamingId === session.id ? (
                   <div className="flex items-center gap-1">
                     <Input
-                      className="flex-1 min-w-0"
+                      className="flex-1 min-w-0 max-w-[180px] mr-1"
                       autoFocus
                       value={renameValue}
                       onClick={(e) => e.stopPropagation()}
@@ -163,17 +163,13 @@ export function AiSidebar({ activeSessionId, onSelectSession, onNewSession }: Ai
                     />
                     <Button
                       className="aspect-square rounded-[15px]"
-                      variant="primary"
+                      variant="ghost"
                       isIconOnly
                       onPress={() => {
-                        if (enabledProviders.length === 0) {
-                          navigate('/settings/ai');
-                          return;
-                        }
-                        onNewSession();
+                        setRenamingId(null);
                       }}
                     >
-                      <SquarePlus className="size-4" />
+                      <Xmark className="size-4" />
                     </Button>
                   </div>
                   ) : (
