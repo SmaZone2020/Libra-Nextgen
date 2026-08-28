@@ -981,6 +981,8 @@ export default {
       suggestAnalyzeAgent: 'Analyze an agent host fingerprint and network info',
       suggestExplainTool: 'Explain how the MCP tool execute_process works',
       suggestSummarize: 'Summarize the recent audit log highlights',
+      vendorAll: 'All',
+      noModels: 'No models for this vendor',
     },
   },
 };

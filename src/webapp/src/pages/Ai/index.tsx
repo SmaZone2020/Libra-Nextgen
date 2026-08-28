@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   Button,
+  Chip,
   ListBox,
   Select,
 } from '@heroui/react';
@@ -33,6 +34,28 @@ import { AiSidebar } from './AiSidebar';
 import { AiThreadMessage } from './AiThreadMessage';
 
 type StreamingState = 'idle' | 'streaming' | 'approval';
+
+/** 解析模型名显示信息：`deepseek/deepseek-v4-flash:free` → 厂商/名称/是否免费。
+ *  仅影响显示；选中值仍使用原始模型 id（含 / 与 :free 后缀）。 */
+function parseModelLabel(raw: string): { vendor?: string; name: string; isFree: boolean } {
+  let s = raw;
+  let isFree = false;
+  if (s.endsWith(':free')) {
+    isFree = true;
+    s = s.slice(0, -':free'.length);
+  }
+  const slash = s.indexOf('/');
+  if (slash > 0) {
+    return { vendor: s.slice(0, slash), name: s.slice(slash + 1), isFree };
+  }
+  return { name: s, isFree };
+}
+
+/** 触发器中展示的模型名：隐藏厂商前缀与 :free 后缀。 */
+function formatModelDisplay(raw: string): string {
+  const { name } = parseModelLabel(raw);
+  return name || raw;
+}
 
 export default function AiPage() {
   const { t } = useTranslation();
@@ -540,7 +563,28 @@ function AiComposer({
 }) {
   const { t } = useTranslation();
   const [value, setValue] = useState('');
+  const [modelMenuOpen, setModelMenuOpen] = useState(false);
+  const [vendorKey, setVendorKey] = useState<string>('');
   const activeProvider = providers.find((p) => p.id === activeProviderId) ?? providers[0];
+
+  // 模型按厂商分组（vendor/model 前缀；无前缀归「全部」）。
+  const modelGroups = useMemo(() => {
+    const map = new Map<string, string[]>();
+    for (const m of activeProvider?.models ?? []) {
+      const vendor = parseModelLabel(m).vendor ?? '';
+      const list = map.get(vendor) ?? [];
+      list.push(m);
+      map.set(vendor, list);
+    }
+    return map;
+  }, [activeProvider]);
+
+  const vendors = useMemo(() => [...modelGroups.keys()], [modelGroups]);
+  // 当前厂商：手动选择优先，否则从当前模型推断。
+  const currentVendor = vendors.includes(vendorKey)
+    ? vendorKey
+    : (parseModelLabel(activeModel).vendor ?? '');
+  const vendorModels = modelGroups.get(currentVendor) ?? [];
 
   const handleSubmit = () => {
     const trimmed = value.trim();
@@ -594,6 +638,8 @@ function AiComposer({
             </Select>
             <Select
               aria-label={t('ai.model')}
+              isOpen={modelMenuOpen}
+              onOpenChange={setModelMenuOpen}
               selectedKey={activeModel || (activeProvider?.models[0] || undefined)}
               onSelectionChange={(key) => {
                 if (key) onSelectModel(String(key));
@@ -605,17 +651,79 @@ function AiComposer({
             >
               <Select.Trigger className="flex w-full items-center gap-1 overflow-hidden">
                 <Sparkles className="size-4 shrink-0" />
-                <Select.Value className="min-w-0 flex-1 truncate" />
+                <Select.Value className="min-w-0 flex-1 truncate">
+                  {(value) => (
+                    <span className="min-w-0 flex-1 truncate">
+                      {formatModelDisplay(String(value))}
+                    </span>
+                  )}
+                </Select.Value>
                 <Select.Indicator className="shrink-0" />
               </Select.Trigger>
-              <Select.Popover>
-                <ListBox items={(activeProvider?.models ?? []).map((m) => ({ id: m, label: m }))} className="max-h-[200px] overflow-y-auto">
-                  {(item) => (
-                    <ListBox.Item key={item.id} id={item.id} textValue={item.label} className="truncate">
-                      {item.label}
-                    </ListBox.Item>
-                  )}
-                </ListBox>
+              <Select.Popover className="min-w-[240px]">
+                <div className="flex max-h-[280px] overflow-hidden">
+                  {/* 左列：厂商 */}
+                  <div className="w-28 shrink-0 overflow-y-auto border-r border-default-200 py-1 dark:border-default-800">
+                    {vendors.map((vendor) => {
+                      const active = vendor === currentVendor;
+                      return (
+                        <button
+                          key={vendor || '(all)'}
+                          type="button"
+                          onClick={() => {
+                            setVendorKey(vendor);
+                          }}
+                          className={`block w-full truncate px-3 py-1.5 text-left text-sm transition-colors ${
+                            active
+                              ? 'bg-accent font-medium text-white'
+                              : 'text-foreground hover:bg-default/60'
+                          }`}
+                        >
+                          {vendor || t('ai.vendorAll')}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {/* 右列：该厂商的模型 */}
+                  <div className="min-w-0 flex-1 overflow-y-auto py-1">
+                    {vendorModels.map((m) => {
+                      const parsed = parseModelLabel(m);
+                      const selected = m === activeModel;
+                      return (
+                        <button
+                          key={m}
+                          type="button"
+                          onClick={() => {
+                            onSelectModel(m);
+                            setModelMenuOpen(false);
+                          }}
+                          className={`flex w-full items-center justify-between gap-2 px-3 py-1.5 text-left text-sm transition-colors ${
+                            selected
+                              ? 'bg-accent font-medium text-white'
+                              : 'text-foreground hover:bg-default/60'
+                          }`}
+                        >
+                          <span className="truncate">{parsed.name}</span>
+                          {parsed.isFree && (
+                            <Chip
+                              color="success"
+                              variant="primary"
+                              size="sm"
+                              className="shrink-0 text-white"
+                            >
+                              <Chip.Label>Free/免费</Chip.Label>
+                            </Chip>
+                          )}
+                        </button>
+                      );
+                    })}
+                    {vendorModels.length === 0 && (
+                      <div className="px-3 py-6 text-center text-xs text-muted">
+                        {t('ai.noModels')}
+                      </div>
+                    )}
+                  </div>
+                </div>
               </Select.Popover>
             </Select>
           </PromptInput.ToolbarStart>

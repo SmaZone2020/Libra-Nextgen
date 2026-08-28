@@ -980,6 +980,8 @@ export default {
       suggestAnalyzeAgent: '分析某台设备的主机指纹与网络信息',
       suggestExplainTool: '解释 MCP 工具 execute_process 的用法',
       suggestSummarize: '帮我总结最近的审计日志要点',
+      vendorAll: '全部',
+      noModels: '该厂商暂无模型',
     },
   },
 };
