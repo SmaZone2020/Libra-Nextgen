@@ -771,8 +771,6 @@ export default {
       aiApiKeyPlaceholder: '留空则保留原有密钥',
       aiTest: '测试连接',
       aiTestOk: '连接成功',
-      aiTestImportHint: '测试成功后可一键导入 /models 返回的模型列表',
-      aiModelsImportHint: '点击「测试连接」后，会从供应商的 /models 接口拉取并填入模型列表；也可手动编辑。',
       aiModels: '模型',
       aiDefaultModel: '默认模型',
       aiEnabled: '启用',

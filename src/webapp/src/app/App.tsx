@@ -74,7 +74,9 @@ const PAGE_META_KEYS: Record<string, [string, string]> = {
 function PageHeader({ pluginLabels }: { pluginLabels: Map<string, string> }) {
   const { t } = useTranslation();
   const { pathname } = useLocation();
-  const keys = PAGE_META_KEYS[pathname];
+  // /ai/:sessionId 是动态路径，回退到 /ai 的标题。
+  const keys = PAGE_META_KEYS[pathname]
+    ?? (pathname.startsWith('/ai/') ? PAGE_META_KEYS['/ai'] : undefined);
   // Plugin pages resolve their heading from the enabled manifest name.
   const pluginName = isPluginRoute(pathname) ? pluginLabels.get(pathname) : undefined;
   if (!keys && !pluginName) return null;
@@ -154,8 +156,6 @@ export function App() {
   const [needsSetup, setNeedsSetup] = useState(false);
   const [checking, setChecking] = useState(true);
   const [agreedAt, setAgreedAt] = useState<string | null | undefined>(undefined);
-  // 后端可达性：不可达时优先展示断线重连页（而不是协议确认/登录页），
-  // 并可临时切换后端地址。null = 尚未探测。
   const [backendReachable, setBackendReachable] = useState<boolean | null>(null);
 
   useEffect(() => {
@@ -228,7 +228,6 @@ export function App() {
     return () => setOnAuthFailed(null);
   }, []);
 
-  // 后端不可达：无论登录态/协议态如何，优先展示断线重连页（支持临时切后端地址）。
   if (backendReachable === false) {
     return (
       <div className="min-h-screen bg-neutral-50 dark:bg-neutral-950">
@@ -308,11 +307,11 @@ function AuthenticatedLayout({
     return permissions.allowedPages.includes(key);
   };
 
-  const NO_PADDING_ROUTES = new Set(['/shell', '/ai', '/ai/:sessionId']);
-  const FULL_HEIGHT_ROUTES = new Set(['/shell', '/ai', '/ai/:sessionId']);
-  // Filter sidebar items: apply permission check + Linux platform exclusions.
-  // "功能" 母项的 children 会被逐个筛选；"插件管理" 母项（to=/plugins）的
-  // children 由 enabled 插件动态填充，母项本身始终保留（可跳转管理页）。
+  // 全高布局路由（AI 页需占满内容区，内部自行滚动）。
+  // 注意：/ai/:sessionId 不能写死字面量，要用前缀匹配实际 pathname。
+  const NO_PADDING_ROUTES = new Set(['/shell']);
+  const FULL_HEIGHT_ROUTES = new Set(['/shell']);
+  const isAiRoute = location.pathname === '/ai' || location.pathname.startsWith('/ai/');
   const visibleItems = sidebarItems
     .map((item): NavItem | null => {
       if (item.children && item.children.length > 0) {
@@ -428,7 +427,7 @@ function AuthenticatedLayout({
         </header>
 
         <div
-          className={`${FULL_HEIGHT_ROUTES.has(location.pathname) ? 'flex min-h-0 flex-1 flex-col overflow-hidden' : 'min-h-0 flex-1 overflow-y-auto'} ${NO_PADDING_ROUTES.has(location.pathname) ? '' : 'px-4 py-6 sm:px-6 lg:px-8'}`}
+          className={`${FULL_HEIGHT_ROUTES.has(location.pathname) || isAiRoute ? 'flex min-h-0 flex-1 flex-col overflow-hidden' : 'min-h-0 flex-1 overflow-y-auto'} ${NO_PADDING_ROUTES.has(location.pathname) || isAiRoute ? '' : 'px-4 py-6 sm:px-6 lg:px-8'}`}
         >
           <AnimatePresence mode="wait">
             <motion.div
@@ -437,7 +436,7 @@ function AuthenticatedLayout({
               exit={{ opacity: 0, y: -12 }}
               initial={{ opacity: 0, y: 12 }}
               transition={pageTransition}
-              className={FULL_HEIGHT_ROUTES.has(location.pathname) ? 'flex min-h-0 flex-1 flex-col' : ''}
+              className={FULL_HEIGHT_ROUTES.has(location.pathname) || isAiRoute ? 'flex min-h-0 flex-1 flex-col' : ''}
             >
               <Routes location={location}>
                 <Route path="/" element={<Dashboard />} />

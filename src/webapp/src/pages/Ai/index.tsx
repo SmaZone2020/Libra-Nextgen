@@ -350,7 +350,7 @@ export default function AiPage() {
   const approvalPending = streaming === 'approval';
 
   return (
-    <div className="flex h-full min-h-0 w-full flex-col md:flex-row">
+    <div className="flex h-full min-h-0 w-full flex-1 flex-col md:flex-row">
       {/* 桌面端会话列表（自身滚动，不随消息容器滚动） */}
       <aside className="hidden w-64 shrink-0 overflow-y-auto border-r border-default-200 md:block dark:border-default-800">
         <AiSidebar

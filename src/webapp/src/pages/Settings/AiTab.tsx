@@ -298,13 +298,14 @@ export default function AiTab() {
                   <Input
                     value={form.name}
                     onChange={(e) => patch({ name: e.target.value })}
-                    placeholder="DeepSeek / [OI] / 自建网关…"
+                    placeholder="Libra"
                   />
                 </div>
                 <div>
                   <Label className="mb-1.5 block text-sm">{t('settings.aiType')}</Label>
                   <Select
                     selectedKey={form.providerType}
+                    defaultSelectedKey={PROVIDER_TYPES[0].id}
                     onSelectionChange={(key) => {
                       if (key) handleTypeChange(String(key));
                     }}
@@ -314,7 +315,7 @@ export default function AiTab() {
                       <Select.Indicator />
                     </Select.Trigger>
                     <Select.Popover>
-                      <ListBox items={PROVIDER_TYPES} defaultSelectedKeys={PROVIDER_TYPES[0].id}>
+                      <ListBox items={PROVIDER_TYPES}>
                         {(item) => (
                           <ListBox.Item key={item.id} id={item.id} textValue={item.label}>
                             {item.label}
@@ -349,9 +350,6 @@ export default function AiTab() {
                       {testing ? <Spinner size="sm" /> : <CircleCheck className="size-4" />}
                       {t('settings.aiTest')}
                     </Button>
-                    <span className="text-xs text-default-400">
-                      {t('settings.aiTestImportHint')}
-                    </span>
                     {testResult && (
                       <span className={`w-full text-xs ${testResult.ok ? 'text-success' : 'text-danger'}`}>
                         {testResult.ok

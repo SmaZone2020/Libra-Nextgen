@@ -34,7 +34,6 @@ export function NetworkOverlay() {
     setOffline(false);
     setGaveUp(false);
     setRetryCount(0);
-    // 恢复在线后清理恢复回调，避免重复触发
     setOnNetworkRecovered(null);
   };
 

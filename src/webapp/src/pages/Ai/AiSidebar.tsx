@@ -148,8 +148,10 @@ export function AiSidebar({ activeSessionId, onSelectSession, onNewSession }: Ai
                   role="button"
                   tabIndex={0}
                 >
-                  {renamingId === session.id ? (
+                {renamingId === session.id ? (
+                  <div className="flex items-center gap-1">
                     <Input
+                      className="flex-1 min-w-0"
                       autoFocus
                       value={renameValue}
                       onClick={(e) => e.stopPropagation()}
@@ -159,6 +161,21 @@ export function AiSidebar({ activeSessionId, onSelectSession, onNewSession }: Ai
                         if (e.key === 'Escape') setRenamingId(null);
                       }}
                     />
+                    <Button
+                      className="aspect-square rounded-[15px]"
+                      variant="primary"
+                      isIconOnly
+                      onPress={() => {
+                        if (enabledProviders.length === 0) {
+                          navigate('/settings/ai');
+                          return;
+                        }
+                        onNewSession();
+                      }}
+                    >
+                      <SquarePlus className="size-4" />
+                    </Button>
+                  </div>
                   ) : (
                     <div className="flex min-w-0 flex-1 flex-col">
                       <span className="truncate text-sm font-medium">

@@ -772,8 +772,6 @@ export default {
       aiApiKeyPlaceholder: 'Leave blank to keep the existing key',
       aiTest: 'Test connection',
       aiTestOk: 'Connected',
-      aiTestImportHint: 'On success, models from the /models endpoint can be imported in one click',
-      aiModelsImportHint: 'Click "Test connection" to fetch and fill models from the provider /models endpoint; you can also edit manually.',
       aiModels: 'Models',
       aiDefaultModel: 'Default model',
       aiEnabled: 'Enabled',
