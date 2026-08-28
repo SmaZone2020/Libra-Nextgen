@@ -3,8 +3,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
-import { Button, Input, Tooltip, Spinner } from '@heroui/react';
-import { Magnifier, SquarePlus, TrashBin, Pencil, Xmark } from '@gravity-ui/icons';
+import { Button, Input, Spinner, Dropdown, Label} from '@heroui/react';
+import { CodeFork, SquarePlus, TrashBin, Pencil, Xmark, EllipsisVertical } from '@gravity-ui/icons';
 import {
   deleteAiSession,
   getAiProviders,
@@ -30,6 +30,7 @@ export function AiSidebar({ activeSessionId, onSelectSession, onNewSession }: Ai
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState('');
   const [deleting, setDeleting] = useState(false);
+  const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -94,7 +95,6 @@ export function AiSidebar({ activeSessionId, onSelectSession, onNewSession }: Ai
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden">
-      {/* 新建会话与搜索 */}
       <div className="p-3 flex items-center gap-2">
         <Input
           className="flex-1 min-w-0"
@@ -136,7 +136,7 @@ export function AiSidebar({ activeSessionId, onSelectSession, onNewSession }: Ai
               return (
                 <div
                   key={session.id}
-                  className={`group flex cursor-pointer items-center gap-2 rounded-[20px] px-3 py-2 transition-colors ${
+                  className={`group flex cursor-pointer select-none items-center gap-2 rounded-[20px] px-3 py-2 transition-colors ${
                     active
                       ? 'bg-accent text-white'
                       : 'text-foreground hover:bg-default/60'
@@ -149,7 +149,7 @@ export function AiSidebar({ activeSessionId, onSelectSession, onNewSession }: Ai
                   tabIndex={0}
                 >
                 {renamingId === session.id ? (
-                  <div className="flex items-center gap-1">
+                  <div className="flex items-center gap-1 select-none">
                     <Input
                       className="flex-1 min-w-0 max-w-[180px] mr-1"
                       autoFocus
@@ -187,37 +187,40 @@ export function AiSidebar({ activeSessionId, onSelectSession, onNewSession }: Ai
                     </div>
                   )}
                   {renamingId !== session.id && (
-                    <div className="hidden shrink-0 items-center gap-0.5 group-hover:flex">
-                      <Tooltip delay={0}>
-                        <Button
-                          isIconOnly
-                          size="sm"
+                    <div className={`hidden shrink-0 items-center gap-0.5 group-hover:flex ${openDropdownId === session.id ? '!flex' : ''}`}>
+                      <Dropdown
+                        isOpen={openDropdownId === session.id}
+                        onOpenChange={(open) => setOpenDropdownId(open ? session.id : null)}
+                      >
+                        <Button 
                           variant="ghost"
-                          className={active ? 'text-primary-foreground' : ''}
-                          aria-label={t('common.rename')}
-                          onPress={() => {
-                            setRenamingId(session.id);
-                            setRenameValue(session.title);
-                          }}
-                        >
-                          <Pencil className="size-3.5" />
+                          isIconOnly 
+                          size='sm'
+                          className={`aspect-square rounded-[15px]  ${active ? 'text-white hover:text-accent' : 'text-accent'}`}>
+                          <EllipsisVertical className="size-4" />
                         </Button>
-                        <Tooltip.Content>{t('common.rename')}</Tooltip.Content>
-                      </Tooltip>
-                      <Tooltip delay={0}>
-                        <Button
-                          isIconOnly
-                          size="sm"
-                          variant="ghost"
-                          className={active ? 'text-primary-foreground' : 'text-danger'}
-                          aria-label={t('common.delete')}
-                          isDisabled={deleting}
-                          onPress={() => void handleDelete(session)}
-                        >
-                          <TrashBin className="size-3.5" />
-                        </Button>
-                        <Tooltip.Content>{t('common.delete')}</Tooltip.Content>
-                      </Tooltip>
+                        <Dropdown.Popover>
+                          <Dropdown.Menu>
+                            <Dropdown.Item id="save-file" textValue="重命名会话" 
+                              onPress={() => {
+                              setRenamingId(session.id);
+                              setRenameValue(session.title);
+                            }}>
+                              <Pencil className="size-4 shrink-0 text-muted" />
+                              <Label>重命名会话</Label>
+                            </Dropdown.Item>
+                            <Dropdown.Item id="new-file" textValue="分支会话">
+                              <CodeFork className="size-4 shrink-0 text-muted" />
+                              <Label>分支会话</Label>
+                            </Dropdown.Item>
+                            <Dropdown.Item id="delete-file" textValue="删除会话" variant="danger"
+                              onPress={() => void handleDelete(session)}>
+                              <TrashBin className="size-4 shrink-0 text-danger" />
+                              <Label>删除会话</Label>
+                            </Dropdown.Item>
+                          </Dropdown.Menu>
+                        </Dropdown.Popover>
+                      </Dropdown>
                     </div>
                   )}
                 </div>
