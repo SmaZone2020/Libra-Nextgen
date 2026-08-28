@@ -10,6 +10,8 @@ export const siteConfig = {
 const topLevelItems: NavItem[] = [
   { icon: ChartLine, to: '/', label: 'nav.dashboard' },
   { icon: Display, to: '/agents', label: 'nav.agents' },
+  { icon: Sparkles, to: '/ai', label: "nav.ai"}
+  
 ];
 
 // "功能" 母项：收纳所有功能类页面（文件/软件数据等）。
@@ -29,8 +31,6 @@ const featuresGroup: NavItem = {
 // More top-level leaves after the features group.
 const bottomTopItems: NavItem[] = [
   { icon: Code, to: '/builder', label: 'nav.builder' },
-  // 内置 AI：入口放在设备列表下方、功能组之后的显眼位置。
-  { icon: Sparkles, to: '/ai', label: 'nav.ai' },
   { icon: Shield, to: '/audit', label: 'nav.auditLogs' },
 ];
 

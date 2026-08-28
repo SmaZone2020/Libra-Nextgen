@@ -10,6 +10,7 @@ import {
   Input,
   Label,
   ListBox,
+  Modal,
   Select,
   Spinner,
   Switch,
@@ -32,11 +33,11 @@ import {
 } from '../../api/ai';
 
 const PROVIDER_TYPES = [
-  { id: 'openai', label: 'OpenAI' },
+  { id: 'openai', label: '[OI]' },
   { id: 'deepseek', label: 'DeepSeek' },
   { id: 'moonshot', label: 'Moonshot (Kimi)' },
   { id: 'qwen', label: '通义千问 (DashScope)' },
-  { id: 'openai-compatible', label: 'OpenAI 兼容自定义' },
+  { id: 'openai-compatible', label: '[OI] 兼容自定义' },
 ] as const;
 
 const DEFAULT_BASE_URLS: Record<string, string> = {
@@ -64,6 +65,8 @@ export default function AiTab() {
   const [loading, setLoading] = useState(true);
   const [mcp, setMcp] = useState<AiMcpInfo | null>(null);
 
+  // 模态框表单状态
+  const [modalOpen, setModalOpen] = useState(false);
   const [form, setForm] = useState<AiProviderInput>(emptyForm());
   const [editingId, setEditingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -118,7 +121,15 @@ export default function AiTab() {
     }
   };
 
-  const startEdit = (p: AiProvider) => {
+  const openCreate = () => {
+    setEditingId(null);
+    setForm(emptyForm());
+    setModelsText('');
+    setTestResult(null);
+    setModalOpen(true);
+  };
+
+  const openEdit = (p: AiProvider) => {
     setEditingId(p.id);
     setForm({
       name: p.name,
@@ -132,13 +143,12 @@ export default function AiTab() {
     });
     setModelsText(p.models.join('\n'));
     setTestResult(null);
+    setModalOpen(true);
   };
 
-  const resetForm = () => {
+  const closeModal = () => {
+    setModalOpen(false);
     setEditingId(null);
-    setForm(emptyForm());
-    setModelsText('');
-    setTestResult(null);
   };
 
   const handleSave = async () => {
@@ -155,7 +165,7 @@ export default function AiTab() {
       } else {
         await createAiProvider(input);
       }
-      resetForm();
+      closeModal();
       await reload();
     } catch (e) {
       alert(e instanceof Error ? e.message : String(e));
@@ -221,12 +231,18 @@ export default function AiTab() {
             <h2 className="text-lg font-semibold">{t('settings.aiProviders')}</h2>
             <p className="text-sm text-default-500">{t('settings.aiProvidersDesc')}</p>
           </div>
-          <Tooltip delay={0}>
-            <Button isIconOnly size="sm" variant="ghost" aria-label={t('common.refresh')} onPress={() => void reload()}>
-              <ArrowsRotateLeft className="size-4" />
+          <div className="flex items-center gap-2">
+            <Tooltip delay={0}>
+              <Button isIconOnly size="sm" variant="ghost" aria-label={t('common.refresh')} onPress={() => void reload()}>
+                <ArrowsRotateLeft className="size-4" />
+              </Button>
+              <Tooltip.Content>{t('common.refresh')}</Tooltip.Content>
+            </Tooltip>
+            <Button size="sm" variant="primary" onPress={openCreate}>
+              <Plus className="size-4" />
+              {t('settings.aiAddProvider')}
             </Button>
-            <Tooltip.Content>{t('common.refresh')}</Tooltip.Content>
-          </Tooltip>
+          </div>
         </div>
 
         {providers.length === 0 ? (
@@ -254,7 +270,7 @@ export default function AiTab() {
                   </span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <Button size="sm" variant="tertiary" onPress={() => startEdit(p)}>
+                  <Button size="sm" variant="tertiary" onPress={() => openEdit(p)}>
                     <Pencil className="size-4" />
                     {t('common.edit')}
                   </Button>
@@ -267,131 +283,129 @@ export default function AiTab() {
             ))}
           </div>
         )}
-
-        {!editingId && (
-          <Button className="mt-4" variant="tertiary" onPress={resetForm}>
-            <Plus className="size-4" />
-            {t('settings.aiAddProvider')}
-          </Button>
-        )}
       </Card>
 
-      {/* ── 供应商编辑表单 ── */}
-      {(editingId || form.name || providers.length === 0) && (
-        <Card className="p-6">
-          <h2 className="mb-4 text-lg font-semibold">
-            {editingId ? t('settings.aiEditProvider') : t('settings.aiAddProvider')}
-          </h2>
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-            <div>
-              <Label className="mb-1.5 block text-sm">{t('settings.aiName')}</Label>
-              <Input
-                value={form.name}
-                onChange={(e) => patch({ name: e.target.value })}
-                placeholder="DeepSeek / OpenAI / 自建网关…"
-              />
-            </div>
-            <div>
-              <Label className="mb-1.5 block text-sm">{t('settings.aiType')}</Label>
-              <Select
-                selectedKey={form.providerType}
-                onSelectionChange={(key) => {
-                  if (key) handleTypeChange(String(key));
-                }}
-              >
-                <Select.Trigger className="w-full">
-                  <Select.Value />
-                  <Select.Indicator />
-                </Select.Trigger>
-                <Select.Popover>
-                  <ListBox items={PROVIDER_TYPES}>
-                    {(item) => (
-                      <ListBox.Item key={item.id} id={item.id} textValue={item.label}>
-                        {item.label}
-                      </ListBox.Item>
+      {/* ── 供应商编辑模态框（复用账户管理的 Modal.Backdrop 受控写法）── */}
+      <Modal.Backdrop isOpen={modalOpen} onOpenChange={(open) => { if (!open) closeModal(); }}>
+        <Modal.Container placement="center" size="lg">
+          <Modal.Dialog>
+            <Modal.CloseTrigger />
+            <Modal.Header>
+              <Modal.Heading>
+                {editingId ? t('settings.aiEditProvider') : t('settings.aiAddProvider')}
+              </Modal.Heading>
+            </Modal.Header>
+            <Modal.Body>
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <div>
+                  <Label className="mb-1.5 block text-sm">{t('settings.aiName')}</Label>
+                  <Input
+                    value={form.name}
+                    onChange={(e) => patch({ name: e.target.value })}
+                    placeholder="DeepSeek / [OI] / 自建网关…"
+                  />
+                </div>
+                <div>
+                  <Label className="mb-1.5 block text-sm">{t('settings.aiType')}</Label>
+                  <Select
+                    selectedKey={form.providerType}
+                    onSelectionChange={(key) => {
+                      if (key) handleTypeChange(String(key));
+                    }}
+                  >
+                    <Select.Trigger className="w-full">
+                      <Select.Value />
+                      <Select.Indicator />
+                    </Select.Trigger>
+                    <Select.Popover>
+                      <ListBox items={PROVIDER_TYPES}>
+                        {(item) => (
+                          <ListBox.Item key={item.id} id={item.id} textValue={item.label}>
+                            {item.label}
+                          </ListBox.Item>
+                        )}
+                      </ListBox>
+                    </Select.Popover>
+                  </Select>
+                </div>
+                <div className="md:col-span-2">
+                  <Label className="mb-1.5 block text-sm">{t('settings.aiBaseUrl')}</Label>
+                  <Input
+                    value={form.baseUrl}
+                    onChange={(e) => patch({ baseUrl: e.target.value })}
+                    placeholder="https://api.deepseek.com/v1"
+                  />
+                </div>
+                <div className="md:col-span-2">
+                  <Label className="mb-1.5 block text-sm">{t('settings.aiApiKey')}</Label>
+                  <Input
+                    type="password"
+                    value={form.apiKey ?? ''}
+                    onChange={(e) => patch({ apiKey: e.target.value })}
+                    placeholder={editingId ? t('settings.aiApiKeyPlaceholder') : 'sk-…'}
+                  />
+                  <div className="mt-2 flex flex-wrap items-center gap-2">
+                    <Button size="sm" variant="tertiary" isDisabled={testing} onPress={() => void handleTest()}>
+                      {testing ? <Spinner size="sm" /> : <CircleCheck className="size-4" />}
+                      {t('settings.aiTest')}
+                    </Button>
+                    <span className="text-xs text-default-400">
+                      {t('settings.aiTestImportHint')}
+                    </span>
+                    {testResult && (
+                      <span className={`w-full text-xs ${testResult.ok ? 'text-success' : 'text-danger'}`}>
+                        {testResult.ok
+                          ? `${t('settings.aiTestOk')} (${testResult.models?.length ?? 0} models)`
+                          : testResult.message}
+                      </span>
                     )}
-                  </ListBox>
-                </Select.Popover>
-              </Select>
-            </div>
-            <div className="md:col-span-2">
-              <Label className="mb-1.5 block text-sm">{t('settings.aiBaseUrl')}</Label>
-              <Input
-                value={form.baseUrl}
-                onChange={(e) => patch({ baseUrl: e.target.value })}
-                placeholder="https://api.deepseek.com/v1"
-              />
-            </div>
-            <div className="md:col-span-2">
-              <Label className="mb-1.5 block text-sm">{t('settings.aiApiKey')}</Label>
-              <Input
-                type="password"
-                value={form.apiKey ?? ''}
-                onChange={(e) => patch({ apiKey: e.target.value })}
-                placeholder={editingId ? t('settings.aiApiKeyPlaceholder') : 'sk-…'}
-              />
-              <div className="mt-1.5 flex items-center gap-2">
-                <Button size="sm" variant="tertiary" isDisabled={testing} onPress={() => void handleTest()}>
-                  {testing ? <Spinner size="sm" /> : <CircleCheck className="size-4" />}
-                  {t('settings.aiTest')}
-                </Button>
-                {testResult && (
-                  <span className={`text-xs ${testResult.ok ? 'text-success' : 'text-danger'}`}>
-                    {testResult.ok
-                      ? `${t('settings.aiTestOk')} (${testResult.models?.length ?? 0} models)`
-                      : testResult.message}
-                  </span>
-                )}
+                  </div>
+                </div>
+                <div className="md:col-span-2">
+                  <Label className="mb-1.5 block text-sm">
+                    {t('settings.aiModels')}
+                    {testResult?.ok && testResult.models ? `（${testResult.models.length}）` : ''}
+                  </Label>
+                  <TextArea
+                    value={modelsText}
+                    onChange={(e) => setModelsText(e.target.value)}
+                    placeholder={'deepseek-chat\ndeepseek-reasoner\n…（每行一个模型 ID）'}
+                    rows={4}
+                  />
+                  <p className="mt-1 text-xs text-default-400">
+                    {t('settings.aiModelsImportHint')}
+                  </p>
+                </div>
+                <div>
+                  <Label className="mb-1.5 block text-sm">{t('settings.aiDefaultModel')}</Label>
+                  <Input
+                    value={form.defaultModel}
+                    onChange={(e) => patch({ defaultModel: e.target.value })}
+                    placeholder="deepseek-chat"
+                  />
+                </div>
+                <div className="flex flex-col justify-end gap-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-sm">{t('settings.aiEnabled')}</span>
+                    <Switch isSelected={form.enabled} onChange={(v) => patch({ enabled: v })}>
+                      <Switch.Control><Switch.Thumb /></Switch.Control>
+                    </Switch>
+                  </div>
+                </div>
               </div>
-            </div>
-            <div className="md:col-span-2">
-              <Label className="mb-1.5 block text-sm">{t('settings.aiModels')}</Label>
-              <TextArea
-                value={modelsText}
-                onChange={(e) => setModelsText(e.target.value)}
-                placeholder={'deepseek-chat\ndeepseek-reasoner\n…（每行一个模型 ID）'}
-                rows={4}
-              />
-            </div>
-            <div>
-              <Label className="mb-1.5 block text-sm">{t('settings.aiDefaultModel')}</Label>
-              <Input
-                value={form.defaultModel}
-                onChange={(e) => patch({ defaultModel: e.target.value })}
-                placeholder="deepseek-chat"
-              />
-            </div>
-            <div className="flex flex-col justify-end gap-3">
-              <div className="flex items-center justify-between gap-3">
-                <span className="text-sm">{t('settings.aiEnabled')}</span>
-                <Switch isSelected={form.enabled} onChange={(v) => patch({ enabled: v })}>
-                  <Switch.Control><Switch.Thumb /></Switch.Control>
-                </Switch>
-              </div>
-              <div className="flex items-center justify-between gap-3">
-                <Tooltip delay={0}>
-                  <span className="text-sm">{t('settings.aiRequireApproval')}</span>
-                  <Tooltip.Content>{t('settings.aiRequireApprovalDesc')}</Tooltip.Content>
-                </Tooltip>
-                <Switch isSelected={form.requireApproval} onChange={(v) => patch({ requireApproval: v })}>
-                  <Switch.Control><Switch.Thumb /></Switch.Control>
-                </Switch>
-              </div>
-            </div>
-          </div>
-          <div className="mt-5 flex items-center gap-2">
-            <Button variant="primary" isDisabled={saving || !form.name.trim()} onPress={() => void handleSave()}>
-              {saving ? <Spinner size="sm" /> : null}
-              {t('common.save')}
-            </Button>
-            {editingId && (
-              <Button variant="ghost" onPress={resetForm}>
+            </Modal.Body>
+            <Modal.Footer>
+              <Button variant="ghost" isDisabled={saving} onPress={closeModal}>
                 {t('common.cancel')}
               </Button>
-            )}
-          </div>
-        </Card>
-      )}
+              <Button variant="primary" isDisabled={saving || !form.name.trim()} onPress={() => void handleSave()}>
+                {saving ? <Spinner size="sm" /> : null}
+                {t('common.save')}
+              </Button>
+            </Modal.Footer>
+          </Modal.Dialog>
+        </Modal.Container>
+      </Modal.Backdrop>
 
       {/* ── MCP 工具连接 ── */}
       <Card className="p-6">

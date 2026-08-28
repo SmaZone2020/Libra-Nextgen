@@ -385,9 +385,6 @@ export default function AiPage() {
                       <PromptSuggestion.Title>
                         {t('ai.heroTitle')}
                       </PromptSuggestion.Title>
-                      <PromptSuggestion.Description>
-                        {t('ai.heroDesc')}
-                      </PromptSuggestion.Description>
                     </PromptSuggestion.Header>
                     <PromptSuggestion.Items>
                       {suggestedPrompts.map((prompt) => (
@@ -450,7 +447,7 @@ export default function AiPage() {
         </ChatConversation>
 
         {/* 底部输入区：shrink-0，固定于主区域底部 */}
-        <div className="shrink-0 px-4 pt-3 pb-4 sm:pb-8">
+        <div className="shrink-0 px-4 pt-3 pb-4 sm:pb-8 ">
           <div className="mx-auto w-full max-w-[760px]">
             <AiComposer
               providers={enabledProviders}
