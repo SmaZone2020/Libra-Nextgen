@@ -51,10 +51,9 @@ public class AiService
 
     private static readonly Dictionary<string, string> DefaultBaseUrls = new(StringComparer.OrdinalIgnoreCase)
     {
-        ["openai"] = "https://api.openai.com/v1",
-        ["deepseek"] = "https://api.deepseek.com/v1",
-        ["moonshot"] = "https://api.moonshot.cn/v1",
-        ["qwen"] = "https://dashscope.aliyuncs.com/compatible-mode/v1",
+        ["openai-chat"] = "https://api.openai.com/v1",
+        ["openai-response"] = "https://api.openai.com/v1",
+        ["anthropic"] = "https://api.anthropic.com/v1",
         ["openai-compatible"] = "",
     };
 
@@ -463,118 +462,26 @@ public class AiService
 
         for (var turn = 0; turn < maxTurns; turn++)
         {
-            // 组装请求。
-            var body = new JsonObject
-            {
-                ["model"] = state.Model,
-                ["messages"] = new JsonArray(state.LlmMessages.Select(m => (JsonNode)m.DeepClone()).ToArray()),
-                ["stream"] = true,
-            };
-            if (tools.Count > 0)
-            {
-                var toolArr = new JsonArray();
-                foreach (var t in tools)
-                {
-                    var schema = t.Schema?.DeepClone() ?? new JsonObject();
-                    toolArr.Add(new JsonObject { ["type"] = "function", ["function"] = new JsonObject { ["name"] = t.Name, ["description"] = t.Description, ["parameters"] = schema } });
-                }
-                body["tools"] = toolArr;
-                body["tool_choice"] = "auto";
-            }
+            state.TurnText = "";
+            Dictionary<int, (string Id, string Name, string Args)> toolCallsThisTurn;
 
-            using var http = new HttpClient();
-            http.Timeout = TimeSpan.FromMinutes(5);
-            using var req = new HttpRequestMessage(HttpMethod.Post, provider.BaseUrl.TrimEnd('/') + "/chat/completions");
-            req.Content = new StringContent(body.ToJsonString(), Encoding.UTF8, "application/json");
-            if (!string.IsNullOrWhiteSpace(provider.ApiKeyEnc))
-                req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", provider.ApiKeyEnc);
-
-            HttpResponseMessage resp;
             try
             {
-                resp = await http.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, ct);
+                toolCallsThisTurn = provider.ProviderType switch
+                {
+                    "anthropic" => await ChatTurnAnthropicAsync(state, provider, tools, onEvent, ct),
+                    "openai-response" => await ChatTurnOpenAiResponseAsync(state, provider, tools, onEvent, ct),
+                    _ => await ChatTurnOpenAiChatAsync(state, provider, tools, onEvent, ct),
+                };
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
             }
             catch (Exception ex)
             {
                 await onEvent(JsonSerializer.Serialize(new { type = "error", message = $"LLM request failed: {ex.Message}" }, JsonOpts));
                 return;
-            }
-
-            if (!resp.IsSuccessStatusCode)
-            {
-                var errBody = await resp.Content.ReadAsStringAsync(ct);
-                await onEvent(JsonSerializer.Serialize(new { type = "error", message = $"LLM HTTP {(int)resp.StatusCode}: {errBody}" }, JsonOpts));
-                return;
-            }
-
-            // 解析供应商 SSE 流。
-            state.TurnText = "";
-            var toolCallsThisTurn = new Dictionary<int, (string Id, string Name, string Args)>();
-            var finishReason = "";
-            await using var stream = await resp.Content.ReadAsStreamAsync(ct);
-            using var reader = new StreamReader(stream);
-            while (!reader.EndOfStream)
-            {
-                var line = await reader.ReadLineAsync(ct);
-                if (line == null) break;
-                if (!line.StartsWith("data:", StringComparison.Ordinal)) continue;
-                var data = line["data:".Length..].Trim();
-                if (data == "[DONE]") break;
-                JsonNode? chunk;
-                try { chunk = JsonNode.Parse(data); } catch { continue; }
-                if (chunk is not JsonObject obj) continue;
-
-                var choices = obj["choices"]?.AsArray();
-                if (choices == null || choices.Count == 0) continue;
-                var choice = choices[0] as JsonObject;
-                var delta = choice?["delta"] as JsonObject;
-
-                if (delta?["reasoning_content"] is JsonValue rv)
-                {
-                    var text = rv.GetValue<string>();
-                    if (text.Length > 0)
-                    {
-                        var step = new AiReasoningStep { Label = "推理", Content = text };
-                        state.Reasoning.Add(step);
-                        await onEvent(JsonSerializer.Serialize(new { type = "reasoning", label = step.Label, content = text }, JsonOpts));
-                    }
-                }
-
-                if (delta?["content"] is JsonValue cv)
-                {
-                    var text = cv.GetValue<string>();
-                    state.AssistantText += text;
-                    state.TurnText += text;
-                    await onEvent(JsonSerializer.Serialize(new { type = "message", delta = text }, JsonOpts));
-                }
-
-                if (delta?["tool_calls"] is JsonArray tcArr)
-                {
-                    foreach (var tcNode in tcArr)
-                    {
-                        if (tcNode is not JsonObject tc) continue;
-                        var idx = tc["index"]?.GetValue<int>() ?? 0;
-                        var fn = tc["function"] as JsonObject;
-                        if (fn == null) continue;
-                        var id = tc["id"]?.GetValue<string>() ?? "";
-                        var name = fn["name"]?.GetValue<string>() ?? "";
-                        var args = fn["arguments"]?.GetValue<string>() ?? "";
-                        if (toolCallsThisTurn.TryGetValue(idx, out var existing))
-                        {
-                            toolCallsThisTurn[idx] = (existing.Id.Length > 0 ? existing.Id : id, existing.Name.Length > 0 ? existing.Name : name, existing.Args + args);
-                        }
-                        else
-                        {
-                            toolCallsThisTurn[idx] = (id, name, args);
-                        }
-                    }
-                }
-
-                if (choice?["finish_reason"]?.GetValue<string>() is { Length: > 0 } fr)
-                {
-                    finishReason = fr;
-                    if (fr is "tool_calls" or "stop" or "length") break;
-                }
             }
 
             // 有工具调用 → 逐个执行（或请求审批）。
@@ -650,6 +557,429 @@ public class AiService
             await SaveSessionAsync(session, ct);
         }
         await onEvent(JsonSerializer.Serialize(new { type = "done", sessionId = state.SessionId, messageId = finalMsg.Id }, JsonOpts));
+    }
+
+    // ── 协议适配：消息历史转换 ────────────────────────────────────────────────
+
+    private static JsonArray BuildOpenAiChatMessages(List<JsonObject> llmMessages) =>
+        new(llmMessages.Select(m => (JsonNode)m.DeepClone()).ToArray());
+
+    private static JsonArray BuildOpenAiResponseInput(List<JsonObject> llmMessages)
+    {
+        var input = new JsonArray();
+        foreach (var m in llmMessages)
+        {
+            var role = m["role"]?.GetValue<string>() ?? "user";
+            if (role == "tool")
+            {
+                input.Add(new JsonObject
+                {
+                    ["type"] = "function_call_output",
+                    ["call_id"] = m["tool_call_id"]?.GetValue<string>() ?? Guid.NewGuid().ToString("N"),
+                    ["output"] = m["content"]?.GetValue<string>() ?? "",
+                });
+                continue;
+            }
+            var obj = new JsonObject { ["role"] = role, ["content"] = m["content"]?.GetValue<string>() ?? "" };
+            if (role == "assistant" && m["tool_calls"] is JsonArray tcArr)
+            {
+                var items = new List<JsonNode> { obj };
+                foreach (var tc in tcArr.OfType<JsonObject>())
+                {
+                    var fn = tc["function"] as JsonObject;
+                    items.Add(new JsonObject
+                    {
+                        ["type"] = "function_call",
+                        ["call_id"] = tc["id"]?.GetValue<string>() ?? Guid.NewGuid().ToString("N"),
+                        ["name"] = fn?["name"]?.GetValue<string>() ?? "",
+                        ["arguments"] = fn?["arguments"]?.GetValue<string>() ?? "{}",
+                    });
+                }
+                foreach (var item in items) input.Add(item);
+            }
+            else
+            {
+                input.Add(obj);
+            }
+        }
+        return input;
+    }
+
+    private static JsonArray BuildAnthropicMessages(List<JsonObject> llmMessages)
+    {
+        var result = new List<JsonObject>();
+        foreach (var m in llmMessages)
+        {
+            var role = m["role"]?.GetValue<string>() ?? "user";
+            JsonArray content;
+            if (role == "tool")
+            {
+                content = new JsonArray
+                {
+                    new JsonObject
+                    {
+                        ["type"] = "tool_result",
+                        ["tool_use_id"] = m["tool_call_id"]?.GetValue<string>() ?? Guid.NewGuid().ToString("N"),
+                        ["content"] = m["content"]?.GetValue<string>() ?? "",
+                    },
+                };
+                role = "user";
+            }
+            else
+            {
+                content = new JsonArray { new JsonObject { ["type"] = "text", ["text"] = m["content"]?.GetValue<string>() ?? "" } };
+                if (role == "assistant" && m["tool_calls"] is JsonArray tcArr)
+                {
+                    foreach (var tc in tcArr.OfType<JsonObject>())
+                    {
+                        var fn = tc["function"] as JsonObject;
+                        content.Add(new JsonObject
+                        {
+                            ["type"] = "tool_use",
+                            ["id"] = tc["id"]?.GetValue<string>() ?? Guid.NewGuid().ToString("N"),
+                            ["name"] = fn?["name"]?.GetValue<string>() ?? "",
+                            ["input"] = JsonNode.Parse(fn?["arguments"]?.GetValue<string>() ?? "{}") ?? new JsonObject(),
+                        });
+                    }
+                }
+            }
+
+            // Claude 要求 user/assistant 交替：合并连续 user 消息。
+            if (role == "user" && result.Count > 0 && result[^1]["role"]?.GetValue<string>() == "user")
+            {
+                var prevContent = result[^1]["content"] as JsonArray;
+                foreach (var c in content) prevContent?.Add(c);
+                continue;
+            }
+            result.Add(new JsonObject { ["role"] = role, ["content"] = content });
+        }
+        return new JsonArray(result.ToArray());
+    }
+
+    private static void AddOpenAiTools(JsonObject body, List<AiToolDescriptor> tools)
+    {
+        if (tools.Count == 0) return;
+        var toolArr = new JsonArray();
+        foreach (var t in tools)
+            toolArr.Add(new JsonObject { ["type"] = "function", ["function"] = new JsonObject { ["name"] = t.Name, ["description"] = t.Description, ["parameters"] = t.Schema?.DeepClone() ?? new JsonObject() } });
+        body["tools"] = toolArr;
+        body["tool_choice"] = "auto";
+    }
+
+    // ── 协议适配：[OI] Chat（chat/completions，默认）────────────────────────
+
+    private async Task<Dictionary<int, (string Id, string Name, string Args)>> ChatTurnOpenAiChatAsync(
+        AiRunState state, AiProvider provider, List<AiToolDescriptor> tools, Func<string, Task> onEvent, CancellationToken ct)
+    {
+        var body = new JsonObject
+        {
+            ["model"] = state.Model,
+            ["messages"] = BuildOpenAiChatMessages(state.LlmMessages),
+            ["stream"] = true,
+        };
+        AddOpenAiTools(body, tools);
+
+        using var http = new HttpClient();
+        http.Timeout = TimeSpan.FromMinutes(5);
+        using var req = new HttpRequestMessage(HttpMethod.Post, provider.BaseUrl.TrimEnd('/') + "/chat/completions");
+        req.Content = new StringContent(body.ToJsonString(), Encoding.UTF8, "application/json");
+        if (!string.IsNullOrWhiteSpace(provider.ApiKeyEnc))
+            req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", provider.ApiKeyEnc);
+
+        using var resp = await http.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, ct);
+        if (!resp.IsSuccessStatusCode)
+        {
+            var errBody = await resp.Content.ReadAsStringAsync(ct);
+            await onEvent(JsonSerializer.Serialize(new { type = "error", message = $"LLM HTTP {(int)resp.StatusCode}: {errBody}" }, JsonOpts));
+            return new Dictionary<int, (string, string, string)>();
+        }
+
+        var toolCalls = new Dictionary<int, (string Id, string Name, string Args)>();
+        await using var stream = await resp.Content.ReadAsStreamAsync(ct);
+        using var reader = new StreamReader(stream);
+        while (!reader.EndOfStream)
+        {
+            var line = await reader.ReadLineAsync(ct);
+            if (line == null) break;
+            if (!line.StartsWith("data:", StringComparison.Ordinal)) continue;
+            var data = line["data:".Length..].Trim();
+            if (data == "[DONE]") break;
+            JsonNode? chunk;
+            try { chunk = JsonNode.Parse(data); } catch { continue; }
+            if (chunk is not JsonObject obj) continue;
+
+            var choices = obj["choices"]?.AsArray();
+            if (choices == null || choices.Count == 0) continue;
+            var choice = choices[0] as JsonObject;
+            var delta = choice?["delta"] as JsonObject;
+
+            if (delta?["reasoning_content"] is JsonValue rv)
+            {
+                var text = rv.GetValue<string>();
+                if (text.Length > 0)
+                {
+                    state.Reasoning.Add(new AiReasoningStep { Label = "推理", Content = text });
+                    await onEvent(JsonSerializer.Serialize(new { type = "reasoning", label = "推理", content = text }, JsonOpts));
+                }
+            }
+
+            if (delta?["content"] is JsonValue cv)
+            {
+                var text = cv.GetValue<string>();
+                state.AssistantText += text;
+                state.TurnText += text;
+                await onEvent(JsonSerializer.Serialize(new { type = "message", delta = text }, JsonOpts));
+            }
+
+            if (delta?["tool_calls"] is JsonArray tcArr)
+            {
+                foreach (var tcNode in tcArr)
+                {
+                    if (tcNode is not JsonObject tc) continue;
+                    var idx = tc["index"]?.GetValue<int>() ?? 0;
+                    var fn = tc["function"] as JsonObject;
+                    if (fn == null) continue;
+                    var id = tc["id"]?.GetValue<string>() ?? "";
+                    var name = fn["name"]?.GetValue<string>() ?? "";
+                    var args = fn["arguments"]?.GetValue<string>() ?? "";
+                    if (toolCalls.TryGetValue(idx, out var existing))
+                        toolCalls[idx] = (existing.Id.Length > 0 ? existing.Id : id, existing.Name.Length > 0 ? existing.Name : name, existing.Args + args);
+                    else
+                        toolCalls[idx] = (id, name, args);
+                }
+            }
+
+            if (choice?["finish_reason"]?.GetValue<string>() is { Length: > 0 } fr &&
+                fr is "tool_calls" or "stop" or "length")
+                break;
+        }
+        return toolCalls;
+    }
+
+    // ── 协议适配：[OI] Response（/responses）───────────────────────────────
+
+    private async Task<Dictionary<int, (string Id, string Name, string Args)>> ChatTurnOpenAiResponseAsync(
+        AiRunState state, AiProvider provider, List<AiToolDescriptor> tools, Func<string, Task> onEvent, CancellationToken ct)
+    {
+        var body = new JsonObject
+        {
+            ["model"] = state.Model,
+            ["input"] = BuildOpenAiResponseInput(state.LlmMessages),
+            ["stream"] = true,
+            ["store"] = false,
+        };
+        if (tools.Count > 0)
+        {
+            var toolArr = new JsonArray();
+            foreach (var t in tools)
+                toolArr.Add(new JsonObject { ["type"] = "function", ["name"] = t.Name, ["description"] = t.Description, ["parameters"] = t.Schema?.DeepClone() ?? new JsonObject() });
+            body["tools"] = toolArr;
+        }
+
+        using var http = new HttpClient();
+        http.Timeout = TimeSpan.FromMinutes(5);
+        using var req = new HttpRequestMessage(HttpMethod.Post, provider.BaseUrl.TrimEnd('/') + "/responses");
+        req.Content = new StringContent(body.ToJsonString(), Encoding.UTF8, "application/json");
+        if (!string.IsNullOrWhiteSpace(provider.ApiKeyEnc))
+            req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", provider.ApiKeyEnc);
+
+        using var resp = await http.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, ct);
+        if (!resp.IsSuccessStatusCode)
+        {
+            var errBody = await resp.Content.ReadAsStringAsync(ct);
+            await onEvent(JsonSerializer.Serialize(new { type = "error", message = $"LLM HTTP {(int)resp.StatusCode}: {errBody}" }, JsonOpts));
+            return new Dictionary<int, (string, string, string)>();
+        }
+
+        var toolCalls = new Dictionary<int, (string Id, string Name, string Args)>();
+        var idxByCallId = new Dictionary<string, int>();
+        var nextIndex = 0;
+        var done = false;
+        await using var stream = await resp.Content.ReadAsStreamAsync(ct);
+        using var reader = new StreamReader(stream);
+        while (!reader.EndOfStream)
+        {
+            var line = await reader.ReadLineAsync(ct);
+            if (line == null) break;
+            if (!line.StartsWith("data:", StringComparison.Ordinal)) continue;
+            var data = line["data:".Length..].Trim();
+            if (data == "[DONE]") break;
+            JsonNode? chunk;
+            try { chunk = JsonNode.Parse(data); } catch { continue; }
+            if (chunk is not JsonObject obj) continue;
+
+            var type = obj["type"]?.GetValue<string>() ?? "";
+            switch (type)
+            {
+                case "response.output_item.added":
+                {
+                    var item = obj["item"] as JsonObject;
+                    if (item?["type"]?.GetValue<string>() == "function_call")
+                    {
+                        var callId = item["id"]?.GetValue<string>() ?? Guid.NewGuid().ToString("N");
+                        var name = item["name"]?.GetValue<string>() ?? "";
+                        idxByCallId[callId] = nextIndex;
+                        toolCalls[nextIndex++] = (callId, name, "");
+                    }
+                    break;
+                }
+                case "response.function_call_arguments.delta":
+                {
+                    var cid = obj["item_id"]?.GetValue<string>() ?? "";
+                    var part = obj["delta"]?.GetValue<string>() ?? "";
+                    if (idxByCallId.TryGetValue(cid, out var idx) && toolCalls.TryGetValue(idx, out var ex))
+                        toolCalls[idx] = (ex.Id, ex.Name, ex.Args + part);
+                    break;
+                }
+                case "response.output_text.delta":
+                {
+                    var text = obj["delta"]?.GetValue<string>() ?? "";
+                    state.AssistantText += text;
+                    state.TurnText += text;
+                    await onEvent(JsonSerializer.Serialize(new { type = "message", delta = text }, JsonOpts));
+                    break;
+                }
+                case "response.reasoning_summary_text.delta":
+                case "response.reasoning_text.delta":
+                {
+                    var text = obj["delta"]?.GetValue<string>() ?? "";
+                    if (text.Length > 0)
+                    {
+                        state.Reasoning.Add(new AiReasoningStep { Label = "推理", Content = text });
+                        await onEvent(JsonSerializer.Serialize(new { type = "reasoning", label = "推理", content = text }, JsonOpts));
+                    }
+                    break;
+                }
+                case "response.completed":
+                case "response.failed":
+                case "response.incomplete":
+                    done = true;
+                    break;
+            }
+            if (done) break;
+        }
+        return toolCalls;
+    }
+
+    // ── 协议适配：Claude（/v1/messages）────────────────────────────────────
+
+    private async Task<Dictionary<int, (string Id, string Name, string Args)>> ChatTurnAnthropicAsync(
+        AiRunState state, AiProvider provider, List<AiToolDescriptor> tools, Func<string, Task> onEvent, CancellationToken ct)
+    {
+        var body = new JsonObject
+        {
+            ["model"] = state.Model,
+            ["max_tokens"] = 8192,
+            ["messages"] = BuildAnthropicMessages(state.LlmMessages),
+            ["stream"] = true,
+        };
+        if (tools.Count > 0)
+        {
+            var toolArr = new JsonArray();
+            foreach (var t in tools)
+                toolArr.Add(new JsonObject { ["name"] = t.Name, ["description"] = t.Description, ["input_schema"] = t.Schema?.DeepClone() ?? new JsonObject() });
+            body["tools"] = toolArr;
+        }
+
+        using var http = new HttpClient();
+        http.Timeout = TimeSpan.FromMinutes(5);
+        using var req = new HttpRequestMessage(HttpMethod.Post, provider.BaseUrl.TrimEnd('/') + "/messages");
+        req.Content = new StringContent(body.ToJsonString(), Encoding.UTF8, "application/json");
+        if (!string.IsNullOrWhiteSpace(provider.ApiKeyEnc))
+        {
+            req.Headers.TryAddWithoutValidation("x-api-key", provider.ApiKeyEnc);
+            req.Headers.TryAddWithoutValidation("anthropic-version", "2023-06-01");
+        }
+
+        using var resp = await http.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, ct);
+        if (!resp.IsSuccessStatusCode)
+        {
+            var errBody = await resp.Content.ReadAsStringAsync(ct);
+            await onEvent(JsonSerializer.Serialize(new { type = "error", message = $"LLM HTTP {(int)resp.StatusCode}: {errBody}" }, JsonOpts));
+            return new Dictionary<int, (string, string, string)>();
+        }
+
+        var toolCalls = new Dictionary<int, (string Id, string Name, string Args)>();
+        var done = false;
+        await using var stream = await resp.Content.ReadAsStreamAsync(ct);
+        using var reader = new StreamReader(stream);
+        while (!reader.EndOfStream)
+        {
+            var line = await reader.ReadLineAsync(ct);
+            if (line == null) break;
+            if (!line.StartsWith("event:", StringComparison.Ordinal) && !line.StartsWith("data:", StringComparison.Ordinal)) continue;
+            if (line.StartsWith("event:", StringComparison.Ordinal)) continue; // 事件类型行仅作提示，实际字段在 data 中。
+            var data = line["data:".Length..].Trim();
+            if (data == "[DONE]") break;
+            JsonNode? chunk;
+            try { chunk = JsonNode.Parse(data); } catch { continue; }
+            if (chunk is not JsonObject obj) continue;
+
+            var type = obj["type"]?.GetValue<string>() ?? "";
+            switch (type)
+            {
+                case "content_block_start":
+                {
+                    var idx = obj["index"]?.GetValue<int>() ?? 0;
+                    var block = obj["content_block"] as JsonObject;
+                    var btype = block?["type"]?.GetValue<string>() ?? "";
+                    if (btype == "tool_use")
+                    {
+                        var callId = block?["id"]?.GetValue<string>() ?? Guid.NewGuid().ToString("N");
+                        var name = block?["name"]?.GetValue<string>() ?? "";
+                        toolCalls[idx] = (callId, name, "");
+                    }
+                    break;
+                }
+                case "content_block_delta":
+                {
+                    var idx = obj["index"]?.GetValue<int>() ?? 0;
+                    var delta = obj["delta"] as JsonObject;
+                    var dtype = delta?["type"]?.GetValue<string>() ?? "";
+                    if (dtype == "text_delta")
+                    {
+                        var text = delta?["text"]?.GetValue<string>() ?? "";
+                        state.AssistantText += text;
+                        state.TurnText += text;
+                        await onEvent(JsonSerializer.Serialize(new { type = "message", delta = text }, JsonOpts));
+                    }
+                    else if (dtype == "input_json_delta")
+                    {
+                        var part = delta?["partial_json"]?.GetValue<string>() ?? "";
+                        if (toolCalls.TryGetValue(idx, out var ex))
+                            toolCalls[idx] = (ex.Id, ex.Name, ex.Args + part);
+                    }
+                    else if (dtype == "thinking_delta")
+                    {
+                        var text = delta?["thinking"]?.GetValue<string>() ?? "";
+                        if (text.Length > 0)
+                        {
+                            state.Reasoning.Add(new AiReasoningStep { Label = "推理", Content = text });
+                            await onEvent(JsonSerializer.Serialize(new { type = "reasoning", label = "推理", content = text }, JsonOpts));
+                        }
+                    }
+                    break;
+                }
+                case "message_delta":
+                {
+                    var stopReason = obj["delta"]?["stop_reason"]?.GetValue<string>() ?? "";
+                    if (stopReason is "tool_use" or "end_turn" or "max_tokens" or "stop_sequence") done = true;
+                    break;
+                }
+                case "message_stop":
+                    done = true;
+                    break;
+                case "error":
+                {
+                    var msg = obj["error"]?.ToJsonString() ?? "unknown anthropic error";
+                    await onEvent(JsonSerializer.Serialize(new { type = "error", message = msg }, JsonOpts));
+                    done = true;
+                    break;
+                }
+            }
+            if (done) break;
+        }
+        return toolCalls;
     }
 
     /// <summary>审批/拒绝挂起的工具调用后继续运行。</summary>

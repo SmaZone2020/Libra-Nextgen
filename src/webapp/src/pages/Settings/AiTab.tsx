@@ -33,19 +33,15 @@ import {
 } from '../../api/ai';
 
 const PROVIDER_TYPES = [
-  { id: 'openai', label: '[OI]' },
-  { id: 'deepseek', label: 'DeepSeek' },
-  { id: 'moonshot', label: 'Moonshot (Kimi)' },
-  { id: 'qwen', label: '通义千问 (DashScope)' },
-  { id: 'openai-compatible', label: '[OI] 兼容自定义' },
+  { id: 'openai-chat', label: 'OpenAI Chat' },
+  { id: 'openai-response', label: 'OpenAI Response' },
+  { id: 'anthropic', label: 'Anthropic' },
 ] as const;
 
 const DEFAULT_BASE_URLS: Record<string, string> = {
-  openai: 'https://api.openai.com/v1',
-  deepseek: 'https://api.deepseek.com/v1',
-  moonshot: 'https://api.moonshot.cn/v1',
-  qwen: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
-  'openai-compatible': '',
+  'openai-chat': 'https://api.openai.com/v1',
+  'openai-response': 'https://api.openai.com/v1',
+  anthropic: 'https://api.anthropic.com/v1',
 };
 
 const emptyForm = (): AiProviderInput => ({
@@ -318,7 +314,7 @@ export default function AiTab() {
                       <Select.Indicator />
                     </Select.Trigger>
                     <Select.Popover>
-                      <ListBox items={PROVIDER_TYPES}>
+                      <ListBox items={PROVIDER_TYPES} defaultSelectedKeys={PROVIDER_TYPES[0].id}>
                         {(item) => (
                           <ListBox.Item key={item.id} id={item.id} textValue={item.label}>
                             {item.label}
@@ -328,22 +324,26 @@ export default function AiTab() {
                     </Select.Popover>
                   </Select>
                 </div>
-                <div className="md:col-span-2">
-                  <Label className="mb-1.5 block text-sm">{t('settings.aiBaseUrl')}</Label>
-                  <Input
-                    value={form.baseUrl}
-                    onChange={(e) => patch({ baseUrl: e.target.value })}
-                    placeholder="https://api.deepseek.com/v1"
-                  />
+                <div className="md:col-span-2 flex gap-4">
+                  <div className="flex-1">
+                    <Label className="mb-1.5 block text-sm">{t('settings.aiBaseUrl')}</Label>
+                    <Input
+                      value={form.baseUrl}
+                      onChange={(e) => patch({ baseUrl: e.target.value })}
+                      placeholder="https://api.deepseek.com/v1"
+                    />
+                  </div>
+                  <div className="flex-1">
+                    <Label className="mb-1.5 block text-sm">{t('settings.aiApiKey')}</Label>
+                    <Input
+                      type="password"
+                      value={form.apiKey ?? ''}
+                      onChange={(e) => patch({ apiKey: e.target.value })}
+                      placeholder={editingId ? t('settings.aiApiKeyPlaceholder') : 'sk-…'}
+                    />
+                  </div>
                 </div>
                 <div className="md:col-span-2">
-                  <Label className="mb-1.5 block text-sm">{t('settings.aiApiKey')}</Label>
-                  <Input
-                    type="password"
-                    value={form.apiKey ?? ''}
-                    onChange={(e) => patch({ apiKey: e.target.value })}
-                    placeholder={editingId ? t('settings.aiApiKeyPlaceholder') : 'sk-…'}
-                  />
                   <div className="mt-2 flex flex-wrap items-center gap-2">
                     <Button size="sm" variant="tertiary" isDisabled={testing} onPress={() => void handleTest()}>
                       {testing ? <Spinner size="sm" /> : <CircleCheck className="size-4" />}
@@ -369,28 +369,10 @@ export default function AiTab() {
                   <TextArea
                     value={modelsText}
                     onChange={(e) => setModelsText(e.target.value)}
-                    placeholder={'deepseek-chat\ndeepseek-reasoner\n…（每行一个模型 ID）'}
+                    fullWidth
+                    placeholder={'deepseek-chat\ndeepseek-reasoner\n…'}
                     rows={4}
                   />
-                  <p className="mt-1 text-xs text-default-400">
-                    {t('settings.aiModelsImportHint')}
-                  </p>
-                </div>
-                <div>
-                  <Label className="mb-1.5 block text-sm">{t('settings.aiDefaultModel')}</Label>
-                  <Input
-                    value={form.defaultModel}
-                    onChange={(e) => patch({ defaultModel: e.target.value })}
-                    placeholder="deepseek-chat"
-                  />
-                </div>
-                <div className="flex flex-col justify-end gap-3">
-                  <div className="flex items-center justify-between gap-3">
-                    <span className="text-sm">{t('settings.aiEnabled')}</span>
-                    <Switch isSelected={form.enabled} onChange={(v) => patch({ enabled: v })}>
-                      <Switch.Control><Switch.Thumb /></Switch.Control>
-                    </Switch>
-                  </div>
                 </div>
               </div>
             </Modal.Body>

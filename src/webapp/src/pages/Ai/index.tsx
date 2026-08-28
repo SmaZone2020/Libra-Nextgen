@@ -379,10 +379,10 @@ export default function AiPage() {
           <ChatConversation.Content className="flex flex-col">
             <div className="mx-auto flex w-full max-w-[760px] flex-col gap-6 px-4 pt-6 pb-4">
               {showEmptyState ? (
-                <div className="flex min-h-full flex-1 flex-col justify-center">
+                <div className="flex min-h-full flex-1 flex-col items-center justify-center">
                   <PromptSuggestion>
                     <PromptSuggestion.Header>
-                      <PromptSuggestion.Title>
+                      <PromptSuggestion.Title className='text-center'>
                         {t('ai.heroTitle')}
                       </PromptSuggestion.Title>
                     </PromptSuggestion.Header>
@@ -448,7 +448,7 @@ export default function AiPage() {
 
         {/* 底部输入区：shrink-0，固定于主区域底部 */}
         <div className="shrink-0 px-4 pt-3 pb-4 sm:pb-8 ">
-          <div className="mx-auto w-full max-w-[760px]">
+          <div className="mx-auto w-full max-w-[80%]">
             <AiComposer
               providers={enabledProviders}
               activeProviderId={activeProvider?.id ?? null}

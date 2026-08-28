@@ -94,11 +94,19 @@ export function AiSidebar({ activeSessionId, onSelectSession, onNewSession }: Ai
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden">
-      {/* 新建会话 */}
-      <div className="shrink-0 p-3">
+      {/* 新建会话与搜索 */}
+      <div className="p-3 flex items-center gap-2">
+        <Input
+          className="flex-1 min-w-0"
+          placeholder={t('ai.searchSessions')}
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          aria-label={t('ai.searchSessions')}
+        />
         <Button
-          className="w-full"
+          className="aspect-square shrink-0 rounded-[15px]"
           variant="primary"
+          isIconOnly
           onPress={() => {
             if (enabledProviders.length === 0) {
               navigate('/settings/ai');
@@ -108,18 +116,7 @@ export function AiSidebar({ activeSessionId, onSelectSession, onNewSession }: Ai
           }}
         >
           <SquarePlus className="size-4" />
-          {t('ai.newChat')}
         </Button>
-      </div>
-
-      {/* 搜索 */}
-      <div className="shrink-0 px-3 pb-2">
-        <Input
-          placeholder={t('ai.searchSessions')}
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          aria-label={t('ai.searchSessions')}
-        />
       </div>
 
       {/* 会话列表 */}
