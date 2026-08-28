@@ -37,16 +37,18 @@ import { resolveModelIcon } from './modelIcons';
 
 type StreamingState = 'idle' | 'streaming' | 'approval';
 
-/** 解析模型名显示信息：`deepseek-ai/deepseek-v4-flash:free` → 厂商/名称/是否免费/是否最新版。
- *  OpenRouter 的 `~` 前缀表示该厂商模型的最新版别名（`~openai/gpt-4o-latest`），
- *  `~` 仅影响显示归类；选中值仍使用原始模型 id（含 /、~ 与 :free 后缀）。 */
-function parseModelLabel(raw: string): { vendor?: string; name: string; isFree: boolean; isLatest: boolean } {
+function parseModelLabel(raw: string): { vendor?: string; name: string; isFree: boolean; isLatest: boolean; isBatch: boolean } {
   let s = raw;
   let isFree = false;
   let isLatest = false;
+  let isBatch = false;
   if (s.endsWith(':free')) {
     isFree = true;
     s = s.slice(0, -':free'.length);
+  }
+  if (s.endsWith(':batch')) {
+    isBatch = true;
+    s = s.slice(0, -':batch'.length);
   }
   if (s.startsWith('~')) {
     isLatest = true;
@@ -54,9 +56,9 @@ function parseModelLabel(raw: string): { vendor?: string; name: string; isFree: 
   }
   const slash = s.indexOf('/');
   if (slash > 0) {
-    return { vendor: s.slice(0, slash), name: s.slice(slash + 1), isFree, isLatest };
+    return { vendor: s.slice(0, slash), name: s.slice(slash + 1), isFree, isLatest, isBatch };
   }
-  return { name: s, isFree, isLatest };
+  return { name: s, isFree, isLatest , isBatch };
 }
 
 /** 连字符/下划线转空格，每词首字母大写：`deepseek-ai` → `Deepseek AI`。 */

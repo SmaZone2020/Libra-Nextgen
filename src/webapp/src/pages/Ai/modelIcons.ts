@@ -1,14 +1,15 @@
 /**
  * 厂商/模型 → 图标映射（public/icon 静态资源）。
- * 精确匹配：先按原始名（小写）查表，再按规范化名（去 -/_/空格）查表。
- * 规则：厂商有图标时不显示模型图标；图标仅用于厂商、无厂商的模型、
- *      或厂商无图标的模型。
+ * 模糊匹配：名称规范化（小写去特殊字符）后，
+ *   1) 精确命中 key；
+ *   2) 否则取「key 是名称子串」中最长的一个（如 deepseek-ai → deepseek.svg，
+ *      anthropic/claude-3-5 → anthropic.svg）；
+ *   3) 2 字符短 key（yi/pi/rc 等）仅精确匹配，避免误配。
  */
 
 const MODEL_ICONS: Record<string, string> = {
   // 主流模型厂商
   deepseek: '/icon/deepseek.svg',
-  'deepseek-ai': '/icon/deepseek.svg',
   openai: '/icon/openai.svg',
   anthropic: '/icon/anthropic.svg',
   claude: '/icon/claude.svg',
@@ -43,13 +44,12 @@ const MODEL_ICONS: Record<string, string> = {
   hunyuan: '/icon/hunyuan.svg',
   minimax: '/icon/minimax.svg',
   zeroone: '/icon/zeroone.svg',
-  '01-ai': '/icon/zeroone.svg',
-  yi: '/icon/yi.svg',
+  '01ai': '/icon/zeroone.svg',
   nvidia: '/icon/nvidia.svg',
   stability: '/icon/stability.svg',
   github: '/icon/github.svg',
-  copilot: '/icon/githubcopilot.svg',
   githubcopilot: '/icon/githubcopilot.svg',
+  copilot: '/icon/githubcopilot.svg',
   perplexity: '/icon/perplexity.svg',
   midjourney: '/icon/midjourney.svg',
   notion: '/icon/notion.svg',
@@ -112,27 +112,33 @@ const MODEL_ICONS: Record<string, string> = {
   relaxcode: '/icon/relaxcode.png',
   runapi: '/icon/runapi.jpg',
   sudocode: '/icon/sudocode.png',
-  'sudocode-us': '/icon/sudocode-us.png',
+  sudocus: '/icon/sudocode-us.png',
   unity2: '/icon/unity2.png',
   xycai: '/icon/xycai-icon.png',
   zetaapi: '/icon/zetaapi-icon.png',
 };
 
-/** 规范化：小写 + 去 非字母数字（保留字母数字，用于兼容 deepseek-ai → deepseekai 等写法）。 */
+/** 图标 key 按长度降序，模糊匹配时优先取更精确（更长）的 key。 */
+const ICON_KEYS = Object.keys(MODEL_ICONS).sort((a, b) => b.length - a.length);
+
+/** 规范化：小写 + 去 非字母数字。 */
 function normalize(name: string): string {
   return name.toLowerCase().replace(/[^a-z0-9]+/g, '');
 }
 
-/** 精确查表（原始名小写 → 规范化名 → 无则 null）。 */
+/** 模糊匹配图标：精确 → 子串（最长 key 优先）→ null。 */
 export function resolveModelIcon(name: string): string | null {
   if (!name) return null;
-  const direct = MODEL_ICONS[name.toLowerCase()];
-  if (direct) return direct;
   const norm = normalize(name);
-  const byNorm = MODEL_ICONS[norm];
-  if (byNorm) return byNorm;
-  // 部分厂商名带 -ai / - 后缀，如 deepseek-ai → deepseek。
-  const base = norm.replace(/(ai|api|inc|labs)$/i, '');
-  if (base && base !== norm) return MODEL_ICONS[base] ?? null;
+  if (!norm) return null;
+
+  const direct = MODEL_ICONS[norm];
+  if (direct) return direct;
+
+  for (const key of ICON_KEYS) {
+    if (key.length < 3) continue; // 2 字符短 key（yi/pi/rc）仅精确匹配
+    const icon = MODEL_ICONS[key];
+    if (icon && norm.includes(key)) return icon;
+  }
   return null;
 }
