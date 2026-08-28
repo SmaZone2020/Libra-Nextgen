@@ -322,15 +322,12 @@ export function AiComposer({
                 <Button
                   aria-label={t('ai.providerModel')}
                   variant="secondary"
+                  isIconOnly
                   isDisabled={isGenerating || !activeProvider}
                   onPress={mobileDrawer.open}
                   className="h-9 min-w-0 max-w-[160px] shrink-0 gap-1.5 rounded-field border border-default-200 px-3 dark:border-default-800"
                 >
-                  <BrandIcon name={activeProvider?.name ?? ''} className="size-4" />
-                  <span className="min-w-0 flex-1 truncate text-sm text-foreground">
-                    {activeProvider?.name ?? t('ai.provider')}
-                  </span>
-                  <ChevronDown className="size-3.5 shrink-0 text-muted" />
+                  <BrandIcon name={activeProvider?.name ?? (activeProvider?.name.slice(0,2) ?? 'P')} className="size-4" />
                 </Button>
               </div>
             </PromptInput.ToolbarStart>
@@ -347,41 +344,48 @@ export function AiComposer({
                   </span>
                   <ChevronDown className="size-3.5 shrink-0 text-muted" />
                 </Button>
-                <Popover.Content className="w-64" offset={10}>
-                  <Popover.Dialog>
-                    <Popover.Arrow />
-                    <Popover.Heading>{t('ai.adjustJustitia')}</Popover.Heading>
-                    <div className="flex flex-col items-center gap-3 pb-1 mt-3">
-                      <CellSlider
-                        maxValue={3}
-                        minValue={0}
-                        step={1}
-                        variant="secondary"
-                        value={permission}
-                        onChange={(v) => {
-                          const val = Array.isArray(v) ? v[0] ?? 0 : v;
-                          const tier = JUSTITIA_TIERS[Math.round(val)];
-                          if (tier) onTierChange(tier.key);
-                        }}
-                      >
-                        <CellSlider.Track>
-                          <CellSlider.Fill className="transition-[width] duration-200 ease-out" />
-                          <CellSlider.Thumb className="transition-[translate,left] duration-200 ease-out" />
-                        </CellSlider.Track>
-                      </CellSlider>
-                      <div className="flex w-full justify-between px-0.5 text-[11px] text-muted">
-                        {JUSTITIA_TIERS.map((tier) => (
-                          <span
-                            key={tier.key}
-                            className={`transition-colors duration-200 ${
-                              tier.key === justitiaTier ? 'font-medium text-accent' : ''
-                            }`}
+                <Popover.Content className="w-[21rem] p-0 bg-transparent shadow-none" offset={10}>
+                  <Popover.Dialog className="p-0">
+                    <Popover.Arrow className="fill-accent/30" />
+                    <PressableFeedback.Root className="aurora-justitia w-full" isDisabled={isGenerating}>
+                      <PressableFeedback.Ripple />
+                      <div className="aurora-inner flex flex-col gap-3 p-4">
+                        <Popover.Heading className="text-sm font-medium text-foreground">
+                          {t('ai.adjustJustitia')}
+                        </Popover.Heading>
+                        <div className="flex flex-col items-center gap-3 pb-1 mt-1">
+                          <CellSlider
+                            maxValue={3}
+                            minValue={0}
+                            step={1}
+                            variant="secondary"
+                            value={permission}
+                            onChange={(v) => {
+                              const val = Array.isArray(v) ? v[0] ?? 0 : v;
+                              const tier = JUSTITIA_TIERS[Math.round(val)];
+                              if (tier) onTierChange(tier.key);
+                            }}
                           >
-                            {tier.name}
-                          </span>
-                        ))}
+                            <CellSlider.Track>
+                              <CellSlider.Fill className="transition-[width] duration-200 ease-out" />
+                              <CellSlider.Thumb className="transition-[translate,left] duration-200 ease-out" />
+                            </CellSlider.Track>
+                          </CellSlider>
+                          <div className="flex w-full justify-between px-0.5 text-[11px] text-muted">
+                            {JUSTITIA_TIERS.map((tier) => (
+                              <span
+                                key={tier.key}
+                                className={`transition-colors duration-200 ${
+                                  tier.key === justitiaTier ? 'font-medium text-accent' : ''
+                                }`}
+                              >
+                                {tier.name}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
                       </div>
-                    </div>
+                    </PressableFeedback.Root>
                   </Popover.Dialog>
                 </Popover.Content>
               </Popover>
@@ -497,22 +501,24 @@ export function AiComposer({
                                       <div className="flex min-w-0 flex-col">
                                         <Label className="flex min-w-0 items-center gap-1.5">
                                           <span className="truncate">{titleCaseWords(parsed.name)}</span>
+                                        </Label>
+                                        <div className='space-x-2 -mt-1'>
+                                          {parsed.isFree && (
+                                            <Description className="text-[11px] text-success">
+                                              {t('ai.free')}
+                                            </Description>
+                                          )}
                                           {parsed.isLatest && (
-                                            <Chip color="accent" variant="primary" size="sm" className="shrink-0 text-white">
-                                              <Chip.Label>{t('ai.latest')}</Chip.Label>
-                                            </Chip>
+                                            <Description className="text-[11px] text-accent">
+                                              {t('ai.latest')}
+                                            </Description>
                                           )}
                                           {parsed.isBatch && (
-                                            <Chip color="accent" variant="primary" size="sm" className="shrink-0 text-white">
-                                              <Chip.Label>{t('ai.batch')}</Chip.Label>
-                                            </Chip>
+                                            <Description className="text-[11px] text-warning">
+                                              {t('ai.batch')}
+                                            </Description>
                                           )}
-                                        </Label>
-                                        {parsed.isFree && (
-                                          <Description className="text-[11px] text-success">
-                                            {t('ai.free')}
-                                          </Description>
-                                        )}
+                                        </div>
                                       </div>
                                       <ListBox.ItemIndicator />
                                     </ListBox.Item>

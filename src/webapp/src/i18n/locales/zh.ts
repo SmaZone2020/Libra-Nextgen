@@ -76,6 +76,7 @@ export default {
       ok: '正常',
       fail: '失败',
       byteUnits: { B: 'B', KB: 'KB', MB: 'MB', GB: 'GB', TB: 'TB' },
+      confirm: '确认',
     },
     agentRequired: {
       title: '请先选择设备',
@@ -956,7 +957,7 @@ export default {
       goConfigure: '去配置 AI 供应商',
       heroTitle: '开始与 Justitia 对话',
       heroDesc: '提问，或从下方建议开始。AI 可调用设备列表、系统信息等 MCP 工具。',
-      inputPlaceholder: '输入你的问题，Enter 发送，Shift+Enter 换行…',
+      inputPlaceholder: '今天我们聊点什么？',
       disclaimer: 'AI 可能会出错，重要信息请核实。',
       send: '发送消息',
       stop: '停止生成',

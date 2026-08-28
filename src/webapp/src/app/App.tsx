@@ -349,6 +349,8 @@ function AuthenticatedLayout({
   // Route → display name for plugin page headers.
   const pluginLabels = new Map(registeredPlugins.map((p) => [p.route, p.manifest.name || p.pluginId]));
 
+  const hiddenHeader = new Set(['/ai']);
+
   return (
     <div className="h-screen overflow-hidden bg-neutral-50 dark:bg-neutral-950">
       <NetworkOverlay />
@@ -366,7 +368,11 @@ function AuthenticatedLayout({
         className="sm:pl-[var(--sidebar-w)] flex h-full min-w-0 flex-col transition-all duration-300"
         style={{ '--sidebar-w': `${sidebarWidth}px` } as React.CSSProperties}
       >
-        <header className="shrink-0 border-b border-neutral-200 bg-white dark:bg-neutral-900 dark:border-neutral-800 px-4 py-3 sm:px-6 lg:px-8">
+        <header
+          className={`${
+            hiddenHeader.has(location.pathname) ? 'hidden' : ''
+          } shrink-0 border-b border-neutral-200 bg-white dark:bg-neutral-900 dark:border-neutral-800 px-4 py-3 sm:px-6 lg:px-8`}
+        >
           {/* Mobile: hamburger + title row */}
           <div className="flex items-center gap-3 sm:hidden">
             <Button
@@ -434,8 +440,6 @@ function AuthenticatedLayout({
         >
           <AnimatePresence mode="wait">
             <motion.div
-              // AI 页内部切换会话（/ai/:id ↔ /ai）时保持组件实例，不做整页过渡；
-              // 其余路由切换仍保留原有过渡动画。
               key={isAiRoute ? 'ai' : location.pathname}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -12 }}

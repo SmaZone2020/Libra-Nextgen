@@ -1,0 +1,150 @@
+/* Aurora Justitia 档位卡片：旋转光晕 + 呼吸边框 + 不均匀脉动阴影 */
+
+@property --aurora-angle {
+  syntax: '<angle>';
+  inherits: false;
+  initial-value: 0deg;
+}
+
+@property --aurora-pulse {
+  syntax: '<number>';
+  inherits: false;
+  initial-value: 1;
+}
+
+.aurora-justitia {
+  --aurora-speed: 7s;
+  --aurora-rotate-duration: 6s;
+  --aurora-pulse-duration: 2.6s;
+  --aurora-hue-shift: 18deg;
+  --aurora-glow-1: rgba(99, 102, 241, 0.55);
+  --aurora-glow-2: rgba(168, 85, 247, 0.45);
+  --aurora-glow-3: rgba(34, 211, 238, 0.4);
+  position: relative;
+  isolation: isolate;
+  border-radius: 20px;
+  overflow: hidden;
+  background:
+    radial-gradient(120% 100% at 50% 0%, color-mix(in oklab, var(--color-accent, #6366f1) 10%, transparent), transparent 60%),
+    linear-gradient(155deg, var(--surface-secondary, #f1f1f4), var(--surface, #fff) 55%);
+  transition: box-shadow 500ms var(--ease-out, ease-out);
+  animation: aurora-pulse var(--aurora-pulse-duration) ease-in-out infinite alternate;
+}
+
+/* 旋转的 conic 光晕层 */
+.aurora-justitia::before {
+  content: '';
+  position: absolute;
+  inset: -60%;
+  z-index: -2;
+  pointer-events: none;
+  background: conic-gradient(
+    from var(--aurora-angle),
+    transparent 0deg,
+    var(--aurora-glow-1) 55deg,
+    transparent 110deg,
+    var(--aurora-glow-2) 175deg,
+    transparent 230deg,
+    var(--aurora-glow-3) 285deg,
+    transparent 340deg,
+    var(--aurora-glow-1) 360deg
+  );
+  filter: blur(34px);
+  opacity: 0.55;
+  animation: aurora-rotate var(--aurora-rotate-duration) linear infinite;
+}
+
+/* 沿边缘游走的亮线（环形轨道光） */
+.aurora-justitia::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  border-radius: inherit;
+  padding: 1.5px;
+  background: conic-gradient(
+    from var(--aurora-angle),
+    transparent 0deg,
+    var(--aurora-glow-1) 60deg,
+    transparent 120deg,
+    var(--aurora-glow-2) 200deg,
+    transparent 260deg,
+    var(--aurora-glow-3) 320deg,
+    transparent 360deg
+  );
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  mask-composite: exclude;
+  opacity: 0.9;
+  animation: aurora-rotate var(--aurora-speed) linear infinite;
+}
+
+.aurora-justitia:hover {
+  --aurora-glow-1: rgba(129, 140, 248, 0.75);
+  --aurora-glow-2: rgba(192, 132, 252, 0.6);
+  --aurora-glow-3: rgba(103, 232, 249, 0.55);
+}
+
+@keyframes aurora-rotate {
+  to {
+    --aurora-angle: 360deg;
+  }
+}
+
+/* 边框时粗时细且不均匀：box-shadow 逐帧描出流动的环状光带 */
+@keyframes aurora-pulse {
+  0% {
+    box-shadow:
+      0 0 14px 0 var(--aurora-glow-1),
+      0 0 0 1.5px color-mix(in oklab, var(--color-accent, #6366f1) 35%, transparent),
+      0 0 26px -4px var(--aurora-glow-2),
+      0 0 8px -2px var(--aurora-glow-3),
+      inset 0 0 12px -6px var(--aurora-glow-1);
+  }
+  50% {
+    box-shadow:
+      0 0 22px 2px var(--aurora-glow-2),
+      0 0 0 4px color-mix(in oklab, var(--color-accent, #6366f1) 60%, transparent),
+      0 0 34px -2px var(--aurora-glow-1),
+      0 0 16px 0 var(--aurora-glow-3),
+      inset 0 0 16px -4px var(--aurora-glow-2);
+  }
+  100% {
+    box-shadow:
+      0 0 16px 0 var(--aurora-glow-3),
+      0 0 0 2.5px color-mix(in oklab, var(--color-accent, #6366f1) 45%, transparent),
+      0 0 30px -3px var(--aurora-glow-2),
+      0 0 10px -1px var(--aurora-glow-1),
+      inset 0 0 14px -5px var(--aurora-glow-3);
+  }
+}
+
+/* 内部卡片：按下反馈 + 静态渐变层，自身透明以便光晕透出 */
+.aurora-justitia .aurora-inner {
+  position: relative;
+  z-index: 0;
+  border-radius: inherit;
+  background:
+    linear-gradient(155deg, color-mix(in oklab, var(--surface, #fff) 88%, transparent), color-mix(in oklab, var(--surface-secondary, #f1f1f4) 92%, transparent));
+  transition: transform 150ms var(--ease-smooth, ease-out);
+}
+
+.aurora-justitia[data-pressed='true'] .aurora-inner {
+  transform: scale(0.985);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .aurora-justitia::before,
+  .aurora-justitia::after {
+    animation: none;
+  }
+  .aurora-justitia {
+    animation: none;
+  }
+}

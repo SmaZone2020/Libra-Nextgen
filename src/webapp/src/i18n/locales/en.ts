@@ -77,6 +77,7 @@ export default {
       ok: 'OK',
       fail: 'FAIL',
       byteUnits: { B: 'B', KB: 'KB', MB: 'MB', GB: 'GB', TB: 'TB' },
+      confirm: 'Confirm',
     },
     agentRequired: {
       title: 'Select an agent first',
@@ -957,7 +958,7 @@ export default {
       goConfigure: 'Configure AI providers',
       heroTitle: 'Start a conversation with Justitia',
       heroDesc: 'Ask a question or start from a suggestion. The AI can call MCP tools like agent listing and system info.',
-      inputPlaceholder: 'Ask anything. Enter to send, Shift+Enter for a new line…',
+      inputPlaceholder: 'What shall we chat about today?',
       disclaimer: 'AI can make mistakes. Check important info.',
       send: 'Send message',
       stop: 'Stop generation',
