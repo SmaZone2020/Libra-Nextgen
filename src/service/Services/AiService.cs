@@ -223,6 +223,43 @@ public class AiService
         return r.ModifiedCount > 0 || r.MatchedCount > 0;
     }
 
+    /// <summary>复制会话为分支：深拷贝消息，标题追加 -fork。</summary>
+    public async Task<AiSession?> ForkSessionAsync(string id, string userId, string userName, CancellationToken ct = default)
+    {
+        var src = await Sessions.Find(x => x.Id == id && x.UserId == userId).FirstOrDefaultAsync(ct);
+        if (src == null) return null;
+
+        var fork = new AiSession
+        {
+            UserId = userId,
+            UserName = userName,
+            Title = $"{src.Title}-fork",
+            ProviderId = src.ProviderId,
+            Model = src.Model,
+            // 深拷贝消息（含 reasoning/toolCalls/sources），避免引用共享。
+            Messages = src.Messages.Select(m => new AiMessage
+            {
+                Id = Guid.NewGuid().ToString("N"),
+                Role = m.Role,
+                Content = m.Content,
+                Reasoning = m.Reasoning?.Select(r => new AiReasoningStep { Label = r.Label, Content = r.Content }).ToList(),
+                ToolCalls = m.ToolCalls?.Select(t => new AiToolCall
+                {
+                    Id = Guid.NewGuid().ToString("N"),
+                    ToolName = t.ToolName,
+                    ArgsText = t.ArgsText,
+                    State = t.State,
+                    Output = t.Output,
+                    Error = t.Error,
+                }).ToList(),
+                Sources = m.Sources?.Select(s => new AiSource { Title = s.Title, SourceType = s.SourceType, Url = s.Url, Description = s.Description }).ToList(),
+                CreatedAt = m.CreatedAt,
+            }).ToList(),
+        };
+        await Sessions.InsertOneAsync(fork, cancellationToken: ct);
+        return fork;
+    }
+
     // ── MCP 工具注册表 ────────────────────────────────────────────────────
 
     public async Task<AiMcpConfig> GetMcpConfigAsync(CancellationToken ct = default)

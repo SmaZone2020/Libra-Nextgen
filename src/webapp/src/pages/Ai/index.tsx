@@ -680,7 +680,7 @@ function AiComposer({
                   aria-label={t('ai.model')}
                   variant="secondary"
                   isDisabled={isGenerating || !activeProvider}
-                  className="h-9 min-w-0 max-w-[120px] shrink-0 gap-1 rounded-field border border-default-200 px-2 sm:max-w-[160px] dark:border-default-800"
+                  className="h-9 text-foreground min-w-0 max-w-[120px] shrink-0 gap-1 rounded-field border border-default-200 px-3 sm:max-w-[160px] dark:border-default-800"
                 >
                   <Sparkles className="size-4 shrink-0" />
                   <span className="min-w-0 flex-1 truncate text-sm">
@@ -693,7 +693,7 @@ function AiComposer({
                 <Popover.Dialog>
                   <div className="flex max-h-[280px] overflow-hidden">
                     {/* 左列：厂商 */}
-                    <div className="w-28 shrink-0 overflow-y-auto border-r border-default-200 py-1 dark:border-default-800">
+                    <div className="w-auto min-w-[100px] shrink-0 overflow-y-auto border-r border-default-200 py-1 dark:border-default-800">
                       {vendors.map((vendor) => {
                         const active = vendor === currentVendor;
                         const vendorIcon = vendor ? resolveModelIcon(vendor) : null;
@@ -726,7 +726,7 @@ function AiComposer({
                       })}
                     </div>
                     {/* 右列：该厂商的模型 */}
-                    <div className="min-w-0 flex-1 overflow-y-auto py-1">
+                    <div className="min-w-0 w-auto flex-1 overflow-y-auto py-1">
                       {vendorModels.map((m) => {
                         const parsed = parseModelLabel(m);
                         const selected = m === activeModel;
@@ -742,13 +742,13 @@ function AiComposer({
                               onSelectModel(m);
                               setModelMenuOpen(false);
                             }}
-                            className={`flex w-full items-center justify-between gap-2 px-3 py-1.5 text-left text-sm transition-colors ${
+                            className={`flex min-w-[170px] w-full items-center justify-between gap-2 px-3 py-1.5 text-left text-sm transition-colors ${
                               selected
                                 ? 'bg-accent font-medium text-white'
                                 : 'text-foreground hover:bg-default/60'
                             }`}
                           >
-                            <span className="flex min-w-0 items-center gap-1.5">
+                            <span className="flex min-w-0 items-center gap-1.5 flex-1 relative">
                               {modelIcon && (
                                 <img
                                   src={modelIcon}
@@ -758,33 +758,41 @@ function AiComposer({
                                 />
                               )}
                               <span className="min-w-0 flex-1 truncate">
-                                {parsed.isLatest ? (
-                                  <>
-                                    {titleCaseWords(parsed.name)}{' '}
-                                    <Chip
-                                      color="accent"
-                                      variant="primary"
-                                      size="sm"
-                                      className="shrink-0 text-white"
-                                    >
-                                      <Chip.Label>{t('ai.latest')}</Chip.Label>
-                                    </Chip>
-                                  </>
-                                ) : (
-                                  titleCaseWords(parsed.name)
+                                {titleCaseWords(parsed.name)}
+                              </span>
+                              <span className="right-0 flex items-center gap-1">
+                                {parsed.isLatest && (
+                                  <Chip
+                                    color="accent"
+                                    variant="primary"
+                                    size="sm"
+                                    className="shrink-0 text-white"
+                                  >
+                                    <Chip.Label>{t('ai.latest')}</Chip.Label>
+                                  </Chip>
+                                )}
+                                {parsed.isBatch && (
+                                  <Chip
+                                    color="accent"
+                                    variant="primary"
+                                    size="sm"
+                                    className="shrink-0 text-white"
+                                  >
+                                    <Chip.Label>{t('ai.batch')}</Chip.Label>
+                                  </Chip>
+                                )}
+                                {parsed.isFree && (
+                                  <Chip
+                                    color="success"
+                                    variant="primary"
+                                    size="sm"
+                                    className="shrink-0 text-white"
+                                  >
+                                    <Chip.Label>{t('ai.free')}</Chip.Label>
+                                  </Chip>
                                 )}
                               </span>
                             </span>
-                            {parsed.isFree && (
-                              <Chip
-                                color="success"
-                                variant="primary"
-                                size="sm"
-                                className="shrink-0 text-white"
-                              >
-                                <Chip.Label>{t('ai.free')}</Chip.Label>
-                              </Chip>
-                            )}
                           </button>
                         );
                       })}

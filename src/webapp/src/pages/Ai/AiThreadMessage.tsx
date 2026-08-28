@@ -247,16 +247,6 @@ export function AiThreadMessage({
               tooltip={t('common.copy')}
               onPress={() => onCopy(message.content)}
             />
-            <ChatMessageActions.ThumbsUp
-              aria-label={t('ai.good')}
-              tooltip={t('ai.good')}
-              onPress={() => onFeedback(true)}
-            />
-            <ChatMessageActions.ThumbsDown
-              aria-label={t('ai.bad')}
-              tooltip={t('ai.bad')}
-              onPress={() => onFeedback(false)}
-            />
             <ChatMessageActions.Regenerate
               aria-label={t('ai.regenerate')}
               tooltip={t('ai.regenerate')}

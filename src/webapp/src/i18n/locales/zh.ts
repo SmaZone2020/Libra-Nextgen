@@ -760,7 +760,6 @@ export default {
       aiTab: 'AI',
       aiDesc: 'AI 供应商、模型与 MCP 工具连接',
       aiProviders: 'AI 供应商',
-      aiProvidersDesc: '内置 AI 助手可用的 LLM 供应商',
       aiNoProviders: '暂无供应商，添加一个即可开始使用 AI 助手。',
       aiAddProvider: '添加供应商',
       aiEditProvider: '编辑供应商',
@@ -984,6 +983,10 @@ export default {
       noModels: '该厂商暂无模型',
       free: '免费',
       latest: '最新版',
+      batch: '批量',
+      renameSession: '重命名会话',
+      forkSession: '分支会话',
+      deleteSession: '删除会话',
     },
   },
 };

@@ -107,6 +107,14 @@ public class AiController : ControllerBase
         return ok ? Ok(new { renamed = true }) : NotFound(new { error = "session not found" });
     }
 
+    /// <summary>分支会话：复制为带 -fork 后缀的新会话（含完整消息历史）。</summary>
+    [HttpPost("sessions/{id}/fork")]
+    public async Task<IActionResult> ForkSession(string id, CancellationToken ct)
+    {
+        var fork = await _ai.ForkSessionAsync(id, UserId, UserName, ct);
+        return fork == null ? NotFound(new { error = "session not found" }) : Ok(fork);
+    }
+
     // ── MCP 连接 ──────────────────────────────────────────────────────────
 
     [HttpGet("mcp")]

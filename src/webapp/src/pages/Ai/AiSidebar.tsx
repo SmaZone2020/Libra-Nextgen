@@ -7,6 +7,7 @@ import { Button, Input, Spinner, Dropdown, Label} from '@heroui/react';
 import { CodeFork, SquarePlus, TrashBin, Pencil, Xmark, EllipsisVertical } from '@gravity-ui/icons';
 import {
   deleteAiSession,
+  forkAiSession,
   getAiProviders,
   getAiSessions,
   renameAiSession,
@@ -93,6 +94,20 @@ export function AiSidebar({ activeSessionId, refreshKey = 0, onSelectSession, on
     setRenamingId(null);
   };
 
+  const handleFork = async (session: AiSession) => {
+    setDeleting(true);
+    try {
+      const fork = await forkAiSession(session.id);
+      setOpenDropdownId(null);
+      await load();
+      onSelectSession(fork.id);
+    } catch (e) {
+      alert(e instanceof Error ? e.message : String(e));
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   const enabledProviders = providers.filter((p) => p.enabled);
 
   return (
@@ -138,7 +153,7 @@ export function AiSidebar({ activeSessionId, refreshKey = 0, onSelectSession, on
               return (
                 <div
                   key={session.id}
-                  className={`group flex cursor-pointer select-none items-center gap-2 rounded-[20px] px-3 py-2 transition-colors ${
+                  className={`group flex cursor-pointer select-none items-center gap-2 rounded-[20px] px-4 py-2 transition-colors ${
                     active
                       ? 'bg-accent text-white'
                       : 'text-foreground hover:bg-default/60'
@@ -203,22 +218,23 @@ export function AiSidebar({ activeSessionId, refreshKey = 0, onSelectSession, on
                         </Button>
                         <Dropdown.Popover>
                           <Dropdown.Menu>
-                            <Dropdown.Item id="save-file" textValue="重命名会话" 
+                            <Dropdown.Item id="save-file" textValue={t('ai.renameSession')}
                               onPress={() => {
                               setRenamingId(session.id);
                               setRenameValue(session.title);
                             }}>
                               <Pencil className="size-4 shrink-0 text-muted" />
-                              <Label>重命名会话</Label>
+                              <Label>{t('ai.renameSession')}</Label>
                             </Dropdown.Item>
-                            <Dropdown.Item id="new-file" textValue="分支会话">
+                            <Dropdown.Item id="fork-file" textValue={t('ai.forkSession')}
+                              onPress={() => void handleFork(session)}>
                               <CodeFork className="size-4 shrink-0 text-muted" />
-                              <Label>分支会话</Label>
+                              <Label>{t('ai.forkSession')}</Label>
                             </Dropdown.Item>
-                            <Dropdown.Item id="delete-file" textValue="删除会话" variant="danger"
+                            <Dropdown.Item id="delete-file" textValue={t('ai.deleteSession')} variant="danger"
                               onPress={() => void handleDelete(session)}>
                               <TrashBin className="size-4 shrink-0 text-danger" />
-                              <Label>删除会话</Label>
+                              <Label>{t('ai.deleteSession')}</Label>
                             </Dropdown.Item>
                           </Dropdown.Menu>
                         </Dropdown.Popover>

@@ -147,6 +147,11 @@ export async function renameAiSession(id: string, title: string): Promise<void> 
   await api.put<void>(`/ai/sessions/${id}/rename`, { title });
 }
 
+/** 分支会话：复制为带 -fork 后缀的新会话（含完整消息历史）。 */
+export async function forkAiSession(id: string): Promise<AiSession> {
+  return api.post<AiSession>(`/ai/sessions/${id}/fork`);
+}
+
 export async function getAiMcp(): Promise<AiMcpInfo> {
   return api.get<AiMcpInfo>('/ai/mcp');
 }

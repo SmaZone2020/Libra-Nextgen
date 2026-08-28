@@ -225,7 +225,6 @@ export default function AiTab() {
         <div className="mb-4 flex items-center justify-between">
           <div>
             <h2 className="text-lg font-semibold">{t('settings.aiProviders')}</h2>
-            <p className="text-sm text-default-500">{t('settings.aiProvidersDesc')}</p>
           </div>
           <div className="flex items-center gap-2">
             <Tooltip delay={0}>
@@ -403,39 +402,6 @@ export default function AiTab() {
             </Switch.Content>
           </Switch>
         </div>
-
-        {mcp?.toolsEnabled && (
-          <div className="mt-4 space-y-2">
-            <p className="text-sm text-default-500">
-              {t('settings.aiMcpWhitelistHint')}（{mcp.tools.length} tools）
-            </p>
-            <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
-              {mcp.tools.map((tool) => {
-                const whitelistMode = mcp.allowedTools.length > 0;
-                const checked = whitelistMode ? mcp.allowedTools.includes(tool.name) : true;
-                return (
-                  <div key={tool.name} className="flex items-start gap-2 rounded-xl border border-default-200 p-3 dark:border-default-800">
-                    <Checkbox
-                      isSelected={checked}
-                      onChange={(v) => void handleToolWhitelist(tool, v)}
-                    >
-                      <Checkbox.Indicator />
-                      <div className="flex min-w-0 flex-col">
-                        <span className="font-mono text-sm">{tool.name}</span>
-                        <span className="line-clamp-2 text-xs text-default-500">{tool.description}</span>
-                      </div>
-                    </Checkbox>
-                  </div>
-                );
-              })}
-              {mcp.tools.length === 0 && (
-                <div className="col-span-full py-6 text-center text-sm text-default-400">
-                  {t('mcp.noTools')}
-                </div>
-              )}
-            </div>
-          </div>
-        )}
       </Card>
     </div>
   );

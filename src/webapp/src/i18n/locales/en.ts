@@ -761,7 +761,6 @@ export default {
       aiTab: 'AI',
       aiDesc: 'AI providers, models and MCP tool connections',
       aiProviders: 'AI Providers',
-      aiProvidersDesc: 'LLM providers available to the built-in AI assistant',
       aiNoProviders: 'No providers yet. Add one to start using the AI assistant.',
       aiAddProvider: 'Add provider',
       aiEditProvider: 'Edit provider',
@@ -985,6 +984,10 @@ export default {
       noModels: 'No models for this vendor',
       free: 'Free',
       latest: 'Latest',
+      batch: 'Batch',
+      renameSession: 'Rename session',
+      forkSession: 'Fork session',
+      deleteSession: 'Delete session',
     },
   },
 };
