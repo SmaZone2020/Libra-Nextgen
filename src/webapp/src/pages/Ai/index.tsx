@@ -49,6 +49,7 @@ export default function AiPage() {
   const [streamingReasoning, setStreamingReasoning] = useState<string[]>([]);
   const [streamingTools, setStreamingTools] = useState<AiToolCall[]>([]);
   const [pendingApproval, setPendingApproval] = useState<AiToolCall | null>(null);
+  const [streamError, setStreamError] = useState<string | null>(null);
 
   const abortRef = useRef<AbortController | null>(null);
   const pendingSessionIdRef = useRef<string | null>(null);
@@ -106,6 +107,7 @@ export default function AiPage() {
       setStreamingReasoning([]);
       setStreamingTools([]);
       setPendingApproval(null);
+      setStreamError(null);
       if (id) {
         navigate(`/ai/${id}`);
       } else {
@@ -125,6 +127,7 @@ export default function AiPage() {
       setStreamingReasoning([]);
       setStreamingTools([]);
       setPendingApproval(null);
+      setStreamError(null);
     }
     navigate('/ai');
   }, [activeId, navigate]);
@@ -207,8 +210,8 @@ export default function AiPage() {
         case 'error':
           setStreaming('idle');
           setPendingApproval(null);
-          // 附加到流式文本后，作为尾部错误提示。
-          setStreamingText((prev) => prev + `\n\n> ⚠️ ${evt.message}`);
+          // 以红色错误块渲染（不再拼进流式文本）。
+          setStreamError((prev) => (prev ? `${prev}\n${evt.message}` : evt.message));
           break;
       }
     },
@@ -257,6 +260,7 @@ export default function AiPage() {
       setStreamingReasoning([]);
       setStreamingTools([]);
       setPendingApproval(null);
+      setStreamError(null);
       setStreaming('streaming');
       pendingSessionIdRef.current = targetId;
 
@@ -267,7 +271,7 @@ export default function AiPage() {
       } catch (e) {
         if ((e as Error).name !== 'AbortError') {
           setStreaming('idle');
-          setStreamingText((prev) => prev + `\n\n> ⚠️ ${e instanceof Error ? e.message : String(e)}`);
+          setStreamError(e instanceof Error ? e.message : String(e));
         }
       } finally {
         if (abortRef.current === abort) abortRef.current = null;
@@ -285,6 +289,7 @@ export default function AiPage() {
     setStreamingTools([]);
     setStreamingReasoning([]);
     setPendingApproval(null);
+    setStreamError(null);
   }, [activeId]);
 
   const handleApprove = useCallback(
@@ -438,6 +443,17 @@ export default function AiPage() {
                   onApprove={(id) => void handleApprove(id, true)}
                   onReject={(id) => void handleApprove(id, false)}
                 />
+              )}
+
+              {streamError && (
+                <div
+                  className="rounded-xl border border-danger/30 bg-danger/5 px-4 py-3 text-sm text-danger"
+                  role="alert"
+                >
+                  {streamError.split('\n').map((line, i) => (
+                    <p key={i} className={i > 0 ? 'mt-1' : ''}>{line}</p>
+                  ))}
+                </div>
               )}
             </div>
             <ChatConversation.ScrollAnchor />

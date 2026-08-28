@@ -196,7 +196,7 @@ export function AiSidebar({ activeSessionId, onSelectSession, onNewSession }: Ai
                           variant="ghost"
                           isIconOnly 
                           size='sm'
-                          className={`aspect-square rounded-[15px]  ${active ? 'text-white hover:text-accent' : 'text-accent'}`}>
+                          className={`aspect-square rounded-[15px]  ${active ? 'text-white hover:text-accent active:bg-white/20' : 'text-accent'}`}>
                           <EllipsisVertical className="size-4" />
                         </Button>
                         <Dropdown.Popover>
