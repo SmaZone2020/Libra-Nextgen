@@ -416,7 +416,7 @@ export default function AiPage() {
 
         <ChatConversation className="min-h-0 flex-1">
           <ChatConversation.Content className={`flex flex-col ${!session?.messages.length ? 'h-full' : ''}`}>
-            <div className="m-auto flex w-full max-w-[760px] flex-col gap-6 px-4 pt-6 pb-4">
+            <div className="m-auto flex w-full sm:w-[80%] flex-col gap-6 px-4 pt-6 pb-4">
               {showEmptyState ? (
                 <div className="flex min-h-full flex-1 flex-col items-center justify-center">
                   <PromptSuggestion>
@@ -498,7 +498,7 @@ export default function AiPage() {
 
         {/* 底部输入区：shrink-0，固定于主区域底部 */}
         <div className="shrink-0 px-4 pt-3 pb-4 sm:pb-8 ">
-          <div className="mx-auto w-full max-w-[80%]">
+          <div className="mx-auto w-full sm:w-[80%]">
             <AiComposer
               providers={enabledProviders}
               activeProviderId={activeProvider?.id ?? null}
@@ -576,15 +576,16 @@ function AiComposer({
               isDisabled={isGenerating}
               placeholder={t('ai.provider')}
               variant="secondary"
+              className="min-w-0 max-w-[110px] sm:max-w-[140px]"
             >
-              <Select.Trigger className="flex items-center gap-2">
-                <Select.Value />
-                <Select.Indicator />
+              <Select.Trigger className="flex w-full items-center gap-1 overflow-hidden">
+                <Select.Value className="min-w-0 flex-1 truncate" />
+                <Select.Indicator className="shrink-0" />
               </Select.Trigger>
               <Select.Popover>
-                <ListBox items={providers}>
+                <ListBox items={providers} className="max-h-[200px] overflow-y-auto">
                   {(item) => (
-                    <ListBox.Item key={item.id} id={item.id} textValue={item.name}>
+                    <ListBox.Item key={item.id} id={item.id} textValue={item.name} className="truncate">
                       {item.name}
                     </ListBox.Item>
                   )}
@@ -600,16 +601,17 @@ function AiComposer({
               isDisabled={isGenerating || !activeProvider}
               placeholder={t('ai.model')}
               variant="secondary"
+              className="min-w-0 max-w-[120px] sm:max-w-[160px]"
             >
-              <Select.Trigger className="flex items-center gap-2">
+              <Select.Trigger className="flex w-full items-center gap-1 overflow-hidden">
                 <Sparkles className="size-4 shrink-0" />
-                <Select.Value />
-                <Select.Indicator />
+                <Select.Value className="min-w-0 flex-1 truncate" />
+                <Select.Indicator className="shrink-0" />
               </Select.Trigger>
               <Select.Popover>
-                <ListBox items={(activeProvider?.models ?? []).map((m) => ({ id: m, label: m }))}>
+                <ListBox items={(activeProvider?.models ?? []).map((m) => ({ id: m, label: m }))} className="max-h-[200px] overflow-y-auto">
                   {(item) => (
-                    <ListBox.Item key={item.id} id={item.id} textValue={item.label}>
+                    <ListBox.Item key={item.id} id={item.id} textValue={item.label} className="truncate">
                       {item.label}
                     </ListBox.Item>
                   )}
