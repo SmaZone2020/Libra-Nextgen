@@ -115,17 +115,19 @@ export default function AiPage() {
     [navigate],
   );
 
-  const handleNewSession = useCallback(async () => {
-    const provider = enabledProviders[0];
-    if (!provider) return;
-    try {
-      const s = await createAiSession(provider.id, provider.defaultModel || provider.models[0] || '');
-      setSessions((prev) => [s, ...prev]);
-      navigate(`/ai/${s.id}`);
-    } catch (e) {
-      alert(e instanceof Error ? e.message : String(e));
+  const handleNewSession = useCallback(() => {
+    // 点击新建：不直接创建会话，仅跳转到 /ai 空态（已在则无动作）。
+    // 只有用户发出第一条消息并发送时，才会真正创建会话。
+    if (activeId || location.pathname !== '/ai') {
+      abortRef.current?.abort();
+      setStreaming('idle');
+      setStreamingText('');
+      setStreamingReasoning([]);
+      setStreamingTools([]);
+      setPendingApproval(null);
     }
-  }, [enabledProviders, navigate]);
+    navigate('/ai');
+  }, [activeId, navigate]);
 
   const handleSelectProvider = (providerId: string) => {
     if (!session) return;
@@ -223,7 +225,7 @@ export default function AiPage() {
       let target = session;
 
       if (!target && !targetId) {
-        // 无会话 → 先创建。
+        // 空态首条消息：此时才真正创建会话。
         const provider = enabledProviders[0];
         if (!provider) {
           navigate('/settings/ai');
@@ -376,8 +378,8 @@ export default function AiPage() {
         </div>
 
         <ChatConversation className="min-h-0 flex-1">
-          <ChatConversation.Content className="flex flex-col">
-            <div className="mx-auto flex w-full max-w-[760px] flex-col gap-6 px-4 pt-6 pb-4">
+          <ChatConversation.Content className={`flex flex-col ${!session?.messages.length ? 'h-full' : ''}`}>
+            <div className="m-auto flex w-full max-w-[760px] flex-col gap-6 px-4 pt-6 pb-4">
               {showEmptyState ? (
                 <div className="flex min-h-full flex-1 flex-col items-center justify-center">
                   <PromptSuggestion>
