@@ -640,6 +640,41 @@ public class AiService
                     var toolCall = new AiToolCall { Id = callId, ToolName = name, ArgsText = argsText };
                     state.ToolCalls.Add(toolCall);
 
+                    // request_tier_elevation：正式的权限提升请求（§6 Writ 通道）。
+                    // 不执行任何动作，直接把请求转成审批挂起（kind=escalation），
+                    // 由 Operator 通过审批模态框批准（一次性/5min/20min 临时提升）或拒绝。
+                    if (name == "request_tier_elevation")
+                    {
+                        var reqArgs = JsonNode.Parse(argsText) as JsonObject ?? new JsonObject();
+                        var requestedTierKey = reqArgs["requiredTier"]?.GetValue<string>() ?? "";
+                        var requested = JustitiaPolicy.Parse(requestedTierKey);
+                        if (requested <= state.EffectiveTier)
+                        {
+                            // 目标档位不高于当前有效档位：无需提升，直接说明。
+                            var note = McpUtils.Ok(new { status = "no-elevation-needed", currentTier = state.EffectiveTier.ToString().ToLowerInvariant(), requested = requestedTierKey });
+                            toolCall.State = "output-available";
+                            toolCall.Output = note;
+                            await onEvent(JsonSerializer.Serialize(new { type = "tool_result", toolCallId = callId, toolName = name, output = note, state = toolCall.State }, JsonOpts));
+                            state.LlmMessages.Add(new JsonObject { ["role"] = "tool", ["tool_call_id"] = callId, ["content"] = note });
+                            continue;
+                        }
+
+                        toolCall.State = "requires-action";
+                        state.PendingToolCall = new JsonObject
+                        {
+                            ["sessionId"] = state.SessionId,
+                            ["toolCallId"] = callId,
+                            ["toolName"] = name,
+                            ["argsText"] = argsText,
+                            ["reason"] = $"tier elevation requested: {state.EffectiveTier} → {requested}",
+                            ["kind"] = "escalation",
+                            ["requiredTier"] = (int)requested,
+                            ["currentTier"] = (int)state.EffectiveTier,
+                        };
+                        await onEvent(JsonSerializer.Serialize(new { type = "approval", toolCall = new { id = callId, toolName = name, argsText, reason = $"tier elevation requested: {state.EffectiveTier} → {requested}", kind = "escalation", requiredTier = (int)requested, currentTier = (int)state.EffectiveTier } }, JsonOpts));
+                        return; // 挂起，等待 /chat/action 恢复。
+                    }
+
                     // Justitia 档位门槛：有效档位（含审批临时提升）不足 → 挂起等审批。
                     // 档位内工具直接执行，不再逐调用弹审批。
                     var required = JustitiaPolicy.RequiredTier(name);
@@ -1208,6 +1243,26 @@ public class AiService
                 default: // "one-time"：不动已有许可窗口，仅本次执行。
                     break;
             }
+        }
+
+        // request_tier_elevation：提升本身即结果，无真实工具可执行——
+        // 直接回填确认结果并继续循环，避免反射调用空工具。
+        if (pendingKind == "escalation" && pending.ToolName == "request_tier_elevation")
+        {
+            pending.State = "output-available";
+            var confirmed = McpUtils.Ok(new
+            {
+                status = "elevation-granted",
+                tier = state.EffectiveTier.ToString().ToLowerInvariant(),
+                permit,
+                expiresAt = state.BoostExpiresAt?.ToUniversalTime().ToString("o"),
+            });
+            pending.Output = confirmed;
+            await onEvent(JsonSerializer.Serialize(new { type = "tool_result", toolCallId, toolName = pending.ToolName, output = confirmed, state = pending.State }, JsonOpts));
+            state.LlmMessages.Add(new JsonObject { ["role"] = "tool", ["tool_call_id"] = toolCallId, ["content"] = confirmed });
+            await ChatLoopAsync(state, provider, onEvent, ct);
+            CleanupRunIfFinished(state, sessionId);
+            return;
         }
 
         // 批准 → 执行。
