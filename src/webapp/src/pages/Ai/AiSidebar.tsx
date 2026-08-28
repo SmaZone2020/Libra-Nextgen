@@ -206,7 +206,7 @@ export function AiSidebarDrawer({
     <Drawer state={state}>
       <Drawer.Backdrop isDismissable>
         <Drawer.Content placement="left">
-          <Drawer.Dialog>
+          <Drawer.Dialog className="px-4 w-60">
             <Drawer.Header>
               <Drawer.Heading>{t('ai.title')}</Drawer.Heading>
               <Drawer.CloseTrigger />
