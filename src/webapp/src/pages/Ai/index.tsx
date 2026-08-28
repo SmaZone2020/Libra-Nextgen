@@ -242,6 +242,9 @@ export default function AiPage() {
               });
             })
             .catch(() => undefined);
+          // done 后把本地流式状态清空，避免残留 streamingText/streamingTools。
+          setStreamingText('');
+          setStreamingTools([]);
           break;
         }
         case 'error':
