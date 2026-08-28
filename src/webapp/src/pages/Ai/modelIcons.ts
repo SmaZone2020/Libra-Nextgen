@@ -1,0 +1,138 @@
+/**
+ * 厂商/模型 → 图标映射（public/icon 静态资源）。
+ * 精确匹配：先按原始名（小写）查表，再按规范化名（去 -/_/空格）查表。
+ * 规则：厂商有图标时不显示模型图标；图标仅用于厂商、无厂商的模型、
+ *      或厂商无图标的模型。
+ */
+
+const MODEL_ICONS: Record<string, string> = {
+  // 主流模型厂商
+  deepseek: '/icon/deepseek.svg',
+  'deepseek-ai': '/icon/deepseek.svg',
+  openai: '/icon/openai.svg',
+  anthropic: '/icon/anthropic.svg',
+  claude: '/icon/claude.svg',
+  gemini: '/icon/gemini.svg',
+  google: '/icon/google.svg',
+  googlecloud: '/icon/googlecloud.svg',
+  palm: '/icon/palm.svg',
+  gemma: '/icon/gemma.svg',
+  qwen: '/icon/qwen.svg',
+  alibaba: '/icon/alibaba.svg',
+  kimi: '/icon/kimi.svg',
+  moonshot: '/icon/kimi.svg',
+  chatglm: '/icon/chatglm.svg',
+  zhipu: '/icon/zhipu.svg',
+  grok: '/icon/grok.svg',
+  xai: '/icon/xai.svg',
+  mistral: '/icon/mistral.svg',
+  cohere: '/icon/cohere.svg',
+  meta: '/icon/meta.svg',
+  llama: '/icon/meta.svg',
+  ollama: '/icon/ollama.svg',
+  huggingface: '/icon/huggingface.svg',
+  azure: '/icon/azure.svg',
+  aws: '/icon/aws.svg',
+  amazon: '/icon/aws.svg',
+  baidu: '/icon/baidu.svg',
+  wenxin: '/icon/wenxin.svg',
+  ernie: '/icon/wenxin.svg',
+  bytedance: '/icon/bytedance.svg',
+  doubao: '/icon/doubao.svg',
+  tencent: '/icon/tencent.svg',
+  hunyuan: '/icon/hunyuan.svg',
+  minimax: '/icon/minimax.svg',
+  zeroone: '/icon/zeroone.svg',
+  '01-ai': '/icon/zeroone.svg',
+  yi: '/icon/yi.svg',
+  nvidia: '/icon/nvidia.svg',
+  stability: '/icon/stability.svg',
+  github: '/icon/github.svg',
+  copilot: '/icon/githubcopilot.svg',
+  githubcopilot: '/icon/githubcopilot.svg',
+  perplexity: '/icon/perplexity.svg',
+  midjourney: '/icon/midjourney.svg',
+  notion: '/icon/notion.svg',
+  vercel: '/icon/vercel.svg',
+  huawei: '/icon/huawei.svg',
+  cloudflare: '/icon/cloudflare.svg',
+  xiaomi: '/icon/xiaomimimo.svg',
+  xiaomimimo: '/icon/xiaomimimo.svg',
+
+  // 聚合/代理平台
+  openrouter: '/icon/openrouter.svg',
+  siliconflow: '/icon/siliconflow.svg',
+  modelscope: '/icon/modelscope-color.svg',
+  novita: '/icon/novita.svg',
+  newapi: '/icon/newapi.svg',
+  aihubmix: '/icon/aihubmix-color.svg',
+  crazyrouter: '/icon/crazyrouter.svg',
+  subrouter: '/icon/subrouter.svg',
+  teamorouter: '/icon/TeamoRouter-icon-dark.png',
+  shengsuanyun: '/icon/shengsuanyun.svg',
+  micu: '/icon/micu.svg',
+  ucloud: '/icon/ucloud.svg',
+  sssaicode: '/icon/sssaicode.svg',
+  stepfun: '/icon/stepfun.svg',
+  catcoder: '/icon/catcoder.svg',
+  bailian: '/icon/bailian.svg',
+  ppio: '/icon/ppio.svg',
+  mcp: '/icon/mcp.svg',
+  rc: '/icon/rc.svg',
+  lioncc: '/icon/lioncc.svg',
+  longcat: '/icon/longcat-color.svg',
+  opencode: '/icon/opencode-logo-light.svg',
+  amux: '/icon/amuxapi-icon.svg',
+  claw: '/icon/claw.svg',
+  openclaw: '/icon/claw.svg',
+  cubence: '/icon/cubence.svg',
+  packycode: '/icon/packycode.svg',
+  zenmux: '/icon/amuxapi-icon.svg',
+
+  // 图片/URL 图标平台
+  a6api: '/icon/a6-icon.png',
+  apikeyfun: '/icon/apikeyfun.png',
+  apinebula: '/icon/apinebula_icon.png',
+  atlascloud: '/icon/atlascloud_icon.png',
+  byteplus: '/icon/byteplus.png',
+  ccsub: '/icon/ccsub.svg',
+  claudeapi: '/icon/ClaudeApi.png',
+  claudecn: '/icon/claudecn.png',
+  cherryin: '/icon/cherryin.png',
+  code0: '/icon/code0.png',
+  eflowcode: '/icon/eflowcode.png',
+  etok: '/icon/etok.png',
+  fenno: '/icon/fenno-icon.webp',
+  hermes: '/icon/hermes.png',
+  huoshan: '/icon/huoshan.png',
+  nekocode: '/icon/nekocode-icon.png',
+  pateway: '/icon/pateway.jpg',
+  pipellm: '/icon/pipellm.png',
+  qiniu: '/icon/qiniu.png',
+  relaxcode: '/icon/relaxcode.png',
+  runapi: '/icon/runapi.jpg',
+  sudocode: '/icon/sudocode.png',
+  'sudocode-us': '/icon/sudocode-us.png',
+  unity2: '/icon/unity2.png',
+  xycai: '/icon/xycai-icon.png',
+  zetaapi: '/icon/zetaapi-icon.png',
+};
+
+/** 规范化：小写 + 去 非字母数字（保留字母数字，用于兼容 deepseek-ai → deepseekai 等写法）。 */
+function normalize(name: string): string {
+  return name.toLowerCase().replace(/[^a-z0-9]+/g, '');
+}
+
+/** 精确查表（原始名小写 → 规范化名 → 无则 null）。 */
+export function resolveModelIcon(name: string): string | null {
+  if (!name) return null;
+  const direct = MODEL_ICONS[name.toLowerCase()];
+  if (direct) return direct;
+  const norm = normalize(name);
+  const byNorm = MODEL_ICONS[norm];
+  if (byNorm) return byNorm;
+  // 部分厂商名带 -ai / - 后缀，如 deepseek-ai → deepseek。
+  const base = norm.replace(/(ai|api|inc|labs)$/i, '');
+  if (base && base !== norm) return MODEL_ICONS[base] ?? null;
+  return null;
+}

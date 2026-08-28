@@ -33,6 +33,7 @@ import {
 } from '../../vendor/ui-pro';
 import { AiSidebar } from './AiSidebar';
 import { AiThreadMessage } from './AiThreadMessage';
+import { resolveModelIcon } from './modelIcons';
 
 type StreamingState = 'idle' | 'streaming' | 'approval';
 
@@ -693,6 +694,7 @@ function AiComposer({
                     <div className="w-28 shrink-0 overflow-y-auto border-r border-default-200 py-1 dark:border-default-800">
                       {vendors.map((vendor) => {
                         const active = vendor === currentVendor;
+                        const vendorIcon = vendor ? resolveModelIcon(vendor) : null;
                         return (
                           <button
                             key={vendor || '(all)'}
@@ -700,13 +702,23 @@ function AiComposer({
                             onClick={() => {
                               setVendorKey(vendor);
                             }}
-                            className={`block w-full truncate px-3 py-1.5 text-left text-sm transition-colors ${
+                            className={`flex w-full items-center gap-1.5 truncate px-3 py-1.5 text-left text-sm transition-colors ${
                               active
                                 ? 'bg-accent font-medium text-white'
                                 : 'text-foreground hover:bg-default/60'
                             }`}
                           >
-                            {vendor ? titleCaseWords(vendor) : t('ai.vendorAll')}
+                            {vendorIcon && (
+                              <img
+                                src={vendorIcon}
+                                alt=""
+                                className="size-4 shrink-0 object-contain"
+                                loading="lazy"
+                              />
+                            )}
+                            <span className="min-w-0 flex-1 truncate">
+                              {vendor ? titleCaseWords(vendor) : t('ai.vendorAll')}
+                            </span>
                           </button>
                         );
                       })}
@@ -716,6 +728,10 @@ function AiComposer({
                       {vendorModels.map((m) => {
                         const parsed = parseModelLabel(m);
                         const selected = m === activeModel;
+                        // 图标规则：厂商有图标则模型不再显示图标；
+                        // 仅当无厂商（「全部」组）或厂商无图标时，模型按自身名称尝试匹配图标。
+                        const vendorIcon = parsed.vendor ? resolveModelIcon(parsed.vendor) : null;
+                        const modelIcon = vendorIcon ? null : resolveModelIcon(parsed.name);
                         return (
                           <button
                             key={m}
@@ -730,17 +746,32 @@ function AiComposer({
                                 : 'text-foreground hover:bg-default/60'
                             }`}
                           >
-                            <span className="min-w-0 flex-1 truncate">
-                              {parsed.isLatest ? (
-                                <>
-                                  {titleCaseWords(parsed.name)}{' '}
-                                  <span className="text-[10px] uppercase tracking-wide text-accent">
-                                    {t('ai.latest')}
-                                  </span>
-                                </>
-                              ) : (
-                                titleCaseWords(parsed.name)
+                            <span className="flex min-w-0 items-center gap-1.5">
+                              {modelIcon && (
+                                <img
+                                  src={modelIcon}
+                                  alt=""
+                                  className="size-4 shrink-0 object-contain"
+                                  loading="lazy"
+                                />
                               )}
+                              <span className="min-w-0 flex-1 truncate">
+                                {parsed.isLatest ? (
+                                  <>
+                                    {titleCaseWords(parsed.name)}{' '}
+                                    <Chip
+                                      color="accent"
+                                      variant="primary"
+                                      size="sm"
+                                      className="shrink-0 text-white"
+                                    >
+                                      <Chip.Label>{t('ai.latest')}</Chip.Label>
+                                    </Chip>
+                                  </>
+                                ) : (
+                                  titleCaseWords(parsed.name)
+                                )}
+                              </span>
                             </span>
                             {parsed.isFree && (
                               <Chip
