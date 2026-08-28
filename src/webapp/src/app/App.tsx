@@ -431,7 +431,9 @@ function AuthenticatedLayout({
         >
           <AnimatePresence mode="wait">
             <motion.div
-              key={location.pathname}
+              // AI 页内部切换会话（/ai/:id ↔ /ai）时保持组件实例，不做整页过渡；
+              // 其余路由切换仍保留原有过渡动画。
+              key={isAiRoute ? 'ai' : location.pathname}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -12 }}
               initial={{ opacity: 0, y: 12 }}
