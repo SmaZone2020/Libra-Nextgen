@@ -177,7 +177,7 @@ public class AiController : ControllerBase
             await Response.Body.FlushAsync(ct);
         }
 
-        await _ai.RunChatAsync(session, req.Content, Send, ct);
+        await _ai.RunChatAsync(session, req.Content, Send, ct, JustitiaPolicy.Parse(req.Tier));
     }
 
     /// <summary>审批/拒绝挂起的工具调用并继续。</summary>
@@ -260,6 +260,8 @@ public class AiChatReq
 {
     public string? SessionId { get; set; }
     public string? Content { get; set; }
+    /// <summary>Justitia 档位 key（cognitio/arbitrium/imperium/dictatura），浏览器持久化随请求提交。</summary>
+    public string? Tier { get; set; }
 }
 
 public class AiChatActionReq

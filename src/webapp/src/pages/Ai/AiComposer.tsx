@@ -3,11 +3,12 @@
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button, Chip, ListBox, Popover, Select } from '@heroui/react';
-import { ChevronDown, PaperPlane, Sparkles } from '@gravity-ui/icons';
-import { PromptInput } from '../../vendor/ui-pro';
+import { ChevronDown, PaperPlane, Shield, Sparkles } from '@gravity-ui/icons';
+import { PromptInput, CellSlider } from '../../vendor/ui-pro';
 import type { AiProvider } from '../../api/ai';
 import { resolveModelIcon } from './modelIcons';
 import { formatModelDisplay, parseModelLabel, titleCaseWords } from './utils';
+import { JUSTITIA_TIERS, type JustitiaTierKey } from './justitia';
 
 export interface AiComposerProps {
   providers: AiProvider[];
@@ -15,6 +16,9 @@ export interface AiComposerProps {
   activeModel: string;
   isGenerating: boolean;
   canSend: boolean;
+  /** Justitia 档位 key（浏览器持久化，随 SSE 请求提交）。 */
+  justitiaTier: JustitiaTierKey;
+  onTierChange: (tier: JustitiaTierKey) => void;
   onSend: (text: string) => void;
   onStop: () => void;
   onSelectProvider: (id: string) => void;
@@ -27,6 +31,8 @@ export function AiComposer({
   activeModel,
   isGenerating,
   canSend,
+  justitiaTier,
+  onTierChange,
   onSend,
   onStop,
   onSelectProvider,
@@ -36,10 +42,9 @@ export function AiComposer({
   const [value, setValue] = useState('');
   const [modelMenuOpen, setModelMenuOpen] = useState(false);
   const [vendorKey, setVendorKey] = useState<string>('');
+  const [tierMenuOpen, setTierMenuOpen] = useState(false);
+  const permission = JUSTITIA_TIERS.find((x) => x.key === justitiaTier)?.index ?? 0;
   const activeProvider = providers.find((p) => p.id === activeProviderId) ?? providers[0];
-
-  // 模型按厂商分组（vendor/model 前缀；无前缀归「全部」）。
-  // OpenRouter 的 `~vendor/model` 最新版别名并入对应厂商，且组内置顶。
   const modelGroups = useMemo(() => {
     const map = new Map<string, string[]>();
     for (const m of activeProvider?.models ?? []) {
@@ -50,7 +55,6 @@ export function AiComposer({
       list.push(m);
       map.set(vendor, list);
     }
-    // 组内排序：最新版（~ 前缀）置顶，其余按名称。
     for (const list of map.values()) {
       list.sort((a, b) => {
         const la = parseModelLabel(a);
@@ -62,12 +66,10 @@ export function AiComposer({
     return map;
   }, [activeProvider]);
 
-  // 厂商列按 a-z 排序。
   const vendors = useMemo(
     () => [...modelGroups.keys()].sort((a, b) => a.localeCompare(b)),
     [modelGroups],
   );
-  // 当前厂商：手动选择优先，否则从当前模型推断。
   const currentVendor = vendors.includes(vendorKey)
     ? vendorKey
     : (parseModelLabel(activeModel).vendor ?? '');
@@ -144,7 +146,6 @@ export function AiComposer({
               <Popover.Content className="min-w-[240px] p-0">
                 <Popover.Dialog>
                   <div className="flex max-h-[280px] overflow-hidden">
-                    {/* 左列：厂商 */}
                     <div className="w-auto min-w-[100px] shrink-0 overflow-y-auto border-r border-default-200 py-1 dark:border-default-800">
                       {vendors.map((vendor) => {
                         const active = vendor === currentVendor;
@@ -257,28 +258,45 @@ export function AiComposer({
             </Popover>
           </PromptInput.ToolbarStart>
           <PromptInput.ToolbarEnd>
-            <Button
-              aria-label={t('ai.model')}
-              variant="secondary"
-              isDisabled={isGenerating || !activeProvider}
-              className="h-9 text-foreground min-w-0 max-w-[120px] shrink-0 gap-1 rounded-field border border-default-200 px-3 sm:max-w-[160px] dark:border-default-800"
-            >
-            <Popover>
-              <Popover.Trigger/>
-              <Popover.Content>
-                <Popover.Arrow />
+            <Popover isOpen={tierMenuOpen} onOpenChange={setTierMenuOpen}>
+              <Button
+                aria-label={t('ai.justitiaTier')}
+                variant="ghost"
+                isDisabled={isGenerating}
+                className="h-9 w-[140px] shrink-0 gap-1"
+              >
+                <span className="text-sm font-medium">
+                  {JUSTITIA_TIERS[permission]?.name}
+                </span>
+                <ChevronDown className="size-3.5 shrink-0 text-muted" />
+              </Button>
+              <Popover.Content className="w-64" offset={10}>
                 <Popover.Dialog>
-                  <Popover.Heading/>
-                  {/* content goes here */}
+                  <Popover.Arrow />
+                  <Popover.Heading>{t('ai.adjustJustitia')}</Popover.Heading>
+                  <div className="flex flex-col items-center gap-3 pb-1">
+                    <CellSlider
+                      maxValue={3}
+                      minValue={0}
+                      step={1}
+                      variant="secondary"
+                      value={permission}
+                      onChange={(v) => {
+                        const val = Array.isArray(v) ? v[0] ?? 0 : v;
+                        const tier = JUSTITIA_TIERS[val];
+                        if (tier) onTierChange(tier.key);
+                      }}
+                    >
+                      <CellSlider.Track>
+                        <CellSlider.Fill className="transition-[width] duration-300 ease-out" />
+                        <CellSlider.Thumb className="transition-[translate,left] duration-300 ease-out" />
+                      </CellSlider.Track>
+                    </CellSlider>
+                  </div>
                 </Popover.Dialog>
               </Popover.Content>
             </Popover>
-              <Sparkles className="size-4 shrink-0" />
-              <span className="min-w-0 flex-1 truncate text-sm">
-                {activeModel ? formatModelDisplay(activeModel) : t('ai.model')}
-              </span>
-              <ChevronDown className="size-3.5 shrink-0 text-muted" />
-            </Button>
+
             <PromptInput.Send
               aria-label={isGenerating ? t('ai.stop') : t('ai.send')}
               isDisabled={!isGenerating && !value.trim()}

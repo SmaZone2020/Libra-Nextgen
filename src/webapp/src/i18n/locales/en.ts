@@ -988,6 +988,8 @@ export default {
       renameSession: 'Rename session',
       forkSession: 'Fork session',
       deleteSession: 'Delete session',
+      justitiaTier: 'Justitia permission tier',
+      adjustJustitia: 'Adjust Justitia permissions',
     },
   },
 };

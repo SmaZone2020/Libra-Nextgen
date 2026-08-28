@@ -85,7 +85,19 @@ export type AiSseEvent =
   | { type: 'message'; delta: string }
   | { type: 'tool_call'; toolCall: { id: string; toolName: string; argsText: string; state: AiToolState } }
   | { type: 'tool_result'; toolCallId: string; toolName: string; output: string; state: AiToolState }
-  | { type: 'approval'; toolCall: { id: string; toolName: string; argsText: string } }
+  | {
+      type: 'approval';
+      toolCall: {
+        id: string;
+        toolName: string;
+        argsText: string;
+        reason?: string;
+        /** approval = 供应商审批；escalation = Justitia 档位提升请求。 */
+        kind?: 'approval' | 'escalation';
+        requiredTier?: number;
+        currentTier?: number;
+      };
+    }
   | { type: 'done'; sessionId: string; messageId: string }
   | { type: 'error'; message: string };
 
@@ -163,12 +175,14 @@ export async function setAiMcp(input: AiMcpInput): Promise<void> {
 /**
  * 发起流式聊天。以 fetch + ReadableStream 解析 SSE（POST，方便携带长文）。
  * onEvent 依次收到 reasoning/message/tool_call/tool_result/approval/done/error。
+ * @param tier Justitia 档位 key（cognitio/arbitrium/imperium/dictatura），后端强制校验。
  */
 export async function streamAiChat(
   sessionId: string,
   content: string,
   onEvent: (evt: AiSseEvent) => void,
   signal?: AbortSignal,
+  tier?: string,
 ): Promise<void> {
   const resp = await fetch(`${apiBase()}/ai/chat`, {
     method: 'POST',
@@ -176,7 +190,7 @@ export async function streamAiChat(
       'Content-Type': 'application/json',
       Authorization: `Bearer ${getToken() ?? ''}`,
     },
-    body: JSON.stringify({ sessionId, content }),
+    body: JSON.stringify({ sessionId, content, tier }),
     signal,
   });
 

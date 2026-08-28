@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -23,6 +23,7 @@ import { ChatConversation, PromptSuggestion } from '../../vendor/ui-pro';
 import { AiSidebar } from './AiSidebar';
 import { AiThreadMessage } from './AiThreadMessage';
 import { AiComposer } from './AiComposer';
+import { loadJustitiaTier, saveJustitiaTier, type JustitiaTierKey } from './justitia';
 
 type StreamingState = 'idle' | 'streaming' | 'approval';
 export default function AiPage() {
@@ -36,6 +37,8 @@ export default function AiPage() {
   const [loading, setLoading] = useState(true);
 
   const [streaming, setStreaming] = useState<StreamingState>('idle');
+  // Justitia 档位（浏览器持久化，随 SSE 请求提交）。
+  const [justitiaTier, setJustitiaTier] = useState<JustitiaTierKey>(() => loadJustitiaTier());
   const [streamingText, setStreamingText] = useState('');
   const [streamingReasoning, setStreamingReasoning] = useState<string[]>([]);
   const [streamingTools, setStreamingTools] = useState<AiToolCall[]>([]);
@@ -208,6 +211,11 @@ export default function AiPage() {
             toolName: evt.toolCall.toolName,
             argsText: evt.toolCall.argsText,
             state: 'requires-action',
+            // 附加审批元数据（kind/reason/档位）供模态框展示。
+            ...(evt.toolCall.kind ? { kind: evt.toolCall.kind } : {}),
+            ...(evt.toolCall.reason ? { error: evt.toolCall.reason } : {}),
+            ...(evt.toolCall.requiredTier !== undefined ? { requiredTier: evt.toolCall.requiredTier } : {}),
+            ...(evt.toolCall.currentTier !== undefined ? { currentTier: evt.toolCall.currentTier } : {}),
           });
           break;
         }
@@ -289,7 +297,7 @@ export default function AiPage() {
       const abort = new AbortController();
       abortRef.current = abort;
       try {
-        await streamAiChat(targetId, trimmed, (evt) => handleStreamEvent(evt, targetId), abort.signal);
+        await streamAiChat(targetId, trimmed, (evt) => handleStreamEvent(evt, targetId), abort.signal, justitiaTier);
       } catch (e) {
         if ((e as Error).name !== 'AbortError') {
           setStreaming('idle');
@@ -491,6 +499,11 @@ export default function AiPage() {
               activeModel={activeModel}
               isGenerating={isGenerating || approvalPending}
               canSend={canSend}
+              justitiaTier={justitiaTier}
+              onTierChange={(tier) => {
+                setJustitiaTier(tier);
+                saveJustitiaTier(tier);
+              }}
               onSend={(text) => void send(text)}
               onStop={handleStop}
               onSelectProvider={handleSelectProvider}

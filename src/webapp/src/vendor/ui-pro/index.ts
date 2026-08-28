@@ -23,3 +23,4 @@ export * from './components/markdown';
 export * from './components/prompt-input';
 export * from './components/prompt-suggestion';
 export * from './components/text-shimmer';
+export * from './components/cell-slider';

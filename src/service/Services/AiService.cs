@@ -24,6 +24,8 @@ public sealed class AiRunState
     public required string ProviderId { get; init; }
     public required string Model { get; init; }
     public required string UserId { get; init; }
+    /// <summary>本次运行携带的 Justitia 档位（浏览器持久化 → SSE 请求参数）。</summary>
+    public JustitiaTier JustitiaTier { get; set; } = JustitiaTier.Cognitio;
     public List<JsonObject> LlmMessages { get; } = new();
     public List<AiToolCall> ToolCalls { get; } = new();
     public List<AiReasoningStep> Reasoning { get; } = new();
@@ -434,7 +436,8 @@ public class AiService
         AiSession session,
         string content,
         Func<string, Task> onEvent,
-        CancellationToken ct = default)
+        CancellationToken ct = default,
+        JustitiaTier justitiaTier = JustitiaTier.Cognitio)
     {
         var provider = await GetProviderAsync(session.ProviderId, includeKey: true, ct);
         if (provider == null)
@@ -454,6 +457,7 @@ public class AiService
             ProviderId = session.ProviderId,
             Model = session.Model,
             UserId = session.UserId,
+            JustitiaTier = justitiaTier,
         };
         _runs[session.Id] = state;
         state.Cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
@@ -552,6 +556,26 @@ public class AiService
                     var toolCall = new AiToolCall { Id = callId, ToolName = name, ArgsText = argsText };
                     state.ToolCalls.Add(toolCall);
 
+                    // Justitia 档位门槛：不足 → 权限不足 + 可请求提升。
+                    var required = JustitiaPolicy.RequiredTier(name);
+                    if (state.JustitiaTier < required)
+                    {
+                        toolCall.State = "requires-action";
+                        state.PendingToolCall = new JsonObject
+                        {
+                            ["sessionId"] = state.SessionId,
+                            ["toolCallId"] = callId,
+                            ["toolName"] = name,
+                            ["argsText"] = argsText,
+                            ["reason"] = $"tool requires tier {required} (current {state.JustitiaTier})",
+                            ["kind"] = "escalation",
+                            ["requiredTier"] = (int)required,
+                            ["currentTier"] = (int)state.JustitiaTier,
+                        };
+                        await onEvent(JsonSerializer.Serialize(new { type = "approval", toolCall = new { id = callId, toolName = name, argsText, reason = $"tool requires tier {required} (current {state.JustitiaTier})", kind = "escalation", requiredTier = (int)required, currentTier = (int)state.JustitiaTier } }, JsonOpts));
+                        return; // 挂起，等待 /chat/action 恢复。
+                    }
+
                     if (provider.RequireApproval)
                     {
                         toolCall.State = "requires-action";
@@ -561,8 +585,10 @@ public class AiService
                             ["toolCallId"] = callId,
                             ["toolName"] = name,
                             ["argsText"] = argsText,
+                            ["reason"] = "provider requires approval",
+                            ["kind"] = "approval",
                         };
-                        await onEvent(JsonSerializer.Serialize(new { type = "approval", toolCall = new { id = callId, toolName = name, argsText } }, JsonOpts));
+                        await onEvent(JsonSerializer.Serialize(new { type = "approval", toolCall = new { id = callId, toolName = name, argsText, reason = "provider requires approval", kind = "approval" } }, JsonOpts));
                         return; // 挂起，等待 /chat/action 恢复。
                     }
 
@@ -1072,6 +1098,13 @@ public class AiService
             state.AssistantText += "\n\n[操作已被拒绝]\n\n";
             await ChatLoopAsync(state, provider, onEvent, ct);
             return;
+        }
+
+        // 批准 → 若是档位提升请求（escalation），临时提升本次运行档位后执行。
+        if (state.PendingToolCall?["kind"]?.GetValue<string>() == "escalation")
+        {
+            var requiredTier = state.PendingToolCall["requiredTier"]?.GetValue<int>() ?? (int)JustitiaTier.Imperium;
+            state.JustitiaTier = (JustitiaTier)Math.Max((int)state.JustitiaTier, requiredTier);
         }
 
         // 批准 → 执行。
