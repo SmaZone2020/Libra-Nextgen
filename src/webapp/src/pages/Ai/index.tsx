@@ -23,6 +23,7 @@ import { ChatConversation, PromptSuggestion } from '../../vendor/ui-pro';
 import { AiSidebar, AiSidebarDrawer } from './AiSidebar';
 import { AiThreadMessage } from './AiThreadMessage';
 import { AiComposer } from './AiComposer';
+import { AiApprovalModal, type AiPermit } from './AiApprovalModal';
 import { loadJustitiaTier, saveJustitiaTier, type JustitiaTierKey } from './justitia';
 
 type StreamingState = 'idle' | 'streaming' | 'approval';
@@ -45,6 +46,8 @@ export default function AiPage() {
   const [streamingReasoning, setStreamingReasoning] = useState<string[]>([]);
   const [streamingTools, setStreamingTools] = useState<AiToolCall[]>([]);
   const [pendingApproval, setPendingApproval] = useState<AiToolCall | null>(null);
+  // 审批模态框：可关闭留痕，对话流中稍后可再次批准/拒绝。
+  const [approvalModalOpen, setApprovalModalOpen] = useState(false);
   const [streamError, setStreamError] = useState<string | null>(null);
 
   // 鏂板缓浼氳瘽鍋忓ソ锛堟祻瑙堝櫒鎸佷箙鍖栵級锛氫緵搴斿晢涓庢ā鍨嬮粯璁ゅ€笺€?
@@ -219,11 +222,14 @@ export default function AiPage() {
             ...(evt.toolCall.requiredTier !== undefined ? { requiredTier: evt.toolCall.requiredTier } : {}),
             ...(evt.toolCall.currentTier !== undefined ? { currentTier: evt.toolCall.currentTier } : {}),
           });
+          // 弹审批模态框；关闭后留痕在对话流，可稍后再次批准/拒绝。
+          setApprovalModalOpen(true);
           break;
         }
         case 'done': {
           setStreaming('idle');
           setPendingApproval(null);
+          setApprovalModalOpen(false);
           setStreamingReasoning([]);
           void getAiSession(sessionId)
             .then((s) => {
@@ -239,6 +245,7 @@ export default function AiPage() {
         case 'error':
           setStreaming('idle');
           setPendingApproval(null);
+          setApprovalModalOpen(false);
           // 浠ョ孩鑹查敊璇潡娓叉煋锛堜笉鍐嶆嫾杩涙祦寮忔枃鏈級銆?
           setStreamError((prev) => (prev ? `${prev}\n${evt.message}` : evt.message));
           break;
@@ -325,19 +332,44 @@ export default function AiPage() {
   }, [activeId]);
 
   const handleApprove = useCallback(
-    async (toolCallId: string, approved: boolean) => {
+    async (toolCallId: string, permit: AiPermit) => {
       if (!pendingApproval || !activeId) return;
       const id = activeId;
+      setApprovalModalOpen(false);
       setStreaming('streaming');
-      setPendingApproval((prev) => (prev && prev.id === toolCallId ? { ...prev, state: approved ? 'running' : 'error' } : prev));
+      setPendingApproval((prev) => (prev && prev.id === toolCallId ? { ...prev, state: 'running' } : prev));
       const abort = new AbortController();
       abortRef.current = abort;
       try {
-        await streamAiAction(id, toolCallId, approved, (evt) => handleStreamEvent(evt, id), abort.signal);
+        await streamAiAction(id, toolCallId, true, (evt) => handleStreamEvent(evt, id), abort.signal, permit);
       } catch (e) {
         if ((e as Error).name !== 'AbortError') {
           setStreaming('idle');
-          setStreamingText((prev) => prev + `\n\n> 鈿狅笍 ${e instanceof Error ? e.message : String(e)}`);
+          setStreamingText((prev) => prev + `\n\n> ⚠️ ${e instanceof Error ? e.message : String(e)}`);
+        }
+      } finally {
+        if (abortRef.current === abort) abortRef.current = null;
+        setStreaming((s) => (s === 'approval' ? s : 'idle'));
+      }
+    },
+    [activeId, handleStreamEvent, pendingApproval],
+  );
+
+  const handleReject = useCallback(
+    async (toolCallId: string) => {
+      if (!pendingApproval || !activeId) return;
+      const id = activeId;
+      setApprovalModalOpen(false);
+      setStreaming('streaming');
+      setPendingApproval((prev) => (prev && prev.id === toolCallId ? { ...prev, state: 'error' } : prev));
+      const abort = new AbortController();
+      abortRef.current = abort;
+      try {
+        await streamAiAction(id, toolCallId, false, (evt) => handleStreamEvent(evt, id), abort.signal);
+      } catch (e) {
+        if ((e as Error).name !== 'AbortError') {
+          setStreaming('idle');
+          setStreamingText((prev) => prev + `\n\n> ⚠️ ${e instanceof Error ? e.message : String(e)}`);
         }
       } finally {
         if (abortRef.current === abort) abortRef.current = null;
@@ -447,8 +479,11 @@ export default function AiPage() {
                     onRegenerate={() => void handleRegenerate()}
                     onEdit={handleEditMessage}
                     onFeedback={handleFeedback}
-                    onApprove={(id) => void handleApprove(id, true)}
-                    onReject={(id) => void handleApprove(id, false)}
+                    onApprove={(id) => {
+                      // 对话流中批准：先重新打开模态框选择许可时长。
+                      setApprovalModalOpen(true);
+                    }}
+                    onReject={(id) => void handleReject(id)}
                   />
                 ))
               )}
@@ -472,8 +507,11 @@ export default function AiPage() {
                   onRegenerate={() => undefined}
                   onEdit={() => undefined}
                   onFeedback={() => undefined}
-                  onApprove={(id) => void handleApprove(id, true)}
-                  onReject={(id) => void handleApprove(id, false)}
+                  onApprove={(id) => {
+                    // 对话流中批准：重新打开模态框选择许可时长。
+                    setApprovalModalOpen(true);
+                  }}
+                  onReject={(id) => void handleReject(id)}
                 />
               )}
 
@@ -526,6 +564,19 @@ export default function AiPage() {
         refreshKey={sidebarRefreshKey}
         onSelectSession={selectSession}
         onNewSession={() => void handleNewSession()}
+      />
+
+      {/* 档位提升审批模态框：可关闭留痕，对话流中稍后可再次批准/拒绝 */}
+      <AiApprovalModal
+        tool={pendingApproval}
+        open={approvalModalOpen}
+        onOpenChange={setApprovalModalOpen}
+        onApprove={(permit) => {
+          if (pendingApproval) void handleApprove(pendingApproval.id, permit);
+        }}
+        onReject={() => {
+          if (pendingApproval) void handleReject(pendingApproval.id);
+        }}
       />
     </div>
   );

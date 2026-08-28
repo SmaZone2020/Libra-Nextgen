@@ -28,6 +28,15 @@ public sealed class AiRunState
     public required string UserId { get; init; }
     /// <summary>本次运行携带的 Justitia 档位（浏览器持久化 → SSE 请求参数）。</summary>
     public JustitiaTier JustitiaTier { get; set; } = JustitiaTier.Cognitio;
+    /// <summary>审批授予的临时提升档位（5/20 分钟许可窗口），到期自动回落。</summary>
+    public int? BoostTier { get; set; }
+    /// <summary>临时提升到期时间（UTC）。</summary>
+    public DateTime? BoostExpiresAt { get; set; }
+    /// <summary>有效档位 = 未过期的临时提升档位，否则当前档位。</summary>
+    public JustitiaTier EffectiveTier =>
+        BoostTier is { } b && BoostExpiresAt is { } exp && exp > DateTime.UtcNow
+            ? (JustitiaTier)b
+            : JustitiaTier;
     public List<JsonObject> LlmMessages { get; } = new();
     public List<AiToolCall> ToolCalls { get; } = new();
     public List<AiReasoningStep> Reasoning { get; } = new();
@@ -595,9 +604,10 @@ public class AiService
                     var toolCall = new AiToolCall { Id = callId, ToolName = name, ArgsText = argsText };
                     state.ToolCalls.Add(toolCall);
 
-                    // Justitia 档位门槛：不足 → 权限不足 + 可请求提升。
+                    // Justitia 档位门槛：有效档位（含审批临时提升）不足 → 挂起等审批。
+                    // 档位内工具直接执行，不再逐调用弹审批。
                     var required = JustitiaPolicy.RequiredTier(name);
-                    if (state.JustitiaTier < required)
+                    if (state.EffectiveTier < required)
                     {
                         toolCall.State = "requires-action";
                         state.PendingToolCall = new JsonObject
@@ -606,28 +616,12 @@ public class AiService
                             ["toolCallId"] = callId,
                             ["toolName"] = name,
                             ["argsText"] = argsText,
-                            ["reason"] = $"tool requires tier {required} (current {state.JustitiaTier})",
+                            ["reason"] = $"tool requires tier {required} (current {state.EffectiveTier})",
                             ["kind"] = "escalation",
                             ["requiredTier"] = (int)required,
-                            ["currentTier"] = (int)state.JustitiaTier,
+                            ["currentTier"] = (int)state.EffectiveTier,
                         };
-                        await onEvent(JsonSerializer.Serialize(new { type = "approval", toolCall = new { id = callId, toolName = name, argsText, reason = $"tool requires tier {required} (current {state.JustitiaTier})", kind = "escalation", requiredTier = (int)required, currentTier = (int)state.JustitiaTier } }, JsonOpts));
-                        return; // 挂起，等待 /chat/action 恢复。
-                    }
-
-                    if (provider.RequireApproval)
-                    {
-                        toolCall.State = "requires-action";
-                        state.PendingToolCall = new JsonObject
-                        {
-                            ["sessionId"] = state.SessionId,
-                            ["toolCallId"] = callId,
-                            ["toolName"] = name,
-                            ["argsText"] = argsText,
-                            ["reason"] = "provider requires approval",
-                            ["kind"] = "approval",
-                        };
-                        await onEvent(JsonSerializer.Serialize(new { type = "approval", toolCall = new { id = callId, toolName = name, argsText, reason = "provider requires approval", kind = "approval" } }, JsonOpts));
+                        await onEvent(JsonSerializer.Serialize(new { type = "approval", toolCall = new { id = callId, toolName = name, argsText, reason = $"tool requires tier {required} (current {state.EffectiveTier})", kind = "escalation", requiredTier = (int)required, currentTier = (int)state.EffectiveTier } }, JsonOpts));
                         return; // 挂起，等待 /chat/action 恢复。
                     }
 
@@ -788,7 +782,7 @@ public class AiService
         AiRunState state, AiProvider provider, List<AiToolDescriptor> tools, Func<string, Task> onEvent, CancellationToken ct)
     {
         var messages = BuildOpenAiChatMessages(state.LlmMessages);
-        var systemPrompt = BuildSystemPrompt(state.JustitiaTier);
+        var systemPrompt = BuildSystemPrompt(state.EffectiveTier);
         if (systemPrompt.Length > 0)
             messages.Insert(0, new JsonObject { ["role"] = "system", ["content"] = systemPrompt });
 
@@ -889,7 +883,7 @@ public class AiService
             ["stream"] = true,
             ["store"] = false,
         };
-        var systemPrompt = BuildSystemPrompt(state.JustitiaTier);
+        var systemPrompt = BuildSystemPrompt(state.EffectiveTier);
         if (systemPrompt.Length > 0) body["instructions"] = systemPrompt;
         if (tools.Count > 0)
         {
@@ -996,7 +990,7 @@ public class AiService
             ["messages"] = BuildAnthropicMessages(state.LlmMessages),
             ["stream"] = true,
         };
-        var systemPrompt = BuildSystemPrompt(state.JustitiaTier);
+        var systemPrompt = BuildSystemPrompt(state.EffectiveTier);
         if (systemPrompt.Length > 0) body["system"] = systemPrompt;
         if (tools.Count > 0)
         {
@@ -1108,7 +1102,9 @@ public class AiService
     }
 
     /// <summary>审批/拒绝挂起的工具调用后继续运行。</summary>
-    public async Task ResolveApprovalAsync(string sessionId, string toolCallId, bool approved, Func<string, Task> onEvent, CancellationToken ct = default)
+    public async Task ResolveApprovalAsync(
+        string sessionId, string toolCallId, bool approved, Func<string, Task> onEvent,
+        CancellationToken ct = default, string permit = "one-time")
     {
         var state = _runs.TryGetValue(sessionId, out var r) ? r : null;
         if (state == null) return;
@@ -1158,10 +1154,24 @@ public class AiService
             return;
         }
 
-        // 批准 → 若是档位提升请求（escalation），临时提升本次运行档位后执行。
+        // 批准 → 若是档位提升请求（escalation），按许可时长授予临时提升：
+        //   one-time：仅本次调用执行（不改变已有许可窗口，后续同档工具仍需审批）；
+        //   5min/20min：提升 EffectiveTier，窗口内同档工具直接执行，到期回落。
         if (pendingKind == "escalation")
         {
-            state.JustitiaTier = (JustitiaTier)Math.Max((int)state.JustitiaTier, requiredTier);
+            switch (permit)
+            {
+                case "5min":
+                    state.BoostTier = requiredTier;
+                    state.BoostExpiresAt = DateTime.UtcNow.AddMinutes(5);
+                    break;
+                case "20min":
+                    state.BoostTier = requiredTier;
+                    state.BoostExpiresAt = DateTime.UtcNow.AddMinutes(20);
+                    break;
+                default: // "one-time"：不动已有许可窗口，仅本次执行。
+                    break;
+            }
         }
 
         // 批准 → 执行。

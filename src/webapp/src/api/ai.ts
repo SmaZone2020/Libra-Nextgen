@@ -227,13 +227,14 @@ export async function streamAiChat(
   }
 }
 
-/** 审批/拒绝工具调用（同样返回 SSE 流）。 */
+/** 审批/拒绝工具调用（同样返回 SSE 流）。permit：one-time | 5min | 20min（档位提升许可时长）。 */
 export async function streamAiAction(
   sessionId: string,
   toolCallId: string,
   approved: boolean,
   onEvent: (evt: AiSseEvent) => void,
   signal?: AbortSignal,
+  permit?: 'one-time' | '5min' | '20min',
 ): Promise<void> {
   const resp = await fetch(`${apiBase()}/ai/chat/action`, {
     method: 'POST',
@@ -241,7 +242,7 @@ export async function streamAiAction(
       'Content-Type': 'application/json',
       Authorization: `Bearer ${getToken() ?? ''}`,
     },
-    body: JSON.stringify({ sessionId, toolCallId, approved }),
+    body: JSON.stringify({ sessionId, toolCallId, approved, permit: permit ?? 'one-time' }),
     signal,
   });
 

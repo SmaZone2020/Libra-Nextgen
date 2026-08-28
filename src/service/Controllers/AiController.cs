@@ -201,7 +201,7 @@ public class AiController : ControllerBase
             await Response.Body.FlushAsync(ct);
         }
 
-        await _ai.ResolveApprovalAsync(req.SessionId, req.ToolCallId, req.Approved, Send, ct);
+        await _ai.ResolveApprovalAsync(req.SessionId, req.ToolCallId, req.Approved, Send, ct, req.Permit);
         return new EmptyResult();
     }
 
@@ -269,6 +269,8 @@ public class AiChatActionReq
     public string? SessionId { get; set; }
     public string? ToolCallId { get; set; }
     public bool Approved { get; set; }
+    /// <summary>档位提升许可时长：one-time（仅本次）/ 5min / 20min。默认 one-time。</summary>
+    public string Permit { get; set; } = "one-time";
 }
 
 public class AiStopReq
