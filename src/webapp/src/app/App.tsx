@@ -387,6 +387,9 @@ function AuthenticatedLayout({
             <div className="flex-1 min-w-0">
               <PageHeader pluginLabels={pluginLabels} />
             </div>
+            <div className="block sm:hidden">
+              <AgentSelector />
+            </div>
             <Dropdown>
               <Button isIconOnly size="sm" variant="ghost">
                 <span className="text-sm font-medium">{user.username.slice(0, 2).toUpperCase()}</span>
@@ -402,11 +405,6 @@ function AuthenticatedLayout({
                 </Dropdown.Menu>
               </Dropdown.Popover>
             </Dropdown>
-          </div>
-
-          {/* Mobile: agent selector row */}
-          <div className="block sm:hidden">
-            <AgentSelector />
           </div>
 
           {/* Desktop header row */}
