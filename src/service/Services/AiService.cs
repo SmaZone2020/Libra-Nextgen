@@ -435,8 +435,12 @@ public class AiService
     }
 
     private static bool IsDiService(Type t) =>
-        t.IsClass && !t.IsPrimitive && t != typeof(string) && t != typeof(Uri) &&
-        (t.Namespace?.StartsWith("LibraNextgen") == true || t.Namespace == "Microsoft.AspNetCore.Http");
+        // 注：IHttpContextAccessor 是接口（IsClass=false），但确实是 DI 服务——
+        // 必须在此识别，否则会被当成 JSON 参数，LLM 传入 "http": {...} 时
+        // Deserialize 到接口会抛异常并炸掉整个 SSE 流。
+        t == typeof(IHttpContextAccessor) ||
+        (t.IsClass && !t.IsPrimitive && t != typeof(string) && t != typeof(Uri) &&
+        (t.Namespace?.StartsWith("LibraNextgen") == true || t.Namespace == "Microsoft.AspNetCore.Http"));
 
     /// <summary>反射调用一个 [McpServerTool] 静态方法。</summary>
     public async Task<string> InvokeToolAsync(string toolName, JsonObject args, CancellationToken ct = default)
@@ -451,29 +455,38 @@ public class AiService
 
                 var ps = method.GetParameters();
                 var callArgs = new object?[ps.Length];
-                for (var i = 0; i < ps.Length; i++)
+                try
                 {
-                    var p = ps[i];
-                    if (p.ParameterType == typeof(CancellationToken))
+                    for (var i = 0; i < ps.Length; i++)
                     {
-                        callArgs[i] = ct;
+                        var p = ps[i];
+                        if (p.ParameterType == typeof(CancellationToken))
+                        {
+                            callArgs[i] = ct;
+                        }
+                        else if (IsDiService(p.ParameterType))
+                        {
+                            callArgs[i] = _services.GetService(p.ParameterType);
+                        }
+                        else if (args.TryGetPropertyValue(p.Name, out var node))
+                        {
+                            callArgs[i] = node.Deserialize(p.ParameterType, JsonOpts);
+                        }
+                        else if (p.IsOptional)
+                        {
+                            callArgs[i] = p.DefaultValue;
+                        }
+                        else
+                        {
+                            return McpUtils.Error($"missing argument '{p.Name}' for tool '{toolName}'");
+                        }
                     }
-                    else if (IsDiService(p.ParameterType))
-                    {
-                        callArgs[i] = _services.GetService(p.ParameterType);
-                    }
-                    else if (args.TryGetPropertyValue(p.Name, out var node))
-                    {
-                        callArgs[i] = node.Deserialize(p.ParameterType, JsonOpts);
-                    }
-                    else if (p.IsOptional)
-                    {
-                        callArgs[i] = p.DefaultValue;
-                    }
-                    else
-                    {
-                        return McpUtils.Error($"missing argument '{p.Name}' for tool '{toolName}'");
-                    }
+                }
+                catch (Exception ex)
+                {
+                    // 参数构建/反序列化失败（如 LLM 传入多余参数、类型不匹配）：
+                    // 转成结构化工具错误，绝不能炸掉 SSE 流。
+                    return McpUtils.Error($"invalid arguments for tool '{toolName}': {ex.Message}");
                 }
 
                 try
@@ -697,7 +710,17 @@ public class AiService
                     }
 
                     await onEvent(JsonSerializer.Serialize(new { type = "tool_call", toolCall = new { id = callId, toolName = name, argsText, state = "running" } }, JsonOpts));
-                    var output = await InvokeToolAsync(name, JsonNode.Parse(argsText) as JsonObject ?? new JsonObject(), ct);
+                    string output;
+                    try
+                    {
+                        output = await InvokeToolAsync(name, JsonNode.Parse(argsText) as JsonObject ?? new JsonObject(), ct);
+                    }
+                    catch (Exception ex)
+                    {
+                        // 兜底：任何工具执行异常都转成结构化错误，绝不炸掉 SSE 流。
+                        _logger.LogWarning(ex, "AI tool {Tool} threw unhandled exception", name);
+                        output = McpUtils.Error($"tool '{name}' failed: {ex.Message}");
+                    }
                     var isError = output.Contains("\"error\"", StringComparison.Ordinal);
                     toolCall.State = isError ? "error" : "output-available";
                     toolCall.Output = output;
