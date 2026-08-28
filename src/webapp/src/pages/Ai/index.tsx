@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Button } from '@heroui/react';
-import { ArrowLeft } from '@gravity-ui/icons';
+import { ArrowLeft, BarsDescendingAlignLeft } from '@gravity-ui/icons';
 import {
   createAiSession,
   getAiProviders,
@@ -400,17 +400,16 @@ export default function AiPage() {
 
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         <div className="flex shrink-0 items-center gap-2 border-b border-default-200 px-3 py-2 md:hidden dark:border-default-800">
-          {/* 左侧按钮：打开会话列表 Drawer（替代原供应商徽章） */}
+
           <Button
             isIconOnly
-            size="sm"
             variant="ghost"
             aria-label={t('ai.sessions')}
             onPress={() => setMobileSidebarOpen(true)}
           >
-            <ArrowLeft className="size-4" />
+            <BarsDescendingAlignLeft className="size-4" />
           </Button>
-          <span className="min-w-0 flex-1 truncate text-sm font-medium">
+          <span className="min-w-0 flex-1 truncate text-base font-medium">
             {session?.title || t('ai.title')}
           </span>
         </div>

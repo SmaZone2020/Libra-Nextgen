@@ -349,8 +349,6 @@ function AuthenticatedLayout({
   // Route → display name for plugin page headers.
   const pluginLabels = new Map(registeredPlugins.map((p) => [p.route, p.manifest.name || p.pluginId]));
 
-  const hiddenHeader = new Set(['/ai']);
-
   return (
     <div className="h-screen overflow-hidden bg-neutral-50 dark:bg-neutral-950">
       <NetworkOverlay />
@@ -369,9 +367,7 @@ function AuthenticatedLayout({
         style={{ '--sidebar-w': `${sidebarWidth}px` } as React.CSSProperties}
       >
         <header
-          className={`${
-            hiddenHeader.has(location.pathname) ? 'hidden' : ''
-          } shrink-0 border-b border-neutral-200 bg-white dark:bg-neutral-900 dark:border-neutral-800 px-4 py-3 sm:px-6 lg:px-8`}
+          className={`shrink-0 border-b border-neutral-200 bg-white dark:bg-neutral-900 dark:border-neutral-800 px-4 py-3 sm:px-6 lg:px-8`}
         >
           {/* Mobile: hamburger + title row */}
           <div className="flex items-center gap-3 sm:hidden">
@@ -409,7 +405,7 @@ function AuthenticatedLayout({
           </div>
 
           {/* Mobile: agent selector row */}
-          <div className="sm:hidden mt-2">
+          <div className="hidden sm:block ">
             <AgentSelector />
           </div>
 

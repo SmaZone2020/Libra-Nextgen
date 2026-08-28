@@ -344,12 +344,15 @@ export function AiComposer({
                   </span>
                   <ChevronDown className="size-3.5 shrink-0 text-muted" />
                 </Button>
-                <Popover.Content className="w-[21rem] p-0 bg-transparent shadow-none" offset={10}>
-                  <Popover.Dialog className="p-0">
+                <Popover.Content className="p-0" offset={10}>
+                  <Popover.Dialog className="p-0 rounded-[30px]">
                     <Popover.Arrow className="fill-accent/30" />
-                    <PressableFeedback.Root className="aurora-justitia w-full" isDisabled={isGenerating}>
+                    <PressableFeedback.Root
+                      className={`aurora-justitia w-full ${permission === 3 ? 'aurora-justitia--active' : ''}`}
+                      isDisabled={isGenerating}
+                    >
                       <PressableFeedback.Ripple />
-                      <div className="aurora-inner flex flex-col gap-3 p-4">
+                      <div className="aurora-inner flex flex-col gap-3 p-4 ">
                         <Popover.Heading className="text-sm font-medium text-foreground">
                           {t('ai.adjustJustitia')}
                         </Popover.Heading>

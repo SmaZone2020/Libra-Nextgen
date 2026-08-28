@@ -1,4 +1,4 @@
-/* Aurora Justitia 档位卡片：旋转光晕 + 呼吸边框 + 不均匀脉动阴影 */
+/* Aurora Justitia 档位卡片：仅最高档（dictatura）启用旋转光晕 + 呼吸边框 + 不均匀脉动阴影 */
 
 @property --aurora-angle {
   syntax: '<angle>';
@@ -27,11 +27,14 @@
   background:
     radial-gradient(120% 100% at 50% 0%, color-mix(in oklab, var(--color-accent, #6366f1) 10%, transparent), transparent 60%),
     linear-gradient(155deg, var(--surface-secondary, #f1f1f4), var(--surface, #fff) 55%);
-  transition: box-shadow 500ms var(--ease-out, ease-out);
-  animation: aurora-pulse var(--aurora-pulse-duration) ease-in-out infinite alternate;
+  transition: box-shadow 500ms var(--ease-out, ease-out), opacity 400ms var(--ease-smooth, ease-out);
+  /* 非最高档：静态细环 + 微弱静态光晕（不动画） */
+  box-shadow:
+    0 0 0 1px color-mix(in oklab, var(--color-accent, #6366f1) 18%, transparent),
+    0 0 18px -8px var(--aurora-glow-1);
 }
 
-/* 旋转的 conic 光晕层 */
+/* 旋转的 conic 光晕层：默认隐藏，仅 --active 亮起 */
 .aurora-justitia::before {
   content: '';
   position: absolute;
@@ -50,11 +53,11 @@
     var(--aurora-glow-1) 360deg
   );
   filter: blur(34px);
-  opacity: 0.55;
-  animation: aurora-rotate var(--aurora-rotate-duration) linear infinite;
+  opacity: 0;
+  transition: opacity 500ms var(--ease-smooth, ease-out);
 }
 
-/* 沿边缘游走的亮线（环形轨道光） */
+/* 沿边缘游走的亮线（环形轨道光）：默认静态微光，仅 --active 旋转 */
 .aurora-justitia::after {
   content: '';
   position: absolute;
@@ -81,14 +84,24 @@
     linear-gradient(#000 0 0) content-box,
     linear-gradient(#000 0 0);
   mask-composite: exclude;
-  opacity: 0.9;
-  animation: aurora-rotate var(--aurora-speed) linear infinite;
+  opacity: 0.35;
+  transition: opacity 500ms var(--ease-smooth, ease-out);
 }
 
-.aurora-justitia:hover {
-  --aurora-glow-1: rgba(129, 140, 248, 0.75);
-  --aurora-glow-2: rgba(192, 132, 252, 0.6);
-  --aurora-glow-3: rgba(103, 232, 249, 0.55);
+/* ── 最高档：全部动画点亮 ── */
+
+.aurora-justitia--active {
+  animation: aurora-pulse var(--aurora-pulse-duration) ease-in-out infinite alternate;
+}
+
+.aurora-justitia--active::before {
+  opacity: 0.55;
+  animation: aurora-rotate var(--aurora-rotate-duration) linear infinite;
+}
+
+.aurora-justitia--active::after {
+  opacity: 0.9;
+  animation: aurora-rotate var(--aurora-speed) linear infinite;
 }
 
 @keyframes aurora-rotate {
@@ -97,15 +110,14 @@
   }
 }
 
-/* 边框时粗时细且不均匀：box-shadow 逐帧描出流动的环状光带 */
 @keyframes aurora-pulse {
   0% {
     box-shadow:
       0 0 14px 0 var(--aurora-glow-1),
-      0 0 0 1.5px color-mix(in oklab, var(--color-accent, #6366f1) 35%, transparent),
+      0 0 0 1.5px color-mix(in oklab, var(--color-accent, #4f51d4) 35%, transparent),
       0 0 26px -4px var(--aurora-glow-2),
       0 0 8px -2px var(--aurora-glow-3),
-      inset 0 0 12px -6px var(--aurora-glow-1);
+      inset 0 0 12px -3px var(--aurora-glow-1);
   }
   50% {
     box-shadow:
@@ -113,7 +125,7 @@
       0 0 0 4px color-mix(in oklab, var(--color-accent, #6366f1) 60%, transparent),
       0 0 34px -2px var(--aurora-glow-1),
       0 0 16px 0 var(--aurora-glow-3),
-      inset 0 0 16px -4px var(--aurora-glow-2);
+      inset 0 0 16px -3px var(--aurora-glow-2);
   }
   100% {
     box-shadow:
@@ -121,7 +133,7 @@
       0 0 0 2.5px color-mix(in oklab, var(--color-accent, #6366f1) 45%, transparent),
       0 0 30px -3px var(--aurora-glow-2),
       0 0 10px -1px var(--aurora-glow-1),
-      inset 0 0 14px -5px var(--aurora-glow-3);
+      inset 0 0 14px -3px var(--aurora-glow-3);
   }
 }
 
@@ -140,11 +152,11 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .aurora-justitia::before,
-  .aurora-justitia::after {
+  .aurora-justitia--active::before,
+  .aurora-justitia--active::after {
     animation: none;
   }
-  .aurora-justitia {
+  .aurora-justitia--active {
     animation: none;
   }
 }
