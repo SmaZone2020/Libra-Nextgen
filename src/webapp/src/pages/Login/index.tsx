@@ -32,7 +32,7 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
   };
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center">
+    <div className="h-[90vh] flex flex-col items-center justify-center">
       <div className="mb-4 flex flex-col items-center justify-center">
         <img
           alt="icon"
@@ -40,7 +40,7 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
           loading="lazy"
           src="/images/icon2.webp"
         />
-        <p className="mx-auto text-[32px] libre">Libra-Nextgen</p>
+        <p className="mx-auto text-[32px] libre sm:block hidden">Libra-Nextgen</p>
       </div>
       <Card className="w-full max-w-sm p-6" >
         <form onSubmit={handleSubmit}>
@@ -52,11 +52,11 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
             )}
             <TextField variant="secondary" autoFocus value={username} onChange={setUsername}>
               <Label>{t('login.username')}</Label>
-              <Input variant="secondary" placeholder="admin" />
+              <Input variant="secondary" placeholder="Username" />
             </TextField>
             <TextField variant="secondary" type="password" value={password} onChange={setPassword}>
               <Label>{t('login.password')}</Label>
-              <Input variant="secondary" placeholder="admin123" />
+              <Input variant="secondary" placeholder="Password" />
             </TextField>
           </Card.Content>
           <Card.Footer className="pt-6">

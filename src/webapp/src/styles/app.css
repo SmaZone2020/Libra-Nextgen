@@ -59,7 +59,30 @@ html {
   background: #2563eb;
 }
 
-/* ── 弹出层列表滚动条美化（保留滚动功能，隐藏视觉条） ── */
+/* ── 弹出层列表滚动条：细滚动条（隐藏 track，窄 thumb），保留滚动功能 ── */
+.scrollbar-thin {
+  scrollbar-width: thin; /* Firefox */
+  scrollbar-color: color-mix(in oklab, var(--color-muted, #737373) 35%, transparent) transparent;
+}
+
+.scrollbar-thin::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  border-radius: 9999px;
+  background: color-mix(in oklab, var(--color-muted, #737373) 35%, transparent);
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in oklab, var(--color-muted, #737373) 55%, transparent);
+}
+
+.scrollbar-thin::-webkit-scrollbar-track {
+  background: transparent;
+}
+
 [data-slot="popover"] ::-webkit-scrollbar,
 [data-slot="modal-container"] ::-webkit-scrollbar,
 [data-slot="listbox"] ::-webkit-scrollbar {

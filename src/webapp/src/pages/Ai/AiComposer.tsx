@@ -10,7 +10,7 @@ import { resolveModelIcon } from './modelIcons';
 import { formatModelDisplay, parseModelLabel, titleCaseWords } from './utils';
 import { JUSTITIA_TIERS, type JustitiaTierKey } from './justitia';
 
-/** 供应商/厂商/模型图标：有匹配用品牌图标，无匹配用默认 icon2.webp。 */
+/** 渚涘簲鍟?鍘傚晢/妯″瀷鍥炬爣锛氭湁鍖归厤鐢ㄥ搧鐗屽浘鏍囷紝鏃犲尮閰嶇敤榛樿 icon2.webp銆?*/
 function BrandIcon({ name, className = 'size-5' }: { name: string; className?: string }) {
   const icon = name ? resolveModelIcon(name) : null;
   if (icon) {
@@ -28,7 +28,7 @@ function BrandIcon({ name, className = 'size-5' }: { name: string; className?: s
   );
 }
 
-/** 0/100 区间 → 最近档位下标（档位点 0/33/66/100）。 */
+/** 0/100 鍖洪棿 鈫?鏈€杩戞。浣嶄笅鏍囷紙妗ｄ綅鐐?0/33/66/100锛夈€?*/
 function nearestTierIndex(v: number): number {
   const pts = [0, 33, 66, 100];
   let best = 0;
@@ -49,7 +49,7 @@ export interface AiComposerProps {
   activeModel: string;
   isGenerating: boolean;
   canSend: boolean;
-  /** Justitia 档位 key（浏览器持久化，随 SSE 请求提交）。 */
+  /** Justitia 妗ｄ綅 key锛堟祻瑙堝櫒鎸佷箙鍖栵紝闅?SSE 璇锋眰鎻愪氦锛夈€?*/
   justitiaTier: JustitiaTierKey;
   onTierChange: (tier: JustitiaTierKey) => void;
   onSend: (text: string) => void;
@@ -79,7 +79,6 @@ export function AiComposer({
   const permission = JUSTITIA_TIERS.find((x) => x.key === justitiaTier)?.index ?? 0;
   const activeProvider = providers.find((p) => p.id === activeProviderId) ?? providers[0];
 
-  // 当前供应商的模型按厂商分组（vendor/model 前缀；无前缀归「全部」）。
   const modelGroups = useMemo(() => {
     const map = new Map<string, string[]>();
     for (const m of activeProvider?.models ?? []) {
@@ -101,7 +100,6 @@ export function AiComposer({
     return map;
   }, [activeProvider]);
 
-  // 厂商列按 a-z 排序；无厂商（全部模型无 vendor 前缀）时隐藏厂商列（两列布局）。
   const vendors = useMemo(
     () => [...modelGroups.keys()].sort((a, b) => a.localeCompare(b)),
     [modelGroups],
@@ -114,7 +112,7 @@ export function AiComposer({
 
   const handleProviderSelect = (id: string) => {
     onSelectProvider(id);
-    setVendorKey(''); // 切换供应商后重置厂商过滤。
+    setVendorKey('');
   };
 
   const handleModelSelect = (m: string) => {
@@ -147,7 +145,6 @@ export function AiComposer({
         </PromptInput.Content>
         <PromptInput.Toolbar>
           <PromptInput.ToolbarStart>
-            {/* 供应商 + 模型：单按钮，弹出三列（供应商 | 厂商 | 模型；无厂商时两列） */}
             <Popover isOpen={modelMenuOpen} onOpenChange={setModelMenuOpen}>
               <Popover.Trigger>
                 <Button
@@ -170,7 +167,6 @@ export function AiComposer({
               <Popover.Content className="p-0">
                 <Popover.Dialog>
                   <div className="flex max-h-[300px] overflow-hidden">
-                    {/* 列 1：供应商 */}
                     <ListBox
                       aria-label={t('ai.provider')}
                       selectionMode="single"
@@ -179,7 +175,7 @@ export function AiComposer({
                         const k = [...keys][0];
                         if (k) handleProviderSelect(String(k));
                       }}
-                      className="w-44 shrink-0 overflow-y-auto border-r border-default-200 py-1 dark:border-default-800"
+                      className="w-44 shrink-0 overflow-y-auto scrollbar-thin border-r border-default-200 py-1 dark:border-default-800"
                     >
                       {providers.map((p) => (
                         <ListBox.Item key={p.id} id={p.id} textValue={p.name}>
@@ -193,7 +189,6 @@ export function AiComposer({
                       ))}
                     </ListBox>
 
-                    {/* 列 2：模型厂商（无厂商时隐藏） */}
                     {vendors.length > 1 && (
                       <ListBox
                         aria-label={t('ai.vendorAll')}
@@ -203,7 +198,7 @@ export function AiComposer({
                           const k = [...keys][0];
                           if (k) setVendorKey(String(k));
                         }}
-                        className="max-w-46 shrink-0 overflow-y-auto border-r border-default-200 py-1 dark:border-default-800"
+                        className="max-w-46 shrink-0 overflow-y-auto scrollbar-thin border-r border-default-200 py-1 dark:border-default-800"
                       >
                         {vendors.map((vendor) => (
                           <ListBox.Item
@@ -219,7 +214,6 @@ export function AiComposer({
                       </ListBox>
                     )}
 
-                    {/* 列 3：模型 */}
                     <ListBox
                       aria-label={t('ai.model')}
                       selectionMode="single"
@@ -228,7 +222,7 @@ export function AiComposer({
                         const k = [...keys][0];
                         if (k) handleModelSelect(String(k));
                       }}
-                      className="max-w-46 flex-1 overflow-y-auto py-1"
+                      className="max-w-46 flex-1 overflow-y-auto scrollbar-thin py-1"
                     >
                       {vendorModels.map((m) => {
                         const parsed = parseModelLabel(m);
@@ -306,11 +300,9 @@ export function AiComposer({
                       variant="secondary"
                       value={permission * (100 / 3)}
                       onChange={(v) => {
+                        // 拖动中仅跟随滑块，不做吸附；松手（onChangeEnd）才吸附到最近档位。
                         const val = Array.isArray(v) ? v[0] ?? 0 : v;
-                        // 拖动中实时吸附到最近档位（0/33/66/100），松开后由 onChangeEnd 最终确认。
-                        const idx = nearestTierIndex(val);
-                        const tier = JUSTITIA_TIERS[idx];
-                        if (tier) onTierChange(tier.key);
+                        void val;
                       }}
                       onChangeEnd={(v) => {
                         const val = Array.isArray(v) ? v[0] ?? 0 : v;
@@ -320,8 +312,8 @@ export function AiComposer({
                       }}
                     >
                       <CellSlider.Track>
-                        <CellSlider.Fill className="transition-[width] duration-200 ease-out" />
-                        <CellSlider.Thumb className="transition-[translate,left] duration-200 ease-out" />
+                        <CellSlider.Fill className="transition-none" />
+                        <CellSlider.Thumb className="transition-none" />
                       </CellSlider.Track>
                     </CellSlider>
                     <div className="flex w-full justify-between px-0.5 text-[11px] text-muted">
