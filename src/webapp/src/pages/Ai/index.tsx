@@ -1,16 +1,10 @@
-'use client';
+﻿'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router-dom';
-import {
-  Button,
-  Chip,
-  ListBox,
-  Popover,
-  Select,
-} from '@heroui/react';
-import { ArrowLeft, ChevronDown, PaperPlane, Sparkles } from '@gravity-ui/icons';
+import { Button } from '@heroui/react';
+import { ArrowLeft } from '@gravity-ui/icons';
 import {
   createAiSession,
   getAiProviders,
@@ -25,57 +19,12 @@ import {
   type AiSseEvent,
   type AiToolCall,
 } from '../../api/ai';
-import {
-  ChatConversation,
-  ChatMessage as ChatMessagePrimitive,
-  PromptInput,
-  PromptSuggestion,
-} from '../../vendor/ui-pro';
+import { ChatConversation, PromptSuggestion } from '../../vendor/ui-pro';
 import { AiSidebar } from './AiSidebar';
 import { AiThreadMessage } from './AiThreadMessage';
-import { resolveModelIcon } from './modelIcons';
+import { AiComposer } from './AiComposer';
 
 type StreamingState = 'idle' | 'streaming' | 'approval';
-
-function parseModelLabel(raw: string): { vendor?: string; name: string; isFree: boolean; isLatest: boolean; isBatch: boolean } {
-  let s = raw;
-  let isFree = false;
-  let isLatest = false;
-  let isBatch = false;
-  if (s.endsWith(':free')) {
-    isFree = true;
-    s = s.slice(0, -':free'.length);
-  }
-  if (s.endsWith(':batch')) {
-    isBatch = true;
-    s = s.slice(0, -':batch'.length);
-  }
-  if (s.startsWith('~')) {
-    isLatest = true;
-    s = s.slice(1);
-  }
-  const slash = s.indexOf('/');
-  if (slash > 0) {
-    return { vendor: s.slice(0, slash), name: s.slice(slash + 1), isFree, isLatest, isBatch };
-  }
-  return { name: s, isFree, isLatest , isBatch };
-}
-
-/** 连字符/下划线转空格，每词首字母大写：`deepseek-ai` → `Deepseek AI`。 */
-function titleCaseWords(s: string): string {
-  return s
-    .split(/[-_\s]+/)
-    .filter(Boolean)
-    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-    .join(' ');
-}
-
-/** 触发器中展示的模型名：隐藏厂商前缀与 :free 后缀，并按单词美化。 */
-function formatModelDisplay(raw: string): string {
-  const { name } = parseModelLabel(raw);
-  return name ? titleCaseWords(name) : raw;
-}
-
 export default function AiPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -93,7 +42,7 @@ export default function AiPage() {
   const [pendingApproval, setPendingApproval] = useState<AiToolCall | null>(null);
   const [streamError, setStreamError] = useState<string | null>(null);
 
-  // 新建会话偏好（浏览器持久化）：供应商与模型默认值。
+  // 鏂板缓浼氳瘽鍋忓ソ锛堟祻瑙堝櫒鎸佷箙鍖栵級锛氫緵搴斿晢涓庢ā鍨嬮粯璁ゅ€笺€?
   const [prefProviderId, setPrefProviderId] = useState<string | null>(() =>
     localStorage.getItem('ai.prefProviderId'),
   );
@@ -106,7 +55,7 @@ export default function AiPage() {
   const sidebarRefreshKeyRef = useRef(0);
   const [sidebarRefreshKey, setSidebarRefreshKey] = useState(0);
 
-  // 顶层状态：把选中的会话 id 映射到路由。
+  // 椤跺眰鐘舵€侊細鎶婇€変腑鐨勪細璇?id 鏄犲皠鍒拌矾鐢便€?
   const activeId = sessionId ?? null;
 
   const loadMeta = useCallback(async () => {
@@ -134,7 +83,7 @@ export default function AiPage() {
     })();
   }, [activeId, loadMeta]);
 
-  // 路由离开时停止流。
+  // 璺敱绂诲紑鏃跺仠姝㈡祦銆?
   useEffect(() => {
     return () => {
       abortRef.current?.abort();
@@ -145,7 +94,7 @@ export default function AiPage() {
     () => providers.filter((p) => p.enabled && p.models.length > 0),
     [providers],
   );
-  // 有会话时用会话的供应商/模型；空态（新消息）时用浏览器偏好，回退第一个可用供应商。
+  // 鏈変細璇濇椂鐢ㄤ細璇濈殑渚涘簲鍟?妯″瀷锛涚┖鎬侊紙鏂版秷鎭級鏃剁敤娴忚鍣ㄥ亸濂斤紝鍥為€€绗竴涓彲鐢ㄤ緵搴斿晢銆?
   const activeProvider = useMemo(() => {
     const id = session?.providerId ?? prefProviderId ?? enabledProviders[0]?.id ?? null;
     return providers.find((p) => p.id === id) ?? enabledProviders[0] ?? null;
@@ -177,8 +126,8 @@ export default function AiPage() {
   );
 
   const handleNewSession = useCallback(() => {
-    // 点击新建：不直接创建会话，仅跳转到 /ai 空态（已在则无动作）。
-    // 只有用户发出第一条消息并发送时，才会真正创建会话。
+    // 鐐瑰嚮鏂板缓锛氫笉鐩存帴鍒涘缓浼氳瘽锛屼粎璺宠浆鍒?/ai 绌烘€侊紙宸插湪鍒欐棤鍔ㄤ綔锛夈€?
+    // 鍙湁鐢ㄦ埛鍙戝嚭绗竴鏉℃秷鎭苟鍙戦€佹椂锛屾墠浼氱湡姝ｅ垱寤轰細璇濄€?
     if (activeId || location.pathname !== '/ai') {
       abortRef.current?.abort();
       setStreaming('idle');
@@ -195,7 +144,7 @@ export default function AiPage() {
     const p = providers.find((x) => x.id === providerId);
     if (!p) return;
     const defaultModel = p.defaultModel || p.models[0] || '';
-    // 持久化偏好，供下次新建会话读取。
+    // 鎸佷箙鍖栧亸濂斤紝渚涗笅娆℃柊寤轰細璇濊鍙栥€?
     setPrefProviderId(providerId);
     localStorage.setItem('ai.prefProviderId', providerId);
     setPrefModel(defaultModel || null);
@@ -280,7 +229,7 @@ export default function AiPage() {
         case 'error':
           setStreaming('idle');
           setPendingApproval(null);
-          // 以红色错误块渲染（不再拼进流式文本）。
+          // 浠ョ孩鑹查敊璇潡娓叉煋锛堜笉鍐嶆嫾杩涙祦寮忔枃鏈級銆?
           setStreamError((prev) => (prev ? `${prev}\n${evt.message}` : evt.message));
           break;
       }
@@ -298,7 +247,7 @@ export default function AiPage() {
       let target = session;
 
       if (!target && !targetId) {
-        // 空态首条消息：此时才真正创建会话（用浏览器偏好的供应商/模型）。
+        // 绌烘€侀鏉℃秷鎭細姝ゆ椂鎵嶇湡姝ｅ垱寤轰細璇濓紙鐢ㄦ祻瑙堝櫒鍋忓ソ鐨勪緵搴斿晢/妯″瀷锛夈€?
         const provider = activeProvider ?? enabledProviders[0];
         if (!provider) {
           navigate('/settings/ai');
@@ -310,7 +259,7 @@ export default function AiPage() {
           targetId = s.id;
           setSessions((prev) => [s, ...prev]);
           navigate(`/ai/${s.id}`);
-          // 新会话入列后，让侧边栏重新拉取会话列表。
+          // 鏂颁細璇濆叆鍒楀悗锛岃渚ц竟鏍忛噸鏂版媺鍙栦細璇濆垪琛ㄣ€?
           sidebarRefreshKeyRef.current += 1;
           setSidebarRefreshKey(sidebarRefreshKeyRef.current);
         } catch (e) {
@@ -321,7 +270,7 @@ export default function AiPage() {
 
       if (!targetId || !target) return;
 
-      // 本地先追加用户消息（乐观 UI）。
+      // 鏈湴鍏堣拷鍔犵敤鎴锋秷鎭紙涔愯 UI锛夈€?
       const userMsg: AiMessage = {
         id: `local-${Date.now()}`,
         role: 'user',
@@ -378,7 +327,7 @@ export default function AiPage() {
       } catch (e) {
         if ((e as Error).name !== 'AbortError') {
           setStreaming('idle');
-          setStreamingText((prev) => prev + `\n\n> ⚠️ ${e instanceof Error ? e.message : String(e)}`);
+          setStreamingText((prev) => prev + `\n\n> 鈿狅笍 ${e instanceof Error ? e.message : String(e)}`);
         }
       } finally {
         if (abortRef.current === abort) abortRef.current = null;
@@ -389,7 +338,6 @@ export default function AiPage() {
   );
 
   const handleFeedback = useCallback((_good: boolean) => {
-    // 反馈落库（服务端暂无存储，先本地提示）。
   }, []);
 
   const handleRegenerate = useCallback(() => {
@@ -431,7 +379,6 @@ export default function AiPage() {
 
   return (
     <div className="flex h-full min-h-0 w-full flex-1 flex-col md:flex-row">
-      {/* 桌面端会话列表（自身滚动，不随消息容器滚动） */}
       <aside className="hidden w-64 shrink-0 overflow-y-auto border-r border-default-200 md:block dark:border-default-800">
         <AiSidebar
           activeSessionId={activeId}
@@ -441,9 +388,7 @@ export default function AiPage() {
         />
       </aside>
 
-      {/* 主区域：消息滚动 + 底部输入固定在剩余空间底部 */}
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-        {/* 移动端顶栏 */}
         <div className="flex shrink-0 items-center gap-2 border-b border-default-200 px-3 py-2 md:hidden dark:border-default-800">
           <Button isIconOnly size="sm" variant="ghost" aria-label={t('ai.back')} onPress={() => navigate('/')}>
             <ArrowLeft className="size-4" />
@@ -538,7 +483,6 @@ export default function AiPage() {
           />
         </ChatConversation>
 
-        {/* 底部输入区：shrink-0，固定于主区域底部 */}
         <div className="shrink-0 px-4 pt-3 pb-4 sm:pb-8 ">
           <div className="mx-auto w-full sm:w-[80%]">
             <AiComposer
@@ -559,264 +503,3 @@ export default function AiPage() {
   );
 }
 
-function AiComposer({
-  providers,
-  activeProviderId,
-  activeModel,
-  isGenerating,
-  canSend,
-  onSend,
-  onStop,
-  onSelectProvider,
-  onSelectModel,
-}: {
-  providers: AiProvider[];
-  activeProviderId: string | null;
-  activeModel: string;
-  isGenerating: boolean;
-  canSend: boolean;
-  onSend: (text: string) => void;
-  onStop: () => void;
-  onSelectProvider: (id: string) => void;
-  onSelectModel: (model: string) => void;
-}) {
-  const { t } = useTranslation();
-  const [value, setValue] = useState('');
-  const [modelMenuOpen, setModelMenuOpen] = useState(false);
-  const [vendorKey, setVendorKey] = useState<string>('');
-  const activeProvider = providers.find((p) => p.id === activeProviderId) ?? providers[0];
-
-  // 模型按厂商分组（vendor/model 前缀；无前缀归「全部」）。
-  // OpenRouter 的 `~vendor/model` 最新版别名并入对应厂商，且组内置顶。
-  const modelGroups = useMemo(() => {
-    const map = new Map<string, string[]>();
-    for (const m of activeProvider?.models ?? []) {
-      const parsed = parseModelLabel(m);
-      if (!parsed.name) continue;
-      const vendor = parsed.vendor ?? '';
-      const list = map.get(vendor) ?? [];
-      list.push(m);
-      map.set(vendor, list);
-    }
-    // 组内排序：最新版（~ 前缀）置顶，其余按名称。
-    for (const list of map.values()) {
-      list.sort((a, b) => {
-        const la = parseModelLabel(a);
-        const lb = parseModelLabel(b);
-        if (la.isLatest !== lb.isLatest) return la.isLatest ? -1 : 1;
-        return la.name.localeCompare(lb.name);
-      });
-    }
-    return map;
-  }, [activeProvider]);
-
-  // 厂商列按 a-z 排序。
-  const vendors = useMemo(
-    () => [...modelGroups.keys()].sort((a, b) => a.localeCompare(b)),
-    [modelGroups],
-  );
-  // 当前厂商：手动选择优先，否则从当前模型推断。
-  const currentVendor = vendors.includes(vendorKey)
-    ? vendorKey
-    : (parseModelLabel(activeModel).vendor ?? '');
-  const vendorModels = modelGroups.get(currentVendor) ?? [];
-
-  const handleSubmit = () => {
-    const trimmed = value.trim();
-    if (!trimmed || isGenerating) return;
-    setValue('');
-    onSend(trimmed);
-  };
-
-  return (
-    <PromptInput
-      status={isGenerating ? 'streaming' : 'ready'}
-      variant="primary"
-      value={value}
-      onValueChange={setValue}
-      onStop={onStop}
-      onSubmit={handleSubmit}
-    >
-      <PromptInput.Shell>
-        <PromptInput.Content>
-          <PromptInput.TextArea
-            placeholder={t('ai.inputPlaceholder')}
-            aria-label={t('ai.inputPlaceholder')}
-          />
-        </PromptInput.Content>
-        <PromptInput.Toolbar>
-          <PromptInput.ToolbarStart>
-            <Select
-              aria-label={t('ai.provider')}
-              selectedKey={activeProvider?.id}
-              onSelectionChange={(key) => {
-                if (key) onSelectProvider(String(key));
-              }}
-              isDisabled={isGenerating}
-              placeholder={t('ai.provider')}
-              variant="secondary"
-              className="min-w-0 max-w-[110px] sm:max-w-[140px]"
-            >
-              <Select.Trigger className="flex w-full items-center gap-1 overflow-hidden">
-                <Select.Value className="min-w-0 flex-1 truncate" />
-                <Select.Indicator className="shrink-0" />
-              </Select.Trigger>
-              <Select.Popover>
-                <ListBox items={providers} className="max-h-[200px] overflow-y-auto">
-                  {(item) => (
-                    <ListBox.Item key={item.id} id={item.id} textValue={item.name} className="truncate">
-                      {item.name}
-                    </ListBox.Item>
-                  )}
-                </ListBox>
-              </Select.Popover>
-            </Select>
-            <Popover
-              isOpen={modelMenuOpen}
-              onOpenChange={setModelMenuOpen}
-            >
-              <Popover.Trigger>
-                <Button
-                  aria-label={t('ai.model')}
-                  variant="secondary"
-                  isDisabled={isGenerating || !activeProvider}
-                  className="h-9 text-foreground min-w-0 max-w-[120px] shrink-0 gap-1 rounded-field border border-default-200 px-3 sm:max-w-[160px] dark:border-default-800"
-                >
-                  <Sparkles className="size-4 shrink-0" />
-                  <span className="min-w-0 flex-1 truncate text-sm">
-                    {activeModel ? formatModelDisplay(activeModel) : t('ai.model')}
-                  </span>
-                  <ChevronDown className="size-3.5 shrink-0 text-muted" />
-                </Button>
-              </Popover.Trigger>
-              <Popover.Content className="min-w-[240px] p-0">
-                <Popover.Dialog>
-                  <div className="flex max-h-[280px] overflow-hidden">
-                    {/* 左列：厂商 */}
-                    <div className="w-auto min-w-[100px] shrink-0 overflow-y-auto border-r border-default-200 py-1 dark:border-default-800">
-                      {vendors.map((vendor) => {
-                        const active = vendor === currentVendor;
-                        const vendorIcon = vendor ? resolveModelIcon(vendor) : null;
-                        return (
-                          <button
-                            key={vendor || '(all)'}
-                            type="button"
-                            onClick={() => {
-                              setVendorKey(vendor);
-                            }}
-                            className={`flex w-full items-center gap-1.5 truncate px-3 py-1.5 text-left text-sm transition-colors ${
-                              active
-                                ? 'bg-accent font-medium text-white'
-                                : 'text-foreground hover:bg-default/60'
-                            }`}
-                          >
-                            {vendorIcon && (
-                              <img
-                                src={vendorIcon}
-                                alt=""
-                                className="size-4 shrink-0 object-contain"
-                                loading="lazy"
-                              />
-                            )}
-                            <span className="min-w-0 flex-1 truncate">
-                              {vendor ? titleCaseWords(vendor) : t('ai.vendorAll')}
-                            </span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                    {/* 右列：该厂商的模型 */}
-                    <div className="min-w-0 w-auto flex-1 overflow-y-auto py-1">
-                      {vendorModels.map((m) => {
-                        const parsed = parseModelLabel(m);
-                        const selected = m === activeModel;
-                        // 图标规则：厂商有图标则模型不再显示图标；
-                        // 仅当无厂商（「全部」组）或厂商无图标时，模型按自身名称尝试匹配图标。
-                        const vendorIcon = parsed.vendor ? resolveModelIcon(parsed.vendor) : null;
-                        const modelIcon = vendorIcon ? null : resolveModelIcon(parsed.name);
-                        return (
-                          <button
-                            key={m}
-                            type="button"
-                            onClick={() => {
-                              onSelectModel(m);
-                              setModelMenuOpen(false);
-                            }}
-                            className={`flex min-w-[170px] w-full items-center justify-between gap-2 px-3 py-1.5 text-left text-sm transition-colors ${
-                              selected
-                                ? 'bg-accent font-medium text-white'
-                                : 'text-foreground hover:bg-default/60'
-                            }`}
-                          >
-                            <span className="flex min-w-0 items-center gap-1.5 flex-1 relative">
-                              {modelIcon && (
-                                <img
-                                  src={modelIcon}
-                                  alt=""
-                                  className="size-4 shrink-0 object-contain"
-                                  loading="lazy"
-                                />
-                              )}
-                              <span className="min-w-0 flex-1 truncate">
-                                {titleCaseWords(parsed.name)}
-                              </span>
-                              <span className="right-0 flex items-center gap-1">
-                                {parsed.isLatest && (
-                                  <Chip
-                                    color="accent"
-                                    variant="primary"
-                                    size="sm"
-                                    className="shrink-0 text-white"
-                                  >
-                                    <Chip.Label>{t('ai.latest')}</Chip.Label>
-                                  </Chip>
-                                )}
-                                {parsed.isBatch && (
-                                  <Chip
-                                    color="accent"
-                                    variant="primary"
-                                    size="sm"
-                                    className="shrink-0 text-white"
-                                  >
-                                    <Chip.Label>{t('ai.batch')}</Chip.Label>
-                                  </Chip>
-                                )}
-                                {parsed.isFree && (
-                                  <Chip
-                                    color="success"
-                                    variant="primary"
-                                    size="sm"
-                                    className="shrink-0 text-white"
-                                  >
-                                    <Chip.Label>{t('ai.free')}</Chip.Label>
-                                  </Chip>
-                                )}
-                              </span>
-                            </span>
-                          </button>
-                        );
-                      })}
-                      {vendorModels.length === 0 && (
-                        <div className="px-3 py-6 text-center text-xs text-muted">
-                          {t('ai.noModels')}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </Popover.Dialog>
-              </Popover.Content>
-            </Popover>
-          </PromptInput.ToolbarStart>
-          <PromptInput.ToolbarEnd>
-            <PromptInput.Send
-              aria-label={isGenerating ? t('ai.stop') : t('ai.send')}
-              isDisabled={!isGenerating && !value.trim()}
-            >
-              <PaperPlane/>
-            </PromptInput.Send>
-          </PromptInput.ToolbarEnd>
-        </PromptInput.Toolbar>
-      </PromptInput.Shell>
-    </PromptInput>
-  );
-}

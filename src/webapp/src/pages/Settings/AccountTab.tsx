@@ -1,32 +1,12 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Button, Card, Checkbox, CheckboxGroup, Chip, Description, Input, Label, Modal, Spinner, Switch, Tabs, TextField } from '@heroui/react';
-import { getAccountStatus, listAccounts, createAccount, updateAccount, deleteAccount, changePassword } from '../../api/account';
+import { Button, Card, Chip, Spinner } from '@heroui/react';
+import { getAccountStatus, listAccounts, deleteAccount } from '../../api/account';
 import { getStoredUser } from '../../api/auth';
-import type { AccountListItem, UserPermissions } from '../../types/models';
+import type { AccountListItem } from '../../types/models';
 import { useDialog } from '../../hooks/useDialog';
-
-const PAGE_OPTIONS: { key: string; labelKey: string }[] = [
-  { key: 'dashboard', labelKey: 'nav.dashboard' },
-  { key: 'agents', labelKey: 'nav.agents' },
-  { key: 'shell', labelKey: 'nav.shell' },
-  { key: 'files', labelKey: 'nav.explorer' },
-  { key: 'system', labelKey: 'nav.system' },
-  { key: 'othersoft', labelKey: 'nav.softwareData' },
-  { key: 'proxy', labelKey: 'nav.proxyBrowser' },
-  { key: 'ai', labelKey: 'nav.ai' },
-  { key: 'builder', labelKey: 'nav.builder' },
-  { key: 'audit', labelKey: 'nav.auditLogs' },
-  { key: 'plugins', labelKey: 'nav.plugins' },
-];
-
-const ACTION_OPTIONS = [
-  'shell.command', 'file.list', 'file.read', 'file.write', 'file.delete',
-  'file.mkdir', 'file.rename', 'file.move', 'file.copy', 'file.compress', 'file.decompress',
-  'system.info', 'system.processes', 'system.process.kill', 'system.network',
-  'credentials',
-  'proxy.fetch',
-];
+import { AccountModal } from './AccountModal';
+import { ChangePasswordModal } from './ChangePasswordModal';
 
 export default function AccountTab() {
   const { t } = useTranslation();
@@ -38,21 +18,9 @@ export default function AccountTab() {
   // Create / edit modal
   const [modalOpen, setModalOpen] = useState(false);
   const [editingAccount, setEditingAccount] = useState<AccountListItem | null>(null);
-  const [formName, setFormName] = useState('');
-  const [formPassword, setFormPassword] = useState('');
-  const [formRole, setFormRole] = useState('Operator');
-  const [formFullAccess, setFormFullAccess] = useState(true);
-  const [formPages, setFormPages] = useState<string[]>([]);
-  const [formActions, setFormActions] = useState<string[]>([]);
-  const [saving, setSaving] = useState(false);
-  const [formError, setFormError] = useState<string | null>(null);
 
   // Change password modal
   const [pwModalOpen, setPwModalOpen] = useState(false);
-  const [currentPw, setCurrentPw] = useState('');
-  const [newPw, setNewPw] = useState('');
-  const [pwSaving, setPwSaving] = useState(false);
-  const [pwError, setPwError] = useState<string | null>(null);
 
   const loadData = useCallback(async () => {
     try {
@@ -70,60 +38,12 @@ export default function AccountTab() {
 
   const openCreateModal = () => {
     setEditingAccount(null);
-    setFormName('');
-    setFormPassword('');
-    setFormRole('Operator');
-    setFormFullAccess(true);
-    setFormPages([]);
-    setFormActions([]);
-    setFormError(null);
     setModalOpen(true);
   };
 
   const openEditModal = (acc: AccountListItem) => {
     setEditingAccount(acc);
-    setFormName(acc.username);
-    setFormPassword('');
-    setFormRole(acc.role);
-    setFormFullAccess(acc.permissions?.fullAccess ?? true);
-    setFormPages(acc.permissions?.allowedPages ?? []);
-    setFormActions(acc.permissions?.allowedActions ?? []);
-    setFormError(null);
     setModalOpen(true);
-  };
-
-  const buildPermissions = (): UserPermissions => ({
-    fullAccess: formFullAccess,
-    allowedPages: formPages,
-    allowedActions: formActions,
-  });
-
-  const handleSave = async () => {
-    if (!formName.trim()) { setFormError(t('settings.account.nameRequired')); return; }
-    if (!editingAccount && !formPassword) { setFormError(t('settings.account.passwordRequired')); return; }
-    if (!editingAccount && formPassword.length < 6) { setFormError(t('settings.account.passwordMinLength')); return; }
-    setFormError(null);
-    setSaving(true);
-    try {
-      if (editingAccount) {
-        await updateAccount(editingAccount.id, {
-          username: formName.trim(),
-          role: formRole,
-          permissions: buildPermissions(),
-        });
-      } else {
-        await createAccount({
-          username: formName.trim(),
-          password: formPassword,
-          role: formRole,
-          permissions: buildPermissions(),
-        });
-      }
-      setModalOpen(false);
-      await loadAccounts();
-    } catch (err: unknown) {
-      setFormError(err instanceof Error ? err.message : String(err));
-    } finally { setSaving(false); }
   };
 
   const handleDelete = async (acc: AccountListItem) => {
@@ -131,25 +51,10 @@ export default function AccountTab() {
     if (!result.confirmed) return;
     try {
       await deleteAccount(acc.id);
-      await loadAccounts();
-    } catch (err: unknown) {
+      await loadData();
+    } catch {
       // Show error? For now silently fail
     }
-  };
-
-  const handleChangePassword = async () => {
-    if (!currentPw) { setPwError(t('settings.account.currentPasswordRequired')); return; }
-    if (newPw.length < 6) { setPwError(t('settings.account.passwordMinLength')); return; }
-    setPwError(null);
-    setPwSaving(true);
-    try {
-      await changePassword({ currentPassword: currentPw, newPassword: newPw });
-      setPwModalOpen(false);
-      setCurrentPw('');
-      setNewPw('');
-    } catch (err: unknown) {
-      setPwError(err instanceof Error ? err.message : String(err));
-    } finally { setPwSaving(false); }
   };
 
   async function loadAccounts() {
@@ -239,151 +144,18 @@ export default function AccountTab() {
       </Card>
 
       {/* Create/Edit Modal */}
-      <Modal.Backdrop isOpen={modalOpen} onOpenChange={(open) => { if (!open) setModalOpen(false); }}>
-        <Modal.Container placement="center" size="lg">
-          <Modal.Dialog>
-            <Modal.CloseTrigger />
-            <Modal.Header>
-              <Modal.Heading>
-                {editingAccount ? t('settings.account.editAccount') : t('settings.account.createAccount')}
-              </Modal.Heading>
-            </Modal.Header>
-            <Modal.Body>
-              <div className="space-y-4">
-                {formError && (
-                  <div className="p-2 bg-danger-50 text-danger-700 rounded text-xs">{formError}</div>
-                )}
-                <TextField variant="secondary" value={formName} onChange={setFormName}>
-                  <Label>{t('settings.account.username')}</Label>
-                  <Input variant="secondary" autoFocus />
-                </TextField>
-                {!editingAccount && (
-                  <TextField variant="secondary" value={formPassword} onChange={setFormPassword}>
-                    <Label>{t('settings.account.password')}</Label>
-                    <Input variant="secondary" type="password" />
-                  </TextField>
-                )}
-                <div className="space-y-2">
-                  <Label>{t('settings.account.role')}</Label>
-                  <Tabs className="w-full max-w-md">
-                    <Tabs.ListContainer>
-                      <Tabs.List aria-label="选项">
-                        <Tabs.Tab onPress={() => setFormRole('Admin')} id="roleAdmin">
-                          {t('settings.account.roleAdmin')}
-                          <Tabs.Indicator />
-                        </Tabs.Tab>
-                        <Tabs.Tab onPress={() => setFormRole('Operator')} id="roleOperator">
-                          {t('settings.account.roleOperator')}
-                          <Tabs.Indicator />
-                        </Tabs.Tab>
-                      </Tabs.List>
-                    </Tabs.ListContainer>
-                  </Tabs>
-                </div>
-
-                <div className="space-y-3 border-t border-default-200 pt-3">
-                  <Switch isSelected={formFullAccess} onChange={setFormFullAccess}>
-                    <Switch.Control><Switch.Thumb /></Switch.Control>
-                    <Switch.Content>
-                      <Label className="text-sm">{t('settings.account.fullAccess')}</Label>
-                    </Switch.Content>
-                  </Switch>
-
-                  {!formFullAccess && (
-                    <div className="space-y-4">
-                      <div>
-                        <CheckboxGroup
-                          name="allowedPages"
-                          value={formPages}
-                          onChange={(vals) => setFormPages([...vals])}
-                        >
-                          <Label>{t('settings.account.allowedPages')}</Label>
-                          <div className="grid grid-cols-3 gap-1 mt-1 h-40 overflow-y-auto">
-                            {PAGE_OPTIONS.map((p) => (
-                              <Checkbox value={p.key}>
-                                <Checkbox.Content className="flex flex-row items-center gap-2">
-                                  <Checkbox.Control className='bg-default'>
-                                    <Checkbox.Indicator />
-                                  </Checkbox.Control>
-                                  {t(p.labelKey)}
-                                </Checkbox.Content>
-                              </Checkbox>
-                            ))}
-                          </div>
-                        </CheckboxGroup>
-                      </div>
-                      <div>
-                        <CheckboxGroup
-                          name="allowedActions"
-                          value={formActions}
-                          onChange={(vals) => setFormActions([...vals])}
-                        >
-                          <Label>{t('settings.account.allowedActions')}</Label>
-                          <div className="grid grid-cols-3 gap-1 mt-1 h-40 overflow-y-auto">
-                            {ACTION_OPTIONS.map((a) => (
-                              <Checkbox key={a} value={a}>
-                                <Checkbox.Content className="flex flex-row items-center gap-2">
-                                  <Checkbox.Control className='bg-default'>
-                                    <Checkbox.Indicator />
-                                  </Checkbox.Control>
-                                  {t(`riskPolicy.labels.${a}`)}
-                                </Checkbox.Content>
-                              </Checkbox>
-                            ))}
-                          </div>
-                        </CheckboxGroup>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </Modal.Body>
-            <Modal.Footer>
-              <Button variant="ghost" onPress={() => setModalOpen(false)}>
-                {t('common.cancel')}
-              </Button>
-              <Button variant="primary" isPending={saving} onPress={handleSave}>
-                {t('settings.create')}
-              </Button>
-            </Modal.Footer>
-          </Modal.Dialog>
-        </Modal.Container>
-      </Modal.Backdrop>
+      <AccountModal
+        open={modalOpen}
+        editing={editingAccount}
+        onClose={() => setModalOpen(false)}
+        onSaved={() => void loadAccounts()}
+      />
 
       {/* Change Password Modal */}
-      <Modal.Backdrop isOpen={pwModalOpen} onOpenChange={(open) => { if (!open) { setPwModalOpen(false); setPwError(null); } }}>
-        <Modal.Container placement="center" size="sm">
-          <Modal.Dialog>
-            <Modal.CloseTrigger />
-            <Modal.Header>
-              <Modal.Heading>{t('settings.account.changePassword')}</Modal.Heading>
-            </Modal.Header>
-            <Modal.Body>
-              <div className="space-y-4">
-                {pwError && (
-                  <div className="p-2 bg-danger-50 text-danger-700 rounded text-xs">{pwError}</div>
-                )}
-                <TextField variant="secondary" value={currentPw} onChange={setCurrentPw}>
-                  <Label>{t('settings.account.currentPassword')}</Label>
-                  <Input variant="secondary" type="password" autoFocus />
-                </TextField>
-                <TextField variant="secondary" value={newPw} onChange={setNewPw}>
-                  <Label>{t('settings.account.newPassword')}</Label>
-                  <Input variant="secondary" type="password" />
-                </TextField>
-              </div>
-            </Modal.Body>
-            <Modal.Footer>
-              <Button variant="ghost" onPress={() => { setPwModalOpen(false); setPwError(null); }}>
-                {t('common.cancel')}
-              </Button>
-              <Button variant="primary" isPending={pwSaving} onPress={handleChangePassword}>
-                {t('settings.account.changePassword')}
-              </Button>
-            </Modal.Footer>
-          </Modal.Dialog>
-        </Modal.Container>
-      </Modal.Backdrop>
+      <ChangePasswordModal
+        open={pwModalOpen}
+        onClose={() => setPwModalOpen(false)}
+      />
 
       {DialogComponent}
     </div>

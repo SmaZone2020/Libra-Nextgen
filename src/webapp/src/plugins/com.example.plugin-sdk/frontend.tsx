@@ -10,7 +10,7 @@ import { pretty } from './shared';
 const HOST_API: { member: string; desc: string; sample: string }[] = [
   { member: 'selectedAgent', desc: '当前选中的设备（与控制台顶部选择器共享）', sample: 'selectedAgent?.hostname' },
   { member: 'selectAgent(id)', desc: '切换选中设备（与主控制台联动）', sample: 'selectAgent(agentId)' },
-  { member: 'dispatchTask(pluginId, action, args?, agentId?)', desc: '调用插件动作 → Agent 内存执行模块', sample: "dispatchTask('com.example.plugin-sdk', 'showcase', { capability: 'fs' })" },
+  { member: 'dispatchTask(pluginId, action, args?, agentId?)', desc: '调用插件操作 → Agent 内存执行模块', sample: "dispatchTask('com.example.plugin-sdk', 'showcase', { capability: 'fs' })" },
   { member: 'subscribeOutput(cb, action?)', desc: '订阅 WS 实时推送（可选按 action 过滤），返回退订函数', sample: "subscribeOutput(o => setX(o.data), 'showcase')" },
   { member: 'lastOutput', desc: '最近一条 plugin.result 推送（便捷读取）', sample: 'lastOutput?.data' },
 ];

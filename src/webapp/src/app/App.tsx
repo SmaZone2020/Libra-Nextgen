@@ -109,7 +109,6 @@ function AgentSelector() {
 
   if (!AGENT_ROUTES.has(pathname) && !isPluginRoute(pathname)) return null;
 
-  // Only online agents are actionable; offline ones are hidden from the picker.
   const onlineAgents = agents.filter((a) => a.status === 'Online');
 
   return (
@@ -117,9 +116,13 @@ function AgentSelector() {
       <Dropdown>
         <Button
           variant="tertiary"
-          className="flex-1 sm:w-[220px] sm:flex-none justify-start"
+          className="flex-1 sm:w-[220px] sm:flex-none justify-start truncate"
+          isDisabled={onlineAgents.length === 0}
         >
-          {selectedAgent ? `${selectedAgent.hostname} (${selectedAgent.ipAddress})` : t('common.selectAgent')}
+          {onlineAgents.length === 0 ? 
+          t('agents.noAgents') : selectedAgent ?
+           `${selectedAgent.hostname} (${selectedAgent.ipAddress})` :
+          t('common.selectAgent')}
         </Button>
         <Dropdown.Popover>
           <Dropdown.Menu
