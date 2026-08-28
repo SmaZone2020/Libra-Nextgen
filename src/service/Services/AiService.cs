@@ -48,6 +48,10 @@ public sealed class AiRunState
     public bool Finished { get; set; }
     public CancellationTokenSource? Cts { get; set; }
     public DateTime StartedAt { get; set; } = DateTime.UtcNow;
+
+    /// <summary>向当前 SSE 连接推送事件（approval 挂起后前端仍保持同一连接）。</summary>
+    public Func<string, Task>? Notify { get; set; }
+    public Task NotifyAsync(string payload) => Notify?.Invoke(payload) ?? Task.CompletedTask;
 }
 
 public class AiService
@@ -62,6 +66,8 @@ public class AiService
     private readonly ILogger<AiService> _logger;
     private readonly AiSettings _aiSettings;
     private readonly ConcurrentDictionary<string, AiRunState> _runs = new();
+    /// <summary>审批决策门闩：callId → 等待中的 TaskCompletionSource（普通 MCP 等待语义）。</summary>
+    private readonly ConcurrentDictionary<string, TaskCompletionSource<string>> _approvalGates = new();
 
     private static readonly Dictionary<string, string> DefaultBaseUrls = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -551,6 +557,9 @@ public class AiService
             Model = session.Model,
             UserId = session.UserId,
             JustitiaTier = justitiaTier,
+            // 审批挂起时前端仍保持同一 SSE 连接：把 onEvent 挂到 state 上，
+            // ResolveApprovalAsync 无需新建流即可向原连接推送 tool_result。
+            Notify = onEvent,
         };
         _runs[session.Id] = state;
         state.Cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
@@ -685,7 +694,11 @@ public class AiService
                             ["currentTier"] = (int)state.EffectiveTier,
                         };
                         await onEvent(JsonSerializer.Serialize(new { type = "approval", toolCall = new { id = callId, toolName = name, argsText, reason = $"tier elevation requested: {state.EffectiveTier} → {requested}", kind = "escalation", requiredTier = (int)requested, currentTier = (int)state.EffectiveTier } }, JsonOpts));
-                        return; // 挂起，等待 /chat/action 恢复。
+                        // 挂起等待 Operator 决策：把控制权交给内部等待循环。
+                        // 工具调用始终保留在 LlmMessages（assistant tool_calls 已预置），
+                        // 批准/拒绝后由 ResolveApprovalAsync 以普通 MCP 工具结果的方式恢复。
+                        await WaitForApprovalAsync(state, name, callId, ct);
+                        continue; // 继续处理本轮的其余/后续工具调用。
                     }
 
                     // Justitia 档位门槛：有效档位（含审批临时提升）不足 → 挂起等审批。
@@ -706,7 +719,9 @@ public class AiService
                             ["currentTier"] = (int)state.EffectiveTier,
                         };
                         await onEvent(JsonSerializer.Serialize(new { type = "approval", toolCall = new { id = callId, toolName = name, argsText, reason = $"tool requires tier {required} (current {state.EffectiveTier})", kind = "escalation", requiredTier = (int)required, currentTier = (int)state.EffectiveTier } }, JsonOpts));
-                        return; // 挂起，等待 /chat/action 恢复。
+                        // 挂起等待 Operator 决策（同 request_tier_elevation）。
+                        await WaitForApprovalAsync(state, name, callId, ct);
+                        continue;
                     }
 
                     await onEvent(JsonSerializer.Serialize(new { type = "tool_call", toolCall = new { id = callId, toolName = name, argsText, state = "running" } }, JsonOpts));
@@ -1195,6 +1210,48 @@ public class AiService
         return toolCalls;
     }
 
+    /// <summary>
+    /// 挂起等待 Operator 对当前工具调用的决策（无限时）。
+    /// RunChatAsync 的 SSE 保持打开（心跳保活由 Kestrel 处理），前端收到
+    /// approval 事件后弹模态框；用户批准/拒绝时通过 /chat/action 调用
+    /// ResolveApprovalAsync 完成工具执行并写入 tool 结果，本循环随即继续。
+    /// </summary>
+    private async Task WaitForApprovalAsync(AiRunState state, string toolName, string callId, CancellationToken ct)
+    {
+        var gate = _approvalGates.GetOrAdd(callId, _ => new TaskCompletionSource<string>(
+            TaskCreationOptions.RunContinuationsAsynchronously));
+
+        try
+        {
+            // 无限等待；仅取消/会话切换时退出（SSE 断开由控制器层处理）。
+            var output = await gate.Task.WaitAsync(ct);
+            var pending = state.ToolCalls.FirstOrDefault(t => t.Id == callId);
+            if (pending == null) return;
+
+            var isError = output.Contains("\"error\"", StringComparison.Ordinal);
+            pending.State = isError ? "error" : "output-available";
+            pending.Output = output;
+            if (isError) pending.Error = output;
+            await EmitToolResultAsync(state, callId, pending.ToolName, output, pending.State);
+            state.LlmMessages.Add(new JsonObject { ["role"] = "tool", ["tool_call_id"] = callId, ["content"] = output });
+        }
+        catch (OperationCanceledException)
+        {
+            // 运行被取消：工具保持挂起状态，不执行。
+            var pending = state.ToolCalls.FirstOrDefault(t => t.Id == callId);
+            if (pending != null) pending.State = "requires-action";
+        }
+        finally
+        {
+            _approvalGates.TryRemove(callId, out _);
+        }
+    }
+
+    /// <summary>统一发送 tool_result SSE 事件。</summary>
+    private static async Task EmitToolResultAsync(
+        AiRunState state, string callId, string toolName, string output, string toolState)
+        => await state.NotifyAsync(JsonSerializer.Serialize(new { type = "tool_result", toolCallId = callId, toolName, output, state = toolState }, JsonOpts));
+
     /// <summary>审批/拒绝挂起的工具调用后继续运行。</summary>
     public async Task ResolveApprovalAsync(
         string sessionId, string toolCallId, bool approved, Func<string, Task> onEvent,
@@ -1235,81 +1292,65 @@ public class AiService
             });
         }
 
+        string output;
         if (!approved)
         {
-            pending.State = "error";
-            pending.Error = "rejected by operator";
-            var rejection = "Tool call was rejected by the operator. Explain to the user that the operation was not approved.";
-            state.LlmMessages.Add(new JsonObject { ["role"] = "tool", ["tool_call_id"] = toolCallId, ["content"] = rejection });
-            await onEvent(JsonSerializer.Serialize(new { type = "tool_result", toolCallId, toolName = pending.ToolName, output = rejection, state = "error" }, JsonOpts));
-            state.AssistantText += "\n\n[操作已被拒绝]\n\n";
-            await ChatLoopAsync(state, provider, onEvent, ct);
-            CleanupRunIfFinished(state, sessionId);
-            return;
+            // 拒绝：以普通工具结果返回给 LLM，AI 基于"被拒绝"继续回话。
+            output = McpUtils.Error("rejected by operator");
         }
-
-        // 批准 → 若是档位提升请求（escalation），按许可时长授予临时提升：
-        //   one-time：仅本次调用执行（不改变已有许可窗口，后续同档工具仍需审批）；
-        //   5min/20min：提升 EffectiveTier，窗口内同档工具直接执行，到期回落。
-        if (pendingKind == "escalation")
+        else
         {
-            switch (permit)
+            // 批准 → 若是档位提升请求（escalation），按许可时长授予临时提升：
+            //   one-time：仅本次调用执行（不改变已有许可窗口，后续同档工具仍需审批）；
+            //   5min/20min：提升 EffectiveTier，窗口内同档工具直接执行，到期回落。
+            if (pendingKind == "escalation")
             {
-                case "5min":
-                    state.BoostTier = requiredTier;
-                    state.BoostExpiresAt = DateTime.UtcNow.AddMinutes(5);
-                    break;
-                case "20min":
-                    state.BoostTier = requiredTier;
-                    state.BoostExpiresAt = DateTime.UtcNow.AddMinutes(20);
-                    break;
-                default: // "one-time"：不动已有许可窗口，仅本次执行。
-                    break;
+                switch (permit)
+                {
+                    case "5min":
+                        state.BoostTier = requiredTier;
+                        state.BoostExpiresAt = DateTime.UtcNow.AddMinutes(5);
+                        break;
+                    case "20min":
+                        state.BoostTier = requiredTier;
+                        state.BoostExpiresAt = DateTime.UtcNow.AddMinutes(20);
+                        break;
+                    default: // "one-time"：不动已有许可窗口，仅本次执行。
+                        break;
+                }
+            }
+
+            // request_tier_elevation：提升本身即结果，无真实工具可执行。
+            if (pending.ToolName == "request_tier_elevation")
+            {
+                output = McpUtils.Ok(new
+                {
+                    status = "elevation-granted",
+                    tier = state.EffectiveTier.ToString().ToLowerInvariant(),
+                    permit,
+                    expiresAt = state.BoostExpiresAt?.ToUniversalTime().ToString("o"),
+                });
+            }
+            else
+            {
+                // 普通工具：执行并把结果交给 LLM（与 ChatLoopAsync 直接执行路径一致）。
+                try
+                {
+                    output = await InvokeToolAsync(pending.ToolName, JsonNode.Parse(pending.ArgsText) as JsonObject ?? new JsonObject(), ct);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "AI tool {Tool} threw unhandled exception after approval", pending.ToolName);
+                    output = McpUtils.Error($"tool '{pending.ToolName}' failed: {ex.Message}");
+                }
             }
         }
 
-        // request_tier_elevation：提升本身即结果，无真实工具可执行——
-        // 直接回填确认结果并继续循环，避免反射调用空工具。
-        if (pendingKind == "escalation" && pending.ToolName == "request_tier_elevation")
-        {
-            pending.State = "output-available";
-            var confirmed = McpUtils.Ok(new
-            {
-                status = "elevation-granted",
-                tier = state.EffectiveTier.ToString().ToLowerInvariant(),
-                permit,
-                expiresAt = state.BoostExpiresAt?.ToUniversalTime().ToString("o"),
-            });
-            pending.Output = confirmed;
-            await onEvent(JsonSerializer.Serialize(new { type = "tool_result", toolCallId, toolName = pending.ToolName, output = confirmed, state = pending.State }, JsonOpts));
-            state.LlmMessages.Add(new JsonObject { ["role"] = "tool", ["tool_call_id"] = toolCallId, ["content"] = confirmed });
-            await ChatLoopAsync(state, provider, onEvent, ct);
-            CleanupRunIfFinished(state, sessionId);
-            return;
-        }
-
-        // 批准 → 执行。
-        pending.State = "running";
-        await onEvent(JsonSerializer.Serialize(new { type = "tool_call", toolCall = new { id = toolCallId, toolName = pending.ToolName, argsText = pending.ArgsText, state = "running" } }, JsonOpts));
-        string output;
-        try
-        {
-            output = await InvokeToolAsync(pending.ToolName, JsonNode.Parse(pending.ArgsText) as JsonObject ?? new JsonObject(), ct);
-        }
-        catch (Exception ex)
-        {
-            // 兜底：工具执行异常转成结构化错误，绝不能炸掉 SSE 流。
-            _logger.LogWarning(ex, "AI tool {Tool} threw unhandled exception after approval", pending.ToolName);
-            output = McpUtils.Error($"tool '{pending.ToolName}' failed: {ex.Message}");
-        }
-        var isError = output.Contains("\"error\"", StringComparison.Ordinal);
-        pending.State = isError ? "error" : "output-available";
-        pending.Output = output;
-        if (isError) pending.Error = output;
-        await onEvent(JsonSerializer.Serialize(new { type = "tool_result", toolCallId, toolName = pending.ToolName, output, state = pending.State }, JsonOpts));
+        // 把决策结果作为该工具调用的结果写入 LlmMessages，
+        // 并唤醒 WaitForApprovalAsync 的等待循环继续跑（普通 MCP 等待语义）。
         state.LlmMessages.Add(new JsonObject { ["role"] = "tool", ["tool_call_id"] = toolCallId, ["content"] = output });
-        await ChatLoopAsync(state, provider, onEvent, ct);
-        CleanupRunIfFinished(state, sessionId);
+        if (_approvalGates.TryGetValue(toolCallId, out var gate))
+            gate.TrySetResult(output);
     }
 
     /// <summary>续跑结束后若没有新的待审批调用，释放 CTS 并从运行表移除。</summary>
