@@ -7,8 +7,10 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using LibraNextgen.Common.Models;
+using LibraNextgen.Service.Configuration;
 using LibraNextgen.Service.Data;
 using LibraNextgen.Service.Mcp;
+using Microsoft.Extensions.Options;
 using ModelContextProtocol.Server;
 using MongoDB.Driver;
 
@@ -49,6 +51,7 @@ public class AiService
     private readonly MongoDbContext _db;
     private readonly IServiceProvider _services;
     private readonly ILogger<AiService> _logger;
+    private readonly AiSettings _aiSettings;
     private readonly ConcurrentDictionary<string, AiRunState> _runs = new();
 
     private static readonly Dictionary<string, string> DefaultBaseUrls = new(StringComparer.OrdinalIgnoreCase)
@@ -59,11 +62,43 @@ public class AiService
         ["openai-compatible"] = "",
     };
 
-    public AiService(MongoDbContext db, IServiceProvider services, ILogger<AiService> logger)
+    public AiService(
+        MongoDbContext db,
+        IServiceProvider services,
+        ILogger<AiService> logger,
+        IOptions<AiSettings> aiOptions)
     {
         _db = db;
         _services = services;
         _logger = logger;
+        _aiSettings = aiOptions.Value;
+    }
+
+    /// <summary>
+    /// 组装 Justitia 系统提示词：配置文件中的宪法全文 + 运行时注入的当前档位上下文。
+    /// 配置为空时返回空（不注入 system prompt）。
+    /// </summary>
+    private string BuildSystemPrompt(JustitiaTier tier)
+    {
+        var prompt = _aiSettings.SystemPrompt?.Trim() ?? "";
+        if (prompt.Length == 0) return "";
+
+        var tierName = tier.ToString().ToUpperInvariant();
+        var tierLine = tier switch
+        {
+            JustitiaTier.Arbitrium => "ARBITRIUM — 裁量 · Weigh, then decide.",
+            JustitiaTier.Imperium => "IMPERIUM — 治权 · Request, then act.",
+            JustitiaTier.Dictatura => "DICTATURA — 独裁 · No need to request (admin-granted, scoped, TTL-bound).",
+            _ => "COGNITIO — 审理 · Observe only, do not punish.",
+        };
+
+        return $"""
+            {prompt}
+
+            ## SESSION CONTEXT (runtime-injected)
+            Current effective tier: {tierName} — {tierLine}
+            This tier is enforced server-side (JustitiaPolicy): tool calls above it are held for operator approval, never executed.
+            """;
     }
 
     private IMongoCollection<AiProvider> Providers => _db.GetCollection<AiProvider>("ai_providers");
@@ -748,10 +783,15 @@ public class AiService
     private async Task<Dictionary<int, (string Id, string Name, string Args)>> ChatTurnOpenAiChatAsync(
         AiRunState state, AiProvider provider, List<AiToolDescriptor> tools, Func<string, Task> onEvent, CancellationToken ct)
     {
+        var messages = BuildOpenAiChatMessages(state.LlmMessages);
+        var systemPrompt = BuildSystemPrompt(state.JustitiaTier);
+        if (systemPrompt.Length > 0)
+            messages.Insert(0, new JsonObject { ["role"] = "system", ["content"] = systemPrompt });
+
         var body = new JsonObject
         {
             ["model"] = state.Model,
-            ["messages"] = BuildOpenAiChatMessages(state.LlmMessages),
+            ["messages"] = messages,
             ["stream"] = true,
         };
         AddOpenAiTools(body, tools);
@@ -845,6 +885,8 @@ public class AiService
             ["stream"] = true,
             ["store"] = false,
         };
+        var systemPrompt = BuildSystemPrompt(state.JustitiaTier);
+        if (systemPrompt.Length > 0) body["instructions"] = systemPrompt;
         if (tools.Count > 0)
         {
             var toolArr = new JsonArray();
@@ -950,6 +992,8 @@ public class AiService
             ["messages"] = BuildAnthropicMessages(state.LlmMessages),
             ["stream"] = true,
         };
+        var systemPrompt = BuildSystemPrompt(state.JustitiaTier);
+        if (systemPrompt.Length > 0) body["system"] = systemPrompt;
         if (tools.Count > 0)
         {
             var toolArr = new JsonArray();

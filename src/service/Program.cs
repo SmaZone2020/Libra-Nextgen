@@ -29,6 +29,9 @@ builder.Services.AddSingleton<MongoIndexBuilder>();
 // Beacon authentication (shared secret injected at build time)
 builder.Services.Configure<BeaconSettings>(builder.Configuration.GetSection(BeaconSettings.SectionName));
 
+// AI 助手配置（Justitia 默认系统提示词，appsettings.json Ai:SystemPrompt）
+builder.Services.Configure<AiSettings>(builder.Configuration.GetSection(AiSettings.SectionName));
+
 // 监听端口设置（%APPDATA%\Libra-Nextgen\settings.json，可运行时修改）
 var listenerSettings = ListenerSettingsLoader.Load();
 builder.WebHost.ConfigureKestrel(options =>
