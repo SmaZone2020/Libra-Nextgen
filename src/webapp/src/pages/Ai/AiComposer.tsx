@@ -2,13 +2,31 @@
 
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Button, Chip, ListBox, Popover, Select } from '@heroui/react';
-import { ChevronDown, PaperPlane, Shield, Sparkles } from '@gravity-ui/icons';
+import { Button, Chip, Description, Label, ListBox, Popover } from '@heroui/react';
+import { ChevronDown, PaperPlane, Shield } from '@gravity-ui/icons';
 import { PromptInput, CellSlider } from '../../vendor/ui-pro';
 import type { AiProvider } from '../../api/ai';
 import { resolveModelIcon } from './modelIcons';
 import { formatModelDisplay, parseModelLabel, titleCaseWords } from './utils';
 import { JUSTITIA_TIERS, type JustitiaTierKey } from './justitia';
+
+/** 供应商/厂商/模型图标：有匹配用品牌图标，无匹配用默认 icon2.webp。 */
+function BrandIcon({ name, className = 'size-5' }: { name: string; className?: string }) {
+  const icon = name ? resolveModelIcon(name) : null;
+  if (icon) {
+    return (
+      <img src={icon} alt="" className={`${className} shrink-0 object-contain`} loading="lazy" />
+    );
+  }
+  return (
+    <img
+      alt="icon"
+      className={`${className} shrink-0 rounded object-cover dark:invert select-none pointer-events-none`}
+      loading="lazy"
+      src="/images/icon2.webp"
+    />
+  );
+}
 
 export interface AiComposerProps {
   providers: AiProvider[];
@@ -45,6 +63,8 @@ export function AiComposer({
   const [tierMenuOpen, setTierMenuOpen] = useState(false);
   const permission = JUSTITIA_TIERS.find((x) => x.key === justitiaTier)?.index ?? 0;
   const activeProvider = providers.find((p) => p.id === activeProviderId) ?? providers[0];
+
+  // 当前供应商的模型按厂商分组（vendor/model 前缀；无前缀归「全部」）。
   const modelGroups = useMemo(() => {
     const map = new Map<string, string[]>();
     for (const m of activeProvider?.models ?? []) {
@@ -66,14 +86,26 @@ export function AiComposer({
     return map;
   }, [activeProvider]);
 
+  // 厂商列按 a-z 排序；无厂商（全部模型无 vendor 前缀）时隐藏厂商列（两列布局）。
   const vendors = useMemo(
     () => [...modelGroups.keys()].sort((a, b) => a.localeCompare(b)),
     [modelGroups],
   );
+  const showVendorColumn = vendors.length > 0;
   const currentVendor = vendors.includes(vendorKey)
     ? vendorKey
     : (parseModelLabel(activeModel).vendor ?? '');
   const vendorModels = modelGroups.get(currentVendor) ?? [];
+
+  const handleProviderSelect = (id: string) => {
+    onSelectProvider(id);
+    setVendorKey(''); // 切换供应商后重置厂商过滤。
+  };
+
+  const handleModelSelect = (m: string) => {
+    onSelectModel(m);
+    setModelMenuOpen(false);
+  };
 
   const handleSubmit = () => {
     const trimmed = value.trim();
@@ -100,158 +132,135 @@ export function AiComposer({
         </PromptInput.Content>
         <PromptInput.Toolbar>
           <PromptInput.ToolbarStart>
-            <Select
-              aria-label={t('ai.provider')}
-              selectedKey={activeProvider?.id}
-              onSelectionChange={(key) => {
-                if (key) onSelectProvider(String(key));
-              }}
-              isDisabled={isGenerating}
-              placeholder={t('ai.provider')}
-              variant="secondary"
-              className="min-w-0 max-w-[110px] sm:max-w-[140px]"
-            >
-              <Select.Trigger className="flex w-full items-center gap-1 overflow-hidden">
-                <Select.Value className="min-w-0 flex-1 truncate" />
-                <Select.Indicator className="shrink-0" />
-              </Select.Trigger>
-              <Select.Popover>
-                <ListBox items={providers} className="max-h-[200px] overflow-y-auto">
-                  {(item) => (
-                    <ListBox.Item key={item.id} id={item.id} textValue={item.name} className="truncate">
-                      {item.name}
-                    </ListBox.Item>
-                  )}
-                </ListBox>
-              </Select.Popover>
-            </Select>
-            <Popover
-              isOpen={modelMenuOpen}
-              onOpenChange={setModelMenuOpen}
-            >
+            {/* 供应商 + 模型：单按钮，弹出三列（供应商 | 厂商 | 模型；无厂商时两列） */}
+            <Popover isOpen={modelMenuOpen} onOpenChange={setModelMenuOpen}>
               <Popover.Trigger>
                 <Button
-                  aria-label={t('ai.model')}
+                  aria-label={t('ai.providerModel')}
                   variant="secondary"
                   isDisabled={isGenerating || !activeProvider}
-                  className="h-9 text-foreground min-w-0 max-w-[120px] shrink-0 gap-1 rounded-field border border-default-200 px-3 sm:max-w-[160px] dark:border-default-800"
+                  className="h-9 min-w-0 max-w-[220px] shrink-0 gap-1.5 rounded-field border border-default-200 px-3 dark:border-default-800"
                 >
-                  <Sparkles className="size-4 shrink-0" />
-                  <span className="min-w-0 flex-1 truncate text-sm">
+                  <BrandIcon name={activeProvider?.name ?? ''} className="size-4" />
+                  <span className="min-w-0 flex-1 truncate text-sm text-foreground">
+                    {activeProvider?.name ?? t('ai.provider')}
+                  </span>
+                  <span className="shrink-0 text-xs text-muted">/</span>
+                  <span className="min-w-0 max-w-[90px] truncate text-sm text-foreground">
                     {activeModel ? formatModelDisplay(activeModel) : t('ai.model')}
                   </span>
                   <ChevronDown className="size-3.5 shrink-0 text-muted" />
                 </Button>
               </Popover.Trigger>
-              <Popover.Content className="min-w-[240px] p-0">
+              <Popover.Content className="p-0">
                 <Popover.Dialog>
-                  <div className="flex max-h-[280px] overflow-hidden">
-                    <div className="w-auto min-w-[100px] shrink-0 overflow-y-auto border-r border-default-200 py-1 dark:border-default-800">
-                      {vendors.map((vendor) => {
-                        const active = vendor === currentVendor;
-                        const vendorIcon = vendor ? resolveModelIcon(vendor) : null;
-                        return (
-                          <button
+                  <div className="flex max-h-[300px] overflow-hidden">
+                    {/* 列 1：供应商 */}
+                    <ListBox
+                      aria-label={t('ai.provider')}
+                      selectionMode="single"
+                      selectedKeys={activeProvider ? [activeProvider.id] : []}
+                      onSelectionChange={(keys) => {
+                        const k = [...keys][0];
+                        if (k) handleProviderSelect(String(k));
+                      }}
+                      className="w-44 shrink-0 overflow-y-auto border-r border-default-200 py-1 dark:border-default-800"
+                    >
+                      {providers.map((p) => (
+                        <ListBox.Item key={p.id} id={p.id} textValue={p.name}>
+                          <BrandIcon name={p.name} className="size-5" />
+                          <div className="flex min-w-0 flex-col">
+                            <Label className="truncate">{p.name}</Label>
+                            <Description className="truncate text-[11px]">{p.providerType}</Description>
+                          </div>
+                          <ListBox.ItemIndicator />
+                        </ListBox.Item>
+                      ))}
+                    </ListBox>
+
+                    {/* 列 2：模型厂商（无厂商时隐藏） */}
+                    {vendors && (
+                      <ListBox
+                        aria-label={t('ai.vendorAll')}
+                        selectionMode="single"
+                        selectedKeys={currentVendor ? [currentVendor] : []}
+                        onSelectionChange={(keys) => {
+                          const k = [...keys][0];
+                          if (k) setVendorKey(String(k));
+                        }}
+                        className="w-28 shrink-0 overflow-y-auto border-r border-default-200 py-1 dark:border-default-800"
+                      >
+                        {vendors.map((vendor) => (
+                          <ListBox.Item
                             key={vendor || '(all)'}
-                            type="button"
-                            onClick={() => {
-                              setVendorKey(vendor);
-                            }}
-                            className={`flex w-full items-center gap-1.5 truncate px-3 py-1.5 text-left text-sm transition-colors ${
-                              active
-                                ? 'bg-accent font-medium text-white'
-                                : 'text-foreground hover:bg-default/60'
-                            }`}
+                            id={vendor || '(all)'}
+                            textValue={vendor || t('ai.vendorAll')}
                           >
-                            {vendorIcon && (
-                              <img
-                                src={vendorIcon}
-                                alt=""
-                                className="size-4 shrink-0 object-contain"
-                                loading="lazy"
-                              />
-                            )}
-                            <span className="min-w-0 flex-1 truncate">
-                              {vendor ? titleCaseWords(vendor) : t('ai.vendorAll')}
-                            </span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                    <div className="min-w-0 w-auto flex-1 overflow-y-auto py-1">
+                            <BrandIcon name={vendor} className="size-4" />
+                            <Label className="truncate">{vendor ? titleCaseWords(vendor) : t('ai.vendorAll')}</Label>
+                            <ListBox.ItemIndicator />
+                          </ListBox.Item>
+                        ))}
+                      </ListBox>
+                    )}
+
+                    {/* 列 3：模型 */}
+                    <ListBox
+                      aria-label={t('ai.model')}
+                      selectionMode="single"
+                      selectedKeys={activeModel ? [activeModel] : []}
+                      onSelectionChange={(keys) => {
+                        const k = [...keys][0];
+                        if (k) handleModelSelect(String(k));
+                      }}
+                      className="min-w-[200px] flex-1 overflow-y-auto py-1"
+                    >
                       {vendorModels.map((m) => {
                         const parsed = parseModelLabel(m);
-                        const selected = m === activeModel;
                         const vendorIcon = parsed.vendor ? resolveModelIcon(parsed.vendor) : null;
                         const modelIcon = vendorIcon ? null : resolveModelIcon(parsed.name);
                         return (
-                          <button
-                            key={m}
-                            type="button"
-                            onClick={() => {
-                              onSelectModel(m);
-                              setModelMenuOpen(false);
-                            }}
-                            className={`flex min-w-[170px] w-full items-center justify-between gap-2 px-3 py-1.5 text-left text-sm transition-colors ${
-                              selected
-                                ? 'bg-accent font-medium text-white'
-                                : 'text-foreground hover:bg-default/60'
-                            }`}
-                          >
-                            <span className="flex min-w-0 items-center gap-1.5 flex-1 relative">
-                              {modelIcon && (
-                                <img
-                                  src={modelIcon}
-                                  alt=""
-                                  className="size-4 shrink-0 object-contain"
-                                  loading="lazy"
-                                />
-                              )}
-                              <span className="min-w-0 flex-1 truncate">
-                                {titleCaseWords(parsed.name)}
-                              </span>
-                              <span className="right-0 flex items-center gap-1">
+                          <ListBox.Item key={m} id={m} textValue={m}>
+                            {modelIcon ? (
+                              <img
+                                src={modelIcon}
+                                alt=""
+                                className="size-5 shrink-0 object-contain"
+                                loading="lazy"
+                              />
+                            ) : (
+                              <BrandIcon name={parsed.name} className="size-5" />
+                            )}
+                            <div className="flex min-w-0 flex-col">
+                              <Label className="flex items-center gap-1.5">
+                                <span className="truncate">{titleCaseWords(parsed.name)}</span>
                                 {parsed.isLatest && (
-                                  <Chip
-                                    color="accent"
-                                    variant="primary"
-                                    size="sm"
-                                    className="shrink-0 text-white"
-                                  >
+                                  <Chip color="accent" variant="primary" size="sm" className="shrink-0 text-white">
                                     <Chip.Label>{t('ai.latest')}</Chip.Label>
                                   </Chip>
                                 )}
                                 {parsed.isBatch && (
-                                  <Chip
-                                    color="accent"
-                                    variant="primary"
-                                    size="sm"
-                                    className="shrink-0 text-white"
-                                  >
+                                  <Chip color="accent" variant="primary" size="sm" className="shrink-0 text-white">
                                     <Chip.Label>{t('ai.batch')}</Chip.Label>
                                   </Chip>
                                 )}
-                                {parsed.isFree && (
-                                  <Chip
-                                    color="success"
-                                    variant="primary"
-                                    size="sm"
-                                    className="shrink-0 text-white"
-                                  >
-                                    <Chip.Label>{t('ai.free')}</Chip.Label>
-                                  </Chip>
-                                )}
-                              </span>
-                            </span>
-                          </button>
+                              </Label>
+                              {parsed.isFree && (
+                                <Description className="text-[11px] text-success">
+                                  {t('ai.free')}
+                                </Description>
+                              )}
+                            </div>
+                            <ListBox.ItemIndicator />
+                          </ListBox.Item>
                         );
                       })}
                       {vendorModels.length === 0 && (
-                        <div className="px-3 py-6 text-center text-xs text-muted">
-                          {t('ai.noModels')}
-                        </div>
+                        <ListBox.Item id="__empty" textValue={t('ai.noModels')} isDisabled>
+                          <Label className="text-muted">{t('ai.noModels')}</Label>
+                        </ListBox.Item>
                       )}
-                    </div>
+                    </ListBox>
                   </div>
                 </Popover.Dialog>
               </Popover.Content>

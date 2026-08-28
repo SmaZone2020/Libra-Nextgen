@@ -988,6 +988,7 @@ export default {
       renameSession: 'Rename session',
       forkSession: 'Fork session',
       deleteSession: 'Delete session',
+      providerModel: 'Provider / Model',
       justitiaTier: 'Justitia permission tier',
       adjustJustitia: 'Adjust Justitia permissions',
     },

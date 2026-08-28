@@ -987,6 +987,7 @@ export default {
       renameSession: '重命名会话',
       forkSession: '分支会话',
       deleteSession: '删除会话',
+      providerModel: '供应商 / 模型',
       justitiaTier: 'Justitia 权限档位',
       adjustJustitia: '调整 Justitia 的权限',
     },
