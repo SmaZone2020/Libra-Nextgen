@@ -340,52 +340,44 @@ export function AiComposer({
                   isDisabled={isGenerating}
                   className="h-9 w-[140px] shrink-0 gap-1"
                 >
-                  <span className={`text-sm font-medium ${permission === 3 ? 'aurora-text' : ''}`}>
+                  <span className="text-sm font-medium">
                     {JUSTITIA_TIERS[permission]?.name}
                   </span>
                   <ChevronDown className="size-3.5 shrink-0 text-muted" />
                 </Button>
                 <Popover.Content className="p-0" offset={10}>
-                  <Popover.Dialog className="p-0 rounded-[30px]">
+                  <Popover.Dialog className="p-0">
                     <Popover.Arrow className="fill-accent/30" />
-                    <div
-                      className={`w-full ${permission === 3 ? 'aurora-justitia aurora-justitia--active' : ''}`}
-                    >
-                      <div className={`${permission === 3 ? 'aurora-inner' : ''} flex flex-col gap-3 p-4`}>
-                        <Popover.Heading className="text-sm font-medium text-foreground">
-                          {t('ai.adjustJustitia')}
-                        </Popover.Heading>
-                        <div className="flex flex-col items-center gap-3 pb-1 mt-1">
-                          <CellSlider
-                            maxValue={3}
-                            minValue={0}
-                            step={1}
-                            variant="secondary"
-                            value={permission}
-                            onChange={(v) => {
-                              const val = Array.isArray(v) ? v[0] ?? 0 : v;
-                              const tier = JUSTITIA_TIERS[Math.round(val)];
-                              if (tier) onTierChange(tier.key);
-                            }}
+                    <Popover.Heading>{t('ai.adjustJustitia')}</Popover.Heading>
+                    <div className="flex flex-col items-center gap-3 pb-1 mt-3">
+                      <CellSlider
+                        maxValue={3}
+                        minValue={0}
+                        step={1}
+                        variant="secondary"
+                        value={permission}
+                        onChange={(v) => {
+                          const val = Array.isArray(v) ? v[0] ?? 0 : v;
+                          const tier = JUSTITIA_TIERS[Math.round(val)];
+                          if (tier) onTierChange(tier.key);
+                        }}
+                      >
+                        <CellSlider.Track>
+                          <CellSlider.Fill className="transition-[width] duration-200 ease-out" />
+                          <CellSlider.Thumb className="transition-[translate,left] duration-200 ease-out" />
+                        </CellSlider.Track>
+                      </CellSlider>
+                      <div className="flex w-full justify-between px-0.5 text-[11px] text-muted">
+                        {JUSTITIA_TIERS.map((tier) => (
+                          <span
+                            key={tier.key}
+                            className={`transition-colors duration-200 ${
+                              tier.key === justitiaTier ? 'font-medium text-accent' : ''
+                            }`}
                           >
-                            <CellSlider.Track>
-                              <CellSlider.Fill className="transition-[width] duration-200 ease-out" />
-                              <CellSlider.Thumb className="transition-[translate,left] duration-200 ease-out" />
-                            </CellSlider.Track>
-                          </CellSlider>
-                          <div className="flex w-full justify-between px-0.5 text-[11px] text-muted">
-                            {JUSTITIA_TIERS.map((tier) => (
-                              <span
-                                key={tier.key}
-                                className={`transition-colors duration-200 ${
-                                  tier.key === justitiaTier ? 'font-medium text-accent' : ''
-                                }`}
-                              >
-                                {tier.name}
-                              </span>
-                            ))}
-                          </div>
-                        </div>
+                            {tier.name}
+                          </span>
+                        ))}
                       </div>
                     </div>
                   </Popover.Dialog>
