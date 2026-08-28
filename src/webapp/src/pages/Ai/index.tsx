@@ -36,7 +36,7 @@ import { AiThreadMessage } from './AiThreadMessage';
 
 type StreamingState = 'idle' | 'streaming' | 'approval';
 
-/** 解析模型名显示信息：`deepseek/deepseek-v4-flash:free` → 厂商/名称/是否免费。
+/** 解析模型名显示信息：`deepseek-ai/deepseek-v4-flash:free` → 厂商/名称/是否免费。
  *  仅影响显示；选中值仍使用原始模型 id（含 / 与 :free 后缀）。 */
 function parseModelLabel(raw: string): { vendor?: string; name: string; isFree: boolean } {
   let s = raw;
@@ -52,10 +52,19 @@ function parseModelLabel(raw: string): { vendor?: string; name: string; isFree: 
   return { name: s, isFree };
 }
 
-/** 触发器中展示的模型名：隐藏厂商前缀与 :free 后缀。 */
+/** 连字符/下划线转空格，每词首字母大写：`deepseek-ai` → `Deepseek AI`。 */
+function titleCaseWords(s: string): string {
+  return s
+    .split(/[-_\s]+/)
+    .filter(Boolean)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(' ');
+}
+
+/** 触发器中展示的模型名：隐藏厂商前缀与 :free 后缀，并按单词美化。 */
 function formatModelDisplay(raw: string): string {
   const { name } = parseModelLabel(raw);
-  return name || raw;
+  return name ? titleCaseWords(name) : raw;
 }
 
 export default function AiPage() {
@@ -675,7 +684,7 @@ function AiComposer({
                                 : 'text-foreground hover:bg-default/60'
                             }`}
                           >
-                            {vendor || t('ai.vendorAll')}
+                            {vendor ? titleCaseWords(vendor) : t('ai.vendorAll')}
                           </button>
                         );
                       })}
@@ -699,7 +708,7 @@ function AiComposer({
                                 : 'text-foreground hover:bg-default/60'
                             }`}
                           >
-                            <span className="truncate">{parsed.name}</span>
+                            <span className="min-w-0 flex-1 truncate">{titleCaseWords(parsed.name)}</span>
                             {parsed.isFree && (
                               <Chip
                                 color="success"
@@ -707,7 +716,7 @@ function AiComposer({
                                 size="sm"
                                 className="shrink-0 text-white"
                               >
-                                <Chip.Label>Free/免费</Chip.Label>
+                                <Chip.Label>{t('ai.free')}</Chip.Label>
                               </Chip>
                             )}
                           </button>

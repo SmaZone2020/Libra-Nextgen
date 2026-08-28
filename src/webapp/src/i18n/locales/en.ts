@@ -983,6 +983,7 @@ export default {
       suggestSummarize: 'Summarize the recent audit log highlights',
       vendorAll: 'All',
       noModels: 'No models for this vendor',
+      free: 'Free',
     },
   },
 };

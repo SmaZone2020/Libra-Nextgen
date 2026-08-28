@@ -982,6 +982,7 @@ export default {
       suggestSummarize: '帮我总结最近的审计日志要点',
       vendorAll: '全部',
       noModels: '该厂商暂无模型',
+      free: '免费',
     },
   },
 };
