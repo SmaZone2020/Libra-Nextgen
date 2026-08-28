@@ -14,6 +14,7 @@ const PAGE_OPTIONS: { key: string; labelKey: string }[] = [
   { key: 'system', labelKey: 'nav.system' },
   { key: 'othersoft', labelKey: 'nav.softwareData' },
   { key: 'proxy', labelKey: 'nav.proxyBrowser' },
+  { key: 'ai', labelKey: 'nav.ai' },
   { key: 'builder', labelKey: 'nav.builder' },
   { key: 'audit', labelKey: 'nav.auditLogs' },
   { key: 'plugins', labelKey: 'nav.plugins' },

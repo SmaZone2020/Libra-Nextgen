@@ -61,6 +61,7 @@ builder.Services.AddScoped<Repository<PluginRecord>>(sp =>
 builder.Services.AddScoped<Repository<BuildTrafficLists>>(sp =>
     new Repository<BuildTrafficLists>(sp.GetRequiredService<MongoDbContext>(), "build_lists"));
 builder.Services.AddScoped<BuildListService>();
+builder.Services.AddScoped<AiService>();
 
 // JWT Settings (singleton, holds RSA key pair)
 var jwtSettings = new JwtSettings();

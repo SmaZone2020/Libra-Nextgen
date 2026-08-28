@@ -19,6 +19,7 @@ import BuilderPage from '../pages/Builder';
 import AboutPage from '../pages/About';
 import SettingsPage, { SettingDetail } from '../pages/Settings';
 import PluginsPage from '../pages/Plugins';
+import AiPage from '../pages/Ai';
 import { useRegisteredPlugins } from '../plugins/registry';
 import { resolvePluginIcon } from '../plugins/icons';
 import { getStoredUser, logout, checkSetupStatus } from '../api/auth';
@@ -58,6 +59,8 @@ const PAGE_META_KEYS: Record<string, [string, string]> = {
   '/builder': ['pageMeta.builder.label', 'pageMeta.builder.subtitle'],
   '/audit': ['pageMeta.audit.label', 'pageMeta.audit.subtitle'],
   '/about': ['pageMeta.about.label', 'pageMeta.about.subtitle'],
+  '/ai': ['pageMeta.ai.label', 'pageMeta.ai.subtitle'],
+  '/ai/:sessionId': ['pageMeta.ai.label', 'pageMeta.ai.subtitle'],
   '/settings': ['pageMeta.settings.label', 'pageMeta.settings.subtitle'],
   '/plugins': ['pageMeta.plugins.label', 'pageMeta.plugins.subtitle'],
   '/settings/preferences': ['pageMeta.settings.label', 'pageMeta.settings.subtitle'],
@@ -305,7 +308,8 @@ function AuthenticatedLayout({
     return permissions.allowedPages.includes(key);
   };
 
-  const NO_PADDING_ROUTES = new Set(['/shell']);
+  const NO_PADDING_ROUTES = new Set(['/shell', '/ai', '/ai/:sessionId']);
+  const FULL_HEIGHT_ROUTES = new Set(['/shell', '/ai', '/ai/:sessionId']);
   // Filter sidebar items: apply permission check + Linux platform exclusions.
   // "功能" 母项的 children 会被逐个筛选；"插件管理" 母项（to=/plugins）的
   // children 由 enabled 插件动态填充，母项本身始终保留（可跳转管理页）。
@@ -423,7 +427,9 @@ function AuthenticatedLayout({
           </div>
         </header>
 
-        <div className={`min-h-0 flex-1 overflow-y-auto ${NO_PADDING_ROUTES.has(location.pathname) ? '' : 'px-4 py-6 sm:px-6 lg:px-8'}`}>
+        <div
+          className={`${FULL_HEIGHT_ROUTES.has(location.pathname) ? 'flex min-h-0 flex-1 flex-col overflow-hidden' : 'min-h-0 flex-1 overflow-y-auto'} ${NO_PADDING_ROUTES.has(location.pathname) ? '' : 'px-4 py-6 sm:px-6 lg:px-8'}`}
+        >
           <AnimatePresence mode="wait">
             <motion.div
               key={location.pathname}
@@ -431,6 +437,7 @@ function AuthenticatedLayout({
               exit={{ opacity: 0, y: -12 }}
               initial={{ opacity: 0, y: 12 }}
               transition={pageTransition}
+              className={FULL_HEIGHT_ROUTES.has(location.pathname) ? 'flex min-h-0 flex-1 flex-col' : ''}
             >
               <Routes location={location}>
                 <Route path="/" element={<Dashboard />} />
@@ -442,6 +449,8 @@ function AuthenticatedLayout({
                 <Route path="/othersoft" element={<SoftwareDataPage />} />
                 <Route path="/proxy" element={<ProxyBrowserPage />} />
                 <Route path="/builder" element={<BuilderPage />} />
+                <Route path="/ai" element={<AiPage />} />
+                <Route path="/ai/:sessionId" element={<AiPage />} />
                 <Route path="/settings" element={<SettingsPage />} />
                 <Route path="/settings/:settingId" element={<SettingDetail />} />
                 <Route path="/plugins" element={<PluginsPage />} />

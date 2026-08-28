@@ -1,0 +1,583 @@
+'use client';
+
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { useNavigate, useParams } from 'react-router-dom';
+import {
+  Button,
+  ListBox,
+  Select,
+} from '@heroui/react';
+import { ArrowLeft, ChevronDown, Sparkles } from '@gravity-ui/icons';
+import {
+  createAiSession,
+  getAiProviders,
+  getAiSession,
+  getAiSessions,
+  streamAiAction,
+  streamAiChat,
+  stopAiChat,
+  type AiMessage,
+  type AiProvider,
+  type AiSession,
+  type AiSseEvent,
+  type AiToolCall,
+} from '../../api/ai';
+import {
+  ChatConversation,
+  ChatMessage as ChatMessagePrimitive,
+  PromptInput,
+  PromptSuggestion,
+} from '../../vendor/ui-pro';
+import { AiSidebar } from './AiSidebar';
+import { AiThreadMessage } from './AiThreadMessage';
+
+type StreamingState = 'idle' | 'streaming' | 'approval';
+
+export default function AiPage() {
+  const { t } = useTranslation();
+  const navigate = useNavigate();
+  const { sessionId } = useParams<{ sessionId?: string }>();
+
+  const [providers, setProviders] = useState<AiProvider[]>([]);
+  const [sessions, setSessions] = useState<AiSession[]>([]);
+  const [session, setSession] = useState<AiSession | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  const [streaming, setStreaming] = useState<StreamingState>('idle');
+  const [streamingText, setStreamingText] = useState('');
+  const [streamingReasoning, setStreamingReasoning] = useState<string[]>([]);
+  const [streamingTools, setStreamingTools] = useState<AiToolCall[]>([]);
+  const [pendingApproval, setPendingApproval] = useState<AiToolCall | null>(null);
+
+  const abortRef = useRef<AbortController | null>(null);
+  const pendingSessionIdRef = useRef<string | null>(null);
+
+  // 顶层状态：把选中的会话 id 映射到路由。
+  const activeId = sessionId ?? null;
+
+  const loadMeta = useCallback(async () => {
+    const [ps, ss] = await Promise.all([getAiProviders(), getAiSessions()]);
+    setProviders(ps);
+    setSessions(ss);
+  }, []);
+
+  useEffect(() => {
+    void (async () => {
+      setLoading(true);
+      try {
+        await loadMeta();
+        if (activeId) {
+          const s = await getAiSession(activeId);
+          setSession(s);
+        } else {
+          setSession(null);
+        }
+      } catch {
+        /* ignore */
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, [activeId, loadMeta]);
+
+  // 路由离开时停止流。
+  useEffect(() => {
+    return () => {
+      abortRef.current?.abort();
+    };
+  }, []);
+
+  const enabledProviders = useMemo(
+    () => providers.filter((p) => p.enabled && p.models.length > 0),
+    [providers],
+  );
+  const activeProvider = useMemo(
+    () => providers.find((p) => p.id === (session?.providerId ?? enabledProviders[0]?.id)),
+    [providers, session, enabledProviders],
+  );
+  const activeModel = session?.model ?? activeProvider?.defaultModel ?? activeProvider?.models[0] ?? '';
+
+  const selectSession = useCallback(
+    (id: string) => {
+      abortRef.current?.abort();
+      setStreaming('idle');
+      setStreamingText('');
+      setStreamingReasoning([]);
+      setStreamingTools([]);
+      setPendingApproval(null);
+      if (id) {
+        navigate(`/ai/${id}`);
+      } else {
+        navigate('/ai');
+      }
+    },
+    [navigate],
+  );
+
+  const handleNewSession = useCallback(async () => {
+    const provider = enabledProviders[0];
+    if (!provider) return;
+    try {
+      const s = await createAiSession(provider.id, provider.defaultModel || provider.models[0] || '');
+      setSessions((prev) => [s, ...prev]);
+      navigate(`/ai/${s.id}`);
+    } catch (e) {
+      alert(e instanceof Error ? e.message : String(e));
+    }
+  }, [enabledProviders, navigate]);
+
+  const handleSelectProvider = (providerId: string) => {
+    if (!session) return;
+    const p = providers.find((x) => x.id === providerId);
+    if (!p) return;
+    setSession((prev) => prev ? { ...prev, providerId, model: p.defaultModel || p.models[0] || '' } : prev);
+  };
+
+  const handleSelectModel = (model: string) => {
+    if (!session) return;
+    setSession((prev) => prev ? { ...prev, model } : prev);
+  };
+
+  const handleStreamEvent = useCallback(
+    (evt: AiSseEvent, sessionId: string) => {
+      switch (evt.type) {
+        case 'reasoning':
+          setStreamingReasoning((prev) => [...prev, evt.content]);
+          break;
+        case 'message':
+          setStreamingText((prev) => prev + evt.delta);
+          break;
+        case 'tool_call': {
+          const tc: AiToolCall = {
+            id: evt.toolCall.id,
+            toolName: evt.toolCall.toolName,
+            argsText: evt.toolCall.argsText,
+            state: evt.toolCall.state,
+          };
+          setStreamingTools((prev) => {
+            const idx = prev.findIndex((x) => x.id === tc.id);
+            if (idx >= 0) {
+              const next = [...prev];
+              next[idx] = tc;
+              return next;
+            }
+            return [...prev, tc];
+          });
+          break;
+        }
+        case 'tool_result': {
+          const state = evt.state;
+          setStreamingTools((prev) =>
+            prev.map((x) =>
+              x.id === evt.toolCallId
+                ? { ...x, state, output: evt.output, error: state === 'error' ? evt.output : undefined }
+                : x,
+            ),
+          );
+          break;
+        }
+        case 'approval': {
+          setStreaming('approval');
+          setPendingApproval({
+            id: evt.toolCall.id,
+            toolName: evt.toolCall.toolName,
+            argsText: evt.toolCall.argsText,
+            state: 'requires-action',
+          });
+          break;
+        }
+        case 'done': {
+          setStreaming('idle');
+          setPendingApproval(null);
+          setStreamingReasoning([]);
+          void getAiSession(sessionId)
+            .then((s) => {
+              setSession(s);
+              setSessions((prev) => {
+                const rest = prev.filter((x) => x.id !== sessionId);
+                return [s, ...rest];
+              });
+            })
+            .catch(() => undefined);
+          break;
+        }
+        case 'error':
+          setStreaming('idle');
+          setPendingApproval(null);
+          // 附加到流式文本后，作为尾部错误提示。
+          setStreamingText((prev) => prev + `\n\n> ⚠️ ${evt.message}`);
+          break;
+      }
+    },
+    [],
+  );
+
+  const send = useCallback(
+    async (content: string, opts?: { sessionIdOverride?: string; forceNew?: boolean }) => {
+      const trimmed = content.trim();
+      if (!trimmed) return;
+      if (streaming !== 'idle') return;
+
+      let targetId = opts?.sessionIdOverride ?? activeId;
+      let target = session;
+
+      if (!target && !targetId) {
+        // 无会话 → 先创建。
+        const provider = enabledProviders[0];
+        if (!provider) {
+          navigate('/settings/ai');
+          return;
+        }
+        try {
+          const s = await createAiSession(provider.id, provider.defaultModel || provider.models[0] || '');
+          target = s;
+          targetId = s.id;
+          setSessions((prev) => [s, ...prev]);
+          navigate(`/ai/${s.id}`);
+        } catch (e) {
+          alert(e instanceof Error ? e.message : String(e));
+          return;
+        }
+      }
+
+      if (!targetId || !target) return;
+
+      // 本地先追加用户消息（乐观 UI）。
+      const userMsg: AiMessage = {
+        id: `local-${Date.now()}`,
+        role: 'user',
+        content: trimmed,
+        createdAt: new Date().toISOString(),
+      };
+      setSession((prev) => (prev && prev.id === targetId ? { ...prev, messages: [...prev.messages, userMsg] } : prev));
+      setStreamingText('');
+      setStreamingReasoning([]);
+      setStreamingTools([]);
+      setPendingApproval(null);
+      setStreaming('streaming');
+      pendingSessionIdRef.current = targetId;
+
+      const abort = new AbortController();
+      abortRef.current = abort;
+      try {
+        await streamAiChat(targetId, trimmed, (evt) => handleStreamEvent(evt, targetId), abort.signal);
+      } catch (e) {
+        if ((e as Error).name !== 'AbortError') {
+          setStreaming('idle');
+          setStreamingText((prev) => prev + `\n\n> ⚠️ ${e instanceof Error ? e.message : String(e)}`);
+        }
+      } finally {
+        if (abortRef.current === abort) abortRef.current = null;
+        setStreaming((s) => (s === 'approval' ? s : 'idle'));
+      }
+    },
+    [activeId, enabledProviders, handleStreamEvent, navigate, session, streaming],
+  );
+
+  const handleStop = useCallback(() => {
+    if (activeId) void stopAiChat(activeId);
+    abortRef.current?.abort();
+    setStreaming('idle');
+    setStreamingText('');
+    setStreamingTools([]);
+    setStreamingReasoning([]);
+    setPendingApproval(null);
+  }, [activeId]);
+
+  const handleApprove = useCallback(
+    async (toolCallId: string, approved: boolean) => {
+      if (!pendingApproval || !activeId) return;
+      const id = activeId;
+      setStreaming('streaming');
+      setPendingApproval((prev) => (prev && prev.id === toolCallId ? { ...prev, state: approved ? 'running' : 'error' } : prev));
+      const abort = new AbortController();
+      abortRef.current = abort;
+      try {
+        await streamAiAction(id, toolCallId, approved, (evt) => handleStreamEvent(evt, id), abort.signal);
+      } catch (e) {
+        if ((e as Error).name !== 'AbortError') {
+          setStreaming('idle');
+          setStreamingText((prev) => prev + `\n\n> ⚠️ ${e instanceof Error ? e.message : String(e)}`);
+        }
+      } finally {
+        if (abortRef.current === abort) abortRef.current = null;
+        setStreaming((s) => (s === 'approval' ? s : 'idle'));
+      }
+    },
+    [activeId, handleStreamEvent, pendingApproval],
+  );
+
+  const handleFeedback = useCallback((_good: boolean) => {
+    // 反馈落库（服务端暂无存储，先本地提示）。
+  }, []);
+
+  const handleRegenerate = useCallback(() => {
+    if (!session || session.messages.length < 2) return;
+    const lastUser = [...session.messages].reverse().find((m) => m.role === 'user');
+    if (lastUser) void send(lastUser.content);
+  }, [session, send]);
+
+  const handleEditMessage = useCallback(() => {
+    if (!session || session.messages.length === 0) return;
+    const lastUser = [...session.messages].reverse().find((m) => m.role === 'user');
+    if (!lastUser) return;
+    const el = document.querySelector('[data-slot="prompt-input-textarea"]') as HTMLTextAreaElement | null;
+    if (el) {
+      el.focus();
+      el.value = lastUser.content;
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+  }, [session]);
+
+  const handleCopy = useCallback((text: string) => {
+    void navigator.clipboard?.writeText(text).catch(() => undefined);
+  }, []);
+
+  const suggestedPrompts = useMemo(
+    () => [
+      t('ai.suggestListAgents'),
+      t('ai.suggestAnalyzeAgent'),
+      t('ai.suggestExplainTool'),
+      t('ai.suggestSummarize'),
+    ],
+    [t],
+  );
+
+  const showEmptyState = !session || session.messages.length === 0;
+  const canSend = streaming === 'idle';
+  const isGenerating = streaming === 'streaming';
+  const approvalPending = streaming === 'approval';
+
+  return (
+    <div className="flex h-full min-h-0 w-full flex-col md:flex-row">
+      {/* 桌面端会话列表（自身滚动，不随消息容器滚动） */}
+      <aside className="hidden w-64 shrink-0 overflow-y-auto border-r border-default-200 md:block dark:border-default-800">
+        <AiSidebar
+          activeSessionId={activeId}
+          onSelectSession={selectSession}
+          onNewSession={() => void handleNewSession()}
+        />
+      </aside>
+
+      {/* 主区域：消息滚动 + 底部输入固定在剩余空间底部 */}
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+        {/* 移动端顶栏 */}
+        <div className="flex shrink-0 items-center gap-2 border-b border-default-200 px-3 py-2 md:hidden dark:border-default-800">
+          <Button isIconOnly size="sm" variant="ghost" aria-label={t('ai.back')} onPress={() => navigate('/')}>
+            <ArrowLeft className="size-4" />
+          </Button>
+          <span className="min-w-0 flex-1 truncate text-sm font-medium">
+            {session?.title || t('ai.title')}
+          </span>
+          <span className="shrink-0 rounded-full bg-default/60 px-2.5 py-0.5 text-xs text-foreground">
+            {activeProvider?.name ?? t('ai.unknownProvider')}
+          </span>
+        </div>
+
+        <ChatConversation className="min-h-0 flex-1">
+          <ChatConversation.Content className="flex flex-col">
+            <div className="mx-auto flex w-full max-w-[760px] flex-col gap-6 px-4 pt-6 pb-4">
+              {showEmptyState ? (
+                <div className="flex min-h-full flex-1 flex-col justify-center">
+                  <PromptSuggestion>
+                    <PromptSuggestion.Header>
+                      <PromptSuggestion.Title>
+                        {t('ai.heroTitle')}
+                      </PromptSuggestion.Title>
+                      <PromptSuggestion.Description>
+                        {t('ai.heroDesc')}
+                      </PromptSuggestion.Description>
+                    </PromptSuggestion.Header>
+                    <PromptSuggestion.Items>
+                      {suggestedPrompts.map((prompt) => (
+                        <PromptSuggestion.Item
+                          key={prompt}
+                          onPress={() => canSend && void send(prompt)}
+                        >
+                          {prompt}
+                        </PromptSuggestion.Item>
+                      ))}
+                    </PromptSuggestion.Items>
+                  </PromptSuggestion>
+                </div>
+              ) : (
+                session?.messages.map((message) => (
+                  <AiThreadMessage
+                    key={message.id}
+                    message={message}
+                    isStreaming={false}
+                    onCopy={handleCopy}
+                    onRegenerate={() => void handleRegenerate()}
+                    onEdit={handleEditMessage}
+                    onFeedback={handleFeedback}
+                    onApprove={(id) => void handleApprove(id, true)}
+                    onReject={(id) => void handleApprove(id, false)}
+                  />
+                ))
+              )}
+
+              {(streaming === 'streaming' || streaming === 'approval') && (
+                <AiThreadMessage
+                  message={{
+                    id: 'streaming',
+                    role: 'assistant',
+                    content: '',
+                    reasoning: streamingReasoning.length > 0
+                      ? streamingReasoning.map((c, i) => ({ label: t('ai.thinking'), content: c }))
+                      : undefined,
+                    toolCalls: streamingTools.length > 0 ? streamingTools : undefined,
+                    createdAt: new Date().toISOString(),
+                  }}
+                  streamingText={streamingText}
+                  isStreaming
+                  pendingApproval={pendingApproval}
+                  onCopy={handleCopy}
+                  onRegenerate={() => undefined}
+                  onEdit={() => undefined}
+                  onFeedback={() => undefined}
+                  onApprove={(id) => void handleApprove(id, true)}
+                  onReject={(id) => void handleApprove(id, false)}
+                />
+              )}
+            </div>
+            <ChatConversation.ScrollAnchor />
+          </ChatConversation.Content>
+          <ChatConversation.ScrollButton
+            aria-label={t('ai.scrollToBottom')}
+            tooltip={t('ai.scrollToBottom')}
+          />
+        </ChatConversation>
+
+        {/* 底部输入区：shrink-0，固定于主区域底部 */}
+        <div className="shrink-0 px-4 pt-3 pb-4 sm:pb-8">
+          <div className="mx-auto w-full max-w-[760px]">
+            <AiComposer
+              providers={enabledProviders}
+              activeProviderId={activeProvider?.id ?? null}
+              activeModel={activeModel}
+              isGenerating={isGenerating || approvalPending}
+              canSend={canSend}
+              onSend={(text) => void send(text)}
+              onStop={handleStop}
+              onSelectProvider={handleSelectProvider}
+              onSelectModel={handleSelectModel}
+            />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AiComposer({
+  providers,
+  activeProviderId,
+  activeModel,
+  isGenerating,
+  canSend,
+  onSend,
+  onStop,
+  onSelectProvider,
+  onSelectModel,
+}: {
+  providers: AiProvider[];
+  activeProviderId: string | null;
+  activeModel: string;
+  isGenerating: boolean;
+  canSend: boolean;
+  onSend: (text: string) => void;
+  onStop: () => void;
+  onSelectProvider: (id: string) => void;
+  onSelectModel: (model: string) => void;
+}) {
+  const { t } = useTranslation();
+  const [value, setValue] = useState('');
+  const activeProvider = providers.find((p) => p.id === activeProviderId) ?? providers[0];
+
+  const handleSubmit = () => {
+    const trimmed = value.trim();
+    if (!trimmed || isGenerating) return;
+    setValue('');
+    onSend(trimmed);
+  };
+
+  return (
+    <PromptInput
+      status={isGenerating ? 'streaming' : 'ready'}
+      variant="primary"
+      value={value}
+      onValueChange={setValue}
+      onStop={onStop}
+      onSubmit={handleSubmit}
+    >
+      <PromptInput.Shell>
+        <PromptInput.Content>
+          <PromptInput.TextArea
+            placeholder={t('ai.inputPlaceholder')}
+            aria-label={t('ai.inputPlaceholder')}
+          />
+        </PromptInput.Content>
+        <PromptInput.Toolbar>
+          <PromptInput.ToolbarStart>
+            <Select
+              aria-label={t('ai.provider')}
+              selectedKey={activeProvider?.id}
+              onSelectionChange={(key) => {
+                if (key) onSelectProvider(String(key));
+              }}
+              isDisabled={isGenerating}
+              placeholder={t('ai.provider')}
+              variant="secondary"
+            >
+              <Select.Trigger className="flex items-center gap-2">
+                <Select.Value />
+                <Select.Indicator />
+              </Select.Trigger>
+              <Select.Popover>
+                <ListBox items={providers}>
+                  {(item) => (
+                    <ListBox.Item key={item.id} id={item.id} textValue={item.name}>
+                      {item.name}
+                    </ListBox.Item>
+                  )}
+                </ListBox>
+              </Select.Popover>
+            </Select>
+            <Select
+              aria-label={t('ai.model')}
+              selectedKey={activeModel || undefined}
+              onSelectionChange={(key) => {
+                if (key) onSelectModel(String(key));
+              }}
+              isDisabled={isGenerating || !activeProvider}
+              placeholder={t('ai.model')}
+              variant="secondary"
+            >
+              <Select.Trigger className="flex items-center gap-2">
+                <Sparkles className="size-4 shrink-0" />
+                <Select.Value />
+                <Select.Indicator />
+              </Select.Trigger>
+              <Select.Popover>
+                <ListBox items={(activeProvider?.models ?? []).map((m) => ({ id: m, label: m }))}>
+                  {(item) => (
+                    <ListBox.Item key={item.id} id={item.id} textValue={item.label}>
+                      {item.label}
+                    </ListBox.Item>
+                  )}
+                </ListBox>
+              </Select.Popover>
+            </Select>
+          </PromptInput.ToolbarStart>
+          <PromptInput.ToolbarEnd>
+            <PromptInput.Send
+              aria-label={isGenerating ? t('ai.stop') : t('ai.send')}
+              isDisabled={!isGenerating && !value.trim()}
+            />
+          </PromptInput.ToolbarEnd>
+        </PromptInput.Toolbar>
+      </PromptInput.Shell>
+    </PromptInput>
+  );
+}

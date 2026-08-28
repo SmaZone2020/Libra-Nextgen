@@ -1,0 +1,755 @@
+using System.Collections.Concurrent;
+using System.ComponentModel;
+using System.Net.Http.Headers;
+using System.Reflection;
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.Json;
+using System.Text.Json.Nodes;
+using LibraNextgen.Common.Models;
+using LibraNextgen.Service.Data;
+using LibraNextgen.Service.Mcp;
+using ModelContextProtocol.Server;
+using MongoDB.Driver;
+
+namespace LibraNextgen.Service.Services;
+
+/// <summary>AI 供应商与 MCP 工具的注册表（供 AiService 与控制器共享）。</summary>
+public sealed record AiToolDescriptor(string Name, string Description, JsonObject? Schema);
+
+/// <summary>AI 聊天运行状态（内存态，按会话单并发）。</summary>
+public sealed class AiRunState
+{
+    public required string SessionId { get; init; }
+    public required string ProviderId { get; init; }
+    public required string Model { get; init; }
+    public required string UserId { get; init; }
+    public List<JsonObject> LlmMessages { get; } = new();
+    public List<AiToolCall> ToolCalls { get; } = new();
+    public List<AiReasoningStep> Reasoning { get; } = new();
+    public JsonObject? PendingToolCall { get; set; }
+    /// <summary>跨轮累计的助手文本（流式发出并最终落库）。</summary>
+    public string AssistantText { get; set; } = "";
+    /// <summary>当前轮内累计的文本（用于 LLM 消息组装）。</summary>
+    public string TurnText { get; set; } = "";
+    public bool Finished { get; set; }
+    public CancellationTokenSource? Cts { get; set; }
+    public DateTime StartedAt { get; set; } = DateTime.UtcNow;
+}
+
+public class AiService
+{
+    private static readonly JsonSerializerOptions JsonOpts = new()
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+    };
+
+    private readonly MongoDbContext _db;
+    private readonly IServiceProvider _services;
+    private readonly ILogger<AiService> _logger;
+    private readonly ConcurrentDictionary<string, AiRunState> _runs = new();
+
+    private static readonly Dictionary<string, string> DefaultBaseUrls = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["openai"] = "https://api.openai.com/v1",
+        ["deepseek"] = "https://api.deepseek.com/v1",
+        ["moonshot"] = "https://api.moonshot.cn/v1",
+        ["qwen"] = "https://dashscope.aliyuncs.com/compatible-mode/v1",
+        ["openai-compatible"] = "",
+    };
+
+    public AiService(MongoDbContext db, IServiceProvider services, ILogger<AiService> logger)
+    {
+        _db = db;
+        _services = services;
+        _logger = logger;
+    }
+
+    private IMongoCollection<AiProvider> Providers => _db.GetCollection<AiProvider>("ai_providers");
+    private IMongoCollection<AiSession> Sessions => _db.GetCollection<AiSession>("ai_sessions");
+    private IMongoCollection<AiMcpConfig> McpConfigs => _db.GetCollection<AiMcpConfig>("ai_mcp_config");
+
+    // ── 供应商 ────────────────────────────────────────────────────────────
+
+    public async Task<List<AiProvider>> GetProvidersAsync(CancellationToken ct = default)
+    {
+        var list = await Providers.Find(FilterDefinition<AiProvider>.Empty)
+            .Sort(Builders<AiProvider>.Sort.Descending(p => p.CreatedAt)).ToListAsync(ct);
+        foreach (var p in list) p.ApiKeyEnc = "";
+        return list;
+    }
+
+    public async Task<AiProvider?> GetProviderAsync(string id, bool includeKey, CancellationToken ct = default)
+    {
+        var p = await Providers.Find(x => x.Id == id).FirstOrDefaultAsync(ct);
+        if (p == null) return null;
+        p.ApiKeyEnc = includeKey && p.ApiKeyEnc.Length > 0 ? DecryptKey(p.ApiKeyEnc) : "";
+        return p;
+    }
+
+    public async Task<AiProvider> CreateProviderAsync(AiProvider input, CancellationToken ct = default)
+    {
+        var p = new AiProvider
+        {
+            Name = input.Name.Trim(),
+            ProviderType = string.IsNullOrWhiteSpace(input.ProviderType) ? "openai-compatible" : input.ProviderType.Trim(),
+            BaseUrl = input.BaseUrl?.Trim() ?? "",
+            Models = input.Models ?? new List<string>(),
+            DefaultModel = input.DefaultModel?.Trim() ?? "",
+            Enabled = input.Enabled,
+            RequireApproval = input.RequireApproval,
+        };
+        if (string.IsNullOrWhiteSpace(p.BaseUrl) && DefaultBaseUrls.TryGetValue(p.ProviderType, out var def))
+            p.BaseUrl = def;
+        if (p.Models.Count == 0 && !string.IsNullOrWhiteSpace(input.DefaultModel))
+            p.Models.Add(input.DefaultModel);
+        if (string.IsNullOrWhiteSpace(p.DefaultModel))
+            p.DefaultModel = p.Models.FirstOrDefault() ?? "";
+        if (!string.IsNullOrWhiteSpace(input.ApiKeyEnc))
+            p.ApiKeyEnc = EncryptKey(input.ApiKeyEnc);
+        await Providers.InsertOneAsync(p, cancellationToken: ct);
+        p.ApiKeyEnc = "";
+        return p;
+    }
+
+    public async Task<bool> UpdateProviderAsync(string id, AiProvider input, CancellationToken ct = default)
+    {
+        var update = Builders<AiProvider>.Update
+            .Set(p => p.Name, input.Name.Trim())
+            .Set(p => p.ProviderType, input.ProviderType)
+            .Set(p => p.BaseUrl, input.BaseUrl?.Trim() ?? "")
+            .Set(p => p.Models, input.Models ?? new List<string>())
+            .Set(p => p.DefaultModel, input.DefaultModel?.Trim() ?? "")
+            .Set(p => p.Enabled, input.Enabled)
+            .Set(p => p.RequireApproval, input.RequireApproval);
+        if (!string.IsNullOrWhiteSpace(input.ApiKeyEnc))
+            update = update.Set(p => p.ApiKeyEnc, EncryptKey(input.ApiKeyEnc));
+        var r = await Providers.UpdateOneAsync(x => x.Id == id, update, cancellationToken: ct);
+        return r.ModifiedCount > 0 || r.MatchedCount > 0;
+    }
+
+    public async Task<bool> DeleteProviderAsync(string id, CancellationToken ct = default)
+    {
+        var r = await Providers.DeleteOneAsync(x => x.Id == id, ct);
+        return r.DeletedCount > 0;
+    }
+
+    /// <summary>验证供应商连通性（拉取 /models）。</summary>
+    public async Task<(bool Ok, string? Error, List<string>? Models)> TestProviderAsync(AiProvider input, CancellationToken ct = default)
+    {
+        try
+        {
+            using var http = new HttpClient();
+            http.Timeout = TimeSpan.FromSeconds(20);
+            var baseUrl = input.BaseUrl?.Trim() ?? "";
+            if (string.IsNullOrWhiteSpace(baseUrl) && DefaultBaseUrls.TryGetValue(input.ProviderType ?? "", out var def))
+                baseUrl = def;
+            var url = baseUrl.TrimEnd('/') + "/models";
+            using var req = new HttpRequestMessage(HttpMethod.Get, url);
+            var key = input.ApiKeyEnc;
+            if (!string.IsNullOrWhiteSpace(key))
+                req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", key);
+            using var resp = await http.SendAsync(req, ct);
+            if (!resp.IsSuccessStatusCode)
+            {
+                var errBody = await resp.Content.ReadAsStringAsync(ct);
+                var clipped = errBody.Length > 300 ? errBody[..300] : errBody;
+                return (false, $"HTTP {(int)resp.StatusCode}: {clipped}", null);
+            }
+            var doc = JsonNode.Parse(await resp.Content.ReadAsStringAsync(ct));
+            var models = doc?["data"]?.AsArray()
+                .Select(m => m?["id"]?.GetValue<string>() ?? "")
+                .Where(m => m.Length > 0).ToList() ?? new List<string>();
+            return (true, null, models);
+        }
+        catch (Exception ex)
+        {
+            return (false, ex.Message, null);
+        }
+    }
+
+    // ── 会话 ──────────────────────────────────────────────────────────────
+
+    public async Task<List<AiSession>> GetSessionsAsync(string userId, CancellationToken ct = default)
+    {
+        return await Sessions.Find(x => x.UserId == userId)
+            .Sort(Builders<AiSession>.Sort.Descending(s => s.UpdatedAt)).ToListAsync(ct);
+    }
+
+    public async Task<AiSession?> GetSessionAsync(string id, string userId, CancellationToken ct = default)
+    {
+        return await Sessions.Find(x => x.Id == id && x.UserId == userId).FirstOrDefaultAsync(ct);
+    }
+
+    public async Task<AiSession> CreateSessionAsync(string userId, string userName, string providerId, string model, CancellationToken ct = default)
+    {
+        var s = new AiSession
+        {
+            UserId = userId,
+            UserName = userName,
+            Title = "新对话",
+            ProviderId = providerId,
+            Model = model,
+        };
+        await Sessions.InsertOneAsync(s, cancellationToken: ct);
+        return s;
+    }
+
+    public async Task<bool> DeleteSessionAsync(string id, string userId, CancellationToken ct = default)
+    {
+        var r = await Sessions.DeleteOneAsync(x => x.Id == id && x.UserId == userId, ct);
+        return r.DeletedCount > 0;
+    }
+
+    public async Task<bool> RenameSessionAsync(string id, string userId, string title, CancellationToken ct = default)
+    {
+        var r = await Sessions.UpdateOneAsync(
+            x => x.Id == id && x.UserId == userId,
+            Builders<AiSession>.Update.Set(s => s.Title, title),
+            cancellationToken: ct);
+        return r.ModifiedCount > 0 || r.MatchedCount > 0;
+    }
+
+    // ── MCP 工具注册表 ────────────────────────────────────────────────────
+
+    public async Task<AiMcpConfig> GetMcpConfigAsync(CancellationToken ct = default)
+    {
+        var cfg = await McpConfigs.Find(FilterDefinition<AiMcpConfig>.Empty).FirstOrDefaultAsync(ct);
+        return cfg ?? new AiMcpConfig();
+    }
+
+    public async Task SetMcpConfigAsync(AiMcpConfig cfg, CancellationToken ct = default)
+    {
+        var existing = await McpConfigs.Find(FilterDefinition<AiMcpConfig>.Empty).FirstOrDefaultAsync(ct);
+        if (existing == null)
+        {
+            await McpConfigs.InsertOneAsync(cfg, cancellationToken: ct);
+        }
+        else
+        {
+            await McpConfigs.UpdateOneAsync(
+                Builders<AiMcpConfig>.Filter.Eq(c => c.Id, existing.Id),
+                Builders<AiMcpConfig>.Update
+                    .Set(c => c.ToolsEnabled, cfg.ToolsEnabled)
+                    .Set(c => c.AllowedTools, cfg.AllowedTools ?? new List<string>()),
+                cancellationToken: ct);
+        }
+    }
+
+    /// <summary>
+    /// 枚举 MCP 工具并生成 OpenAI 风格 JSON Schema（单一事实来源：McpServerTool 特性）。
+    /// 可通过 AiMcpConfig 白名单过滤。
+    /// </summary>
+    public async Task<List<AiToolDescriptor>> GetToolsAsync(CancellationToken ct = default)
+    {
+        var cfg = await GetMcpConfigAsync(ct);
+        var result = new List<AiToolDescriptor>();
+        if (!cfg.ToolsEnabled) return result;
+        foreach (var type in typeof(McpService).Assembly.GetTypes())
+        {
+            if (type.GetCustomAttribute<McpServerToolTypeAttribute>() == null) continue;
+            foreach (var method in type.GetMethods(BindingFlags.Public | BindingFlags.Static))
+            {
+                var toolAttr = method.GetCustomAttribute<McpServerToolAttribute>();
+                if (toolAttr == null) continue;
+                var name = method.Name;
+                if (cfg.AllowedTools.Count > 0 && !cfg.AllowedTools.Contains(name)) continue;
+                var desc = method.GetCustomAttribute<DescriptionAttribute>()?.Description ?? "";
+                var schema = BuildToolSchema(method);
+                result.Add(new AiToolDescriptor(name, desc, schema));
+            }
+        }
+        return result.OrderBy(t => t.Name).ToList();
+    }
+
+    private static JsonObject BuildToolSchema(MethodInfo method)
+    {
+        var props = new JsonObject();
+        var required = new JsonArray();
+        foreach (var p in method.GetParameters())
+        {
+            if (p.ParameterType == typeof(CancellationToken) || IsDiService(p.ParameterType))
+                continue;
+            var desc = p.GetCustomAttribute<DescriptionAttribute>()?.Description;
+            var node = new JsonObject();
+            if (!string.IsNullOrWhiteSpace(desc)) node["description"] = desc;
+            if (p.HasDefaultValue) node["default"] = JsonValue.Create(p.DefaultValue);
+            if (p.ParameterType == typeof(string))
+                node["type"] = "string";
+            else if (p.ParameterType == typeof(int) || p.ParameterType == typeof(long))
+                node["type"] = "integer";
+            else if (p.ParameterType == typeof(double) || p.ParameterType == typeof(float))
+                node["type"] = "number";
+            else if (p.ParameterType == typeof(bool))
+                node["type"] = "boolean";
+            else if (p.ParameterType.IsArray)
+            {
+                node["type"] = "array";
+                var elem = p.ParameterType.GetElementType()!;
+                node["items"] = new JsonObject { ["type"] = elem == typeof(string) ? "string" : "object" };
+            }
+            else
+                node["type"] = "object";
+            props[p.Name!] = node;
+            if (!p.IsOptional) required.Add(p.Name);
+        }
+        return new JsonObject
+        {
+            ["type"] = "object",
+            ["properties"] = props,
+            ["required"] = required,
+            ["additionalProperties"] = true,
+        };
+    }
+
+    private static bool IsDiService(Type t) =>
+        t.IsClass && !t.IsPrimitive && t != typeof(string) && t != typeof(Uri) &&
+        (t.Namespace?.StartsWith("LibraNextgen") == true || t.Namespace == "Microsoft.AspNetCore.Http");
+
+    /// <summary>反射调用一个 [McpServerTool] 静态方法。</summary>
+    public async Task<string> InvokeToolAsync(string toolName, JsonObject args, CancellationToken ct = default)
+    {
+        foreach (var type in typeof(McpService).Assembly.GetTypes())
+        {
+            if (type.GetCustomAttribute<McpServerToolTypeAttribute>() == null) continue;
+            foreach (var method in type.GetMethods(BindingFlags.Public | BindingFlags.Static))
+            {
+                if (method.GetCustomAttribute<McpServerToolAttribute>() == null) continue;
+                if (method.Name != toolName) continue;
+
+                var ps = method.GetParameters();
+                var callArgs = new object?[ps.Length];
+                for (var i = 0; i < ps.Length; i++)
+                {
+                    var p = ps[i];
+                    if (p.ParameterType == typeof(CancellationToken))
+                    {
+                        callArgs[i] = ct;
+                    }
+                    else if (IsDiService(p.ParameterType))
+                    {
+                        callArgs[i] = _services.GetService(p.ParameterType);
+                    }
+                    else if (args.TryGetPropertyValue(p.Name, out var node))
+                    {
+                        callArgs[i] = node.Deserialize(p.ParameterType, JsonOpts);
+                    }
+                    else if (p.IsOptional)
+                    {
+                        callArgs[i] = p.DefaultValue;
+                    }
+                    else
+                    {
+                        return McpUtils.Error($"missing argument '{p.Name}' for tool '{toolName}'");
+                    }
+                }
+
+                try
+                {
+                    var result = method.Invoke(null, callArgs);
+                    if (result is Task<string> task)
+                        return await task;
+                    if (result is string s) return s;
+                    if (result is Task t)
+                    {
+                        await t;
+                        var prop = t.GetType().GetProperty("Result");
+                        return prop?.GetValue(t)?.ToString() ?? "ok";
+                    }
+                    return result?.ToString() ?? "ok";
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "AI tool {Tool} failed", toolName);
+                    var inner = ex is TargetInvocationException { InnerException: not null } tie ? tie.InnerException! : ex;
+                    return McpUtils.Error(inner.Message);
+                }
+            }
+        }
+        return McpUtils.Error($"unknown tool '{toolName}'");
+    }
+
+    // ── 聊天编排 ──────────────────────────────────────────────────────────
+
+    public AiRunState? GetRun(string sessionId) => _runs.TryGetValue(sessionId, out var r) ? r : null;
+    public void RemoveRun(string sessionId) => _runs.TryRemove(sessionId, out _);
+
+    /// <summary>
+    /// 启动一次流式聊天。SSE 事件经 onEvent 回调：
+    ///   reasoning {label, content} / message {delta} / tool_call {toolCall} /
+    ///   tool_result {toolCallId, toolName, output} / approval {toolCall} /
+    ///   done {sessionId, messageId} / error {message}
+    /// </summary>
+    public async Task RunChatAsync(
+        AiSession session,
+        string content,
+        Func<string, Task> onEvent,
+        CancellationToken ct = default)
+    {
+        var provider = await GetProviderAsync(session.ProviderId, includeKey: true, ct);
+        if (provider == null)
+        {
+            await onEvent(JsonSerializer.Serialize(new { type = "error", message = "AI provider not found" }, JsonOpts));
+            return;
+        }
+
+        // 用户消息先落库。
+        var userMsg = new AiMessage { Role = "user", Content = content };
+        session.Messages.Add(userMsg);
+        await SaveSessionAsync(session, ct);
+
+        var state = new AiRunState
+        {
+            SessionId = session.Id,
+            ProviderId = session.ProviderId,
+            Model = session.Model,
+            UserId = session.UserId,
+        };
+        _runs[session.Id] = state;
+        state.Cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+
+        // 历史消息（含刚追加的用户消息）→ OpenAI 格式。
+        foreach (var m in session.Messages)
+        {
+            if (m.Role == "user")
+            {
+                state.LlmMessages.Add(new JsonObject { ["role"] = "user", ["content"] = m.Content });
+            }
+            else if (m.Role == "assistant")
+            {
+                var obj = new JsonObject { ["role"] = "assistant", ["content"] = m.Content };
+                if (m.ToolCalls is { Count: > 0 })
+                {
+                    var arr = new JsonArray();
+                    foreach (var tc in m.ToolCalls)
+                        arr.Add(new JsonObject { ["id"] = tc.Id, ["type"] = "function", ["function"] = new JsonObject { ["name"] = tc.ToolName, ["arguments"] = tc.ArgsText } });
+                    obj["tool_calls"] = arr;
+                }
+                state.LlmMessages.Add(obj);
+            }
+            else if (m.Role == "tool" && m.ToolCalls is { Count: > 0 })
+            {
+                var tc = m.ToolCalls[0];
+                state.LlmMessages.Add(new JsonObject
+                {
+                    ["role"] = "tool",
+                    ["tool_call_id"] = tc.Id,
+                    ["content"] = tc.State == "error" ? (tc.Error ?? "") : (tc.Output ?? ""),
+                });
+            }
+        }
+
+        try
+        {
+            await ChatLoopAsync(state, provider, onEvent, state.Cts.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            await onEvent(JsonSerializer.Serialize(new { type = "error", message = "stopped" }, JsonOpts));
+        }
+        finally
+        {
+            state.Cts.Dispose();
+            state.Finished = true;
+            // 停止后不清理 _runs（保留以便前端查询状态），由 RunChatAsync 结束时统一移除。
+            _runs.TryRemove(session.Id, out _);
+        }
+    }
+
+    private async Task ChatLoopAsync(AiRunState state, AiProvider provider, Func<string, Task> onEvent, CancellationToken ct)
+    {
+        var tools = await GetToolsAsync(ct);
+        const int maxTurns = 12;
+
+        for (var turn = 0; turn < maxTurns; turn++)
+        {
+            // 组装请求。
+            var body = new JsonObject
+            {
+                ["model"] = state.Model,
+                ["messages"] = new JsonArray(state.LlmMessages.Select(m => (JsonNode)m.DeepClone()).ToArray()),
+                ["stream"] = true,
+            };
+            if (tools.Count > 0)
+            {
+                var toolArr = new JsonArray();
+                foreach (var t in tools)
+                {
+                    var schema = t.Schema?.DeepClone() ?? new JsonObject();
+                    toolArr.Add(new JsonObject { ["type"] = "function", ["function"] = new JsonObject { ["name"] = t.Name, ["description"] = t.Description, ["parameters"] = schema } });
+                }
+                body["tools"] = toolArr;
+                body["tool_choice"] = "auto";
+            }
+
+            using var http = new HttpClient();
+            http.Timeout = TimeSpan.FromMinutes(5);
+            using var req = new HttpRequestMessage(HttpMethod.Post, provider.BaseUrl.TrimEnd('/') + "/chat/completions");
+            req.Content = new StringContent(body.ToJsonString(), Encoding.UTF8, "application/json");
+            if (!string.IsNullOrWhiteSpace(provider.ApiKeyEnc))
+                req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", provider.ApiKeyEnc);
+
+            HttpResponseMessage resp;
+            try
+            {
+                resp = await http.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, ct);
+            }
+            catch (Exception ex)
+            {
+                await onEvent(JsonSerializer.Serialize(new { type = "error", message = $"LLM request failed: {ex.Message}" }, JsonOpts));
+                return;
+            }
+
+            if (!resp.IsSuccessStatusCode)
+            {
+                var errBody = await resp.Content.ReadAsStringAsync(ct);
+                await onEvent(JsonSerializer.Serialize(new { type = "error", message = $"LLM HTTP {(int)resp.StatusCode}: {errBody}" }, JsonOpts));
+                return;
+            }
+
+            // 解析供应商 SSE 流。
+            state.TurnText = "";
+            var toolCallsThisTurn = new Dictionary<int, (string Id, string Name, string Args)>();
+            var finishReason = "";
+            await using var stream = await resp.Content.ReadAsStreamAsync(ct);
+            using var reader = new StreamReader(stream);
+            while (!reader.EndOfStream)
+            {
+                var line = await reader.ReadLineAsync(ct);
+                if (line == null) break;
+                if (!line.StartsWith("data:", StringComparison.Ordinal)) continue;
+                var data = line["data:".Length..].Trim();
+                if (data == "[DONE]") break;
+                JsonNode? chunk;
+                try { chunk = JsonNode.Parse(data); } catch { continue; }
+                if (chunk is not JsonObject obj) continue;
+
+                var choices = obj["choices"]?.AsArray();
+                if (choices == null || choices.Count == 0) continue;
+                var choice = choices[0] as JsonObject;
+                var delta = choice?["delta"] as JsonObject;
+
+                if (delta?["reasoning_content"] is JsonValue rv)
+                {
+                    var text = rv.GetValue<string>();
+                    if (text.Length > 0)
+                    {
+                        var step = new AiReasoningStep { Label = "推理", Content = text };
+                        state.Reasoning.Add(step);
+                        await onEvent(JsonSerializer.Serialize(new { type = "reasoning", label = step.Label, content = text }, JsonOpts));
+                    }
+                }
+
+                if (delta?["content"] is JsonValue cv)
+                {
+                    var text = cv.GetValue<string>();
+                    state.AssistantText += text;
+                    state.TurnText += text;
+                    await onEvent(JsonSerializer.Serialize(new { type = "message", delta = text }, JsonOpts));
+                }
+
+                if (delta?["tool_calls"] is JsonArray tcArr)
+                {
+                    foreach (var tcNode in tcArr)
+                    {
+                        if (tcNode is not JsonObject tc) continue;
+                        var idx = tc["index"]?.GetValue<int>() ?? 0;
+                        var fn = tc["function"] as JsonObject;
+                        if (fn == null) continue;
+                        var id = tc["id"]?.GetValue<string>() ?? "";
+                        var name = fn["name"]?.GetValue<string>() ?? "";
+                        var args = fn["arguments"]?.GetValue<string>() ?? "";
+                        if (toolCallsThisTurn.TryGetValue(idx, out var existing))
+                        {
+                            toolCallsThisTurn[idx] = (existing.Id.Length > 0 ? existing.Id : id, existing.Name.Length > 0 ? existing.Name : name, existing.Args + args);
+                        }
+                        else
+                        {
+                            toolCallsThisTurn[idx] = (id, name, args);
+                        }
+                    }
+                }
+
+                if (choice?["finish_reason"]?.GetValue<string>() is { Length: > 0 } fr)
+                {
+                    finishReason = fr;
+                    if (fr is "tool_calls" or "stop" or "length") break;
+                }
+            }
+
+            // 有工具调用 → 逐个执行（或请求审批）。
+            if (toolCallsThisTurn.Count > 0)
+            {
+                var asstMsg = new JsonObject { ["role"] = "assistant", ["content"] = state.TurnText };
+                var tcArr2 = new JsonArray();
+                foreach (var (id, name, args) in toolCallsThisTurn.Values)
+                    tcArr2.Add(new JsonObject { ["id"] = id.Length > 0 ? id : Guid.NewGuid().ToString("N"), ["type"] = "function", ["function"] = new JsonObject { ["name"] = name, ["arguments"] = args.Length == 0 ? "{}" : args } });
+                asstMsg["tool_calls"] = tcArr2;
+                state.LlmMessages.Add(asstMsg);
+
+                foreach (var (id, name, args) in toolCallsThisTurn.Values)
+                {
+                    var callId = id.Length > 0 ? id : Guid.NewGuid().ToString("N");
+                    var argsText = args.Length == 0 ? "{}" : args;
+                    var toolCall = new AiToolCall { Id = callId, ToolName = name, ArgsText = argsText };
+                    state.ToolCalls.Add(toolCall);
+
+                    if (provider.RequireApproval)
+                    {
+                        toolCall.State = "requires-action";
+                        state.PendingToolCall = new JsonObject
+                        {
+                            ["sessionId"] = state.SessionId,
+                            ["toolCallId"] = callId,
+                            ["toolName"] = name,
+                            ["argsText"] = argsText,
+                        };
+                        await onEvent(JsonSerializer.Serialize(new { type = "approval", toolCall = new { id = callId, toolName = name, argsText } }, JsonOpts));
+                        return; // 挂起，等待 /chat/action 恢复。
+                    }
+
+                    await onEvent(JsonSerializer.Serialize(new { type = "tool_call", toolCall = new { id = callId, toolName = name, argsText, state = "running" } }, JsonOpts));
+                    var output = await InvokeToolAsync(name, JsonNode.Parse(argsText) as JsonObject ?? new JsonObject(), ct);
+                    var isError = output.Contains("\"error\"", StringComparison.Ordinal);
+                    toolCall.State = isError ? "error" : "output-available";
+                    toolCall.Output = output;
+                    if (isError) toolCall.Error = output;
+                    await onEvent(JsonSerializer.Serialize(new { type = "tool_result", toolCallId = callId, toolName = name, output, state = toolCall.State }, JsonOpts));
+                    state.LlmMessages.Add(new JsonObject
+                    {
+                        ["role"] = "tool",
+                        ["tool_call_id"] = callId,
+                        ["content"] = output,
+                    });
+                }
+                continue; // 进入下一轮。
+            }
+
+            break; // 无工具调用 → 结束。
+        }
+
+        // 落库 & 结束事件。
+        var finalMsg = new AiMessage
+        {
+            Role = "assistant",
+            Content = state.AssistantText,
+            Reasoning = state.Reasoning.Count > 0 ? state.Reasoning : null,
+            ToolCalls = state.ToolCalls.Count > 0 ? state.ToolCalls : null,
+        };
+        var session = await GetSessionAsync(state.SessionId, state.UserId, ct);
+        if (session != null)
+        {
+            session.Messages.Add(finalMsg);
+            if (session.Title == "新对话")
+            {
+                var firstUser = state.LlmMessages.FirstOrDefault(m => m["role"]?.GetValue<string>() == "user");
+                var text = firstUser?["content"]?.GetValue<string>() ?? "";
+                if (text.Length > 24) text = text[..24] + "…";
+                session.Title = text.Length > 0 ? text : "新对话";
+            }
+            await SaveSessionAsync(session, ct);
+        }
+        await onEvent(JsonSerializer.Serialize(new { type = "done", sessionId = state.SessionId, messageId = finalMsg.Id }, JsonOpts));
+    }
+
+    /// <summary>审批/拒绝挂起的工具调用后继续运行。</summary>
+    public async Task ResolveApprovalAsync(string sessionId, string toolCallId, bool approved, Func<string, Task> onEvent, CancellationToken ct = default)
+    {
+        var state = _runs.TryGetValue(sessionId, out var r) ? r : null;
+        if (state == null) return;
+        if (state.PendingToolCall?["toolCallId"]?.GetValue<string>() != toolCallId) return;
+
+        var pending = state.ToolCalls.FirstOrDefault(t => t.Id == toolCallId);
+        if (pending == null) return;
+        state.PendingToolCall = null;
+
+        var provider = await GetProviderAsync(state.ProviderId, includeKey: true, ct);
+        if (provider == null) return;
+
+        // 已预置 assistant tool_calls 消息，补 tool 结果。
+        if (state.LlmMessages.LastOrDefault(m => m["role"]?.GetValue<string>() == "assistant" && m["tool_calls"] != null) is JsonObject asst)
+        {
+            // 已存在（RunChatAsync 挂起时已添加），无需重复添加。
+        }
+        else
+        {
+            state.LlmMessages.Add(new JsonObject
+            {
+                ["role"] = "assistant",
+                ["content"] = state.TurnText,
+                ["tool_calls"] = new JsonArray { new JsonObject { ["id"] = toolCallId, ["type"] = "function", ["function"] = new JsonObject { ["name"] = pending.ToolName, ["arguments"] = pending.ArgsText } } },
+            });
+        }
+
+        if (!approved)
+        {
+            pending.State = "error";
+            pending.Error = "rejected by operator";
+            var rejection = "Tool call was rejected by the operator. Explain to the user that the operation was not approved.";
+            state.LlmMessages.Add(new JsonObject { ["role"] = "tool", ["tool_call_id"] = toolCallId, ["content"] = rejection });
+            await onEvent(JsonSerializer.Serialize(new { type = "tool_result", toolCallId, toolName = pending.ToolName, output = rejection, state = "error" }, JsonOpts));
+            state.AssistantText += "\n\n[操作已被拒绝]\n\n";
+            await ChatLoopAsync(state, provider, onEvent, ct);
+            return;
+        }
+
+        // 批准 → 执行。
+        pending.State = "running";
+        await onEvent(JsonSerializer.Serialize(new { type = "tool_call", toolCall = new { id = toolCallId, toolName = pending.ToolName, argsText = pending.ArgsText, state = "running" } }, JsonOpts));
+        var output = await InvokeToolAsync(pending.ToolName, JsonNode.Parse(pending.ArgsText) as JsonObject ?? new JsonObject(), ct);
+        var isError = output.Contains("\"error\"", StringComparison.Ordinal);
+        pending.State = isError ? "error" : "output-available";
+        pending.Output = output;
+        if (isError) pending.Error = output;
+        await onEvent(JsonSerializer.Serialize(new { type = "tool_result", toolCallId, toolName = pending.ToolName, output, state = pending.State }, JsonOpts));
+        state.LlmMessages.Add(new JsonObject { ["role"] = "tool", ["tool_call_id"] = toolCallId, ["content"] = output });
+        await ChatLoopAsync(state, provider, onEvent, ct);
+    }
+
+    /// <summary>停止当前运行。</summary>
+    public void StopRun(string sessionId)
+    {
+        if (_runs.TryGetValue(sessionId, out var state))
+            state.Cts?.Cancel();
+    }
+
+    private async Task SaveSessionAsync(AiSession session, CancellationToken ct)
+    {
+        session.UpdatedAt = DateTime.UtcNow;
+        await Sessions.ReplaceOneAsync(
+            x => x.Id == session.Id && x.UserId == session.UserId,
+            session,
+            new ReplaceOptions { IsUpsert = false },
+            ct);
+    }
+
+    // ── 密钥保护（与 JwtSettings 一致：Windows DPAPI CurrentUser）─────────
+
+    public static string EncryptKey(string plain)
+    {
+        var bytes = Encoding.UTF8.GetBytes(plain);
+        if (OperatingSystem.IsWindows())
+        {
+            try
+            {
+                return Convert.ToBase64String(System.Security.Cryptography.ProtectedData.Protect(bytes, null, DataProtectionScope.CurrentUser));
+            }
+            catch { /* fallthrough */ }
+        }
+        return Convert.ToBase64String(bytes);
+    }
+
+    public static string DecryptKey(string enc)
+    {
+        var bytes = Convert.FromBase64String(enc);
+        if (OperatingSystem.IsWindows())
+        {
+            try
+            {
+                return Encoding.UTF8.GetString(System.Security.Cryptography.ProtectedData.Unprotect(bytes, null, DataProtectionScope.CurrentUser));
+            }
+            catch { /* fallthrough */ }
+        }
+        return Encoding.UTF8.GetString(bytes);
+    }
+}

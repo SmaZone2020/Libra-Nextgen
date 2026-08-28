@@ -1,4 +1,4 @@
-import { ChartLine, Cpu, Display, Folder, Globe, Shield, Terminal, PlugConnection, Code, CircleInfo, Gear, Puzzle, Layers } from "@gravity-ui/icons";
+import { ChartLine, Cpu, Display, Folder, Globe, Shield, Terminal, PlugConnection, Code, CircleInfo, Gear, Puzzle, Layers, Sparkles } from "@gravity-ui/icons";
 import type { NavItem } from "../shared/layout/Sidebar";
 
 export const siteConfig = {
@@ -29,6 +29,8 @@ const featuresGroup: NavItem = {
 // More top-level leaves after the features group.
 const bottomTopItems: NavItem[] = [
   { icon: Code, to: '/builder', label: 'nav.builder' },
+  // 内置 AI：入口放在设备列表下方、功能组之后的显眼位置。
+  { icon: Sparkles, to: '/ai', label: 'nav.ai' },
   { icon: Shield, to: '/audit', label: 'nav.auditLogs' },
 ];
 

@@ -12,6 +12,7 @@ import {
   Person,
   ShieldKeyhole,
   SlidersVertical,
+  Sparkles,
 } from '@gravity-ui/icons';
 import { getStoredUser } from '../../api/auth';
 import type { ReactNode } from 'react';
@@ -21,6 +22,7 @@ import RiskPolicyTab from './RiskPolicyTab';
 import McpTab from './McpTab';
 import SecurityTab from './SecurityTab';
 import AccessKeysTab from './AccessKeysTab';
+import AiTab from './AiTab';
 
 export interface SettingRoute {
   id: string;
@@ -68,6 +70,14 @@ export const SETTING_ROUTES: SettingRoute[] = [
     icon: Globe,
     adminOnly: true,
     render: () => <McpTab />,
+  },
+  {
+    id: 'ai',
+    labelKey: 'settings.aiTab',
+    descKey: 'settings.aiDesc',
+    icon: Sparkles,
+    adminOnly: true,
+    render: () => <AiTab />,
   },
   {
     id: 'riskPolicy',

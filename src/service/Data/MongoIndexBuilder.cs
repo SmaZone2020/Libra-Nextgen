@@ -33,6 +33,7 @@ public class MongoIndexBuilder
         await CreateTrafficAsync(ct);
         await CreateUsersAsync(ct);
         await CreateAuditLogsAsync(ct);
+        await CreateAiAsync(ct);
     }
 
     private async Task CreateAgentsAsync(CancellationToken ct)
@@ -93,6 +94,16 @@ public class MongoIndexBuilder
         var col = _context.GetCollection<AuditLog>("audit_logs");
         await col.Indexes.CreateOneAsync(
             new CreateIndexModel<AuditLog>(Builders<AuditLog>.IndexKeys.Descending(a => a.Timestamp)),
+            cancellationToken: ct);
+    }
+
+    private async Task CreateAiAsync(CancellationToken ct)
+    {
+        var sessions = _context.GetCollection<AiSession>("ai_sessions");
+        await sessions.Indexes.CreateOneAsync(
+            new CreateIndexModel<AiSession>(Builders<AiSession>.IndexKeys
+                .Ascending(s => s.UserId)
+                .Descending(s => s.UpdatedAt)),
             cancellationToken: ct);
     }
 }
