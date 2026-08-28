@@ -1,14 +1,4 @@
-/**
- * 厂商/模型 → 图标映射（public/icon 静态资源）。
- * 模糊匹配：名称规范化（小写去特殊字符）后，
- *   1) 精确命中 key；
- *   2) 否则取「key 是名称子串」中最长的一个（如 deepseek-ai → deepseek.svg，
- *      anthropic/claude-3-5 → anthropic.svg）；
- *   3) 2 字符短 key（yi/pi/rc 等）仅精确匹配，避免误配。
- */
-
 const MODEL_ICONS: Record<string, string> = {
-  // 主流模型厂商
   deepseek: '/icon/deepseek.svg',
   openai: '/icon/openai.svg',
   anthropic: '/icon/anthropic.svg',
@@ -40,7 +30,8 @@ const MODEL_ICONS: Record<string, string> = {
   wenxin: '/icon/wenxin.svg',
   ernie: '/icon/wenxin.svg',
   bytedance: '/icon/bytedance.svg',
-  doubao: '/icon/doubao.svg',
+  doubao: '/icon/doubao.png',
+  "seed": '/icon/doubao.png',
   tencent: '/icon/tencent.svg',
   hunyuan: '/icon/hunyuan.svg',
   minimax: '/icon/minimax.svg',
