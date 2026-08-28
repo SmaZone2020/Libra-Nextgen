@@ -161,8 +161,10 @@ export function AiThreadMessage({
     <ChatMessagePrimitive.Assistant>
       <ChatMessagePrimitive.Avatar
         alt={t('ai.assistant')}
+        src="/images/icon2.ico"
         fallback="AI"
         show
+        className='object-cover dark:invert select-none pointer-events-none'
       />
 
       <ChatMessagePrimitive.Body>

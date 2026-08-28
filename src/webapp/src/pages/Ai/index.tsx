@@ -53,6 +53,8 @@ export default function AiPage() {
 
   const abortRef = useRef<AbortController | null>(null);
   const pendingSessionIdRef = useRef<string | null>(null);
+  const sidebarRefreshKeyRef = useRef(0);
+  const [sidebarRefreshKey, setSidebarRefreshKey] = useState(0);
 
   // 顶层状态：把选中的会话 id 映射到路由。
   const activeId = sessionId ?? null;
@@ -240,6 +242,9 @@ export default function AiPage() {
           targetId = s.id;
           setSessions((prev) => [s, ...prev]);
           navigate(`/ai/${s.id}`);
+          // 新会话入列后，让侧边栏重新拉取会话列表。
+          sidebarRefreshKeyRef.current += 1;
+          setSidebarRefreshKey(sidebarRefreshKeyRef.current);
         } catch (e) {
           alert(e instanceof Error ? e.message : String(e));
           return;
@@ -362,6 +367,7 @@ export default function AiPage() {
       <aside className="hidden w-64 shrink-0 overflow-y-auto border-r border-default-200 md:block dark:border-default-800">
         <AiSidebar
           activeSessionId={activeId}
+          refreshKey={sidebarRefreshKey}
           onSelectSession={selectSession}
           onNewSession={() => void handleNewSession()}
         />

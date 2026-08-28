@@ -16,11 +16,13 @@ import {
 
 export interface AiSidebarProps {
   activeSessionId: string | null;
+  /** 变化时强制重新拉取会话列表（如首条消息创建新会话后）。 */
+  refreshKey?: number;
   onSelectSession: (id: string) => void;
   onNewSession: () => void;
 }
 
-export function AiSidebar({ activeSessionId, onSelectSession, onNewSession }: AiSidebarProps) {
+export function AiSidebar({ activeSessionId, refreshKey = 0, onSelectSession, onNewSession }: AiSidebarProps) {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const [sessions, setSessions] = useState<AiSession[]>([]);
@@ -47,7 +49,7 @@ export function AiSidebar({ activeSessionId, onSelectSession, onNewSession }: Ai
 
   useEffect(() => {
     void load();
-  }, [load]);
+  }, [load, refreshKey]);
 
   const providerName = useMemo(() => {
     const map = new Map(providers.map((p) => [p.id, p.name]));
@@ -127,7 +129,7 @@ export function AiSidebar({ activeSessionId, onSelectSession, onNewSession }: Ai
           </div>
         ) : filtered.length === 0 ? (
           <div className="px-3 py-8 text-center text-xs text-muted">
-            {query ? t('common.noResults') : t('ai.noSessions')}
+            None
           </div>
         ) : (
           <div className="flex flex-col gap-0.5">

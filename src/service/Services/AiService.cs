@@ -155,10 +155,24 @@ public class AiService
                 var clipped = errBody.Length > 300 ? errBody[..300] : errBody;
                 return (false, $"HTTP {(int)resp.StatusCode}: {clipped}", null);
             }
-            var doc = JsonNode.Parse(await resp.Content.ReadAsStringAsync(ct));
-            var models = doc?["data"]?.AsArray()
+            var body = await resp.Content.ReadAsStringAsync(ct);
+            JsonNode? doc;
+            try
+            {
+                doc = JsonNode.Parse(body);
+            }
+            catch (JsonException)
+            {
+                // 端点不存在 / 返回非 JSON（如 HTML 404 页）时给出可读错误。
+                return (false, $"模型列表响应不是有效 JSON（{url} 可能不支持 /models 路由）", null);
+            }
+            if (doc is not JsonObject obj || obj["data"] is not JsonArray dataArr)
+            {
+                return (false, $"响应缺少 data 数组（{url} 可能不支持 /models 路由）", null);
+            }
+            var models = dataArr
                 .Select(m => m?["id"]?.GetValue<string>() ?? "")
-                .Where(m => m.Length > 0).ToList() ?? new List<string>();
+                .Where(m => m.Length > 0).ToList();
             return (true, null, models);
         }
         catch (Exception ex)

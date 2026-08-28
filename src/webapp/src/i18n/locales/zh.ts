@@ -952,7 +952,6 @@ export default {
       subtitle: '内置 AI 智能体',
       newChat: '新建对话',
       searchSessions: '搜索会话...',
-      noSessions: '暂无会话，点击「新建对话」开始。',
       untitled: '未命名会话',
       unknownProvider: '未知供应商',
       goConfigure: '去配置 AI 供应商',

@@ -953,7 +953,6 @@ export default {
       subtitle: 'Built-in AI agent',
       newChat: 'New chat',
       searchSessions: 'Search conversations…',
-      noSessions: 'No conversations yet. Start a new chat.',
       untitled: 'Untitled conversation',
       unknownProvider: 'Unknown provider',
       goConfigure: 'Configure AI providers',
