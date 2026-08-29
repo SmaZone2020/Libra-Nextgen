@@ -76,7 +76,8 @@
 }
 
 .aurora-input--active {
-  animation: aurora-pulse var(--aurora-pulse-duration) ease-in-out infinite alternate;
+  /* 只保留光影脉动，不再改变边框宽度（固定 1px 细环 + 恒定 1.5px 轨道光）。 */
+  animation: aurora-glow var(--aurora-pulse-duration) ease-in-out infinite alternate;
 }
 
 .aurora-input--active::before {
@@ -95,30 +96,28 @@
   }
 }
 
-@keyframes aurora-pulse {
+/* 光影呼吸：外圈光晕明暗变化，边框宽度恒定不变 */
+@keyframes aurora-glow {
   0% {
     box-shadow:
+      0 0 0 1px color-mix(in oklab, var(--color-accent, #6366f1) 35%, transparent),
       0 0 14px 0 var(--aurora-glow-1),
-      0 0 0 1.5px color-mix(in oklab, var(--color-accent, #4f51d4) 35%, transparent),
       0 0 26px -4px var(--aurora-glow-2),
-      0 0 8px -2px var(--aurora-glow-3),
-      inset 0 0 12px -3px var(--aurora-glow-1);
+      inset 0 0 10px -6px var(--aurora-glow-1);
   }
   50% {
     box-shadow:
-      0 0 22px 2px var(--aurora-glow-2),
-      0 0 0 4px color-mix(in oklab, var(--color-accent, #6366f1) 60%, transparent),
-      0 0 34px -2px var(--aurora-glow-1),
-      0 0 16px 0 var(--aurora-glow-3),
-      inset 0 0 16px -3px var(--aurora-glow-2);
+      0 0 0 1px color-mix(in oklab, var(--color-accent, #6366f1) 60%, transparent),
+      0 0 24px 2px var(--aurora-glow-2),
+      0 0 40px -2px var(--aurora-glow-1),
+      inset 0 0 18px -6px var(--aurora-glow-2);
   }
   100% {
     box-shadow:
-      0 0 16px 0 var(--aurora-glow-3),
-      0 0 0 2.5px color-mix(in oklab, var(--color-accent, #6366f1) 45%, transparent),
-      0 0 30px -3px var(--aurora-glow-2),
-      0 0 10px -1px var(--aurora-glow-1),
-      inset 0 0 14px -3px var(--aurora-glow-3);
+      0 0 0 1px color-mix(in oklab, var(--color-accent, #6366f1) 45%, transparent),
+      0 0 18px 0 var(--aurora-glow-3),
+      0 0 32px -3px var(--aurora-glow-2),
+      inset 0 0 14px -5px var(--aurora-glow-3);
   }
 }
 
@@ -128,4 +127,29 @@
   .aurora-input--active::after {
     animation: none;
   }
+}
+.aurora-text {
+  --aurora-text-a: #6366f1;
+  --aurora-text-b: #a855f7;
+  --aurora-text-c: #22d3ee;
+  background-image: linear-gradient(
+    90deg,
+    var(--aurora-text-a),
+    var(--aurora-text-b),
+    var(--aurora-text-c),
+    var(--aurora-text-b),
+    var(--aurora-text-a)
+  );
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+  animation: aurora-text-flow 3s linear infinite;
+}
+
+.dark .aurora-text {
+  --aurora-text-a: #818cf8;
+  --aurora-text-b: #c084fc;
+  --aurora-text-c: #67e8f9;
 }

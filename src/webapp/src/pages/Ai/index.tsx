@@ -65,6 +65,29 @@ export default function AiPage() {
   const sidebarRefreshKeyRef = useRef(0);
   const [sidebarRefreshKey, setSidebarRefreshKey] = useState(0);
 
+  // 空状态欢迎语：多种风格轮换展示（日期固定 seed，避免每次刷新跳动）。
+  const heroMessages = useMemo(
+    () => [
+      t('ai.heroTitle'),
+      t('ai.heroTitle2'),
+      t('ai.heroTitle3'),
+      t('ai.heroTitle4'),
+      t('ai.heroTitle5'),
+      t('ai.heroTitle6'),
+      t('ai.heroTitle7'),
+      t('ai.heroTitle8'),
+      t('ai.heroTitle9'),
+      t('ai.heroTitle10'),
+    ],
+    [t],
+  );
+  const heroTitle = useMemo(() => {
+    const today = new Date();
+    const seed =
+      today.getFullYear() * 10000 + (today.getMonth() + 1) * 100 + today.getDate();
+    return heroMessages[seed % heroMessages.length] ?? heroMessages[0];
+  }, [heroMessages]);
+
   // 椤跺眰鐘舵€侊細鎶婇€変腑鐨勪細璇?id 鏄犲皠鍒拌矾鐢便€?
   const activeId = sessionId ?? null;
 
@@ -506,11 +529,17 @@ export default function AiPage() {
           <ChatConversation.Content className={`flex flex-col ${!session?.messages.length ? 'h-full' : ''}`}>
             <div className="m-auto flex w-full sm:w-[80%] flex-col gap-6 px-4 pt-6 pb-4">
               {showEmptyState ? (
-                <div className="flex min-h-full flex-1 flex-col items-center justify-center">
+                <div className="flex min-h-[80vh] flex-1 flex-col items-center justify-center">
                   <PromptSuggestion>
                     <PromptSuggestion.Header>
                       <PromptSuggestion.Title className='text-center'>
-                        {t('ai.heroTitle')}
+                        <img
+                          alt="icon"
+                          className="w-54 h-54 mx-auto object-cover dark:invert select-none pointer-events-none"
+                          loading="lazy"
+                          src="/images/icon2.webp"
+                        />
+                        {heroTitle}
                       </PromptSuggestion.Title>
                     </PromptSuggestion.Header>
                     <PromptSuggestion.Items>
