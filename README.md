@@ -80,8 +80,9 @@ Console 的 **Builder** 页在线构建 Windows/Linux 载荷（交叉构建需 z
 - **代理**：Socks 代理模块 + ProxyBrowser 内网 Web 浏览
 - **插件体系**：上传 zip / Git 导入 / 插件市场在线安装与更新
 - **Builder**：在线构建 Win/Linux 载荷、模块启用开关、投递（PowerShell/Cmd/Bash 命令、LNK 打包、匿名下载链接）
-- **MCP**：内置 MCP 服务器（Streamable HTTP，`/mcp`，可开关），AI 客户端可直接调用全部 C2 功能
-- **Console**：ECharts 仪表盘（流量图/地图）、后端地址可配置、断线重连、审计日志、风险策略
+- **AI 助手 Justitia**：流式对话与工具调用、Justitia 四档权限体系（COGNITIO/ARBITRIUM/IMPERIUM/DICTATURA，服务端强制校验）、超档工具审批模态框（一次性 / 5min / 20min 临时许可）、`request_tier_elevation` 提权通道、工具调用审计（档位→风险等级映射）
+- **MCP**：内置 MCP 服务器（Streamable HTTP，`/mcp`，可开关）——Console 内置 AI 助手 Justitia 可直接调用 C2 工具，另支持独立 AI 客户端接入
+- **Console**：ECharts 仪表盘（流量图/地图）、后端地址可配置、断线重连、审计日志、风险策略、内置 AI 助手 Justitia
 
 ## 平台支持
 

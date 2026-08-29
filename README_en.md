@@ -82,8 +82,9 @@ Plugin installation: **Upload** (zip) / **Import from Git** (e.g. the [plugin sc
 - **Proxy**: Socks proxy module + ProxyBrowser for browsing intranet web apps
 - **Plugin system**: upload zip / Git import / Plugin Market with online install & update
 - **Builder**: online Win/Linux payload builds, per-module enable switches, one-liner delivery (PowerShell/Cmd/Bash commands, LNK packaging, anonymous download links)
-- **MCP**: built-in MCP server (Streamable HTTP at `/mcp`, toggleable) — AI clients can drive every C2 capability
-- **Console**: ECharts dashboard (traffic charts/map), configurable backend address, reconnect handling, audit logs, risk policy
+- **AI assistant Justitia**: streaming chat with tool calls, a four-tier authority system (COGNITIO/ARBITRIUM/IMPERIUM/DICTATURA, enforced server-side), approval modal for over-tier tools (one-time / 5min / 20min temporary permits), a `request_tier_elevation` channel, and tool-call audit logging (tier → risk level mapping)
+- **MCP**: built-in MCP server (Streamable HTTP at `/mcp`, toggleable) — the Console's built-in AI assistant Justitia drives C2 tools directly; standalone AI clients can also connect
+- **Console**: ECharts dashboard (traffic charts/map), configurable backend address, reconnect handling, audit logs, risk policy, built-in AI assistant Justitia
 
 ## Platform Support
 
