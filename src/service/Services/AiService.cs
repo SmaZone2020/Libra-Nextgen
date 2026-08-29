@@ -693,7 +693,10 @@ public class AiService
             if (state.PendingToolCall == null)
             {
                 state.Cts.Dispose();
-                _runs.TryRemove(session.Id, out _);
+                // 竞态防御：同一 session 可能已被新运行覆盖（RunChatAsync 被再次触发），
+                // 只有 _runs 里仍指向当前 state 才移除，避免误删新运行的挂起状态。
+                if (_runs.TryGetValue(session.Id, out var current) && ReferenceEquals(current, state))
+                    _runs.TryRemove(session.Id, out _);
                 _logger.LogWarning("RunChatAsync finally removed run state for session {Session} (no pending tool call)", session.Id);
             }
             else
@@ -1527,7 +1530,9 @@ public class AiService
         {
             state.Cts?.Dispose();
             state.Finished = true;
-            _runs.TryRemove(sessionId, out _);
+            // 竞态防御：仅当 _runs 仍指向当前 state 才移除（防误删新运行）。
+            if (_runs.TryGetValue(sessionId, out var current) && ReferenceEquals(current, state))
+                _runs.TryRemove(sessionId, out _);
         }
     }
 
