@@ -1,14 +1,18 @@
 namespace LibraNextgen.Service.Configuration;
 
 /// <summary>
-/// AI 助手配置：Justitia 默认系统提示词。
-/// 提示词全文存储在 appsettings.json 的 Ai:SystemPrompt（部署时可直接编辑）；
-/// 代码内仅保留空默认值——配置缺失时该节不注入 system prompt。
+/// AI 助手配置：Justitia 系统提示词从本地文件加载。
+/// <see cref="SystemPromptFile"/> 指向提示词文件（.md/.txt），
+/// 服务启动时读取并缓存；修改文件后由 <see cref="AiPromptFileLoader"/>
+/// 的变更监听自动热更新，无需重启。
 /// </summary>
 public class AiSettings
 {
     public const string SectionName = "Ai";
 
-    /// <summary>Justitia 宪法系统提示词（EN，10 节）。</summary>
-    public string SystemPrompt { get; set; } = string.Empty;
+    /// <summary>提示词文件路径（相对 ContentRootPath 或绝对路径）。</summary>
+    public string SystemPromptFile { get; set; } = "Configuration/justitia-system-prompt.md";
+
+    /// <summary>兼容旧配置：直接内联的提示词文本（优先于文件）。</summary>
+    public string? SystemPrompt { get; set; }
 }

@@ -10,7 +10,6 @@ using LibraNextgen.Common.Models;
 using LibraNextgen.Service.Configuration;
 using LibraNextgen.Service.Data;
 using LibraNextgen.Service.Mcp;
-using Microsoft.Extensions.Options;
 using ModelContextProtocol.Server;
 using MongoDB.Driver;
 
@@ -64,7 +63,7 @@ public class AiService
     private readonly MongoDbContext _db;
     private readonly IServiceProvider _services;
     private readonly ILogger<AiService> _logger;
-    private readonly AiSettings _aiSettings;
+    private readonly AiPromptFileLoader _promptLoader;
     private readonly ConcurrentDictionary<string, AiRunState> _runs = new();
     /// <summary>审批决策门闩：callId → 等待中的 TaskCompletionSource（普通 MCP 等待语义）。</summary>
     private readonly ConcurrentDictionary<string, TaskCompletionSource<string>> _approvalGates = new();
@@ -81,21 +80,21 @@ public class AiService
         MongoDbContext db,
         IServiceProvider services,
         ILogger<AiService> logger,
-        IOptions<AiSettings> aiOptions)
+        AiPromptFileLoader promptLoader)
     {
         _db = db;
         _services = services;
         _logger = logger;
-        _aiSettings = aiOptions.Value;
+        _promptLoader = promptLoader;
     }
 
     /// <summary>
-    /// 组装 Justitia 系统提示词：配置文件中的宪法全文 + 运行时注入的当前档位上下文。
-    /// 配置为空时返回空（不注入 system prompt）。
+    /// 组装 Justitia 系统提示词：本地提示词文件全文 + 运行时注入的当前档位上下文。
+    /// 文件缺失/为空时返回空（不注入 system prompt）。
     /// </summary>
     private string BuildSystemPrompt(JustitiaTier tier)
     {
-        var prompt = _aiSettings.SystemPrompt?.Trim() ?? "";
+        var prompt = _promptLoader.Current?.Trim() ?? "";
         if (prompt.Length == 0) return "";
 
         var tierName = tier.ToString().ToUpperInvariant();

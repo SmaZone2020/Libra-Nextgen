@@ -26,6 +26,14 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- Justitia 系统提示词：随构建/发布输出，供 AiPromptFileLoader 从本地文件加载 -->
+    <Content Include="Configuration\justitia-system-prompt.md">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </Content>
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\LibraNextgen.Common\LibraNextgen.Common.csproj" />
   </ItemGroup>
 
