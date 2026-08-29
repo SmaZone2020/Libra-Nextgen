@@ -127,6 +127,19 @@ export function AiThreadMessage({
   const toolCalls = message.toolCalls;
   const sources = message.sources;
 
+  // 防御性合并：历史消息里可能存了逐词拆分的推理步骤（旧数据），
+  // 渲染前把连续同 label 的步骤拼接成单个 step。
+  const mergedReasoning = useMemo(() => {
+    if (!reasoning || reasoning.length === 0) return reasoning;
+    const out: { label: string; content: string }[] = [];
+    for (const step of reasoning) {
+      const prev = out[out.length - 1];
+      if (prev && prev.label === step.label) prev.content += step.content;
+      else out.push({ label: step.label, content: step.content });
+    }
+    return out;
+  }, [reasoning]);
+
   // 用户消息原地编辑态。
   const [isEditing, setIsEditing] = useState(false);
   const [draft, setDraft] = useState('');
@@ -281,14 +294,14 @@ export function AiThreadMessage({
       />
 
       <ChatMessagePrimitive.Body>
-        {reasoning && reasoning.length > 0 && (
+        {mergedReasoning && mergedReasoning.length > 0 && (
           <ChainOfThought defaultExpanded={false} isStreaming={isStreaming}>
             <ChainOfThought.Trigger>
-              {isStreaming ? t('ai.thinking') : t('ai.thoughtFor', { count: reasoning.length })}
+              {isStreaming ? t('ai.thinking') : t('ai.thoughtFor', { count: mergedReasoning.length })}
             </ChainOfThought.Trigger>
             <ChainOfThought.Content>
               <ChainOfThought.Steps>
-                {reasoning.map((step, i) => (
+                {mergedReasoning.map((step, i) => (
                   <ChainOfThought.Step key={`${step.label}-${i}`} label={step.label}>
                     {step.content}
                   </ChainOfThought.Step>

@@ -311,6 +311,28 @@ public class AiService
         return true;
     }
 
+    /// <summary>
+    /// 截断会话：保留到指定消息（含）为止，删除其后的全部消息。
+    /// 用于编辑消息后自动重发、重新生成时清理后续上下文。
+    /// </summary>
+    public async Task<bool> TruncateMessagesAfterAsync(
+        string sessionId, string userId, string messageId, CancellationToken ct = default)
+    {
+        var session = await Sessions.Find(x => x.Id == sessionId && x.UserId == userId).FirstOrDefaultAsync(ct);
+        if (session == null) return false;
+
+        var idx = session.Messages.FindIndex(m => m.Id == messageId);
+        if (idx < 0) return false;
+
+        if (idx + 1 < session.Messages.Count)
+        {
+            session.Messages.RemoveRange(idx + 1, session.Messages.Count - idx - 1);
+            session.UpdatedAt = DateTime.UtcNow;
+            await SaveSessionAsync(session, ct);
+        }
+        return true;
+    }
+
     /// <summary>复制会话为分支：深拷贝消息，标题追加 -fork。</summary>
     public async Task<AiSession?> ForkSessionAsync(string id, string userId, string userName, CancellationToken ct = default)
     {
@@ -763,7 +785,7 @@ public class AiService
         {
             Role = "assistant",
             Content = state.AssistantText,
-            Reasoning = state.Reasoning.Count > 0 ? state.Reasoning : null,
+            Reasoning = state.Reasoning.Count > 0 ? MergeReasoningSteps(state.Reasoning) : null,
             ToolCalls = state.ToolCalls.Count > 0 ? state.ToolCalls : null,
         };
         var session = await GetSessionAsync(state.SessionId, state.UserId, ct);
@@ -1255,6 +1277,31 @@ public class AiService
     private static async Task EmitToolResultAsync(
         AiRunState state, string callId, string toolName, string output, string toolState)
         => await state.NotifyAsync(JsonSerializer.Serialize(new { type = "tool_result", toolCallId = callId, toolName, output, state = toolState }, JsonOpts));
+
+    /// <summary>
+    /// 合并推理步骤：LLM 推理增量是按词推送的（每词一个 step），落库前把
+    /// 连续同 label 的步骤拼接成单个 step，避免前端显示成逐词"推理"块。
+    /// </summary>
+    private static List<AiReasoningStep> MergeReasoningSteps(List<AiReasoningStep> steps)
+    {
+        var result = new List<AiReasoningStep>();
+        foreach (var step in steps)
+        {
+            if (result.Count > 0 && result[^1].Label == step.Label)
+            {
+                result[^1] = new AiReasoningStep
+                {
+                    Label = result[^1].Label,
+                    Content = result[^1].Content + step.Content,
+                };
+            }
+            else
+            {
+                result.Add(new AiReasoningStep { Label = step.Label, Content = step.Content });
+            }
+        }
+        return result;
+    }
 
     /// <summary>审批/拒绝挂起的工具调用后继续运行。</summary>
     public async Task ResolveApprovalAsync(
