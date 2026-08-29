@@ -33,6 +33,30 @@ public class AuditService
         await _auditLogs.InsertAsync(entry);
     }
 
+    /// <summary>
+    /// 显式指定风险等级的审计（AI 工具调用使用：风险由 Justitia 档位决定，
+    /// 不经过管理员 RiskPolicy 覆盖——Cognitio→Safe / Arbitrium→Normal /
+    /// Imperium→Dangerous / Dictatura→Malicious）。
+    /// </summary>
+    public async Task LogAsync(
+        string userId, string userName, string action, string? actionKey,
+        string? targetAgentId, string? details, string ipAddress,
+        RiskLevel risk, bool success = true)
+    {
+        var entry = new AuditLog
+        {
+            UserId = userId,
+            UserName = userName,
+            Action = action,
+            TargetAgentId = targetAgentId,
+            Details = details,
+            IpAddress = ipAddress,
+            Success = success,
+            Risk = risk,
+        };
+        await _auditLogs.InsertAsync(entry);
+    }
+
     public async Task<(List<AuditLog> logs, long total)> GetPagedAsync(
         int page, int pageSize, string? query = null,
         DateTime? from = null, DateTime? to = null, bool excludeHeartbeats = true,

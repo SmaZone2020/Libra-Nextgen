@@ -6,6 +6,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using LibraNextgen.Common.Authorization;
 using LibraNextgen.Common.Models;
 using LibraNextgen.Service.Configuration;
 using LibraNextgen.Service.Data;
@@ -25,6 +26,8 @@ public sealed class AiRunState
     public required string ProviderId { get; init; }
     public required string Model { get; init; }
     public required string UserId { get; init; }
+    /// <summary>操作员显示名（审计用）。</summary>
+    public string UserName { get; set; } = "";
     /// <summary>本次运行携带的 Justitia 档位（浏览器持久化 → SSE 请求参数）。</summary>
     public JustitiaTier JustitiaTier { get; set; } = JustitiaTier.Cognitio;
     /// <summary>审批授予的临时提升档位（5/20 分钟许可窗口），到期自动回落。</summary>
@@ -64,6 +67,8 @@ public class AiService
     private readonly IServiceProvider _services;
     private readonly ILogger<AiService> _logger;
     private readonly AiPromptFileLoader _promptLoader;
+    private readonly AuditService _audit;
+    private readonly IHttpContextAccessor _http;
     private readonly ConcurrentDictionary<string, AiRunState> _runs = new();
     /// <summary>审批决策门闩：callId → 等待中的 TaskCompletionSource（普通 MCP 等待语义）。</summary>
     private readonly ConcurrentDictionary<string, TaskCompletionSource<string>> _approvalGates = new();
@@ -80,12 +85,66 @@ public class AiService
         MongoDbContext db,
         IServiceProvider services,
         ILogger<AiService> logger,
-        AiPromptFileLoader promptLoader)
+        AiPromptFileLoader promptLoader,
+        AuditService audit,
+        IHttpContextAccessor http)
     {
         _db = db;
         _services = services;
         _logger = logger;
         _promptLoader = promptLoader;
+        _audit = audit;
+        _http = http;
+    }
+
+    /// <summary>Justitia 四档 → 审计风险等级（档位即风险边界）。</summary>
+    private static RiskLevel RiskForTier(JustitiaTier tier) => tier switch
+    {
+        JustitiaTier.Cognitio => RiskLevel.Safe,      // 审理：只读侦查
+        JustitiaTier.Arbitrium => RiskLevel.Normal,   // 裁量：常规可逆
+        JustitiaTier.Imperium => RiskLevel.Dangerous, // 治权：高危需批准
+        _ => RiskLevel.Malicious,                     // 独裁：全权/恶意
+    };
+
+    /// <summary>从工具参数提取目标 agentId（审计用）。</summary>
+    private static string? ExtractAgentId(JsonObject args) =>
+        args.TryGetPropertyValue("agentId", out var node) && node is JsonValue v && v.TryGetValue<string>(out var id)
+            ? id
+            : null;
+
+    /// <summary>AI 工具调用审计（档位决定风险等级）。</summary>
+    private async Task AuditAiToolAsync(
+        AiRunState state, string toolName, JsonObject args,
+        string? output = null, bool success = true, string? permit = null)
+    {
+        try
+        {
+            var ip = _http.HttpContext?.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+            var details = new StringBuilder($"tier={state.EffectiveTier}");
+            if (!string.IsNullOrEmpty(permit)) details.Append($", permit={permit}");
+            if (args.Count > 0) details.Append($", args={args.ToJsonString()}");
+            if (output is { Length: > 0 })
+            {
+                var clipped = output.Length > 300 ? output[..300] : output;
+                details.Append($", result={clipped}");
+            }
+            if (details.Length > 1500) details.Length = 1500;
+
+            await _audit.LogAsync(
+                state.UserId,
+                state.UserName,
+                $"AI {toolName}",
+                RiskClassifier.ClassifyMcpTool(toolName),
+                ExtractAgentId(args),
+                details.ToString(),
+                ip,
+                RiskForTier(state.EffectiveTier),
+                success);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to write AI tool audit for {Tool}", toolName);
+        }
     }
 
     /// <summary>
@@ -577,6 +636,7 @@ public class AiService
             ProviderId = session.ProviderId,
             Model = session.Model,
             UserId = session.UserId,
+            UserName = session.UserName,
             JustitiaTier = justitiaTier,
             // 审批挂起时前端仍保持同一 SSE 连接：把 onEvent 挂到 state 上，
             // ResolveApprovalAsync 无需新建流即可向原连接推送 tool_result。
@@ -719,6 +779,9 @@ public class AiService
                             ["currentTier"] = (int)state.EffectiveTier,
                         };
                         await onEvent(JsonSerializer.Serialize(new { type = "approval", toolCall = new { id = callId, toolName = name, argsText, reason = $"tier elevation requested: {state.EffectiveTier} → {requested}", kind = "escalation", requiredTier = (int)requested, currentTier = (int)state.EffectiveTier } }, JsonOpts));
+                        // 提权请求本身留痕（风险按请求的目标档位计）。
+                        await AuditAiToolAsync(state, name, reqArgs,
+                            $"elevation requested: {state.EffectiveTier} → {requested}", success: false);
                         // 挂起等待 Operator 决策：把控制权交给内部等待循环。
                         // 工具调用始终保留在 LlmMessages（assistant tool_calls 已预置），
                         // 批准/拒绝后由 ResolveApprovalAsync 以普通 MCP 工具结果的方式恢复。
@@ -744,6 +807,10 @@ public class AiService
                             ["currentTier"] = (int)state.EffectiveTier,
                         };
                         await onEvent(JsonSerializer.Serialize(new { type = "approval", toolCall = new { id = callId, toolName = name, argsText, reason = $"tool requires tier {required} (current {state.EffectiveTier})", kind = "escalation", requiredTier = (int)required, currentTier = (int)state.EffectiveTier } }, JsonOpts));
+                        // 超档工具请求本身留痕（风险按所需档位计）。
+                        await AuditAiToolAsync(state, name,
+                            JsonNode.Parse(argsText) as JsonObject ?? new JsonObject(),
+                            $"approval requested: needs tier {required} (current {state.EffectiveTier})", success: false);
                         // 挂起等待 Operator 决策（同 request_tier_elevation）。
                         await WaitForApprovalAsync(state, name, callId, ct);
                         continue;
@@ -765,6 +832,8 @@ public class AiService
                     toolCall.State = isError ? "error" : "output-available";
                     toolCall.Output = output;
                     if (isError) toolCall.Error = output;
+                    // AI 工具调用审计：风险等级由当前档位决定。
+                    await AuditAiToolAsync(state, name, JsonNode.Parse(argsText) as JsonObject ?? new JsonObject(), output, !isError);
                     await onEvent(JsonSerializer.Serialize(new { type = "tool_result", toolCallId = callId, toolName = name, output, state = toolCall.State }, JsonOpts));
                     state.LlmMessages.Add(new JsonObject
                     {
@@ -1347,6 +1416,10 @@ public class AiService
         {
             // 拒绝：以普通工具结果返回给 LLM，AI 基于"被拒绝"继续回话。
             output = McpUtils.Error("rejected by operator");
+            // 审批拒绝留痕（风险等级按所需档位计）。
+            await AuditAiToolAsync(state, pending.ToolName,
+                JsonNode.Parse(pending.ArgsText) as JsonObject ?? new JsonObject(),
+                "rejected by operator", success: false, permit: permit);
         }
         else
         {
@@ -1380,6 +1453,10 @@ public class AiService
                     permit,
                     expiresAt = state.BoostExpiresAt?.ToUniversalTime().ToString("o"),
                 });
+                // 档位提升留痕（风险按提升后的档位计）。
+                await AuditAiToolAsync(state, pending.ToolName,
+                    JsonNode.Parse(pending.ArgsText) as JsonObject ?? new JsonObject(),
+                    output, success: true, permit: permit);
             }
             else
             {
@@ -1393,6 +1470,11 @@ public class AiService
                     _logger.LogWarning(ex, "AI tool {Tool} threw unhandled exception after approval", pending.ToolName);
                     output = McpUtils.Error($"tool '{pending.ToolName}' failed: {ex.Message}");
                 }
+                // 审批后执行的工具审计（风险按提升后的档位计）。
+                var isErr = output.Contains("\"error\"", StringComparison.Ordinal);
+                await AuditAiToolAsync(state, pending.ToolName,
+                    JsonNode.Parse(pending.ArgsText) as JsonObject ?? new JsonObject(),
+                    output, !isErr, permit);
             }
         }
 
