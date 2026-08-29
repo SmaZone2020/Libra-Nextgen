@@ -1381,11 +1381,24 @@ public class AiService
         CancellationToken ct = default, string permit = "one-time")
     {
         var state = _runs.TryGetValue(sessionId, out var r) ? r : null;
-        if (state == null) return false;
-        if (state.PendingToolCall?["toolCallId"]?.GetValue<string>() != toolCallId) return false;
+        if (state == null)
+        {
+            _logger.LogWarning("ResolveApproval: no run state for session {Session}", sessionId);
+            return false;
+        }
+        var pendingCallId = state.PendingToolCall?["toolCallId"]?.GetValue<string>();
+        if (pendingCallId != toolCallId)
+        {
+            _logger.LogWarning("ResolveApproval: pending call {Pending} != {Call} (session {Session})", pendingCallId, toolCallId, sessionId);
+            return false;
+        }
 
         var pending = state.ToolCalls.FirstOrDefault(t => t.Id == toolCallId);
-        if (pending == null) return false;
+        if (pending == null)
+        {
+            _logger.LogWarning("ResolveApproval: tool call {Call} not found in state (session {Session})", toolCallId, sessionId);
+            return false;
+        }
 
         // 先取出挂起元数据（kind/requiredTier），再清空 PendingToolCall，
         // 否则下方 escalation 分支永远读不到 kind。
