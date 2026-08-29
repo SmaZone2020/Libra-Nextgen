@@ -76,7 +76,7 @@ Console 的 **Builder** 页在线构建 Windows/Linux 载荷（交叉构建需 z
 - **流量伪装**：可配置 Profile（通信路径/请求头/UA 等），Builder 中持久化管理、启用/禁用；连接参数（协议/心跳/抖动）构建时注入
 - **Agent**：多任务并行处理（模块锁外执行）、交互式 Shell（xterm.js）、间接 Syscall 与睡眠混淆、反沙盒/反虚拟机、内存态 PowerShell（CLR Host）、多维度持久化
 - **侦查**：系统/硬件指纹、网络与 GeoIP、WiFi/LAN/蓝牙扫描、进程/窗口/账户
-- **凭据**：浏览器密码、RDP 凭证、SSH 密钥、微信数据、AI 工具 API Key（插件）
+- **凭据**：浏览器密码、RDP 凭证、SSH 密钥
 - **代理**：Socks 代理模块 + ProxyBrowser 内网 Web 浏览
 - **插件体系**：上传 zip / Git 导入 / 插件市场在线安装与更新
 - **Builder**：在线构建 Win/Linux 载荷、模块启用开关、投递（PowerShell/Cmd/Bash 命令、LNK 打包、匿名下载链接）
