@@ -315,10 +315,102 @@ public class AiService
 
     // ── 会话 ──────────────────────────────────────────────────────────────
 
+    /// <summary>控制台会话列表（ChannelId == null，频道会话不混入）。</summary>
     public async Task<List<AiSession>> GetSessionsAsync(string userId, CancellationToken ct = default)
     {
-        return await Sessions.Find(x => x.UserId == userId)
+        return await Sessions.Find(x => x.UserId == userId && x.ChannelId == null)
             .Sort(Builders<AiSession>.Sort.Descending(s => s.UpdatedAt)).ToListAsync(ct);
+    }
+
+    /// <summary>频道会话列表（绑定用户自己的 IM 会话，带频道标记）。</summary>
+    public async Task<List<AiSession>> GetChannelSessionsAsync(string userId, CancellationToken ct = default)
+    {
+        return await Sessions.Find(x => x.UserId == userId && x.ChannelId != null)
+            .Sort(Builders<AiSession>.Sort.Descending(s => s.UpdatedAt)).ToListAsync(ct);
+    }
+
+    /// <summary>
+    /// 按 (channelId, externalId) 取或建频道会话（唯一索引防并发重复）。
+    /// UserId 写绑定用户，控制台所有权/审批校验原样生效。
+    /// </summary>
+    public async Task<AiSession> GetOrCreateChannelSessionAsync(
+        string channelId, string channelType, string externalId, string externalName,
+        string userId, string userName, string providerId, string model, CancellationToken ct = default)
+    {
+        var existing = await Sessions.Find(x => x.ChannelId == channelId && x.ChannelExternalId == externalId)
+            .FirstOrDefaultAsync(ct);
+        if (existing != null) return existing;
+
+        var s = new AiSession
+        {
+            UserId = userId,
+            UserName = userName,
+            Title = externalName.Length > 0 ? externalName : "频道会话",
+            ProviderId = providerId,
+            Model = model,
+            ChannelId = channelId,
+            ChannelType = channelType,
+            ChannelExternalId = externalId,
+            ChannelExternalName = externalName,
+        };
+        try
+        {
+            await Sessions.InsertOneAsync(s, cancellationToken: ct);
+        }
+        catch (MongoDB.Driver.MongoWriteException) when (existing == null)
+        {
+            // 并发创建撞唯一索引：回读胜出者。
+            return await Sessions.Find(x => x.ChannelId == channelId && x.ChannelExternalId == externalId)
+                .FirstOrDefaultAsync(ct) ?? s;
+        }
+        return s;
+    }
+
+    /// <summary>刷新频道会话的外部昵称/审计名。</summary>
+    public async Task UpdateChannelSessionIdentityAsync(
+        string sessionId, string externalName, string userName, CancellationToken ct = default)
+    {
+        await Sessions.UpdateOneAsync(
+            x => x.Id == sessionId,
+            Builders<AiSession>.Update
+                .Set(s => s.ChannelExternalName, externalName)
+                .Set(s => s.UserName, userName),
+            cancellationToken: ct);
+    }
+
+    /// <summary>删除频道下的全部会话（频道删除时清理）。</summary>
+    public async Task DeleteChannelSessionsAsync(string channelId, CancellationToken ct = default)
+    {
+        await Sessions.DeleteManyAsync(x => x.ChannelId == channelId, ct);
+    }
+
+    /// <summary>按 (channelId, externalId) 定位频道会话（IM 审批用，身份即外部用户）。</summary>
+    public async Task<AiSession?> GetChannelSessionByExternalAsync(
+        string channelId, string externalId, CancellationToken ct = default)
+    {
+        return await Sessions.Find(x => x.ChannelId == channelId && x.ChannelExternalId == externalId)
+            .FirstOrDefaultAsync(ct);
+    }
+
+    /// <summary>会话是否存在挂起的审批（控制台打开会话时用于恢复审批模态框）。</summary>
+    public async Task<JsonObject?> GetPendingApprovalAsync(string sessionId, string userId, CancellationToken ct = default)
+    {
+        var session = await Sessions.Find(x => x.Id == sessionId && x.UserId == userId).FirstOrDefaultAsync(ct);
+        if (session == null) return null;
+        var state = GetRun(sessionId);
+        if (state?.PendingToolCall == null) return null;
+        var tc = state.PendingToolCall;
+        return new JsonObject
+        {
+            ["id"] = tc["toolCallId"]?.DeepClone() ?? "unknown",
+            ["toolName"] = tc["toolName"]?.DeepClone() ?? "unknown",
+            ["argsText"] = tc["argsText"]?.DeepClone() ?? "{}",
+            ["state"] = "requires-action",
+            ["kind"] = tc["kind"]?.DeepClone(),
+            ["reason"] = tc["reason"]?.DeepClone(),
+            ["requiredTier"] = tc["requiredTier"]?.DeepClone(),
+            ["currentTier"] = tc["currentTier"]?.DeepClone(),
+        };
     }
 
     public async Task<AiSession?> GetSessionAsync(string id, string userId, CancellationToken ct = default)

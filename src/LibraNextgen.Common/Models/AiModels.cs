@@ -25,7 +25,11 @@ public class AiProvider
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 }
 
-/// <summary>AI 会话（持久化到 MongoDB，按用户隔离）。</summary>
+/// <summary>
+/// AI 会话（持久化到 MongoDB，按用户隔离）。
+/// 频道会话（IM 接入）通过 Channel* 平面字段与控制台会话区分：
+/// ChannelId == null → 控制台会话；非 null → 频道会话（附类型 / 外部用户 ID / 外部昵称）。
+/// </summary>
 public class AiSession
 {
     public string Id { get; set; } = Guid.NewGuid().ToString("N");
@@ -37,6 +41,78 @@ public class AiSession
     public List<AiMessage> Messages { get; set; } = new();
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
+
+    /// <summary>频道 ID（ai_channels.Id）。null = 控制台会话。</summary>
+    public string? ChannelId { get; set; }
+    /// <summary>频道类型：telegram | lark | wechat-claw。</summary>
+    public string? ChannelType { get; set; }
+    /// <summary>频道侧外部用户 ID（Telegram chatId / 飞书 open_id / 微信 wxid）。</summary>
+    public string? ChannelExternalId { get; set; }
+    /// <summary>频道侧外部用户昵称。</summary>
+    public string? ChannelExternalName { get; set; }
+}
+
+/// <summary>AI 频道（IM 接入配置，管理员在控制台管理；敏感配置项静态加密存储）。</summary>
+public class AiChannel
+{
+    public string Id { get; set; } = Guid.NewGuid().ToString("N");
+    public string Name { get; set; } = "";
+    /// <summary>telegram | lark | wechat-claw。</summary>
+    public string ChannelType { get; set; } = "telegram";
+    public bool Enabled { get; set; } = true;
+    /// <summary>类型相关配置。敏感项（botToken/appSecret/encryptKey/ilinkKey）以 AiService.EncryptKey 加密后落库。</summary>
+    public Dictionary<string, string> Config { get; set; } = new();
+    /// <summary>该频道会话的 Justitia 基准档位（0=Cognitio … 3=Dictatura），服务端强制校验。</summary>
+    public int DefaultTier { get; set; } = 0;
+    /// <summary>是否强制绑定控制台账号（默认开；未绑定用户仅能收到 /bind 指引）。</summary>
+    public bool RequireBind { get; set; } = true;
+    /// <summary>默认 AI 供应商（空 = 取第一个启用供应商）。</summary>
+    public string DefaultProviderId { get; set; } = "";
+    /// <summary>默认模型（空 = 供应商默认模型）。</summary>
+    public string DefaultModel { get; set; } = "";
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
+}
+
+/// <summary>频道侧身份 ↔ 控制台账号绑定关系。</summary>
+public class AiChannelUser
+{
+    public string Id { get; set; } = Guid.NewGuid().ToString("N");
+    public string ChannelId { get; set; } = "";
+    /// <summary>Telegram chatId / 飞书 open_id / 微信 wxid。</summary>
+    public string ExternalId { get; set; } = "";
+    /// <summary>IM 侧昵称（展示用）。</summary>
+    public string ExternalName { get; set; } = "";
+    public string BoundUserId { get; set; } = "";
+    public string BoundUserName { get; set; } = "";
+    /// <summary>可选：按用户覆盖频道默认档位（null = 用频道 DefaultTier）。</summary>
+    public int? TierOverride { get; set; }
+    /// <summary>绑定码 SHA-256 哈希（一次性，15 分钟过期）。</summary>
+    public string? BindCodeHash { get; set; }
+    public DateTime? BindCodeExpiresAt { get; set; }
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public DateTime BoundAt { get; set; } = DateTime.UtcNow;
+    public DateTime LastSeenAt { get; set; } = DateTime.UtcNow;
+}
+
+/// <summary>
+/// 一次性绑定码：管理员为指定控制台账号生成，用户在 IM 中发 /bind &lt;code&gt; 完成绑定。
+/// 只存 SHA-256 哈希；15 分钟过期；成功后立即作废。
+/// </summary>
+public class AiChannelBindCode
+{
+    public string Id { get; set; } = Guid.NewGuid().ToString("N");
+    public string ChannelId { get; set; } = "";
+    /// <summary>绑定目标控制台账号。</summary>
+    public string BoundUserId { get; set; } = "";
+    public string BoundUserName { get; set; } = "";
+    /// <summary>绑定码 SHA-256 哈希。</summary>
+    public string CodeHash { get; set; } = "";
+    public DateTime ExpiresAt { get; set; } = DateTime.UtcNow.AddMinutes(15);
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public DateTime? UsedAt { get; set; }
+    public string? UsedByExternalId { get; set; }
+    public string? UsedByExternalName { get; set; }
 }
 
 /// <summary>AI 会话中的一条消息。</summary>

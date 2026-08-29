@@ -34,6 +34,7 @@ public class MongoIndexBuilder
         await CreateUsersAsync(ct);
         await CreateAuditLogsAsync(ct);
         await CreateAiAsync(ct);
+        await CreateAiChannelsAsync(ct);
     }
 
     private async Task CreateAgentsAsync(CancellationToken ct)
@@ -104,6 +105,40 @@ public class MongoIndexBuilder
             new CreateIndexModel<AiSession>(Builders<AiSession>.IndexKeys
                 .Ascending(s => s.UserId)
                 .Descending(s => s.UpdatedAt)),
+            cancellationToken: ct);
+
+        // 频道会话：按 (ChannelId, ChannelExternalId) 唯一（partial filter 避免
+        // 控制台会话的 null ChannelId 互撞——Mongo 唯一索引把 null 视为相等）。
+        await sessions.Indexes.CreateOneAsync(
+            new CreateIndexModel<AiSession>(
+                Builders<AiSession>.IndexKeys
+                    .Ascending(s => s.ChannelId)
+                    .Ascending(s => s.ChannelExternalId),
+                new CreateIndexOptions<AiSession>
+                {
+                    Unique = true,
+                    PartialFilterExpression = Builders<AiSession>.Filter.Type(s => s.ChannelId, MongoDB.Bson.BsonType.String),
+                }),
+            cancellationToken: ct);
+    }
+
+    private async Task CreateAiChannelsAsync(CancellationToken ct)
+    {
+        var users = _context.GetCollection<AiChannelUser>("ai_channel_users");
+        await users.Indexes.CreateOneAsync(
+            new CreateIndexModel<AiChannelUser>(
+                Builders<AiChannelUser>.IndexKeys
+                    .Ascending(u => u.ChannelId)
+                    .Ascending(u => u.ExternalId),
+                new CreateIndexOptions { Unique = true }),
+            cancellationToken: ct);
+
+        var codes = _context.GetCollection<AiChannelBindCode>("ai_channel_bind_codes");
+        await codes.Indexes.CreateOneAsync(
+            new CreateIndexModel<AiChannelBindCode>(
+                Builders<AiChannelBindCode>.IndexKeys
+                    .Ascending(b => b.ChannelId)
+                    .Ascending(b => b.ExpiresAt)),
             cancellationToken: ct);
     }
 }

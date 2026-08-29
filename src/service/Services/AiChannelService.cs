@@ -1,0 +1,717 @@
+using System.Collections.Concurrent;
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.Json;
+using System.Text.Json.Nodes;
+using LibraNextgen.Common.Models;
+using LibraNextgen.Common.Protocol;
+using LibraNextgen.Service.Data;
+using MongoDB.Driver;
+
+namespace LibraNextgen.Service.Services;
+
+/// <summary>
+/// AI 频道网关：IM 接入（Telegram / 飞书 / 微信 Claw）的统一入口。
+/// 职责：频道配置 CRUD、一次性绑定码、入站消息管线（限流 → 命令 → 身份解析 → 会话路由 →
+/// 复用 AiService.RunChatAsync 的聊天/工具/审批管线，事件出口换成 ChannelSink 回发 IM）。
+/// 权限：频道会话的 Justitia 档位由服务端强制（频道默认档位 + 用户覆盖），不信任客户端；
+/// 审批永远发生在控制台（复用现有 /api/ai/chat/action 门闩），频道只是展示端。
+/// </summary>
+public class AiChannelService
+{
+    private const int RateLimitWindowSec = 60;
+    private const int RateLimitMax = 10;
+    private const int MaxMessageLength = 2000;
+    private const int ChunkSize = 3500;
+    private const string SecretSentinel = "********";
+    private const string GuestPrefix = "ch:guest:";
+
+    private readonly MongoDbContext _db;
+    private readonly AiService _ai;
+    private readonly AuditService _audit;
+    private readonly ConnectionManager _ws;
+    private readonly Repository<User> _users;
+    private readonly TelegramChannelAdapter _telegram;
+    private readonly LarkChannelAdapter _lark;
+    private readonly WeChatClawAdapter _claw;
+    private readonly ILogger<AiChannelService> _logger;
+
+    /// <summary>限流桶：(channelId|externalId) → 时间戳队列。</summary>
+    private readonly ConcurrentDictionary<string, Queue<DateTime>> _rateBuckets = new();
+    /// <summary>每用户运行闸：(channelId|externalId) → 同时只允许一个运行。</summary>
+    private readonly ConcurrentDictionary<string, SemaphoreSlim> _gates = new();
+
+    public AiChannelService(
+        MongoDbContext db,
+        AiService ai,
+        AuditService audit,
+        ConnectionManager ws,
+        Repository<User> users,
+        TelegramChannelAdapter telegram,
+        LarkChannelAdapter lark,
+        WeChatClawAdapter claw,
+        ILogger<AiChannelService> logger)
+    {
+        _db = db;
+        _ai = ai;
+        _audit = audit;
+        _ws = ws;
+        _users = users;
+        _telegram = telegram;
+        _lark = lark;
+        _claw = claw;
+        _logger = logger;
+    }
+
+    private IMongoCollection<AiChannel> Channels => _db.GetCollection<AiChannel>("ai_channels");
+    private IMongoCollection<AiChannelUser> ChannelUsers => _db.GetCollection<AiChannelUser>("ai_channel_users");
+    private IMongoCollection<AiChannelBindCode> BindCodes => _db.GetCollection<AiChannelBindCode>("ai_channel_bind_codes");
+
+    private IAiChannelAdapter AdapterFor(string type) => type switch
+    {
+        AiChannelTypes.Telegram => _telegram,
+        AiChannelTypes.Lark => _lark,
+        AiChannelTypes.WechatClaw => _claw,
+        _ => throw new ArgumentException($"unsupported channel type '{type}'"),
+    };
+
+    // ── 配置加解密 / 打码 ────────────────────────────────────────────────
+
+    /// <summary>API 出参打码：敏感键值替换为哨兵。</summary>
+    public static void MaskConfig(AiChannel ch)
+    {
+        foreach (var key in AiChannelTypes.SensitiveKeys)
+            if (ch.Config.TryGetValue(key, out var v) && v.Length > 0)
+                ch.Config[key] = SecretSentinel;
+    }
+
+    private static void EncryptSensitive(AiChannel ch)
+    {
+        foreach (var key in AiChannelTypes.SensitiveKeys)
+            if (ch.Config.TryGetValue(key, out var v) && v.Length > 0 && v != SecretSentinel)
+                ch.Config[key] = AiService.EncryptKey(v);
+    }
+
+    private static void DecryptSensitive(AiChannel ch)
+    {
+        foreach (var key in AiChannelTypes.SensitiveKeys)
+            if (ch.Config.TryGetValue(key, out var v) && v.Length > 0 && v != SecretSentinel)
+                ch.Config[key] = AiService.DecryptKey(v);
+    }
+
+    private static void Validate(AiChannel ch)
+    {
+        if (string.IsNullOrWhiteSpace(ch.Name)) throw new ArgumentException("name is required");
+        if (ch.ChannelType is not (AiChannelTypes.Telegram or AiChannelTypes.Lark or AiChannelTypes.WechatClaw))
+            throw new ArgumentException($"unsupported channel type '{ch.ChannelType}'");
+        var required = ch.ChannelType switch
+        {
+            AiChannelTypes.Telegram => new[] { "botToken" },
+            AiChannelTypes.Lark => new[] { "appId", "appSecret" },
+            _ => new[] { "clawBaseUrl" },
+        };
+        foreach (var k in required)
+            if (!ch.Config.TryGetValue(k, out var v) || string.IsNullOrWhiteSpace(v) || v == SecretSentinel)
+                throw new ArgumentException($"缺少配置项 {k}");
+        if (ch.DefaultTier is < 0 or > 3) ch.DefaultTier = 0;
+    }
+
+    // ── 频道 CRUD ───────────────────────────────────────────────────────
+
+    public async Task<List<AiChannel>> ListChannelsAsync(bool includeSecrets, CancellationToken ct = default)
+    {
+        var list = await Channels.Find(FilterDefinition<AiChannel>.Empty)
+            .Sort(Builders<AiChannel>.Sort.Descending(c => c.CreatedAt)).ToListAsync(ct);
+        foreach (var ch in list)
+        {
+            if (includeSecrets) DecryptSensitive(ch); else MaskConfig(ch);
+        }
+        return list;
+    }
+
+    public async Task<AiChannel?> GetChannelAsync(string id, bool includeSecrets, CancellationToken ct = default)
+    {
+        var ch = await Channels.Find(x => x.Id == id).FirstOrDefaultAsync(ct);
+        if (ch == null) return null;
+        if (includeSecrets) DecryptSensitive(ch); else MaskConfig(ch);
+        return ch;
+    }
+
+    public async Task<List<AiChannel>> GetEnabledChannelsAsync(IEnumerable<string>? types = null, CancellationToken ct = default)
+    {
+        var filter = Builders<AiChannel>.Filter.Eq(c => c.Enabled, true);
+        if (types != null)
+        {
+            var list = types.ToList();
+            if (list.Count > 0) filter &= Builders<AiChannel>.Filter.In(c => c.ChannelType, list);
+        }
+        var result = await Channels.Find(filter).ToListAsync(ct);
+        foreach (var ch in result) DecryptSensitive(ch);
+        return result;
+    }
+
+    public async Task<AiChannel> CreateChannelAsync(AiChannel input, CancellationToken ct = default)
+    {
+        var ch = new AiChannel
+        {
+            Name = input.Name.Trim(),
+            ChannelType = input.ChannelType,
+            Enabled = input.Enabled,
+            Config = new Dictionary<string, string>(input.Config, StringComparer.Ordinal),
+            DefaultTier = input.DefaultTier,
+            RequireBind = input.RequireBind,
+            DefaultProviderId = input.DefaultProviderId ?? "",
+            DefaultModel = input.DefaultModel ?? "",
+        };
+        Validate(ch);
+        EncryptSensitive(ch);
+        await Channels.InsertOneAsync(ch, cancellationToken: ct);
+        MaskConfig(ch);
+        return ch;
+    }
+
+    public async Task<bool> UpdateChannelAsync(string id, AiChannel input, CancellationToken ct = default)
+    {
+        var existing = await GetChannelAsync(id, includeSecrets: true, ct);
+        if (existing == null) return false;
+
+        // 敏感键为哨兵/空 → 保留原值。
+        foreach (var key in AiChannelTypes.SensitiveKeys)
+            if (input.Config.TryGetValue(key, out var v) && (v == SecretSentinel || v.Length == 0))
+                input.Config[key] = existing.Config.GetValueOrDefault(key, "");
+
+        var ch = new AiChannel
+        {
+            Id = id,
+            Name = input.Name.Trim(),
+            ChannelType = input.ChannelType,
+            Enabled = input.Enabled,
+            Config = new Dictionary<string, string>(input.Config, StringComparer.Ordinal),
+            DefaultTier = input.DefaultTier,
+            RequireBind = input.RequireBind,
+            DefaultProviderId = input.DefaultProviderId ?? "",
+            DefaultModel = input.DefaultModel ?? "",
+            CreatedAt = existing.CreatedAt,
+            UpdatedAt = DateTime.UtcNow,
+        };
+        Validate(ch);
+        EncryptSensitive(ch);
+        var r = await Channels.ReplaceOneAsync(x => x.Id == id, ch, cancellationToken: ct);
+        return r.MatchedCount > 0;
+    }
+
+    public async Task<bool> DeleteChannelAsync(string id, CancellationToken ct = default)
+    {
+        var r = await Channels.DeleteOneAsync(x => x.Id == id, ct);
+        if (r.DeletedCount == 0) return false;
+        await ChannelUsers.DeleteManyAsync(x => x.ChannelId == id, ct);
+        await BindCodes.DeleteManyAsync(x => x.ChannelId == id, ct);
+        await _ai.DeleteChannelSessionsAsync(id, ct);
+        return true;
+    }
+
+    /// <summary>连通性自检（设置页"测试连接"）。</summary>
+    public async Task<(bool Ok, string? Error)> TestChannelAsync(AiChannel input, CancellationToken ct = default)
+    {
+        var probe = new AiChannel
+        {
+            Name = input.Name,
+            ChannelType = input.ChannelType,
+            Config = new Dictionary<string, string>(input.Config, StringComparer.Ordinal),
+        };
+        try
+        {
+            // 哨兵值（编辑态未改动的密钥）无法测试——由控制器在调用前用已解密配置补齐。
+            EncryptSensitive(probe);
+            DecryptSensitive(probe);
+            var (ok, msg) = await AdapterFor(probe.ChannelType).TestAsync(probe, ct);
+            return (ok, ok ? null : msg);
+        }
+        catch (Exception ex)
+        {
+            return (false, ex.Message);
+        }
+    }
+
+    /// <summary>绑定用户自己的频道会话（委托 AiService，控制台 AI 页"频道会话"分区）。</summary>
+    public Task<List<AiSession>> MyChannelSessionsAsync(string userId, CancellationToken ct = default)
+        => _ai.GetChannelSessionsAsync(userId, ct);
+
+    /// <summary>轮询型频道拉取增量（由 ChannelPollingHostedService 驱动，按类型分发到适配器）。</summary>
+    public Task<ChannelPollBatch> PollChannelAsync(AiChannel channel, string? cursor, CancellationToken ct = default)
+        => AdapterFor(channel.ChannelType).PollAsync(channel, cursor, ct);
+
+    // ── 绑定码 / 绑定用户 ────────────────────────────────────────────────
+
+    private static readonly char[] CodeAlphabet =
+        "ABCDEFGHJKLMNPQRSTUVWXYZ23456789".ToCharArray(); // 去除 0/O/1/I
+
+    public static string GenerateBindCode()
+    {
+        var bytes = RandomNumberGenerator.GetBytes(8);
+        var sb = new StringBuilder(8);
+        foreach (var b in bytes) sb.Append(CodeAlphabet[b % CodeAlphabet.Length]);
+        return sb.ToString();
+    }
+
+    public static string HashCode(string code) =>
+        Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(code.Trim().ToUpperInvariant())));
+
+    /// <summary>管理员为指定控制台账号生成一次性绑定码（15 分钟有效，只存哈希）。</summary>
+    public async Task<(string Code, DateTime ExpiresAt)> CreateBindCodeAsync(
+        string channelId, string boundUserId, CancellationToken ct = default)
+    {
+        var ch = await Channels.Find(x => x.Id == channelId).FirstOrDefaultAsync(ct)
+            ?? throw new KeyNotFoundException("channel not found");
+        var user = await _users.GetByIdAsync(boundUserId, ct)
+            ?? throw new KeyNotFoundException("user not found");
+        var code = GenerateBindCode();
+        var expiresAt = DateTime.UtcNow.AddMinutes(15);
+        await BindCodes.InsertOneAsync(new AiChannelBindCode
+        {
+            ChannelId = channelId,
+            BoundUserId = user.Id,
+            BoundUserName = user.Username,
+            CodeHash = HashCode(code),
+            ExpiresAt = expiresAt,
+        }, cancellationToken: ct);
+        _logger.LogInformation("Bind code created for channel {Channel} → user {User}", channelId, user.Username);
+        return (code, expiresAt);
+    }
+
+    public async Task<List<AiChannelUser>> ListUsersAsync(string channelId, CancellationToken ct = default)
+    {
+        return await ChannelUsers.Find(x => x.ChannelId == channelId)
+            .Sort(Builders<AiChannelUser>.Sort.Descending(u => u.BoundAt)).ToListAsync(ct);
+    }
+
+    public async Task<bool> SetUserTierAsync(string channelUserId, int? tier, CancellationToken ct = default)
+    {
+        if (tier is < 0 or > 3) throw new ArgumentException("tier must be 0-3 or null");
+        var upd = Builders<AiChannelUser>.Update.Set(u => u.TierOverride, tier);
+        var r = await ChannelUsers.UpdateOneAsync(x => x.Id == channelUserId, upd, cancellationToken: ct);
+        return r.MatchedCount > 0;
+    }
+
+    public async Task<bool> UnbindUserAsync(string channelUserId, CancellationToken ct = default)
+    {
+        var u = await ChannelUsers.Find(x => x.Id == channelUserId).FirstOrDefaultAsync(ct);
+        if (u == null) return false;
+        var r = await ChannelUsers.DeleteOneAsync(x => x.Id == channelUserId, ct);
+        if (r.DeletedCount > 0)
+        {
+            await _audit.LogAsync(u.BoundUserId, u.BoundUserName, "AI channel unbind", "ai.channel.unbind",
+                null, $"channel={u.ChannelId} external={u.ExternalId} ({u.ExternalName})", "console", RiskLevel.Safe);
+        }
+        return r.DeletedCount > 0;
+    }
+
+    // ── 入站管线 ────────────────────────────────────────────────────────
+
+    /// <summary>IM 入站消息统一入口（适配器轮询 / Webhook 均汇入此处）。</summary>
+    public async Task HandleInboundAsync(ChannelInboundMessage msg, CancellationToken ct = default)
+    {
+        var ch = await GetChannelAsync(msg.ChannelId, includeSecrets: true, ct);
+        if (ch == null || !ch.Enabled) return; // 未找到/停用频道：静默丢弃。
+
+        var text = msg.Text.Trim();
+        if (text.Length == 0) return;
+        if (text.Length > MaxMessageLength) text = text[..MaxMessageLength] + "…";
+
+        if (IsRateLimited($"{ch.Id}|{msg.ExternalId}"))
+        {
+            await TrySendAsync(ch, msg.ExternalId, "⏳ 操作过于频繁，请 1 分钟后再试。", ct);
+            return;
+        }
+
+        if (text.StartsWith('/'))
+        {
+            await HandleCommandAsync(ch, msg, text, ct);
+            return;
+        }
+
+        var user = await ChannelUsers.Find(x => x.ChannelId == ch.Id && x.ExternalId == msg.ExternalId)
+            .FirstOrDefaultAsync(ct);
+        if (user == null)
+        {
+            if (ch.RequireBind)
+            {
+                await TrySendAsync(ch, msg.ExternalId, BuildBindHelp(ch), ct);
+                return;
+            }
+            // 访客模式（RequireBind=false）：会话归属合成用户，档位强制 Cognitio，
+            // 超出档位的工具调用自动拒绝（控制台无人可审批）。
+            await RunChatAsync(ch, msg, GuestUserId(ch.Id, msg.ExternalId), "guest", tier: 0, guest: true, ct);
+            return;
+        }
+
+        // 已绑定：更新最后活跃与昵称（异步，不阻塞主流程）。
+        _ = ChannelUsers.UpdateOneAsync(
+            x => x.Id == user.Id,
+            Builders<AiChannelUser>.Update
+                .Set(u => u.LastSeenAt, DateTime.UtcNow)
+                .Set(u => u.ExternalName, msg.ExternalName),
+            cancellationToken: ct);
+
+        var tier = Math.Clamp(user.TierOverride ?? ch.DefaultTier, 0, 3);
+        var auditName = $"{user.BoundUserName}({ch.ChannelType}:{msg.ExternalName})";
+        await RunChatAsync(ch, msg, user.BoundUserId, auditName, tier, guest: false, ct);
+    }
+
+    private static string GuestUserId(string channelId, string externalId) => $"{GuestPrefix}{channelId}:{externalId}";
+    private static bool IsGuestUserId(string userId) => userId.StartsWith(GuestPrefix, StringComparison.Ordinal);
+
+    private bool IsRateLimited(string key)
+    {
+        var now = DateTime.UtcNow;
+        var q = _rateBuckets.GetOrAdd(key, _ => new Queue<DateTime>());
+        lock (q)
+        {
+            while (q.Count > 0 && now - q.Peek() > TimeSpan.FromSeconds(RateLimitWindowSec)) q.Dequeue();
+            if (q.Count >= RateLimitMax) return true;
+            q.Enqueue(now);
+            return false;
+        }
+    }
+
+    private async Task HandleCommandAsync(AiChannel ch, ChannelInboundMessage msg, string text, CancellationToken ct)
+    {
+        var parts = text.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        var cmd = parts.Length > 0 ? parts[0].ToLowerInvariant() : "";
+        switch (cmd)
+        {
+            case "/start":
+            case "/help":
+                await TrySendAsync(ch, msg.ExternalId, BuildHelp(ch), ct);
+                break;
+            case "/status":
+            {
+                var user = await ChannelUsers.Find(x => x.ChannelId == ch.Id && x.ExternalId == msg.ExternalId)
+                    .FirstOrDefaultAsync(ct);
+                var tier = user == null ? ch.DefaultTier : Math.Clamp(user.TierOverride ?? ch.DefaultTier, 0, 3);
+                var bound = user == null ? "未绑定" : $"{user.BoundUserName}";
+                await TrySendAsync(ch, msg.ExternalId, $"绑定：{bound}\n档位：{TierName(tier)}（{(JustitiaTier)tier}）", ct);
+                break;
+            }
+            case "/bind":
+                if (parts.Length < 2)
+                {
+                    await TrySendAsync(ch, msg.ExternalId, "用法：/bind <绑定码>", ct);
+                    return;
+                }
+                await TryBindAsync(ch, msg, parts[1], ct);
+                break;
+            case "/approve":
+            case "/reject":
+            {
+                // IM 内审批：仅会话所属外部用户可操作（身份 = channelId|externalId）。
+                var permit = "one-time";
+                if (cmd == "/approve" && parts.Length > 1)
+                {
+                    var p = parts[1].ToLowerInvariant();
+                    if (p is "5min" or "20min") permit = p;
+                }
+                await TryResolveApprovalAsync(ch, msg, approved: cmd == "/approve", permit, ct);
+                break;
+            }
+            default:
+                await TrySendAsync(ch, msg.ExternalId, BuildHelp(ch), ct);
+                break;
+        }
+    }
+
+    /// <summary>
+    /// IM 端审批决策：定位该外部用户自己的频道会话 → 取挂起调用 → 写入门闩。
+    /// 批准后原运行经 ChannelSink 续跑并把最终结果推回 IM（与控制台审批同一条路径）。
+    /// </summary>
+    private async Task TryResolveApprovalAsync(AiChannel ch, ChannelInboundMessage msg, bool approved, string permit, CancellationToken ct)
+    {
+        var session = await _ai.GetChannelSessionByExternalAsync(ch.Id, msg.ExternalId, ct);
+        if (session == null)
+        {
+            await TrySendAsync(ch, msg.ExternalId, "当前没有挂起的审批。", ct);
+            return;
+        }
+        var pending = await _ai.GetPendingApprovalAsync(session.Id, session.UserId, ct);
+        if (pending == null)
+        {
+            await TrySendAsync(ch, msg.ExternalId, "当前没有挂起的审批。", ct);
+            return;
+        }
+        var callId = pending["id"]?.GetValue<string>() ?? "";
+        if (callId.Length == 0)
+        {
+            await TrySendAsync(ch, msg.ExternalId, "审批状态异常，请在控制台处理。", ct);
+            return;
+        }
+        var ok = await _ai.ResolveApprovalAsync(session.Id, callId, approved, ct, permit);
+        await TrySendAsync(ch, msg.ExternalId, ok
+            ? (approved
+                ? $"✅ 已批准（{permit}），AI 将继续执行。"
+                : "已拒绝该调用。")
+            : "审批已失效（可能已在控制台处理）。", ct);
+    }
+
+    private async Task TryBindAsync(AiChannel ch, ChannelInboundMessage msg, string code, CancellationToken ct)
+    {
+        var existing = await ChannelUsers.Find(x => x.ChannelId == ch.Id && x.ExternalId == msg.ExternalId)
+            .FirstOrDefaultAsync(ct);
+        if (existing != null)
+        {
+            await TrySendAsync(ch, msg.ExternalId, $"已绑定到账号「{existing.BoundUserName}」，如需解绑请联系管理员。", ct);
+            return;
+        }
+        if (string.IsNullOrWhiteSpace(code))
+        {
+            await TrySendAsync(ch, msg.ExternalId, "❌ 绑定码无效。", ct);
+            return;
+        }
+
+        var now = DateTime.UtcNow;
+        var hash = HashCode(code);
+        var bc = await BindCodes.Find(x => x.ChannelId == ch.Id && x.CodeHash == hash
+                && x.ExpiresAt > now && x.UsedAt == null).FirstOrDefaultAsync(ct);
+        if (bc == null)
+        {
+            await TrySendAsync(ch, msg.ExternalId, "❌ 绑定码无效或已过期，请联系管理员重新生成。", ct);
+            return;
+        }
+
+        // 一次性：CAS 标记已用，防止并发抢码。
+        var mark = await BindCodes.UpdateOneAsync(
+            x => x.Id == bc.Id && x.UsedAt == null,
+            Builders<AiChannelBindCode>.Update
+                .Set(b => b.UsedAt, now)
+                .Set(b => b.UsedByExternalId, msg.ExternalId)
+                .Set(b => b.UsedByExternalName, msg.ExternalName),
+            cancellationToken: ct);
+        if (mark.ModifiedCount == 0)
+        {
+            await TrySendAsync(ch, msg.ExternalId, "❌ 绑定码已被使用，请联系管理员重新生成。", ct);
+            return;
+        }
+
+        await ChannelUsers.InsertOneAsync(new AiChannelUser
+        {
+            ChannelId = ch.Id,
+            ExternalId = msg.ExternalId,
+            ExternalName = msg.ExternalName,
+            BoundUserId = bc.BoundUserId,
+            BoundUserName = bc.BoundUserName,
+        }, cancellationToken: ct);
+        await _audit.LogAsync(bc.BoundUserId, bc.BoundUserName, "AI channel bind", "ai.channel.bind", null,
+            $"channel={ch.Id} type={ch.ChannelType} external={msg.ExternalId} ({msg.ExternalName})",
+            "channel", RiskLevel.Safe);
+        var tier = Math.Clamp(ch.DefaultTier, 0, 3);
+        await TrySendAsync(ch, msg.ExternalId,
+            $"✅ 绑定成功：{bc.BoundUserName}\n当前档位：{TierName(tier)}（{(JustitiaTier)tier}）\n发送 /help 查看可用指令。", ct);
+    }
+
+    private async Task RunChatAsync(
+        AiChannel ch, ChannelInboundMessage msg,
+        string userId, string userName, int tier, bool guest, CancellationToken ct)
+    {
+        var (providerId, model) = await ResolveProviderAsync(ch, ct);
+        if (providerId == null)
+        {
+            await TrySendAsync(ch, msg.ExternalId, "⚠️ 未配置可用的 AI 供应商，请联系管理员。", ct);
+            return;
+        }
+
+        var session = await _ai.GetOrCreateChannelSessionAsync(
+            ch.Id, ch.ChannelType, msg.ExternalId, msg.ExternalName, userId, userName, providerId, model, ct);
+        if (session.ChannelExternalName != msg.ExternalName || session.UserName != userName)
+            await _ai.UpdateChannelSessionIdentityAsync(session.Id, msg.ExternalName, userName, ct);
+
+        var gate = _gates.GetOrAdd($"run|{ch.Id}|{msg.ExternalId}", _ => new SemaphoreSlim(1, 1));
+        await gate.WaitAsync(ct);
+        try
+        {
+            await _ai.RunChatAsync(session, msg.Text,
+                BuildSink(ch, msg, session.Id, guest, ct), ct, (JustitiaTier)tier);
+        }
+        finally
+        {
+            gate.Release();
+        }
+    }
+
+    private async Task<(string? ProviderId, string Model)> ResolveProviderAsync(AiChannel ch, CancellationToken ct)
+    {
+        var providers = await _ai.GetProvidersAsync(ct);
+        var enabled = providers.Where(p => p.Enabled && p.Models.Count > 0).ToList();
+        if (enabled.Count == 0) return (null, "");
+        var p = enabled.FirstOrDefault(x => x.Id == ch.DefaultProviderId) ?? enabled[0];
+        var model = ch.DefaultModel.Length > 0 && p.Models.Contains(ch.DefaultModel)
+            ? ch.DefaultModel
+            : (p.DefaultModel.Length > 0 ? p.DefaultModel : p.Models[0]);
+        return (p.Id, model);
+    }
+
+    // ── 事件出口：ChannelSink（SSE 事件 → IM 消息）────────────────────────
+
+    /// <summary>
+    /// 把 RunChatAsync 的 SSE 事件流翻译成 IM 回复：
+    /// 文本增量累积，工具调用给标记，审批转通知（控制台审批后同流续跑），done 一次性回发。
+    /// </summary>
+    private Func<string, Task> BuildSink(AiChannel ch, ChannelInboundMessage msg, string sessionId, bool guest, CancellationToken ct)
+    {
+        var sb = new StringBuilder();
+        return async payload =>
+        {
+            JsonObject? evt;
+            try { evt = JsonNode.Parse(payload) as JsonObject; }
+            catch { return; }
+            if (evt == null) return;
+
+            var type = evt["type"]?.GetValue<string>() ?? "";
+            switch (type)
+            {
+                case "message":
+                    var delta = evt["delta"]?.GetValue<string>() ?? "";
+                    if (delta.Length > 0) { lock (sb) sb.Append(delta); }
+                    break;
+                case "reasoning":
+                    break; // IM 不展示思维链
+                case "tool_call":
+                {
+                    var toolName = evt["toolCall"]?["toolName"]?.GetValue<string>() ?? "";
+                    lock (sb) sb.Append('\n').Append("🔧 调用工具：").Append(toolName);
+                    break;
+                }
+                case "tool_result":
+                    if (evt["state"]?.GetValue<string>() == "error")
+                    { lock (sb) sb.Append("\n⚠️ 工具执行失败"); }
+                    break;
+                case "approval":
+                {
+                    var toolName = evt["toolCall"]?["toolName"]?.GetValue<string>() ?? "";
+                    var callId = evt["toolCall"]?["id"]?.GetValue<string>() ?? "";
+                    var args = evt["toolCall"]?["argsText"]?.GetValue<string>() ?? "";
+                    var argsDetail = args.Length > 0 ? $"\n参数：{args[..Math.Min(args.Length, 500)]}" : "";
+                    await TrySendAsync(ch, msg.ExternalId,
+                        $"⏳ Justitia 请求审批：\n工具「{toolName}」{argsDetail}\n\n" +
+                        $"回复 /approve 批准（或 /approve 5min 临时许可 5 分钟），/reject 拒绝。", ct);
+                    await NotifyConsoleAsync(new
+                    {
+                        kind = "approval",
+                        sessionId,
+                        channelId = ch.Id,
+                        channelType = ch.ChannelType,
+                        externalName = msg.ExternalName,
+                        toolName,
+                    }, ct);
+                    if (guest && callId.Length > 0)
+                    {
+                        // 访客会话控制台无人可审批：3 秒后自动拒绝，让 AI 继续回话。
+                        var cid = callId;
+                        var sid = sessionId;
+                        _ = Task.Run(async () =>
+                        {
+                            try
+                            {
+                                await Task.Delay(3000, ct);
+                                await _ai.ResolveApprovalAsync(sid, cid, false, ct);
+                            }
+                            catch { /* run may have been cancelled */ }
+                        }, ct);
+                    }
+                    break;
+                }
+                case "done":
+                    string text;
+                    lock (sb) { text = sb.ToString().Trim(); sb.Clear(); }
+                    if (text.Length > 0)
+                        await TrySendAsync(ch, msg.ExternalId, text, ct);
+                    break;
+                case "error":
+                    string partial;
+                    lock (sb) { partial = sb.ToString().Trim(); sb.Clear(); }
+                    var err = evt["message"]?.GetValue<string>() ?? "未知错误";
+                    var reply = partial.Length > 0 ? $"{partial}\n\n❌ {err}" : $"❌ {err}";
+                    await TrySendAsync(ch, msg.ExternalId, reply, ct);
+                    break;
+            }
+        };
+    }
+
+    private async Task TrySendAsync(AiChannel ch, string externalId, string text, CancellationToken ct)
+    {
+        try
+        {
+            await SendChunkedAsync(AdapterFor(ch.ChannelType), ch, externalId, text, ct);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Channel send failed ({Channel} → {External})", ch.Id, externalId);
+        }
+    }
+
+    private static async Task SendChunkedAsync(IAiChannelAdapter adapter, AiChannel ch, string externalId, string text, CancellationToken ct)
+    {
+        if (text.Length <= ChunkSize)
+        {
+            await adapter.SendTextAsync(ch, externalId, text, ct);
+            return;
+        }
+        var buf = new StringBuilder();
+        foreach (var line in text.Split('\n'))
+        {
+            if (buf.Length + line.Length + 1 > ChunkSize && buf.Length > 0)
+            {
+                await adapter.SendTextAsync(ch, externalId, buf.ToString().TrimEnd(), ct);
+                buf.Clear();
+            }
+            buf.AppendLine(line);
+        }
+        if (buf.Length > 0)
+            await adapter.SendTextAsync(ch, externalId, buf.ToString().TrimEnd(), ct);
+    }
+
+    /// <summary>控制台 WebSocket 广播（频道事件：审批挂起等）。</summary>
+    private async Task NotifyConsoleAsync(object data, CancellationToken ct)
+    {
+        try
+        {
+            var msg = new WebSocketMessage
+            {
+                Type = "ai.channel",
+                Channel = "console",
+                Data = JsonSerializer.SerializeToElement(data),
+            };
+            await _ws.BroadcastToConsoleAsync(msg, ct);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "Console broadcast failed");
+        }
+    }
+
+    // ── 文案 ─────────────────────────────────────────────────────────────
+
+    private static string TierName(int tier) => tier switch
+    {
+        0 => "Cognitio 审理（只读）",
+        1 => "Arbitrium 裁量（常规）",
+        2 => "Imperium 治权（高危需审批）",
+        3 => "Dictatura 独裁（全权）",
+        _ => "Cognitio 审理（只读）",
+    };
+
+    private string BuildHelp(AiChannel ch) =>
+        $"🤖 我是 Justitia（Libra-Nextgen AI 助手）。\n" +
+        $"频道档位：{TierName(Math.Clamp(ch.DefaultTier, 0, 3))}\n\n" +
+        "可用指令：\n" +
+        "/start 或 /help — 显示本帮助\n" +
+        "/status — 查看绑定与档位\n" +
+        "/bind &lt;绑定码&gt; — 绑定控制台账号\n" +
+        "/approve [one-time|5min|20min] — 批准挂起的工具调用\n" +
+        "/reject — 拒绝挂起的工具调用\n\n" +
+        "直接发送消息即可与我对话。涉及工具的操作受档位约束，高危操作会请求你审批（也可在控制台批准）。";
+
+    private string BuildBindHelp(AiChannel ch) =>
+        "🔒 该频道需要绑定控制台账号后才能使用。\n" +
+        "请在控制台「设置 → AI 频道」中由管理员生成绑定码，然后在此发送：\n" +
+        "/bind <绑定码>\n\n" +
+        "绑定后即可使用 AI 助手（档位受频道配置约束）。";
+}

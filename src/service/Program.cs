@@ -75,6 +75,14 @@ builder.Services.AddScoped<BuildListService>();
 // 请求上下文（IHttpContextAccessor）与工具 DI 均通过单例/作用域工厂按需解析。
 builder.Services.AddSingleton<AiService>();
 
+// AI 频道（IM 接入）：适配器 + 网关 + Telegram/iLink 长轮询 + 飞书长连接后台任务。
+builder.Services.AddSingleton<TelegramChannelAdapter>();
+builder.Services.AddSingleton<LarkChannelAdapter>();
+builder.Services.AddSingleton<WeChatClawAdapter>();
+builder.Services.AddSingleton<AiChannelService>();
+builder.Services.AddHostedService<ChannelPollingHostedService>();
+builder.Services.AddHostedService<LarkWsChannelService>();
+
 // JWT Settings (singleton, holds RSA key pair)
 var jwtSettings = new JwtSettings();
 builder.Services.AddSingleton(jwtSettings);

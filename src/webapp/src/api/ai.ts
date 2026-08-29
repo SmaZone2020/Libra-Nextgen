@@ -66,6 +66,11 @@ export interface AiSession {
   messages: AiMessage[];
   createdAt: string;
   updatedAt: string;
+  /** 频道会话标记：null = 控制台会话；非 null = IM 频道会话。 */
+  channelId?: string | null;
+  channelType?: 'telegram' | 'lark' | 'wechat-claw' | null;
+  channelExternalId?: string | null;
+  channelExternalName?: string | null;
 }
 
 export interface AiToolDescriptor {
@@ -147,6 +152,17 @@ export async function getAiSessions(): Promise<AiSession[]> {
 
 export async function getAiSession(id: string): Promise<AiSession> {
   return api.get<AiSession>(`/ai/sessions/${id}`);
+}
+
+/**
+ * 会话当前是否有挂起的审批（控制台打开会话时恢复审批模态框，含频道会话）。
+ * 返回 null 表示无挂起审批。
+ */
+export async function getPendingAiApproval(
+  id: string,
+): Promise<AiToolCall | null> {
+  const pending = await api.get<AiToolCall | null>(`/ai/sessions/${id}/pending-approval`);
+  return pending && pending.id ? pending : null;
 }
 
 export async function createAiSession(providerId: string, model: string): Promise<AiSession> {

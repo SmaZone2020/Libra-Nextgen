@@ -12,6 +12,7 @@ import {
   type AiProvider,
   type AiSession,
 } from '../../api/ai';
+import { getMyChannelSessions } from '../../api/aiChannels';
 import { AiSidebarSessionRow } from './AiSidebarSessionRow';
 
 export interface AiSidebarProps {
@@ -26,6 +27,7 @@ export function AiSidebar({ activeSessionId, refreshKey = 0, onSelectSession, on
   const { t } = useTranslation();
   const navigate = useNavigate();
   const [sessions, setSessions] = useState<AiSession[]>([]);
+  const [channelSessions, setChannelSessions] = useState<AiSession[]>([]);
   const [providers, setProviders] = useState<AiProvider[]>([]);
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState('');
@@ -37,8 +39,9 @@ export function AiSidebar({ activeSessionId, refreshKey = 0, onSelectSession, on
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [ss, ps] = await Promise.all([getAiSessions(), getAiProviders()]);
+      const [ss, cs, ps] = await Promise.all([getAiSessions(), getMyChannelSessions(), getAiProviders()]);
       setSessions(ss);
+      setChannelSessions(cs);
       setProviders(ps);
     } catch {
       /* ignore */
@@ -61,6 +64,35 @@ export function AiSidebar({ activeSessionId, refreshKey = 0, onSelectSession, on
     if (!q) return sessions;
     return sessions.filter((s) => s.title.toLowerCase().includes(q));
   }, [sessions, query]);
+
+  const filteredChannel = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return channelSessions;
+    return channelSessions.filter((s) => (s.channelExternalName ?? '').toLowerCase().includes(q));
+  }, [channelSessions, query]);
+
+  const sessionRow = (session: AiSession) => (
+    <AiSidebarSessionRow
+      key={session.id}
+      session={session}
+      active={session.id === activeSessionId}
+      renaming={renamingId === session.id}
+      renameValue={renameValue}
+      deleting={deleting}
+      providerName={providerName(session.providerId)}
+      menuOpen={openMenuId === session.id}
+      onMenuOpenChange={(open) => setOpenMenuId(open ? session.id : null)}
+      onSelect={() => onSelectSession(session.id)}
+      onStartRename={() => startRename(session)}
+      onRenameValueChange={setRenameValue}
+      onConfirmRename={() => void handleRename(session)}
+      onCancelRename={() => setRenamingId(null)}
+      onFork={() => void handleFork(session)}
+      onDelete={() => void handleDelete(session)}
+      channelType={session.channelType ?? null}
+      channelExternalName={session.channelExternalName ?? null}
+    />
+  );
 
   const handleDelete = async (session: AiSession) => {
     if (!window.confirm(t('ai.deleteSessionConfirm'))) return;
@@ -154,26 +186,29 @@ export function AiSidebar({ activeSessionId, refreshKey = 0, onSelectSession, on
           </div>
         ) : (
           <div className="flex flex-col gap-0.5">
-            {filtered.map((session) => (
-              <AiSidebarSessionRow
-                key={session.id}
-                session={session}
-                active={session.id === activeSessionId}
-                renaming={renamingId === session.id}
-                renameValue={renameValue}
-                deleting={deleting}
-                providerName={providerName(session.providerId)}
-                menuOpen={openMenuId === session.id}
-                onMenuOpenChange={(open) => setOpenMenuId(open ? session.id : null)}
-                onSelect={() => onSelectSession(session.id)}
-                onStartRename={() => startRename(session)}
-                onRenameValueChange={setRenameValue}
-                onConfirmRename={() => void handleRename(session)}
-                onCancelRename={() => setRenamingId(null)}
-                onFork={() => void handleFork(session)}
-                onDelete={() => void handleDelete(session)}
-              />
-            ))}
+            {filtered.length > 0 && (
+              <>
+                {channelSessions.length > 0 && (
+                  <div className="px-4 pt-2 pb-1 text-[11px] font-medium uppercase tracking-wide text-muted">
+                    {t('ai.consoleSessions')}
+                  </div>
+                )}
+                {filtered.map(sessionRow)}
+              </>
+            )}
+            {filteredChannel.length > 0 && (
+              <>
+                <div className="px-4 pt-3 pb-1 text-[11px] font-medium uppercase tracking-wide text-muted">
+                  {t('ai.channelSessions')}
+                </div>
+                {filteredChannel.map(sessionRow)}
+              </>
+            )}
+            {filtered.length === 0 && filteredChannel.length === 0 && (
+              <div className="px-3 py-8 text-center text-xs text-muted">
+                {t('ai.untitled')}
+              </div>
+            )}
           </div>
         )}
       </div>

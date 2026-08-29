@@ -7,6 +7,7 @@ import { Button, Chip, Tabs } from '@heroui/react';
 import type { ComponentType, SVGProps } from 'react';
 import {
   ChevronRight,
+  Comments,
   Globe,
   Key,
   Person,
@@ -23,6 +24,7 @@ import McpTab from './McpTab';
 import SecurityTab from './SecurityTab';
 import AccessKeysTab from './AccessKeysTab';
 import AiTab from './AiTab';
+import ChannelsTab from './ChannelsTab';
 
 export interface SettingRoute {
   id: string;
@@ -56,6 +58,14 @@ export const SETTING_ROUTES: SettingRoute[] = [
     icon: Sparkles,
     adminOnly: true,
     render: () => <AiTab />,
+  },
+  {
+    id: 'channels',
+    labelKey: 'settings.channelsTab',
+    descKey: 'settings.channelsDesc',
+    icon: Comments,
+    adminOnly: true,
+    render: () => <ChannelsTab />,
   },
   {
     id: 'security',

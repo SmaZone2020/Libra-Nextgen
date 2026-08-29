@@ -21,7 +21,16 @@ export interface AiSidebarSessionRowProps {
   onCancelRename: () => void;
   onFork: () => void;
   onDelete: () => void;
+  /** 频道会话徽标：telegram | lark | wechat-claw。 */
+  channelType?: string | null;
+  channelExternalName?: string | null;
 }
+
+const CHANNEL_ICONS: Record<string, string> = {
+  telegram: '/icon/app/tg.png',
+  lark: '/icon/app/lark.png',
+  'wechat-claw': '/icon/app/wechat.png',
+};
 
 /** 会话列表行：点击切换；右侧三点按钮弹出 Dropdown 菜单（重命名/分支/删除）。 */
 export function AiSidebarSessionRow({
@@ -40,8 +49,11 @@ export function AiSidebarSessionRow({
   onCancelRename,
   onFork,
   onDelete,
+  channelType,
+  channelExternalName,
 }: AiSidebarSessionRowProps) {
   const { t } = useTranslation();
+  const channelIcon = channelType ? CHANNEL_ICONS[channelType] : null;
 
   return (
     <div
@@ -86,11 +98,16 @@ export function AiSidebarSessionRow({
             {session.title || t('ai.untitled')}
           </span>
           <span
-            className={`truncate text-[11px] ${
+            className={`flex items-center gap-1 truncate text-[11px] ${
               active ? 'text-primary-foreground/70' : 'text-muted'
             }`}
           >
-            {providerName} · {session.model}
+            {channelIcon && (
+              <img src={channelIcon} alt={channelType ?? ''} className="size-3.5 object-contain" />
+            )}
+            {channelType
+              ? `${channelExternalName || session.title || t('ai.untitled')} · ${session.model}`
+              : `${providerName} · ${session.model}`}
           </span>
         </div>
       )}

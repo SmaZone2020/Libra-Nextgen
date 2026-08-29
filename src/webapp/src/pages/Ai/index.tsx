@@ -12,6 +12,7 @@ import {
   getAiProviders,
   getAiSession,
   getAiSessions,
+  getPendingAiApproval,
   resolveAiApproval,
   streamAiChat,
   stopAiChat,
@@ -83,6 +84,14 @@ export default function AiPage() {
         if (activeId) {
           const s = await getAiSession(activeId);
           setSession(s);
+          // 恢复挂起的审批（含频道会话在 IM 侧触发、控制台接管的场景）：
+          // 运行态按 sessionId 保留，打开会话时重新弹审批模态框。
+          const pending = await getPendingAiApproval(activeId);
+          if (pending) {
+            setPendingApproval(pending);
+            setStreaming('approval');
+            setApprovalModalOpen(true);
+          }
         } else {
           setSession(null);
         }
@@ -354,6 +363,8 @@ export default function AiPage() {
       setPendingApproval((prev) => (prev && prev.id === toolCallId ? { ...prev, state: 'running' } : prev));
       try {
         await resolveAiApproval(id, toolCallId, true, permit);
+        // 频道会话：审批后运行在服务端续跑并回推 IM；这里刷新本地会话让控制台同步。
+        void getAiSession(id).then(setSession).catch(() => undefined);
       } catch (e) {
         if ((e as Error).name !== 'AbortError') {
           setStreaming('idle');

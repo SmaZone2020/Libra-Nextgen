@@ -84,6 +84,14 @@ public class AiController : ControllerBase
         return s == null ? NotFound(new { error = "session not found" }) : Ok(s);
     }
 
+    /// <summary>会话当前是否有挂起的审批（控制台打开会话时恢复审批模态框，含频道会话）。</summary>
+    [HttpGet("sessions/{id}/pending-approval")]
+    public async Task<IActionResult> GetPendingApproval(string id, CancellationToken ct)
+    {
+        var pending = await _ai.GetPendingApprovalAsync(id, UserId, ct);
+        return Ok(pending);
+    }
+
     [HttpPost("sessions")]
     public async Task<IActionResult> CreateSession([FromBody] AiSessionReq req, CancellationToken ct)
     {
