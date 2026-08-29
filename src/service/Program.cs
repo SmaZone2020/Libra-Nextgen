@@ -93,7 +93,7 @@ builder.Services.AddSingleton<DownloadTicketStore>();
 builder.Services.AddSingleton<RiskPolicyService>();
 builder.Services.AddSingleton<PermissionService>();
 builder.Services.AddSingleton<McpService>();
-builder.Services.AddScoped<AuditService>();
+builder.Services.AddSingleton<AuditService>();
 builder.Services.AddScoped<AccessKeyService>();
 builder.Services.AddSingleton<BuilderBuildService>();
 builder.Services.AddScoped<PluginService>();

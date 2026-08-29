@@ -552,7 +552,10 @@ public class AiService
                         }
                         else if (IsDiService(p.ParameterType))
                         {
-                            callArgs[i] = _services.GetService(p.ParameterType);
+                            // 后台运行（挂起等待审批）时请求作用域可能已释放，直接取单例。
+                            callArgs[i] = p.ParameterType == typeof(IHttpContextAccessor)
+                                ? _http
+                                : _services.GetService(p.ParameterType);
                         }
                         else if (args.TryGetPropertyValue(p.Name, out var node))
                         {
