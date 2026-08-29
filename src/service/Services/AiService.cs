@@ -643,6 +643,7 @@ public class AiService
             Notify = onEvent,
         };
         _runs[session.Id] = state;
+        _logger.LogInformation("RunChatAsync started for session {Session} (tier {Tier})", session.Id, justitiaTier);
         state.Cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
 
         // 历史消息（含刚追加的用户消息）→ OpenAI 格式。
@@ -1320,11 +1321,14 @@ public class AiService
     {
         var gate = _approvalGates.GetOrAdd(callId, _ => new TaskCompletionSource<string>(
             TaskCreationOptions.RunContinuationsAsynchronously));
+        _logger.LogInformation("WaitForApproval: waiting for call {Call} (session {Session}, pending={Pending})",
+            callId, state.SessionId, state.PendingToolCall?["toolCallId"]?.GetValue<string>());
 
         try
         {
             // 无限等待；仅取消/会话切换时退出（SSE 断开由控制器层处理）。
             var output = await gate.Task.WaitAsync(ct);
+            _logger.LogInformation("WaitForApproval: gate resolved for call {Call} (session {Session})", callId, state.SessionId);
             var pending = state.ToolCalls.FirstOrDefault(t => t.Id == callId);
             if (pending == null) return;
 
@@ -1410,6 +1414,8 @@ public class AiService
             _logger.LogWarning("ResolveApproval: tool call {Call} not found in state (session {Session})", toolCallId, sessionId);
             return false;
         }
+        _logger.LogInformation("ResolveApproval: matched pending call {Call} (session {Session}), approved={Approved}, permit={Permit}",
+            toolCallId, sessionId, approved, permit);
 
         // 先取出挂起元数据（kind/requiredTier），再清空 PendingToolCall，
         // 否则下方 escalation 分支永远读不到 kind。
