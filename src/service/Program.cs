@@ -49,24 +49,25 @@ builder.WebHost.ConfigureKestrel(options =>
 
 builder.Services.AddHttpClient();
 
-// Typed repositories per collection
-builder.Services.AddScoped<Repository<Agent>>(sp =>
+// Typed repositories per collection — singleton 化（MongoDbContext 已是单例，
+// Repository 无状态，仅包一层集合引用；供单例 AuditService/AiService 后台执行使用）
+builder.Services.AddSingleton<Repository<Agent>>(sp =>
     new Repository<Agent>(sp.GetRequiredService<MongoDbContext>(), "agents"));
-builder.Services.AddScoped<Repository<AgentTask>>(sp =>
+builder.Services.AddSingleton<Repository<AgentTask>>(sp =>
     new Repository<AgentTask>(sp.GetRequiredService<MongoDbContext>(), "tasks"));
-builder.Services.AddScoped<Repository<User>>(sp =>
+builder.Services.AddSingleton<Repository<User>>(sp =>
     new Repository<User>(sp.GetRequiredService<MongoDbContext>(), "users"));
-builder.Services.AddScoped<Repository<AuditLog>>(sp =>
+builder.Services.AddSingleton<Repository<AuditLog>>(sp =>
     new Repository<AuditLog>(sp.GetRequiredService<MongoDbContext>(), "audit_logs"));
-builder.Services.AddScoped<Repository<MalleableProfileConfig>>(sp =>
+builder.Services.AddSingleton<Repository<MalleableProfileConfig>>(sp =>
     new Repository<MalleableProfileConfig>(sp.GetRequiredService<MongoDbContext>(), "profiles"));
-builder.Services.AddScoped<Repository<TrafficRecord>>(sp =>
+builder.Services.AddSingleton<Repository<TrafficRecord>>(sp =>
     new Repository<TrafficRecord>(sp.GetRequiredService<MongoDbContext>(), "traffic"));
-builder.Services.AddScoped<Repository<AccessKey>>(sp =>
+builder.Services.AddSingleton<Repository<AccessKey>>(sp =>
     new Repository<AccessKey>(sp.GetRequiredService<MongoDbContext>(), "access_keys"));
-builder.Services.AddScoped<Repository<PluginRecord>>(sp =>
+builder.Services.AddSingleton<Repository<PluginRecord>>(sp =>
     new Repository<PluginRecord>(sp.GetRequiredService<MongoDbContext>(), "plugins"));
-builder.Services.AddScoped<Repository<BuildTrafficLists>>(sp =>
+builder.Services.AddSingleton<Repository<BuildTrafficLists>>(sp =>
     new Repository<BuildTrafficLists>(sp.GetRequiredService<MongoDbContext>(), "build_lists"));
 builder.Services.AddScoped<BuildListService>();
 builder.Services.AddScoped<AiService>();
