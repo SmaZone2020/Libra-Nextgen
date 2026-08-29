@@ -78,7 +78,7 @@ Plugin installation: **Upload** (zip) / **Import from Git** (e.g. the [plugin sc
 - **Traffic masquerading**: configurable profiles (comm path / headers / UA, etc.), persisted manage/disable in the Builder; connection parameters (protocol / heartbeat / jitter) injected at build time
 - **Agent**: concurrent task processing (modules run lock-free), interactive Shell (xterm.js), indirect syscalls + sleep obfuscation, anti-sandbox / anti-VM, in-memory PowerShell (CLR host), multi-vector persistence
 - **Recon**: system & hardware fingerprinting, network + GeoIP, WiFi / LAN / Bluetooth scanning, processes / windows / accounts
-- **Credentials**: browser passwords, RDP credentials, SSH keys, WeChat data, AI tool API keys (plugin)
+- **Credentials**: browser passwords, RDP credentials, SSH keys
 - **Proxy**: Socks proxy module + ProxyBrowser for browsing intranet web apps
 - **Plugin system**: upload zip / Git import / Plugin Market with online install & update
 - **Builder**: online Win/Linux payload builds, per-module enable switches, one-liner delivery (PowerShell/Cmd/Bash commands, LNK packaging, anonymous download links)
