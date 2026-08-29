@@ -97,6 +97,28 @@ public class AiService
         _http = http;
     }
 
+    /// <summary>在请求作用域内解析 Scoped 服务（工具反射注入用；单例下不可直接 GetService）。</summary>
+    private T? ResolveScoped<T>() where T : class
+    {
+        if (_services is IServiceScopeFactory scopeFactory)
+        {
+            using var scope = scopeFactory.CreateScope();
+            return scope.ServiceProvider.GetService(typeof(T)) as T;
+        }
+        return _services.GetService(typeof(T)) as T;
+    }
+
+    /// <summary>按类型解析 DI 服务（单例直接取，Scoped 走作用域工厂）。</summary>
+    private object? ResolveScopedFor(Type type)
+    {
+        if (_services is IServiceScopeFactory scopeFactory)
+        {
+            using var scope = scopeFactory.CreateScope();
+            return scope.ServiceProvider.GetService(type);
+        }
+        return _services.GetService(type);
+    }
+
     /// <summary>Justitia 四档 → 审计风险等级（档位即风险边界）。</summary>
     private static RiskLevel RiskForTier(JustitiaTier tier) => tier switch
     {
@@ -552,10 +574,11 @@ public class AiService
                         }
                         else if (IsDiService(p.ParameterType))
                         {
-                            // 后台运行（挂起等待审批）时请求作用域可能已释放，直接取单例。
+                            // 单例 AiService：请求上下文用注入的单例 _http；
+                            // 其余 DI 服务用作用域工厂按需解析（工具可能注入 Scoped 服务）。
                             callArgs[i] = p.ParameterType == typeof(IHttpContextAccessor)
                                 ? _http
-                                : _services.GetService(p.ParameterType);
+                                : ResolveScopedFor(p.ParameterType);
                         }
                         else if (args.TryGetPropertyValue(p.Name, out var node))
                         {

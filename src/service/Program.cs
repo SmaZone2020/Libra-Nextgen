@@ -70,7 +70,10 @@ builder.Services.AddSingleton<Repository<PluginRecord>>(sp =>
 builder.Services.AddSingleton<Repository<BuildTrafficLists>>(sp =>
     new Repository<BuildTrafficLists>(sp.GetRequiredService<MongoDbContext>(), "build_lists"));
 builder.Services.AddScoped<BuildListService>();
-builder.Services.AddScoped<AiService>();
+// AiService 单例：运行表（_runs）与审批门闩跨请求共享——
+// /chat 挂起审批后，/chat/action 必须能命中同一个运行状态。
+// 请求上下文（IHttpContextAccessor）与工具 DI 均通过单例/作用域工厂按需解析。
+builder.Services.AddSingleton<AiService>();
 
 // JWT Settings (singleton, holds RSA key pair)
 var jwtSettings = new JwtSettings();
