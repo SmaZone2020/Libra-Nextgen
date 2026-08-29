@@ -69,7 +69,6 @@ public class RiskClassifierTests
     [InlineData("kill_process", RiskActions.SystemProcessKill)]
     [InlineData("get_rdp_credentials", RiskActions.Credentials)]
     [InlineData("get_ssh_keys", RiskActions.Credentials)]
-    [InlineData("scan_ai_tokens", RiskActions.Ai)]
     [InlineData("list_directory", RiskActions.FileList)]
     [InlineData("get_drives", RiskActions.FileDrives)]
     [InlineData("rename_file", RiskActions.FileRename)]

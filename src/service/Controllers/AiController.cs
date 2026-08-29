@@ -125,6 +125,14 @@ public class AiController : ControllerBase
         return ok ? Ok(new { deleted = true }) : NotFound(new { error = "message not found" });
     }
 
+    /// <summary>截断会话：保留到指定消息（含）为止，删除其后的全部消息。</summary>
+    [HttpDelete("sessions/{id}/messages/{messageId}/after")]
+    public async Task<IActionResult> TruncateMessagesAfter(string id, string messageId, CancellationToken ct)
+    {
+        var ok = await _ai.TruncateMessagesAfterAsync(id, UserId, messageId, ct);
+        return ok ? Ok(new { truncated = true }) : NotFound(new { error = "message not found" });
+    }
+
     /// <summary>分支会话：复制为带 -fork 后缀的新会话（含完整消息历史）。</summary>
     [HttpPost("sessions/{id}/fork")]
     public async Task<IActionResult> ForkSession(string id, CancellationToken ct)
@@ -200,7 +208,11 @@ public class AiController : ControllerBase
         await _ai.RunChatAsync(session, req.Content, Send, ct, JustitiaPolicy.Parse(req.Tier));
     }
 
-    /// <summary>审批/拒绝挂起的工具调用并继续。</summary>
+    /// <summary>
+    /// 审批/拒绝/临时批准挂起的工具调用。纯 POST：把决策写入后端门闩，
+    /// 唤醒原 SSE 流继续推送 tool_result/后续消息（AI 在同一流内续跑）。
+    /// 本接口不返回 SSE，仅返回接受确认。
+    /// </summary>
     [HttpPost("chat/action")]
     public async Task<IActionResult> ChatAction([FromBody] AiChatActionReq req, CancellationToken ct)
     {
@@ -211,18 +223,10 @@ public class AiController : ControllerBase
         var session = await _ai.GetSessionAsync(req.SessionId, UserId, ct);
         if (session == null) return NotFound(new { error = "session not found" });
 
-        Response.Headers.CacheControl = "no-cache";
-        Response.Headers.ContentType = "text/event-stream";
-        await Response.Body.FlushAsync(ct);
-
-        async Task Send(string payload)
-        {
-            await Response.WriteAsync($"data: {payload}\n\n", ct);
-            await Response.Body.FlushAsync(ct);
-        }
-
-        await _ai.ResolveApprovalAsync(req.SessionId, req.ToolCallId, req.Approved, Send, ct, req.Permit);
-        return new EmptyResult();
+        var accepted = await _ai.ResolveApprovalAsync(req.SessionId, req.ToolCallId, req.Approved, ct, req.Permit);
+        return accepted
+            ? Ok(new { accepted = true })
+            : NotFound(new { error = "no pending approval for this tool call" });
     }
 
     [HttpPost("chat/stop")]

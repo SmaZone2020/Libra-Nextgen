@@ -78,7 +78,6 @@ public static class RiskClassifier
     {
         "delete_agent" => RiskActions.AgentDelete,
         "get_rdp_credentials" or "get_ssh_keys" => RiskActions.Credentials,
-        "scan_ai_tokens" => RiskActions.Ai,
         "list_directory" => RiskActions.FileList,
         "get_drives" => RiskActions.FileDrives,
         "delete_file" => RiskActions.FileDelete,

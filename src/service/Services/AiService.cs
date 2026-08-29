@@ -1371,17 +1371,21 @@ public class AiService
         return result;
     }
 
-    /// <summary>审批/拒绝挂起的工具调用后继续运行。</summary>
-    public async Task ResolveApprovalAsync(
-        string sessionId, string toolCallId, bool approved, Func<string, Task> onEvent,
+    /// <summary>
+    /// 审批/拒绝/临时批准挂起的工具调用（纯决策接口，不返回 SSE）。
+    /// 执行工具（或授予提权）后通过门闩唤醒原 SSE 流的等待循环继续推送。
+    /// 返回 false 表示没有匹配的挂起调用。
+    /// </summary>
+    public async Task<bool> ResolveApprovalAsync(
+        string sessionId, string toolCallId, bool approved,
         CancellationToken ct = default, string permit = "one-time")
     {
         var state = _runs.TryGetValue(sessionId, out var r) ? r : null;
-        if (state == null) return;
-        if (state.PendingToolCall?["toolCallId"]?.GetValue<string>() != toolCallId) return;
+        if (state == null) return false;
+        if (state.PendingToolCall?["toolCallId"]?.GetValue<string>() != toolCallId) return false;
 
         var pending = state.ToolCalls.FirstOrDefault(t => t.Id == toolCallId);
-        if (pending == null) return;
+        if (pending == null) return false;
 
         // 先取出挂起元数据（kind/requiredTier），再清空 PendingToolCall，
         // 否则下方 escalation 分支永远读不到 kind。
@@ -1393,7 +1397,7 @@ public class AiService
         if (provider == null)
         {
             CleanupRunIfFinished(state, sessionId);
-            return;
+            return false;
         }
 
         // 已预置 assistant tool_calls 消息，补 tool 结果。
@@ -1483,6 +1487,7 @@ public class AiService
         state.LlmMessages.Add(new JsonObject { ["role"] = "tool", ["tool_call_id"] = toolCallId, ["content"] = output });
         if (_approvalGates.TryGetValue(toolCallId, out var gate))
             gate.TrySetResult(output);
+        return true;
     }
 
     /// <summary>续跑结束后若没有新的待审批调用，释放 CTS 并从运行表移除。</summary>

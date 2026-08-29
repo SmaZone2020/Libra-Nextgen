@@ -62,7 +62,6 @@ public static class JustitiaPolicy
         ["delete_file"] = JustitiaTier.Imperium,
         ["get_rdp_credentials"] = JustitiaTier.Imperium,
         ["get_ssh_keys"] = JustitiaTier.Imperium,
-        ["scan_ai_tokens"] = JustitiaTier.Imperium,
 
         // ── Dictatura (3) 全权：删除设备 / 破坏性操作，仅管理员可启 ──
         ["delete_agent"] = JustitiaTier.Dictatura,

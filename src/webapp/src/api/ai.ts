@@ -239,14 +239,15 @@ export async function streamAiChat(
   }
 }
 
-/** 审批/拒绝工具调用（同样返回 SSE 流）。permit：one-time | 5min | 20min（档位提升许可时长）。 */
-export async function streamAiAction(
+/** 审批/拒绝/临时批准挂起的工具调用（纯 POST，不返回 SSE）。
+ * 后端收到决策后写入门闩，由原 SSE 流（streamAiChat）继续推送
+ * tool_result / message / done——本函数仅返回是否接受。 */
+export async function resolveAiApproval(
   sessionId: string,
   toolCallId: string,
   approved: boolean,
-  onEvent: (evt: AiSseEvent) => void,
+  permit: 'one-time' | '5min' | '20min' = 'one-time',
   signal?: AbortSignal,
-  permit?: 'one-time' | '5min' | '20min',
 ): Promise<void> {
   const resp = await fetch(`${apiBase()}/ai/chat/action`, {
     method: 'POST',
@@ -254,39 +255,13 @@ export async function streamAiAction(
       'Content-Type': 'application/json',
       Authorization: `Bearer ${getToken() ?? ''}`,
     },
-    body: JSON.stringify({ sessionId, toolCallId, approved, permit: permit ?? 'one-time' }),
+    body: JSON.stringify({ sessionId, toolCallId, approved, permit }),
     signal,
   });
 
   if (!resp.ok) {
     const err = await resp.json().catch(() => ({ error: `HTTP ${resp.status}` }));
     throw new Error(err.error || `Request failed: ${resp.status}`);
-  }
-  if (!resp.body) return;
-
-  const reader = resp.body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = '';
-
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    buffer += decoder.decode(value, { stream: true });
-    let idx: number;
-    while ((idx = buffer.indexOf('\n\n')) >= 0) {
-      const chunk = buffer.slice(0, idx);
-      buffer = buffer.slice(idx + 2);
-      for (const line of chunk.split('\n')) {
-        if (!line.startsWith('data:')) continue;
-        const payload = line.slice(5).trim();
-        if (!payload || payload === '[DONE]') continue;
-        try {
-          onEvent(JSON.parse(payload) as AiSseEvent);
-        } catch {
-          /* skip */
-        }
-      }
-    }
   }
 }
 

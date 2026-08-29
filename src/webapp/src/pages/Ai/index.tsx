@@ -12,7 +12,7 @@ import {
   getAiProviders,
   getAiSession,
   getAiSessions,
-  streamAiAction,
+  resolveAiApproval,
   streamAiChat,
   stopAiChat,
   type AiMessage,
@@ -349,23 +349,20 @@ export default function AiPage() {
       if (!pendingApproval || !activeId) return;
       const id = activeId;
       setApprovalModalOpen(false);
-      setStreaming('streaming');
+      // 决策通过普通 POST 交给后端；原 SSE 流（send 里的 streamAiChat）
+      // 会继续推送 tool_result/message/done，这里不接管流、不动 streaming 状态。
       setPendingApproval((prev) => (prev && prev.id === toolCallId ? { ...prev, state: 'running' } : prev));
-      const abort = new AbortController();
-      abortRef.current = abort;
       try {
-        await streamAiAction(id, toolCallId, true, (evt) => handleStreamEvent(evt, id), abort.signal, permit);
+        await resolveAiApproval(id, toolCallId, true, permit);
       } catch (e) {
         if ((e as Error).name !== 'AbortError') {
           setStreaming('idle');
-          setStreamingText((prev) => prev + `\n\n> ⚠️ ${e instanceof Error ? e.message : String(e)}`);
+          setPendingApproval(null);
+          setStreamError(e instanceof Error ? e.message : String(e));
         }
-      } finally {
-        if (abortRef.current === abort) abortRef.current = null;
-        setStreaming((s) => (s === 'approval' ? s : 'idle'));
       }
     },
-    [activeId, handleStreamEvent, pendingApproval],
+    [activeId, pendingApproval],
   );
 
   const handleReject = useCallback(
@@ -373,23 +370,18 @@ export default function AiPage() {
       if (!pendingApproval || !activeId) return;
       const id = activeId;
       setApprovalModalOpen(false);
-      setStreaming('streaming');
       setPendingApproval((prev) => (prev && prev.id === toolCallId ? { ...prev, state: 'error' } : prev));
-      const abort = new AbortController();
-      abortRef.current = abort;
       try {
-        await streamAiAction(id, toolCallId, false, (evt) => handleStreamEvent(evt, id), abort.signal);
+        await resolveAiApproval(id, toolCallId, false);
       } catch (e) {
         if ((e as Error).name !== 'AbortError') {
           setStreaming('idle');
-          setStreamingText((prev) => prev + `\n\n> ⚠️ ${e instanceof Error ? e.message : String(e)}`);
+          setPendingApproval(null);
+          setStreamError(e instanceof Error ? e.message : String(e));
         }
-      } finally {
-        if (abortRef.current === abort) abortRef.current = null;
-        setStreaming((s) => (s === 'approval' ? s : 'idle'));
       }
     },
-    [activeId, handleStreamEvent, pendingApproval],
+    [activeId, pendingApproval],
   );
 
   const handleFeedback = useCallback((_good: boolean) => {
@@ -497,14 +489,10 @@ export default function AiPage() {
         />
       </aside>
 
-      {/* 伸缩按钮：会话列表容器右侧、垂直居中 */}
-      <Tooltip delay={0}>
-        <Tooltip.Trigger>
           <Button
             isIconOnly
             variant="secondary"
             size="sm"
-            aria-label={sidebarCollapsed ? t('ai.expandSidebar') : t('ai.collapseSidebar')}
             onPress={() => setSidebarCollapsed((v) => !v)}
             className="absolute top-1/2 -translate-y-1/2 z-20 hidden size-6 rounded-full border border-default-200 shadow-md md:inline-flex dark:border-default-800"
             style={{
@@ -518,11 +506,6 @@ export default function AiPage() {
               <ChevronLeft className="size-3.5" />
             )}
           </Button>
-        </Tooltip.Trigger>
-        <Tooltip.Content placement="right">
-          {sidebarCollapsed ? t('ai.expandSidebar') : t('ai.collapseSidebar')}
-        </Tooltip.Content>
-      </Tooltip>
 
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         <div className="flex shrink-0 items-center gap-2 border-b border-default-200 px-3 py-2 md:hidden dark:border-default-800">
