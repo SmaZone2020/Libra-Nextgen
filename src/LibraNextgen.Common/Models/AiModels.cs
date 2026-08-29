@@ -69,6 +69,8 @@ public class AiToolCall
     /// <summary>running / output-available / error / requires-action / input-streaming。</summary>
     public string State { get; set; } = "running";
     public string? Output { get; set; }
+    /// <summary>该工具调用发生时已累积的助手文本（用于前端把工具调用穿插在文本流中）。</summary>
+    public string? TextBefore { get; set; }
     public string? Error { get; set; }
 }
 

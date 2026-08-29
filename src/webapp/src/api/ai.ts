@@ -35,6 +35,8 @@ export interface AiToolCall {
   state: AiToolState;
   output?: string;
   error?: string;
+  /** 该工具调用发生时已输出的助手文本（用于把工具调用穿插在文本流中）。 */
+  textBefore?: string;
 }
 
 export interface AiSource {

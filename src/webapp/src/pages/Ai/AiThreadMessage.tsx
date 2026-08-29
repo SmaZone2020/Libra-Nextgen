@@ -11,7 +11,6 @@ import {
   ChatSource,
   ChatSources,
   ChatTool,
-  ChatToolGroup,
   Markdown,
   StreamMarkdown,
   TextShimmer,
@@ -219,6 +218,58 @@ export function AiThreadMessage({
     );
   }
 
+  // 把文本与工具调用按 TextBefore 位置穿插成有序片段：
+  // [ {type:'text', text}, {type:'tool', tool}, {type:'text', text}, ... ]
+  const interleaved = useMemo(() => {
+    const tools = [...(toolCalls ?? [])].sort((a, b) =>
+      (a.textBefore ?? '').length - (b.textBefore ?? '').length,
+    );
+    const segments: { type: 'text' | 'tool'; text?: string; tool?: AiToolCall }[] = [];
+    let cursor = 0;
+    for (const tool of tools) {
+      const before = tool.textBefore ?? '';
+      if (before.length > cursor) {
+        segments.push({ type: 'text', text: message.content.slice(cursor, before.length) });
+        cursor = before.length;
+      }
+      segments.push({ type: 'tool', tool });
+    }
+    if (cursor < message.content.length) {
+      segments.push({ type: 'text', text: message.content.slice(cursor) });
+    }
+    return segments;
+  }, [message.content, toolCalls]);
+
+  // 流式进行中的临时工具（待审批 / 正在运行）追加到末尾。
+  const tailTools = streamingTools ?? [];
+  const hasTailTools = tailTools.length > 0;
+
+  const renderBody = () => {
+    const parts: React.ReactNode[] = [];
+    let key = 0;
+    for (const seg of interleaved) {
+      if (seg.type === 'text' && seg.text) {
+        parts.push(
+          <ChatMessagePrimitive.Content key={`text-${key++}`}>
+            <Markdown>{seg.text}</Markdown>
+          </ChatMessagePrimitive.Content>,
+        );
+      } else if (seg.type === 'tool' && seg.tool) {
+        parts.push(
+          renderToolCall(
+            seg.tool,
+            isStreaming,
+            `${t('ai.usedTool')} `,
+            `tool-${key++}`,
+            onApprove,
+            onReject,
+          ),
+        );
+      }
+    }
+    return parts;
+  };
+
   return (
     <ChatMessagePrimitive.Assistant>
       <ChatMessagePrimitive.Avatar
@@ -247,24 +298,22 @@ export function AiThreadMessage({
           </ChainOfThought>
         )}
 
-        {renderedToolCalls.length > 0 && (
-          <ChatToolGroup active={isStreaming} defaultExpanded={isStreaming}>
-            <ChatToolGroup.Trigger>
-              {t('ai.toolCalls', { count: renderedToolCalls.length })}
-            </ChatToolGroup.Trigger>
-            <ChatToolGroup.Content>
-              {renderedToolCalls.map((tool, index) =>
-                renderToolCall(
-                  tool,
-                  isStreaming,
-                  `${t('ai.usedTool')} `,
-                  `${tool.toolName}-${index}`,
-                  onApprove,
-                  onReject,
-                ),
-              )}
-            </ChatToolGroup.Content>
-          </ChatToolGroup>
+        {renderBody()}
+
+        {/* 流式进行中的工具（审批挂起 / 正在执行）穿插在末尾实时显示 */}
+        {hasTailTools && (
+          <div className="flex flex-col gap-2">
+            {tailTools.map((tool, index) =>
+              renderToolCall(
+                tool,
+                isStreaming,
+                `${t('ai.usedTool')} `,
+                `tail-tool-${index}`,
+                onApprove,
+                onReject,
+              ),
+            )}
+          </div>
         )}
 
         {sources && sources.length > 0 && (
@@ -296,10 +345,6 @@ export function AiThreadMessage({
             ) : null}
             <ChatLoader.Dots />
           </>
-        ) : message.content ? (
-          <ChatMessagePrimitive.Content>
-            <Markdown>{message.content}</Markdown>
-          </ChatMessagePrimitive.Content>
         ) : null}
 
         {!isStreaming && (message.content || renderedToolCalls.length > 0) && (

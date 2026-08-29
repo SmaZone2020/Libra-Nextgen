@@ -659,7 +659,8 @@ public class AiService
                 {
                     var callId = id.Length > 0 ? id : Guid.NewGuid().ToString("N");
                     var argsText = args.Length == 0 ? "{}" : args;
-                    var toolCall = new AiToolCall { Id = callId, ToolName = name, ArgsText = argsText };
+                    // 记录该工具调用发生时已输出的助手文本，供前端把工具调用穿插在文本流中。
+                    var toolCall = new AiToolCall { Id = callId, ToolName = name, ArgsText = argsText, TextBefore = state.AssistantText };
                     state.ToolCalls.Add(toolCall);
 
                     // request_tier_elevation：正式的权限提升请求（§6 Writ 通道）。
@@ -668,7 +669,10 @@ public class AiService
                     if (name == "request_tier_elevation")
                     {
                         var reqArgs = JsonNode.Parse(argsText) as JsonObject ?? new JsonObject();
-                        var requestedTierKey = reqArgs["requiredTier"]?.GetValue<string>() ?? "";
+                        // 兼容 LLM 传参：requiredTier 或 tier 键均可。
+                        var requestedTierKey = reqArgs["requiredTier"]?.GetValue<string>()
+                            ?? reqArgs["tier"]?.GetValue<string>()
+                            ?? "";
                         var requested = JustitiaPolicy.Parse(requestedTierKey);
                         if (requested <= state.EffectiveTier)
                         {
