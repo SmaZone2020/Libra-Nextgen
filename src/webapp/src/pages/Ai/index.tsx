@@ -3,8 +3,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Button } from '@heroui/react';
-import { ArrowLeft, BarsDescendingAlignLeft } from '@gravity-ui/icons';
+import { Button, Tooltip } from '@heroui/react';
+import { ArrowLeft, BarsDescendingAlignLeft, ChevronLeft, ChevronRight } from '@gravity-ui/icons';
 import {
   createAiSession,
   deleteAiMessage,
@@ -42,6 +42,8 @@ export default function AiPage() {
   const [streaming, setStreaming] = useState<StreamingState>('idle');
   // 移动端会话列表 Drawer 开关。
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+  // 桌面端会话列表伸缩（收起后仅剩右缘按钮）。
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   // Justitia 档位（浏览器持久化，随 SSE 请求提交）。
   const [justitiaTier, setJustitiaTier] = useState<JustitiaTierKey>(() => loadJustitiaTier());
   const [streamingText, setStreamingText] = useState('');
@@ -481,8 +483,12 @@ export default function AiPage() {
   const approvalPending = streaming === 'approval';
 
   return (
-    <div className="flex h-full min-h-0 w-full flex-1 flex-col md:flex-row">
-      <aside className="hidden w-64 shrink-0 overflow-y-auto border-r border-default-200 md:block dark:border-default-800">
+    <div className="relative flex h-full min-h-0 w-full flex-1 flex-col md:flex-row">
+      <aside
+        className={`hidden shrink-0 overflow-hidden border-r border-default-200 transition-[width] duration-200 md:block dark:border-default-800 ${
+          sidebarCollapsed ? 'w-0 border-r-0' : 'w-64'
+        }`}
+      >
         <AiSidebar
           activeSessionId={activeId}
           refreshKey={sidebarRefreshKey}
@@ -490,6 +496,33 @@ export default function AiPage() {
           onNewSession={() => void handleNewSession()}
         />
       </aside>
+
+      {/* 伸缩按钮：会话列表容器右侧、垂直居中 */}
+      <Tooltip delay={0}>
+        <Tooltip.Trigger>
+          <Button
+            isIconOnly
+            variant="secondary"
+            size="sm"
+            aria-label={sidebarCollapsed ? t('ai.expandSidebar') : t('ai.collapseSidebar')}
+            onPress={() => setSidebarCollapsed((v) => !v)}
+            className="absolute top-1/2 -translate-y-1/2 z-20 hidden size-6 rounded-full border border-default-200 shadow-md md:inline-flex dark:border-default-800"
+            style={{
+              left: sidebarCollapsed ? 2 : 244,
+              transition: 'left 200ms ease',
+            }}
+          >
+            {sidebarCollapsed ? (
+              <ChevronRight className="size-3.5" />
+            ) : (
+              <ChevronLeft className="size-3.5" />
+            )}
+          </Button>
+        </Tooltip.Trigger>
+        <Tooltip.Content placement="right">
+          {sidebarCollapsed ? t('ai.expandSidebar') : t('ai.collapseSidebar')}
+        </Tooltip.Content>
+      </Tooltip>
 
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         <div className="flex shrink-0 items-center gap-2 border-b border-default-200 px-3 py-2 md:hidden dark:border-default-800">
