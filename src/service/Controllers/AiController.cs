@@ -187,6 +187,8 @@ public class AiController : ControllerBase
 
         Response.Headers.CacheControl = "no-cache";
         Response.Headers.ContentType = "text/event-stream";
+        // 审批等待可能很长（无限时）：禁用响应缓冲，让 SSE 帧即时刷出。
+        HttpContext.Features.Get<Microsoft.AspNetCore.Http.Features.IHttpResponseBodyFeature>()?.DisableBuffering();
         await Response.Body.FlushAsync(ct);
 
         async Task Send(string payload)

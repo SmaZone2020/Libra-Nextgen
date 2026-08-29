@@ -40,6 +40,10 @@ builder.WebHost.ConfigureKestrel(options =>
         options.ListenLocalhost(listenerSettings.Port);
     else
         options.ListenAnyIP(listenerSettings.Port);
+
+    // AI 聊天 SSE 可能因审批等待挂起很久：放宽请求/响应超时，防止连接被掐断。
+    options.Limits.RequestHeadersTimeout = TimeSpan.FromMinutes(5);
+    options.Limits.KeepAliveTimeout = TimeSpan.FromMinutes(10);
 });
 
 builder.Services.AddHttpClient();
