@@ -693,6 +693,12 @@ public class AiService
             {
                 state.Cts.Dispose();
                 _runs.TryRemove(session.Id, out _);
+                _logger.LogWarning("RunChatAsync finally removed run state for session {Session} (no pending tool call)", session.Id);
+            }
+            else
+            {
+                _logger.LogWarning("RunChatAsync finally kept run state for session {Session} (pending tool call {Call})",
+                    session.Id, state.PendingToolCall["toolCallId"]?.GetValue<string>());
             }
         }
     }
@@ -1334,6 +1340,11 @@ public class AiService
             // 运行被取消：工具保持挂起状态，不执行。
             var pending = state.ToolCalls.FirstOrDefault(t => t.Id == callId);
             if (pending != null) pending.State = "requires-action";
+            _logger.LogWarning("WaitForApproval: gate wait cancelled for call {Call} (session {Session})", callId, state.SessionId);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "WaitForApproval: gate wait failed for call {Call} (session {Session})", callId, state.SessionId);
         }
         finally
         {
