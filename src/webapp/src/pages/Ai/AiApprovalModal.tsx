@@ -34,10 +34,10 @@ export function AiApprovalModal({
   const requiredTier = (tool as AiToolCall & { requiredTier?: number }).requiredTier;
   const currentTier = (tool as AiToolCall & { currentTier?: number }).currentTier;
 
-  const permitOptions: { permit: AiPermit; label: string; desc: string }[] = [
-    { permit: 'one-time', label: t('ai.permitOnce'), desc: t('ai.permitOnceDesc') },
-    { permit: '5min', label: t('ai.permit5min'), desc: t('ai.permit5minDesc') },
-    { permit: '20min', label: t('ai.permit20min'), desc: t('ai.permit20minDesc') },
+  const permitOptions: { permit: AiPermit; label: string}[] = [
+    { permit: 'one-time', label: t('ai.permitOnce') },
+    { permit: '5min', label: t('ai.permit5min') },
+    { permit: '20min', label: t('ai.permit20min') },
   ];
 
   return (
@@ -63,7 +63,10 @@ export function AiApprovalModal({
                     </span>
                     {requiredTier !== undefined && currentTier !== undefined && (
                       <Chip color="warning" variant="soft" size="sm">
-                        {t('ai.approvalTierUp', { from: currentTier, to: requiredTier })}
+                        {t('ai.approvalTierUp', { 
+                          from: ['Cognitio', 'Arbitrium', 'Imperium', 'Dictatura'][currentTier], 
+                          to: ['Cognitio', 'Arbitrium', 'Imperium', 'Dictatura'][requiredTier] 
+                        })}
                       </Chip>
                     )}
                   </div>
@@ -76,7 +79,6 @@ export function AiApprovalModal({
                     <div className="mt-2 text-xs text-muted">{tool.error}</div>
                   )}
                 </div>
-                <div className="text-xs text-muted">{t('ai.approvalHint')}</div>
               </div>
             </Modal.Body>
             <Modal.Footer className="flex-col items-stretch gap-2">
@@ -90,7 +92,6 @@ export function AiApprovalModal({
                   <Clock className="size-4 shrink-0" />
                   <span className="flex flex-col items-start leading-tight">
                     <span className="text-sm font-medium">{opt.label}</span>
-                    <span className="text-xs text-muted">{opt.desc}</span>
                   </span>
                 </Button>
               ))}

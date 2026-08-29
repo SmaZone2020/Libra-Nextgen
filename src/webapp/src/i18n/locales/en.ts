@@ -30,8 +30,6 @@ export default {
       pluginPages: 'Plugin Pages',
       pluginManager: 'Plugins',
       toggleGroup: 'Toggle group',
-      expandSidebar: 'Expand sidebar',
-      collapseSidebar: 'Collapse sidebar',
       toggleSidebar: 'Toggle sidebar',
     },
     pageMeta: {
@@ -956,7 +954,7 @@ export default {
       untitled: 'Untitled conversation',
       unknownProvider: 'Unknown provider',
       goConfigure: 'Configure AI providers',
-      heroTitle: 'Hey, Operator. Long time no see.',
+      heroTitle: 'Hey, Operator. Long time no see',
       heroDesc: 'Ask a question or start from a suggestion. The AI can call MCP tools like agent listing and system info.',
       inputPlaceholder: 'What shall we chat about today?',
       disclaimer: 'AI can make mistakes. Check important info.',

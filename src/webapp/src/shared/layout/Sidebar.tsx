@@ -101,13 +101,12 @@ export function Sidebar({
                 </motion.div>
               )}
             </AnimatePresence>
-            <Tooltip delay={0} >
               <Button
                 isIconOnly
                 aria-label="Toggle sidebar"
                 variant="ghost"
                 onPress={() => onToggle(!collapsed)}
-                className="absolute right-4 top-4 z-10"
+                className="absolute right-4 top-4 z-10 rounded-[15px]"
               >
                 {collapsed ? (        
                   <img
@@ -115,12 +114,8 @@ export function Sidebar({
                     className="w-8 h-8 object-cover dark:invert"
                     loading="lazy"
                     src="/images/icon2.webp"
-                  />) : <LayoutSideContentLeft className="w-5 h-5" />}
+                  />) : <LayoutSideContentLeft />}
               </Button>
-              <Tooltip.Content>
-                <p>{collapsed ? t('nav.expandSidebar') : t('nav.collapseSidebar')}</p>
-              </Tooltip.Content>
-            </Tooltip>
           </div>
 
           <motion.nav
@@ -160,7 +155,7 @@ export function Sidebar({
             <span className="text-2xl font-bold text-neutral-900 dark:text-neutral-100 libre">{brand}</span>
             <Tooltip delay={0}>
               <Button isIconOnly aria-label="Close sidebar" size="sm" variant="ghost" onPress={onMobileClose}>
-                <LayoutSideContentLeft className="w-5 h-5" />
+                <LayoutSideContentLeft />
               </Button>
               <Tooltip.Content>
                 <p>{t('nav.collapseSidebar')}</p>
@@ -234,12 +229,11 @@ function DesktopNavItem({ item, collapsed }: { item: NavItem; collapsed: boolean
             <Dropdown>
               <Button
                 isIconOnly
-                size="lg"
                 variant={groupActive ? 'primary' : 'ghost'}
                 className={`transition-all duration-300 ${groupActive ? 'rounded-[15px]' : ''}`}
                 aria-label={label}
               >
-                <item.icon className="w-5 h-5 shrink-0" />
+                <item.icon className="shrink-0" />
               </Button>
               <Dropdown.Popover>
                 <Dropdown.Menu
@@ -261,12 +255,11 @@ function DesktopNavItem({ item, collapsed }: { item: NavItem; collapsed: boolean
           ) : (
             <Tooltip delay={0}>
               <Button
-                size="lg"
                 variant={groupActive ? 'primary' : 'ghost'}
                 className={`flex-1 justify-start px-3 mr-1 transition-all duration-300 ${groupActive ? 'rounded-[15px]' : ''}`}
                 onPress={handlePress}
               >
-                <item.icon className="w-5 h-5 shrink-0" />
+                <item.icon className="shrink-0" />
                 <span
                   className="overflow-hidden whitespace-nowrap transition-all duration-300 font-medium flex-1 text-left"
                   style={{ maxWidth: collapsed ? 0 : '14rem', opacity: collapsed ? 0 : 1 }}
@@ -332,7 +325,7 @@ function DesktopNavItem({ item, collapsed }: { item: NavItem; collapsed: boolean
                         className={`flex-1 justify-start px-2 mr-1 transition-all duration-200 ${isActive ? 'rounded-[12px]' : ''}`}
                         onPress={() => navigate(child.to)}
                       >
-                        <child.icon className="ml-1 w-5 h-5 shrink-0" />
+                        <child.icon className="ml-1 shrink-0" />
                         <span className="text-[15px] truncate">{childLabel}</span>
                       </Button>
                     </div>
@@ -354,12 +347,11 @@ function DesktopNavItem({ item, collapsed }: { item: NavItem; collapsed: boolean
       <Tooltip delay={0} isDisabled={!collapsed}>
         <Button
           isIconOnly={collapsed}
-          size="lg"
           variant={isActive ? 'primary' : 'ghost'}
           className={`flex-1 justify-start px-3 mr-1 transition-all duration-300 ${isActive ? 'rounded-[15px]' : ''}`}
           onPress={() => navigate(item.to)}
         >
-          <item.icon className="w-5 h-5 shrink-0" />
+          <item.icon className="shrink-0" />
           <span
             className="overflow-hidden whitespace-nowrap transition-all duration-300 font-medium "
             style={{ maxWidth: collapsed ? 0 : '14rem', opacity: collapsed ? 0 : 1 }}
@@ -420,12 +412,11 @@ function MobileNavItem({ item, onNavigate }: { item: NavItem; onNavigate: () => 
       <div>
         <div className="flex items-center">
           <Button
-            size="lg"
             variant={groupActive ? 'primary' : 'ghost'}
             className={`flex-1 justify-start px-3 mr-1 ${groupActive ? 'rounded-[15px]' : ''}`}
             onPress={handleBody}
           >
-            <item.icon className="w-5 h-5 shrink-0" />
+            <item.icon className="shrink-0" />
             <span className="font-medium ml-3 flex-1 text-left">{label}</span>
             <span
               onClick={handleChevron}
@@ -466,7 +457,6 @@ function MobileNavItem({ item, onNavigate }: { item: NavItem; onNavigate: () => 
                   return (
                     <Button
                       key={child.to}
-                      size="sm"
                       variant={isActive ? 'primary' : 'ghost'}
                       className={`justify-start px-2 ${isActive ? 'rounded-[12px]' : ''}`}
                       onPress={() => { navigate(child.to); onNavigate(); }}
@@ -490,12 +480,11 @@ function MobileNavItem({ item, onNavigate }: { item: NavItem; onNavigate: () => 
   return (
     <div className="flex items-center">
       <Button
-        size="lg"
         variant={isActive ? 'primary' : 'ghost'}
         className={`flex-1 justify-start px-3 mr-1 ${isActive ? 'rounded-[15px]' : ''}`}
         onPress={() => { navigate(item.to); onNavigate(); }}
       >
-        <item.icon className="w-5 h-5 shrink-0" />
+        <item.icon className="shrink-0" />
         <span className="font-medium ml-3">{label}</span>
       </Button>
       {isActive && <div className="h-6 w-2 bg-blue-500 shrink-0 rounded-md" />}

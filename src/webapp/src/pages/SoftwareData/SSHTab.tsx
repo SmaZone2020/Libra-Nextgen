@@ -225,7 +225,7 @@ export function SSHTab({ agentId }: SSHTabProps) {
                       <Copy className="w-4 h-4 mr-1" /> {t('othersoft.ssh.copy')}
                     </Button>
                     <Button className="flex-1" onPress={handleDownload}>
-                      <ArrowDownToLine className="w-4 h-4 mr-1" /> {t('othersoft.download')}
+                      <ArrowDownToLine className="w-4 h-4 mr-1" /> {t('common.download')}
                     </Button>
                   </Modal.Footer>
                 </>

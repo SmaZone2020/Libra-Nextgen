@@ -30,8 +30,6 @@ export default {
       pluginPages: '插件页面',
       pluginManager: '插件管理',
       toggleGroup: '展开/收起分组',
-      expandSidebar: '展开侧边栏',
-      collapseSidebar: '收起侧边栏',
       toggleSidebar: '切换侧边栏',
     },
     pageMeta: {
@@ -955,7 +953,7 @@ export default {
       untitled: '未命名会话',
       unknownProvider: '未知供应商',
       goConfigure: '去配置 AI 供应商',
-      heroTitle: '嗨，Operator，别来无恙。',
+      heroTitle: '嗨，Operator，别来无恙？',
       heroDesc: '提问，或从下方建议开始。AI 可调用设备列表、系统信息等 MCP 工具。',
       inputPlaceholder: '今天我们聊点什么？',
       disclaimer: 'AI 可能会出错，重要信息请核实。',

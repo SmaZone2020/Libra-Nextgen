@@ -143,14 +143,14 @@ export function AiSidebar({ activeSessionId, refreshKey = 0, onSelectSession, on
       </div>
 
       {/* 会话列表 */}
-      <div className="min-h-0 flex-1 overflow-y-auto pb-3 sm:px-3 px-0">
+      <div className={`min-h-0 flex-1 overflow-y-auto pb-3 sm:px-3 px-0`}>
         {loading ? (
           <div className="flex justify-center py-8">
             <Spinner size="sm" />
           </div>
         ) : filtered.length === 0 ? (
           <div className="px-3 py-8 text-center text-xs text-muted">
-            {query ? t('common.noResults') : t('ai.noSessions')}
+            NONE
           </div>
         ) : (
           <div className="flex flex-col gap-0.5">

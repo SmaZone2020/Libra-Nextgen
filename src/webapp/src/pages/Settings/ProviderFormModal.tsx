@@ -153,6 +153,7 @@ export function ProviderFormModal({ open, editing, onClose, onSaved }: ProviderF
                 <Label className="mb-1.5 block text-sm">{t('settings.aiName')}</Label>
                 <Input
                   value={form.name}
+                  variant='secondary'
                   onChange={(e) => patch({ name: e.target.value })}
                   placeholder="Libra"
                 />
@@ -165,6 +166,7 @@ export function ProviderFormModal({ open, editing, onClose, onSaved }: ProviderF
                   onSelectionChange={(key) => {
                     if (key) handleTypeChange(String(key));
                   }}
+                  variant='secondary'
                 >
                   <Select.Trigger className="w-full">
                     <Select.Value />
@@ -188,6 +190,7 @@ export function ProviderFormModal({ open, editing, onClose, onSaved }: ProviderF
                     value={form.baseUrl}
                     onChange={(e) => patch({ baseUrl: e.target.value })}
                     placeholder="https://api.deepseek.com/v1"
+                    variant='secondary'
                   />
                 </div>
                 <div className="flex-1">
@@ -197,6 +200,7 @@ export function ProviderFormModal({ open, editing, onClose, onSaved }: ProviderF
                     value={form.apiKey ?? ''}
                     onChange={(e) => patch({ apiKey: e.target.value })}
                     placeholder={editing ? t('settings.aiApiKeyPlaceholder') : 'sk-…'}
+                    variant='secondary'
                   />
                 </div>
               </div>
@@ -226,6 +230,7 @@ export function ProviderFormModal({ open, editing, onClose, onSaved }: ProviderF
                   fullWidth
                   placeholder={'deepseek-chat\ndeepseek-reasoner\n…'}
                   rows={4}
+                  variant='secondary'
                 />
               </div>
             </div>
