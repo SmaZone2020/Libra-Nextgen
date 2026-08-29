@@ -45,7 +45,7 @@ export default function AiPage() {
   // Justitia 档位（浏览器持久化，随 SSE 请求提交）。
   const [justitiaTier, setJustitiaTier] = useState<JustitiaTierKey>(() => loadJustitiaTier());
   const [streamingText, setStreamingText] = useState('');
-  const [streamingReasoning, setStreamingReasoning] = useState<string[]>([]);
+  const [streamingReasoning, setStreamingReasoning] = useState('');
   const [streamingTools, setStreamingTools] = useState<AiToolCall[]>([]);
   const [pendingApproval, setPendingApproval] = useState<AiToolCall | null>(null);
   // 审批模态框：可关闭留痕，对话流中稍后可再次批准/拒绝。
@@ -65,30 +65,6 @@ export default function AiPage() {
   const sidebarRefreshKeyRef = useRef(0);
   const [sidebarRefreshKey, setSidebarRefreshKey] = useState(0);
 
-  // 空状态欢迎语：多种风格轮换展示（日期固定 seed，避免每次刷新跳动）。
-  const heroMessages = useMemo(
-    () => [
-      t('ai.heroTitle'),
-      t('ai.heroTitle2'),
-      t('ai.heroTitle3'),
-      t('ai.heroTitle4'),
-      t('ai.heroTitle5'),
-      t('ai.heroTitle6'),
-      t('ai.heroTitle7'),
-      t('ai.heroTitle8'),
-      t('ai.heroTitle9'),
-      t('ai.heroTitle10'),
-    ],
-    [t],
-  );
-  const heroTitle = useMemo(() => {
-    const today = new Date();
-    const seed =
-      today.getFullYear() * 10000 + (today.getMonth() + 1) * 100 + today.getDate();
-    return heroMessages[seed % heroMessages.length] ?? heroMessages[0];
-  }, [heroMessages]);
-
-  // 椤跺眰鐘舵€侊細鎶婇€変腑鐨勪細璇?id 鏄犲皠鍒拌矾鐢便€?
   const activeId = sessionId ?? null;
 
   const loadMeta = useCallback(async () => {
@@ -116,7 +92,6 @@ export default function AiPage() {
     })();
   }, [activeId, loadMeta]);
 
-  // 璺敱绂诲紑鏃跺仠姝㈡祦銆?
   useEffect(() => {
     return () => {
       abortRef.current?.abort();
@@ -127,7 +102,6 @@ export default function AiPage() {
     () => providers.filter((p) => p.enabled && p.models.length > 0),
     [providers],
   );
-  // 鏈変細璇濇椂鐢ㄤ細璇濈殑渚涘簲鍟?妯″瀷锛涚┖鎬侊紙鏂版秷鎭級鏃剁敤娴忚鍣ㄥ亸濂斤紝鍥為€€绗竴涓彲鐢ㄤ緵搴斿晢銆?
   const activeProvider = useMemo(() => {
     const id = session?.providerId ?? prefProviderId ?? enabledProviders[0]?.id ?? null;
     return providers.find((p) => p.id === id) ?? enabledProviders[0] ?? null;
@@ -145,7 +119,7 @@ export default function AiPage() {
       abortRef.current?.abort();
       setStreaming('idle');
       setStreamingText('');
-      setStreamingReasoning([]);
+      setStreamingReasoning('');
       setStreamingTools([]);
       setPendingApproval(null);
       setStreamError(null);
@@ -159,13 +133,11 @@ export default function AiPage() {
   );
 
   const handleNewSession = useCallback(() => {
-    // 鐐瑰嚮鏂板缓锛氫笉鐩存帴鍒涘缓浼氳瘽锛屼粎璺宠浆鍒?/ai 绌烘€侊紙宸插湪鍒欐棤鍔ㄤ綔锛夈€?
-    // 鍙湁鐢ㄦ埛鍙戝嚭绗竴鏉℃秷鎭苟鍙戦€佹椂锛屾墠浼氱湡姝ｅ垱寤轰細璇濄€?
     if (activeId || location.pathname !== '/ai') {
       abortRef.current?.abort();
       setStreaming('idle');
       setStreamingText('');
-      setStreamingReasoning([]);
+      setStreamingReasoning('');
       setStreamingTools([]);
       setPendingApproval(null);
       setStreamError(null);
@@ -177,7 +149,6 @@ export default function AiPage() {
     const p = providers.find((x) => x.id === providerId);
     if (!p) return;
     const defaultModel = p.defaultModel || p.models[0] || '';
-    // 鎸佷箙鍖栧亸濂斤紝渚涗笅娆℃柊寤轰細璇濊鍙栥€?
     setPrefProviderId(providerId);
     localStorage.setItem('ai.prefProviderId', providerId);
     setPrefModel(defaultModel || null);
@@ -200,7 +171,8 @@ export default function AiPage() {
     (evt: AiSseEvent, sessionId: string) => {
       switch (evt.type) {
         case 'reasoning':
-          setStreamingReasoning((prev) => [...prev, evt.content]);
+          // 拼接成一段连续思考文本，避免每个增量片段渲染成独立"思考中…"。
+          setStreamingReasoning((prev) => prev + evt.content);
           break;
         case 'message':
           setStreamingText((prev) => prev + evt.delta);
@@ -241,13 +213,11 @@ export default function AiPage() {
             toolName: evt.toolCall.toolName,
             argsText: evt.toolCall.argsText,
             state: 'requires-action',
-            // 附加审批元数据（kind/reason/档位）供模态框展示。
             ...(evt.toolCall.kind ? { kind: evt.toolCall.kind } : {}),
             ...(evt.toolCall.reason ? { error: evt.toolCall.reason } : {}),
             ...(evt.toolCall.requiredTier !== undefined ? { requiredTier: evt.toolCall.requiredTier } : {}),
             ...(evt.toolCall.currentTier !== undefined ? { currentTier: evt.toolCall.currentTier } : {}),
           });
-          // 弹审批模态框；关闭后留痕在对话流，可稍后再次批准/拒绝。
           setApprovalModalOpen(true);
           break;
         }
@@ -255,7 +225,7 @@ export default function AiPage() {
           setStreaming('idle');
           setPendingApproval(null);
           setApprovalModalOpen(false);
-          setStreamingReasoning([]);
+          setStreamingReasoning('');
           void getAiSession(sessionId)
             .then((s) => {
               setSession(s);
@@ -265,7 +235,6 @@ export default function AiPage() {
               });
             })
             .catch(() => undefined);
-          // done 后把本地流式状态清空，避免残留 streamingText/streamingTools。
           setStreamingText('');
           setStreamingTools([]);
           break;
@@ -274,7 +243,6 @@ export default function AiPage() {
           setStreaming('idle');
           setPendingApproval(null);
           setApprovalModalOpen(false);
-          // 浠ョ孩鑹查敊璇潡娓叉煋锛堜笉鍐嶆嫾杩涙祦寮忔枃鏈級銆?
           setStreamError((prev) => (prev ? `${prev}\n${evt.message}` : evt.message));
           break;
       }
@@ -292,7 +260,6 @@ export default function AiPage() {
       let target = session;
 
       if (!target && !targetId) {
-        // 绌烘€侀鏉℃秷鎭細姝ゆ椂鎵嶇湡姝ｅ垱寤轰細璇濓紙鐢ㄦ祻瑙堝櫒鍋忓ソ鐨勪緵搴斿晢/妯″瀷锛夈€?
         const provider = activeProvider ?? enabledProviders[0];
         if (!provider) {
           navigate('/settings/ai');
@@ -304,7 +271,6 @@ export default function AiPage() {
           targetId = s.id;
           setSessions((prev) => [s, ...prev]);
           navigate(`/ai/${s.id}`);
-          // 鏂颁細璇濆叆鍒楀悗锛岃渚ц竟鏍忛噸鏂版媺鍙栦細璇濆垪琛ㄣ€?
           sidebarRefreshKeyRef.current += 1;
           setSidebarRefreshKey(sidebarRefreshKeyRef.current);
         } catch (e) {
@@ -315,7 +281,6 @@ export default function AiPage() {
 
       if (!targetId || !target) return;
 
-      // 鏈湴鍏堣拷鍔犵敤鎴锋秷鎭紙涔愯 UI锛夈€?
       const userMsg: AiMessage = {
         id: `local-${Date.now()}`,
         role: 'user',
@@ -324,7 +289,7 @@ export default function AiPage() {
       };
       setSession((prev) => (prev && prev.id === targetId ? { ...prev, messages: [...prev.messages, userMsg] } : prev));
       setStreamingText('');
-      setStreamingReasoning([]);
+      setStreamingReasoning('');
       setStreamingTools([]);
       setPendingApproval(null);
       setStreamError(null);
@@ -351,13 +316,31 @@ export default function AiPage() {
   const handleStop = useCallback(() => {
     if (activeId) void stopAiChat(activeId);
     abortRef.current?.abort();
+    // 保留已输出的内容：把本次流式文本固定为一条助手消息（若确实有输出）。
+    setSession((prev) => {
+      if (!prev) return prev;
+      const text = streamingText.trim();
+      if (!text) return prev;
+      return {
+        ...prev,
+        messages: [
+          ...prev.messages,
+          {
+            id: `local-stop-${Date.now()}`,
+            role: 'assistant',
+            content: text,
+            createdAt: new Date().toISOString(),
+          },
+        ],
+      };
+    });
     setStreaming('idle');
     setStreamingText('');
     setStreamingTools([]);
-    setStreamingReasoning([]);
+    setStreamingReasoning('');
     setPendingApproval(null);
     setStreamError(null);
-  }, [activeId]);
+  }, [activeId, streamingText]);
 
   const handleApprove = useCallback(
     async (toolCallId: string, permit: AiPermit) => {
@@ -420,7 +403,6 @@ export default function AiPage() {
     async (messageId: string, content: string) => {
       if (!activeId || !session) return;
       const id = activeId;
-      // 本地先更新 UI（乐观更新），失败再回滚。
       const prev = session;
       setSession((s) =>
         s
@@ -529,17 +511,17 @@ export default function AiPage() {
           <ChatConversation.Content className={`flex flex-col ${!session?.messages.length ? 'h-full' : ''}`}>
             <div className="m-auto flex w-full sm:w-[80%] flex-col gap-6 px-4 pt-6 pb-4">
               {showEmptyState ? (
-                <div className="flex min-h-[80vh] flex-1 flex-col items-center justify-center">
+                <div className="flex h-[80vh] flex-1 flex-col items-center justify-center">
                   <PromptSuggestion>
                     <PromptSuggestion.Header>
                       <PromptSuggestion.Title className='text-center'>
                         <img
                           alt="icon"
-                          className="w-54 h-54 mx-auto object-cover dark:invert select-none pointer-events-none"
+                          className="w-50 h-50 mx-auto object-cover dark:invert select-none pointer-events-none"
                           loading="lazy"
                           src="/images/icon2.webp"
                         />
-                        {heroTitle}
+                        {t("ai.heroTitle")}
                       </PromptSuggestion.Title>
                     </PromptSuggestion.Header>
                     <PromptSuggestion.Items>
@@ -580,8 +562,8 @@ export default function AiPage() {
                     id: 'streaming',
                     role: 'assistant',
                     content: '',
-                    reasoning: streamingReasoning.length > 0
-                      ? streamingReasoning.map((c, i) => ({ label: t('ai.thinking'), content: c }))
+                    reasoning: streamingReasoning
+                      ? [{ label: t('ai.thinking'), content: streamingReasoning }]
                       : undefined,
                     toolCalls: streamingTools.length > 0 ? streamingTools : undefined,
                     createdAt: new Date().toISOString(),

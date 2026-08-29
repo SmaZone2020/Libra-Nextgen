@@ -13,12 +13,12 @@ import {
   Popover,
   useOverlayState,
 } from '@heroui/react';
-import { ChevronDown, PaperPlane, Shield, Sparkles } from '@gravity-ui/icons';
+import { ChevronDown, Shield, Sparkles } from '@gravity-ui/icons';
 import { PromptInput, CellSlider, PressableFeedback } from '../../vendor/ui-pro';
 import type { AiProvider } from '../../api/ai';
 import { resolveModelIcon } from './modelIcons';
 import { formatModelDisplay, parseModelLabel, titleCaseWords } from './utils';
-import { JUSTITIA_TIERS, type JustitiaTierKey } from './justitia';
+import { JUSTITIA_TIERS, JUSTITIA_TIER_VALUES, snapJustitiaValue, type JustitiaTierKey } from './justitia';
 
 function BrandIcon({ name, className = 'size-5' }: { name: string; className?: string }) {
   const icon = name ? resolveModelIcon(name) : null;
@@ -209,6 +209,16 @@ export function AiComposer({
   const [tierMenuOpen, setTierMenuOpen] = useState(false);
   const mobileDrawer = useOverlayState();
   const permission = JUSTITIA_TIERS.find((x) => x.key === justitiaTier)?.index ?? 0;
+  // 自由拖动时的临时 0–100 位置；null 表示未在拖动，吸附到档位位置。
+  const [draftValue, setDraftValue] = useState<number | null>(null);
+  const isDragging = draftValue !== null;
+  const sliderValue = draftValue ?? JUSTITIA_TIER_VALUES[permission] ?? 0;
+  // 拖动中实时显示最近档位名，松开后才真正提交。
+  const activeTierIndex =
+    draftValue !== null
+      ? JUSTITIA_TIER_VALUES.indexOf(snapJustitiaValue(draftValue))
+      : permission;
+  const activeTier = JUSTITIA_TIERS[activeTierIndex];
   const activeProvider = providers.find((p) => p.id === activeProviderId) ?? providers[0];
 
   const modelGroups = useMemo(() => {
@@ -340,45 +350,59 @@ export function AiComposer({
                   isDisabled={isGenerating}
                   className="h-9 w-[140px] shrink-0 gap-1"
                 >
-                  <span className="text-sm font-medium">
-                    {JUSTITIA_TIERS[permission]?.name}
+                  <span className={`text-sm font-medium ${activeTierIndex === 3 ? 'aurora-text' : ''}`}>
+                    {activeTier?.name ?? JUSTITIA_TIERS[permission]?.name}
                   </span>
                   <ChevronDown className="size-3.5 shrink-0 text-muted" />
                 </Button>
-                <Popover.Content className="p-0" offset={10}>
-                  <Popover.Dialog className="p-0">
+                <Popover.Content offset={10}>
+                  <Popover.Dialog>
                     <Popover.Arrow className="fill-accent/30" />
                     <Popover.Heading>{t('ai.adjustJustitia')}</Popover.Heading>
                     <div className="flex flex-col items-center gap-3 pb-1 mt-3">
                       <CellSlider
-                        maxValue={3}
+                        maxValue={100}
                         minValue={0}
                         step={1}
                         variant="secondary"
-                        value={permission}
+                        value={sliderValue}
+                        data-dragging={isDragging ? 'true' : 'false'}
+                        className="group"
                         onChange={(v) => {
                           const val = Array.isArray(v) ? v[0] ?? 0 : v;
-                          const tier = JUSTITIA_TIERS[Math.round(val)];
+                          // 拖动中自由跟手，不提交档位
+                          setDraftValue(Math.round(val));
+                        }}
+                        onChangeEnd={(v) => {
+                          const val = Array.isArray(v) ? v[0] ?? 0 : v;
+                          // 松开后吸附到最近档位并提交
+                          const snapped = snapJustitiaValue(val);
+                          const tier = JUSTITIA_TIERS[JUSTITIA_TIER_VALUES.indexOf(snapped)];
                           if (tier) onTierChange(tier.key);
+                          setDraftValue(null);
                         }}
                       >
                         <CellSlider.Track>
-                          <CellSlider.Fill className="transition-[width] duration-200 ease-out" />
-                          <CellSlider.Thumb className="transition-[translate,left] duration-200 ease-out" />
+                          <CellSlider.Fill className="transition-[width] duration-200 ease-out group-data-[dragging=true]:transition-none" />
+                          <CellSlider.Thumb className="transition-[translate,left] duration-200 ease-out group-data-[dragging=true]:transition-none" />
+                          {/* 档位中点刻度：33 / 66（与 thumb 可见指示条同用 left:p% 定位，中心对齐） */}
+                          {JUSTITIA_TIER_VALUES.filter((pos) => pos !== 0 && pos !== 100).map(
+                            (pos) => {
+                              const tierIndex = JUSTITIA_TIER_VALUES.indexOf(pos);
+                              return (
+                                <span
+                                  key={pos}
+                                  aria-hidden="true"
+                                  className={`pointer-events-none absolute top-1/2 z-[1] size-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full transition-colors duration-200 ${
+                                    tierIndex === activeTierIndex ? 'bg-accent' : 'bg-muted/50'
+                                  }`}
+                                  style={{ left: `${pos}%` }}
+                                />
+                              );
+                            },
+                          )}
                         </CellSlider.Track>
                       </CellSlider>
-                      <div className="flex w-full justify-between px-0.5 text-[11px] text-muted">
-                        {JUSTITIA_TIERS.map((tier) => (
-                          <span
-                            key={tier.key}
-                            className={`transition-colors duration-200 ${
-                              tier.key === justitiaTier ? 'font-medium text-accent' : ''
-                            }`}
-                          >
-                            {tier.name}
-                          </span>
-                        ))}
-                      </div>
                     </div>
                   </Popover.Dialog>
                 </Popover.Content>
@@ -387,9 +411,7 @@ export function AiComposer({
               <PromptInput.Send
                 aria-label={isGenerating ? t('ai.stop') : t('ai.send')}
                 isDisabled={!isGenerating && !value.trim()}
-              >
-                <PaperPlane/>
-              </PromptInput.Send>
+              />
             </PromptInput.ToolbarEnd>
           </PromptInput.Toolbar>
         </PromptInput.Shell>
