@@ -5,14 +5,17 @@ import { useTranslation } from 'react-i18next';
 import {
   Button,
   Checkbox,
+  CheckboxGroup,
   Chip,
+  Description,
   Label,
   ListBox,
   Modal,
   Select,
   Spinner,
 } from '@heroui/react';
-import { TrashBin } from '@gravity-ui/icons';
+import clsx from 'clsx';
+import { ArrowDownToLine, ArrowUpFromLine, TrashBin } from '@gravity-ui/icons';
 import { getAiSessions, type AiSession } from '../../api/ai';
 import { getAiChannels, type AiChannel } from '../../api/aiChannels';
 import {
@@ -24,8 +27,8 @@ import {
 import { useDialog } from '../../hooks/useDialog';
 
 const EVENT_OPTIONS = [
-  { id: 'agent.online', labelKey: 'ai.eventOnline' },
-  { id: 'agent.offline', labelKey: 'ai.eventOffline' },
+  { id: 'agent.online', titleKey: 'ai.eventOnline', descKey: 'ai.eventOnlineDesc', icon: ArrowUpFromLine },
+  { id: 'agent.offline', titleKey: 'ai.eventOffline', descKey: 'ai.eventOfflineDesc', icon: ArrowDownToLine },
 ] as const;
 
 /**
@@ -80,10 +83,6 @@ export function EventSubscriptionModal({
     void load();
   }, [open, load]);
 
-  const toggleEvent = (id: string, on: boolean) => {
-    setEvents((prev) => (on ? [...new Set([...prev, id])] : prev.filter((e) => e !== id)));
-  };
-
   const sessionName = useMemo(() => {
     const map = new Map(sessions.map((s) => [s.id, s.title]));
     return (id: string) => map.get(id) ?? id;
@@ -130,7 +129,7 @@ export function EventSubscriptionModal({
 
   const eventLabel = (id: string) => {
     const opt = EVENT_OPTIONS.find((o) => o.id === id);
-    return opt ? t(opt.labelKey) : id;
+    return opt ? t(opt.titleKey) : id;
   };
 
   return (
@@ -147,24 +146,39 @@ export function EventSubscriptionModal({
                 <div className="flex justify-center py-10"><Spinner size="sm" /></div>
               ) : (
                 <div className="space-y-5">
-                  {/* 事件选择 */}
-                  <div>
-                    <Label className="mb-2 block text-sm">{t('ai.eventSelect')}</Label>
-                    <div className="flex flex-wrap gap-3">
-                      {EVENT_OPTIONS.map((opt) => (
-                        <Checkbox
-                          key={opt.id}
-                          isSelected={events.includes(opt.id)}
-                          onChange={(v) => toggleEvent(opt.id, v)}
-                        >
-                          <Checkbox.Control>
-                            <Checkbox.Indicator />
-                          </Checkbox.Control>
-                          <span className="ml-1 text-sm">{t(opt.labelKey)}</span>
-                        </Checkbox>
-                      ))}
+                  {/* 事件选择（卡片式 CheckboxGroup） */}
+                  <CheckboxGroup
+                    name="events"
+                    value={events}
+                    onChange={(vals) => setEvents([...vals])}
+                  >
+                    <Label className="text-sm">{t('ai.eventSelect')}</Label>
+                    <Description className="mb-2">{t('ai.eventSelectDesc')}</Description>
+                    <div className="flex flex-col gap-2">
+                      {EVENT_OPTIONS.map((opt) => {
+                        const Icon = opt.icon;
+                        return (
+                          <Checkbox key={opt.id} value={opt.id} variant="secondary">
+                            <Checkbox.Content
+                              className={clsx(
+                                'group relative flex w-full flex-row items-start justify-start gap-4 rounded-2xl bg-surface px-5 py-4 transition-all',
+                                'data-[selected=true]:bg-accent/10',
+                              )}
+                            >
+                              <Checkbox.Control className="absolute end-4 top-3 size-5 rounded-full before:rounded-full">
+                                <Checkbox.Indicator />
+                              </Checkbox.Control>
+                              <Icon className="size-5 text-accent-soft-foreground" />
+                              <div className="flex flex-col gap-1">
+                                <span>{t(opt.titleKey)}</span>
+                                <Description>{t(opt.descKey)}</Description>
+                              </div>
+                            </Checkbox.Content>
+                          </Checkbox>
+                        );
+                      })}
                     </div>
-                  </div>
+                  </CheckboxGroup>
 
                   {/* 送达目标 */}
                   <div>
