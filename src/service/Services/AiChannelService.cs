@@ -517,6 +517,11 @@ public class AiChannelService
             return;
         }
         var ok = await _ai.ResolveApprovalAsync(session.Id, callId, approved, ct, permit);
+        if (ok)
+        {
+            // 决策完成：删除审批消息（用户已批准/拒绝，无需保留；仅原生按钮频道生效）。
+            await AdapterFor(ch.ChannelType).DeleteApprovalMessageAsync(ch, session.Id, callId, ct);
+        }
         await TrySendAsync(ch, msg.ExternalId, ok
             ? (approved
                 ? $"✅ 已批准（{permit}），AI 将继续执行。"
@@ -771,6 +776,8 @@ public class AiChannelService
                             {
                                 await Task.Delay(3000, ct);
                                 await _ai.ResolveApprovalAsync(sid, cid, false, ct);
+                                // 自动拒绝后同样清理审批消息（访客为纯文本消息，通常无记录，no-op）。
+                                await AdapterFor(ch.ChannelType).DeleteApprovalMessageAsync(ch, sid, cid, ct);
                             }
                             catch { /* run may have been cancelled */ }
                         }, ct);
@@ -948,8 +955,8 @@ public class AiChannelService
     {
         var tier = TierName(Math.Clamp(ch.DefaultTier, 0, 3));
         var html =
-            $"我是 Justitia（Libra-Nextgen AI 助手）。\n" +
-            $"频道档位：<b>{HtmlEncode(tier)}</b>\n\n" +
+            $"我是 Justitia\n" +
+            $"目前权限档位：<b>{HtmlEncode(tier)}</b>\n\n" +
             "<b>可用指令：</b>\n" +
             "<code>/start</code> 或 <code>/help</code> — 显示本帮助\n" +
             "<code>/status</code> — 查看绑定与档位\n" +
@@ -958,8 +965,8 @@ public class AiChannelService
             "<code>/reject</code> — 拒绝工具调用\n\n" +
             "直接发送消息即可与我对话。";
         var plain =
-            $"我是 Justitia（Libra-Nextgen AI 助手）。\n" +
-            $"频道档位：{tier}\n\n" +
+            $"我是 Justitia\n" +
+            $"目前权限档位：{tier}\n\n" +
             "可用指令：\n" +
             "/start 或 /help — 显示本帮助\n" +
             "/status — 查看绑定与档位\n" +

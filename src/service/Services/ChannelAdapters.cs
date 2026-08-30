@@ -110,6 +110,13 @@ public interface IAiChannelAdapter
     Task SendApprovalAsync(AiChannel channel, string externalId, string html, string plain, string sessionId, string toolCallId, CancellationToken ct) =>
         SendTextAsync(channel, externalId, plain, ct);
 
+    /// <summary>
+    /// 审批决策完成后删除审批消息（用户已批准/拒绝，无需保留）。
+    /// 仅支持原生按钮的频道实现；默认 no-op。
+    /// </summary>
+    Task DeleteApprovalMessageAsync(AiChannel channel, string sessionId, string toolCallId, CancellationToken ct) =>
+        Task.CompletedTask;
+
     /// <summary>连通性自检（设置页"测试连接"）。返回 (ok, message)。</summary>
     Task<(bool Ok, string Message)> TestAsync(AiChannel channel, CancellationToken ct);
 
@@ -159,6 +166,8 @@ public class TelegramChannelAdapter : IAiChannelAdapter
     private readonly ConcurrentDictionary<string, ITelegramBotClient> _clients = new();
     /// <summary>审批按钮令牌表：token → 审批上下文（TTL 10 分钟）。</summary>
     private readonly ConcurrentDictionary<string, ApprovalButton> _approvalButtons = new();
+    /// <summary>待删除的审批消息：sessionId:toolCallId → (chatId, messageId)。决策完成后删除。</summary>
+    private readonly ConcurrentDictionary<string, (string ChatId, int MessageId)> _pendingApprovalMessages = new();
 
     public TelegramChannelAdapter(ILogger<TelegramChannelAdapter> logger)
     {
@@ -227,13 +236,31 @@ public class TelegramChannelAdapter : IAiChannelAdapter
     public async Task SendApprovalAsync(AiChannel channel, string externalId, string html, string plain, string sessionId, string toolCallId, CancellationToken ct)
     {
         var markup = BuildApprovalMarkup(channel.Id, externalId, sessionId, toolCallId);
+        Message sent;
         try
         {
-            await Bot(channel).SendMessage(externalId, html, parseMode: ParseMode.Html, replyMarkup: markup, cancellationToken: ct);
+            sent = await Bot(channel).SendMessage(externalId, html, parseMode: ParseMode.Html, replyMarkup: markup, cancellationToken: ct);
         }
         catch (Exception)
         {
-            await Bot(channel).SendMessage(externalId, plain, replyMarkup: markup, cancellationToken: ct);
+            sent = await Bot(channel).SendMessage(externalId, plain, replyMarkup: markup, cancellationToken: ct);
+        }
+        // 记录审批消息：决策完成后据此删除。
+        _pendingApprovalMessages[$"{sessionId}:{toolCallId}"] = (externalId, sent.Id);
+    }
+
+    /// <summary>审批决策完成：删除审批消息（用户已批准/拒绝，无需保留）。</summary>
+    public async Task DeleteApprovalMessageAsync(AiChannel channel, string sessionId, string toolCallId, CancellationToken ct)
+    {
+        var key = $"{sessionId}:{toolCallId}";
+        if (!_pendingApprovalMessages.TryRemove(key, out var m)) return;
+        try
+        {
+            await Bot(channel).DeleteMessage(m.ChatId, m.MessageId, ct);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "Failed to delete approval message {MessageId} (session {Session})", m.MessageId, sessionId);
         }
     }
 
@@ -444,14 +471,18 @@ public class TelegramChannelAdapter : IAiChannelAdapter
                     await bot.AnswerCallbackQuery(action.CallbackQueryId,
                         result.Ok ? (action.Approved ? $"✅ 已批准（{action.Permit}）" : "❌ 已拒绝") : result.Message,
                         showAlert: !result.Ok, cancellationToken: ct);
-                    // 按钮已处理：移除键盘，避免重复点击。
-                    try
+                    if (result.Ok)
                     {
-                        await bot.EditMessageReplyMarkup(action.ChatId, action.MessageId, replyMarkup: null, cancellationToken: ct);
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.LogDebug(ex, "Failed to clear approval keyboard (message {MessageId})", action.MessageId);
+                        // 决策完成：删除审批消息（用户已批准/拒绝，无需保留）。
+                        try
+                        {
+                            await bot.DeleteMessage(action.ChatId, action.MessageId, ct);
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.LogDebug(ex, "Failed to delete approval message (message {MessageId})", action.MessageId);
+                        }
+                        _pendingApprovalMessages.TryRemove($"{action.SessionId}:{action.ToolCallId}", out _);
                     }
                 }
                 catch (Exception ex)
