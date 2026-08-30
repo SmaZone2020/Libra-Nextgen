@@ -117,9 +117,13 @@ public class AiChannelBindCode
     public string BoundUserName { get; set; } = "";
     /// <summary>绑定码 SHA-256 哈希。</summary>
     public string CodeHash { get; set; } = "";
+    /// <summary>绑定码明文尾 4 位（列表展示用，非敏感）。</summary>
+    public string CodeTail { get; set; } = "";
     public DateTime ExpiresAt { get; set; } = DateTime.UtcNow.AddMinutes(15);
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime? UsedAt { get; set; }
+    /// <summary>管理员作废时间（作废后不可再绑定）。</summary>
+    public DateTime? RevokedAt { get; set; }
     public string? UsedByExternalId { get; set; }
     public string? UsedByExternalName { get; set; }
 }

@@ -129,6 +129,21 @@ public class AiChannelController : ControllerBase
     public async Task<IActionResult> ListUsers(string id, CancellationToken ct)
         => Ok(await _channels.ListUsersAsync(id, ct));
 
+    /// <summary>列出频道的全部绑定码（含已用/作废/过期状态，仅展示尾号）。</summary>
+    [HttpGet("{id}/bind-codes")]
+    [Authorize(Roles = "Admin")]
+    public async Task<IActionResult> ListBindCodes(string id, CancellationToken ct)
+        => Ok(await _channels.ListBindCodesAsync(id, ct));
+
+    /// <summary>作废一个未使用的绑定码（已使用/已作废返回错误）。</summary>
+    [HttpDelete("{id}/bind-codes/{codeId}")]
+    [Authorize(Roles = "Admin")]
+    public async Task<IActionResult> RevokeBindCode(string id, string codeId, CancellationToken ct)
+    {
+        var ok = await _channels.RevokeBindCodeAsync(id, codeId, ct);
+        return ok ? Ok(new { revoked = true }) : BadRequest(new { error = "绑定码不存在、已使用或已作废" });
+    }
+
     /// <summary>调整绑定用户的档位覆盖（body.tier 为 null 时清除覆盖，回落频道默认档位）。</summary>
     [HttpPut("users/{channelUserId}/tier")]
     [Authorize(Roles = "Admin")]

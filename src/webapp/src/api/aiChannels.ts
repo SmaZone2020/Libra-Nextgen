@@ -61,6 +61,20 @@ export interface AiBindCode {
   bindUrl?: string | null;
 }
 
+/** 绑定码记录（列表展示；仅尾号可见）。 */
+export interface AiBindCodeInfo {
+  id: string;
+  boundUserId: string;
+  boundUserName: string;
+  /** 绑定码明文尾 4 位（非敏感，仅用于识别）。 */
+  codeTail: string;
+  createdAt: string;
+  expiresAt: string;
+  usedAt?: string | null;
+  revokedAt?: string | null;
+  usedByExternalName?: string | null;
+}
+
 // ── API ──────────────────────────────────────────────────────────────────
 
 export async function getAiChannels(): Promise<AiChannel[]> {
@@ -93,6 +107,16 @@ export async function createAiBindCode(channelId: string, userId: string): Promi
 
 export async function getAiChannelUsers(channelId: string): Promise<AiChannelUser[]> {
   return api.get<AiChannelUser[]>(`/ai/channels/${channelId}/users`);
+}
+
+/** 列出频道的全部绑定码（含状态）。 */
+export async function getAiChannelBindCodes(channelId: string): Promise<AiBindCodeInfo[]> {
+  return api.get<AiBindCodeInfo[]>(`/ai/channels/${channelId}/bind-codes`);
+}
+
+/** 作废一个未使用的绑定码。 */
+export async function revokeAiBindCode(channelId: string, codeId: string): Promise<void> {
+  await api.delete<void>(`/ai/channels/${channelId}/bind-codes/${codeId}`);
 }
 
 /** 设置绑定用户档位覆盖；tier 为 null 时清除覆盖。 */

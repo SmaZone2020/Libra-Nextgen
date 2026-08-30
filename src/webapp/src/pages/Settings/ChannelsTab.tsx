@@ -19,11 +19,14 @@ import { ArrowsRotateLeft, Copy, Key, Pencil, Persons, Plus, TrashBin } from '@g
 import {
   createAiBindCode,
   deleteAiChannel,
+  getAiChannelBindCodes,
   getAiChannelUsers,
   getAiChannels,
+  revokeAiBindCode,
   setAiChannelUserTier,
   unbindAiChannelUser,
   type AiBindCode,
+  type AiBindCodeInfo,
   type AiChannel,
   type AiChannelUser,
 } from '../../api/aiChannels';
@@ -231,7 +234,7 @@ export default function ChannelsTab() {
   );
 }
 
-/** 生成一次性绑定码：选择控制台账号 → 生成 → 展示（15 分钟有效）。 */
+/** 生成一次性绑定码：选择控制台账号 → 生成 → 展示（15 分钟有效）；可查看并作废未使用码。 */
 function BindCodeModal({ channel, onClose }: { channel: AiChannel; onClose: () => void }) {
   const { t } = useTranslation();
   const [accounts, setAccounts] = useState<{ id: string; username: string }[]>([]);
@@ -239,6 +242,16 @@ function BindCodeModal({ channel, onClose }: { channel: AiChannel; onClose: () =
   const [generating, setGenerating] = useState(false);
   const [result, setResult] = useState<AiBindCode | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [codes, setCodes] = useState<AiBindCodeInfo[]>([]);
+  const [revoking, setRevoking] = useState<string | null>(null);
+
+  const loadCodes = useCallback(async () => {
+    try {
+      setCodes(await getAiChannelBindCodes(channel.id));
+    } catch {
+      /* ignore */
+    }
+  }, [channel.id]);
 
   useEffect(() => {
     void listAccounts()
@@ -248,7 +261,8 @@ function BindCodeModal({ channel, onClose }: { channel: AiChannel; onClose: () =
         if (first) setUserId(first.id);
       })
       .catch(() => undefined);
-  }, []);
+    void loadCodes();
+  }, [loadCodes]);
 
   const handleGenerate = async () => {
     if (!userId) return;
@@ -257,6 +271,7 @@ function BindCodeModal({ channel, onClose }: { channel: AiChannel; onClose: () =
     setResult(null);
     try {
       setResult(await createAiBindCode(channel.id, userId));
+      await loadCodes();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -264,8 +279,29 @@ function BindCodeModal({ channel, onClose }: { channel: AiChannel; onClose: () =
     }
   };
 
+  const handleRevoke = async (code: AiBindCodeInfo) => {
+    if (!window.confirm(t('channels.revokeCodeConfirm', { tail: code.codeTail }))) return;
+    setRevoking(code.id);
+    try {
+      await revokeAiBindCode(channel.id, code.id);
+      await loadCodes();
+    } catch (e) {
+      alert(e instanceof Error ? e.message : String(e));
+    } finally {
+      setRevoking(null);
+    }
+  };
+
   const handleCopy = () => {
     if (result) void navigator.clipboard?.writeText(result.code).catch(() => undefined);
+  };
+
+  const now = Date.now();
+  const statusOf = (c: AiBindCodeInfo): { label: string; color: string; revocable: boolean } => {
+    if (c.revokedAt) return { label: t('channels.codeRevoked'), color: 'text-default-400', revocable: false };
+    if (c.usedAt) return { label: t('channels.codeUsed'), color: 'text-success', revocable: false };
+    if (new Date(c.expiresAt).getTime() <= now) return { label: t('channels.codeExpired'), color: 'text-default-400', revocable: false };
+    return { label: t('channels.codePending'), color: 'text-warning', revocable: true };
   };
 
   return (
@@ -332,6 +368,47 @@ function BindCodeModal({ channel, onClose }: { channel: AiChannel; onClose: () =
                   </p>
                 </div>
               )}
+
+              {/* 绑定码列表（可作废未使用码） */}
+              <div>
+                <Label className="mb-1.5 block text-sm">{t('channels.codeList')}</Label>
+                {codes.length === 0 ? (
+                  <div className="py-4 text-center text-xs text-default-400">{t('channels.noCodes')}</div>
+                ) : (
+                  <div className="max-h-56 space-y-1.5 overflow-y-auto">
+                    {codes.map((c) => {
+                      const st = statusOf(c);
+                      return (
+                        <div
+                          key={c.id}
+                          className="flex items-center gap-2 rounded-xl border border-default-200 px-3 py-2 dark:border-default-800"
+                        >
+                          <div className="min-w-0 flex-1">
+                            <span className="font-mono text-xs">
+                              ····{c.codeTail}
+                              <span className={`ml-2 ${st.color}`}>{st.label}</span>
+                            </span>
+                            <div className="truncate text-[11px] text-default-500">
+                              {c.boundUserName} · {new Date(c.createdAt).toLocaleString()}
+                            </div>
+                          </div>
+                          {st.revocable && (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="text-danger"
+                              isDisabled={revoking === c.id}
+                              onPress={() => void handleRevoke(c)}
+                            >
+                              {revoking === c.id ? <Spinner size="sm" /> : t('channels.revoke')}
+                            </Button>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
             </div>
           </Modal.Body>
           <Modal.Footer>

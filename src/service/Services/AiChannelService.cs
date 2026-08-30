@@ -343,6 +343,7 @@ public class AiChannelService
             BoundUserId = user.Id,
             BoundUserName = user.Username,
             CodeHash = HashCode(code),
+            CodeTail = code.Length >= 4 ? code[^4..] : code,
             ExpiresAt = expiresAt,
         }, cancellationToken: ct);
         _logger.LogInformation("Bind code created for channel {Channel} → user {User}", channelId, user.Username);
@@ -360,6 +361,30 @@ public class AiChannelService
     {
         return await ChannelUsers.Find(x => x.ChannelId == channelId)
             .Sort(Builders<AiChannelUser>.Sort.Descending(u => u.BoundAt)).ToListAsync(ct);
+    }
+
+    /// <summary>列出频道的全部绑定码（新→旧）。</summary>
+    public async Task<List<AiChannelBindCode>> ListBindCodesAsync(string channelId, CancellationToken ct = default)
+    {
+        return await BindCodes.Find(x => x.ChannelId == channelId)
+            .Sort(Builders<AiChannelBindCode>.Sort.Descending(b => b.CreatedAt)).ToListAsync(ct);
+    }
+
+    /// <summary>作废一个未使用的绑定码（已使用的不可作废）。返回 false 表示不存在或已使用。</summary>
+    public async Task<bool> RevokeBindCodeAsync(string channelId, string codeId, CancellationToken ct = default)
+    {
+        var r = await BindCodes.UpdateOneAsync(
+            x => x.Id == codeId && x.ChannelId == channelId && x.UsedAt == null && x.RevokedAt == null,
+            Builders<AiChannelBindCode>.Update.Set(b => b.RevokedAt, DateTime.UtcNow),
+            cancellationToken: ct);
+        if (r.MatchedCount == 0) return false;
+        var bc = await BindCodes.Find(x => x.Id == codeId).FirstOrDefaultAsync(ct);
+        if (bc != null)
+        {
+            await _audit.LogAsync(bc.BoundUserId, bc.BoundUserName, "AI channel bind code revoke", "ai.channel.bind.revoke",
+                null, $"channel={channelId} tail={bc.CodeTail}", "console", RiskLevel.Safe);
+        }
+        return true;
     }
 
     public async Task<bool> SetUserTierAsync(string channelUserId, int? tier, CancellationToken ct = default)
@@ -641,7 +666,7 @@ public class AiChannelService
         var state = await CreateModelMenuStateAsync(ch, ct);
         if (state == null)
         {
-            await TrySendAsync(ch, replyTo ?? externalId, "⚠️ 未配置可用的 AI 供应商，请联系管理员。", ct);
+            await TrySendAsync(ch, replyTo ?? externalId, "⚠️ 未配置可用的 AI 供应商。", ct);
             return;
         }
         var key = $"{ch.Id}|{externalId}";
@@ -1034,8 +1059,8 @@ public class AiChannelService
         {
             // 已绑定：明确提示，避免误读为"绑定成功"。
             await TrySendRichAsync(ch, Target(msg),
-                $"你已经绑定到账号 <b>{HtmlEncode(existing.BoundUserName)}</b>，无需重复绑定。\n如需更换，请联系管理员解绑。",
-                $"你已经绑定到账号「{existing.BoundUserName}」，无需重复绑定。\n如需更换，请联系管理员解绑。", ct);
+                $"你已经绑定到账号 <b>{HtmlEncode(existing.BoundUserName)}</b>，无需重复绑定。",
+                $"你已经绑定到账号「{existing.BoundUserName}」，无需重复绑定。", ct);
             return;
         }
         if (string.IsNullOrWhiteSpace(code))
@@ -1047,10 +1072,10 @@ public class AiChannelService
         var now = DateTime.UtcNow;
         var hash = HashCode(code);
         var bc = await BindCodes.Find(x => x.ChannelId == ch.Id && x.CodeHash == hash
-                && x.ExpiresAt > now && x.UsedAt == null).FirstOrDefaultAsync(ct);
+                && x.ExpiresAt > now && x.UsedAt == null && x.RevokedAt == null).FirstOrDefaultAsync(ct);
         if (bc == null)
         {
-            await TrySendAsync(ch, Target(msg), "❌ 绑定码无效或已过期，请联系管理员重新生成。", ct);
+            await TrySendAsync(ch, Target(msg), "❌ 绑定码无效或已过期，请重新生成。", ct);
             return;
         }
 
@@ -1064,7 +1089,7 @@ public class AiChannelService
             cancellationToken: ct);
         if (mark.ModifiedCount == 0)
         {
-            await TrySendAsync(ch, Target(msg), "❌ 绑定码已被使用，请联系管理员重新生成。", ct);
+            await TrySendAsync(ch, Target(msg), "❌ 绑定码已被使用，请重新生成。", ct);
             return;
         }
 
@@ -1092,7 +1117,7 @@ public class AiChannelService
         var (providerId, model, _) = await ResolveProviderAsync(ch, ct);
         if (providerId == null)
         {
-            await TrySendAsync(ch, Target(msg), "⚠️ 未配置可用的 AI 供应商，请联系管理员。", ct);
+            await TrySendAsync(ch, Target(msg), "⚠️ 未配置可用的 AI 供应商", ct);
             return;
         }
 
