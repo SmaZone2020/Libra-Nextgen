@@ -41,7 +41,9 @@ export default function McpTab() {
             <p className="text-sm text-default-500">{t('mcp.desc')}</p>
           </div>
           <Switch isSelected={info.enabled} isDisabled={toggling} onChange={handleToggle}>
-            <Switch.Control><Switch.Thumb /></Switch.Control>
+            <Switch.Content>
+              <Switch.Control><Switch.Thumb /></Switch.Control>
+            </Switch.Content>
           </Switch>
         </div>
 

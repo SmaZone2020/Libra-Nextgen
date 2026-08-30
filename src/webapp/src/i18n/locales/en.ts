@@ -1058,10 +1058,9 @@ export default {
       clawAuthorize: 'Authorize',
       clawTokenHint: 'Paste a bot_token, or click "Authorize" to scan the QR and auto-fill it. The base URL is fixed to the official iLink endpoint.',
       clawQrLoading: 'Requesting authorization QR…',
-      clawQrHint: 'Scan with WeChat and confirm on your phone; the bot_token will be fetched and filled in automatically',
+      clawQrHint: 'Scan with WeChat and confirm on your phone',
       clawQrExpired: 'QR code expired — try again',
       clawQrSuccess: 'Authorized — bot_token filled in',
-      clawNoStream: 'WeChat does not support streaming output (iLink has no message editing); replies are sent as one message',
     },
   },
 };

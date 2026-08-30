@@ -156,8 +156,10 @@ export function ServiceTab() {
               <div className="flex flex-wrap items-end gap-2">
                 <Input value={nowFormat} onChange={(e) => setNowFormat((e.target as HTMLInputElement).value)} placeholder="format" className="w-56" />
                 <Switch isSelected={nowUtc} onChange={setNowUtc}>
-                  <Switch.Control><Switch.Thumb /></Switch.Control>
-                  <span className="text-sm">UTC</span>
+                  <Switch.Content>
+                    <Switch.Control><Switch.Thumb /></Switch.Control>
+                    <span className="text-sm">UTC</span>
+                  </Switch.Content>
                 </Switch>
               </div>
             )}

@@ -187,7 +187,9 @@ export default function AiTab() {
             <p className="text-sm text-default-500">{t('settings.aiMcpDesc')}</p>
           </div>
           <Switch isSelected={mcp?.toolsEnabled ?? false} onChange={(v) => void handleMcpToggle(v)}>
-            <Switch.Control><Switch.Thumb /></Switch.Control>
+            <Switch.Content>
+              <Switch.Control><Switch.Thumb /></Switch.Control>
+            </Switch.Content>
           </Switch>
         </div>
 

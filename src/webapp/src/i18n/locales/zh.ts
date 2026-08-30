@@ -1054,10 +1054,9 @@ export default {
       clawAuthorize: '授权',
       clawTokenHint: '可直接粘贴 bot_token，或点击"授权"扫码登录后自动回填。基座地址固定为官方地址，无需填写。',
       clawQrLoading: '正在获取授权二维码…',
-      clawQrHint: '请用微信扫码并在手机上确认授权，页面会自动获取并填入 bot_token',
+      clawQrHint: '请用微信扫码并在手机上确认授权',
       clawQrExpired: '二维码已过期，请重试',
       clawQrSuccess: '授权成功，bot_token 已自动填入',
-      clawNoStream: '微信不支持流式输出（iLink 无消息编辑能力），输出将一次性发送',
     },
   },
 };

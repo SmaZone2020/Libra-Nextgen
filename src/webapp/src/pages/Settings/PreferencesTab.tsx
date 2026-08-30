@@ -118,9 +118,11 @@ export default function PreferencesTab() {
             <p className="text-sm text-default-500">{t('settings.noticeSoundDesc')}</p>
           </div>
           <Switch isSelected={sound} onChange={handleSound}>
-            <Switch.Control>
-              <Switch.Thumb />
-            </Switch.Control>
+            <Switch.Content>
+              <Switch.Control>
+                <Switch.Thumb />
+              </Switch.Control>
+            </Switch.Content>
           </Switch>
         </div>
       </Card>

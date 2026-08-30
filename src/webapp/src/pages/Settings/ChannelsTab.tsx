@@ -172,7 +172,9 @@ export default function ChannelsTab() {
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
                   <Switch isSelected={ch.enabled} onChange={(v) => void handleToggle(ch, v)}>
-                    <Switch.Control><Switch.Thumb /></Switch.Control>
+                    <Switch.Content>
+                      <Switch.Control><Switch.Thumb /></Switch.Control>
+                    </Switch.Content>
                   </Switch>
                   <Tooltip delay={0}>
                     <Button size="sm" variant="tertiary" isIconOnly aria-label={t('channels.bindCode')}

@@ -391,28 +391,35 @@ export function ChannelFormModal({ open, editing, onClose, onSaved }: ChannelFor
                 </Select>
               </div>
               <div className="flex flex-wrap items-end gap-4">
-                <Switch isSelected={form.requireBind} onChange={(v) => patch({ requireBind: v })}>
-                  <Switch.Control><Switch.Thumb /></Switch.Control>
-                  <Label className="ml-2 text-sm">{t('channels.requireBind')}</Label>
-                </Switch>
+                {form.channelType === 'telegram' && (
+                  <Switch isSelected={form.requireBind} onChange={(v) => patch({ requireBind: v })}>
+                    <Switch.Content>
+                      <Switch.Control><Switch.Thumb /></Switch.Control>
+                      <Label className="ml-2 text-sm">{t('channels.requireBind')}</Label>
+                    </Switch.Content>
+                  </Switch>
+                )}
                 <Switch isSelected={form.showToolCalls} onChange={(v) => patch({ showToolCalls: v })}>
-                  <Switch.Control><Switch.Thumb /></Switch.Control>
-                  <Label className="ml-2 text-sm">{t('channels.showToolCalls')}</Label>
+                  <Switch.Content>
+                    <Switch.Control><Switch.Thumb /></Switch.Control>
+                    <Label className="ml-2 text-sm">{t('channels.showToolCalls')}</Label>
+                  </Switch.Content>
                 </Switch>
                 {form.channelType !== 'wechat-claw' && (
                   <Switch isSelected={form.streamOutput} onChange={(v) => patch({ streamOutput: v })}>
-                    <Switch.Control><Switch.Thumb /></Switch.Control>
-                    <Label className="ml-2 text-sm">{t('channels.streamOutput')}</Label>
+                    <Switch.Content>
+                      <Switch.Control><Switch.Thumb /></Switch.Control>
+                      <Label className="ml-2 text-sm">{t('channels.streamOutput')}</Label>
+                    </Switch.Content>
                   </Switch>
                 )}
                 {form.channelType === 'telegram' && (
                   <Switch isSelected={form.allowInGroups} onChange={(v) => patch({ allowInGroups: v })}>
-                    <Switch.Control><Switch.Thumb /></Switch.Control>
-                    <Label className="ml-2 text-sm">{t('channels.allowInGroups')}</Label>
+                    <Switch.Content>
+                      <Switch.Control><Switch.Thumb /></Switch.Control>
+                      <Label className="ml-2 text-sm">{t('channels.allowInGroups')}</Label>
+                    </Switch.Content>
                   </Switch>
-                )}
-                {form.channelType === 'wechat-claw' && (
-                  <p className="w-full text-xs text-default-500">{t('channels.clawNoStream')}</p>
                 )}
               </div>
             </div>

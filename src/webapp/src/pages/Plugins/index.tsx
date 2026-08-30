@@ -249,7 +249,9 @@ export default function PluginsPage() {
                           {t('plugins.installedAt')}: {new Date(p.installedAt).toLocaleString()}
                         </span>
                         <Switch isSelected={p.enabled} onChange={(v) => handleToggle(p, v)}>
-                          <Switch.Control><Switch.Thumb /></Switch.Control>
+                          <Switch.Content>
+                            <Switch.Control><Switch.Thumb /></Switch.Control>
+                          </Switch.Content>
                         </Switch>
                       </div>
                     }

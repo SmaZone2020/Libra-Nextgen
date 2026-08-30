@@ -89,9 +89,11 @@ export default function SecurityTab() {
             <p className="text-sm text-default-500">{t('settings.bindLoopbackOnlyDesc')}</p>
           </div>
           <Switch isSelected={bindLoopbackOnly} onChange={setBindLoopbackOnly}>
-            <Switch.Control>
-              <Switch.Thumb />
-            </Switch.Control>
+            <Switch.Content>
+              <Switch.Control>
+                <Switch.Thumb />
+              </Switch.Control>
+            </Switch.Content>
           </Switch>
         </div>
       </Card>
@@ -109,9 +111,11 @@ export default function SecurityTab() {
           </div>
           <div className="flex flex-col items-end gap-2">
             <Switch isSelected={openLan} onChange={setOpenLan}>
-              <Switch.Control>
-                <Switch.Thumb />
-              </Switch.Control>
+              <Switch.Content>
+                <Switch.Control>
+                  <Switch.Thumb />
+                </Switch.Control>
+              </Switch.Content>
             </Switch>
             <Button size="sm" variant="primary" onPress={saveSecurity}>
               {saved ? t('settings.backendPortSaved') : t('common.save')}
