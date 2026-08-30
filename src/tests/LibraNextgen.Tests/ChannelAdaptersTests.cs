@@ -191,20 +191,25 @@ public class ChannelAdaptersTests
         Assert.Null(TelegramChannelAdapter.TryParseMessage(chOff, GroupMsg("hello @LibraNT_Bot", true), "LibraNT_Bot"));
         // 开关开启：未提及 → 忽略。
         Assert.Null(TelegramChannelAdapter.TryParseMessage(chOn, GroupMsg("hello", false), "LibraNT_Bot"));
-        // 提及 bot → 处理，标记 IsGroup。
+        // 提及 bot → 处理，标记 IsGroup；身份 = 发送者 from.id，回复目标 = 群 chat id。
         var m = TelegramChannelAdapter.TryParseMessage(chOn, GroupMsg("hello @LibraNT_Bot", true), "LibraNT_Bot");
         Assert.NotNull(m);
         Assert.True(m!.IsGroup);
-        Assert.Equal("-100123", m.ExternalId);
-        // /bind 命令无需提及（未绑定用户绑定引导）。
+        Assert.Equal("42", m.ExternalId);
+        Assert.Equal("-100123", m.ReplyTo);
+        // /bind 命令无需提及（未绑定用户绑定引导），身份同样按用户走。
         var b = TelegramChannelAdapter.TryParseMessage(chOn, GroupMsg("/bind ABC12345", false), "LibraNT_Bot");
         Assert.NotNull(b);
         Assert.True(b!.IsGroup);
+        Assert.Equal("42", b.ExternalId);
+        Assert.Equal("-100123", b.ReplyTo);
         Assert.Equal("/bind ABC12345", b.Text);
         // 私聊不受群组开关影响。
         var priv = TelegramChannelAdapter.TryParseMessage(chOff, TextMessage(1, 1, "hi", 5), "LibraNT_Bot");
         Assert.NotNull(priv);
         Assert.False(priv!.IsGroup);
+        Assert.Equal("1", priv.ExternalId);
+        Assert.Null(priv.ReplyTo);
     }
 
     // ── 菜单按钮回调解析 ──────────────────────────────────────────────────

@@ -35,7 +35,10 @@ public static class AiChannelTypes
 public sealed class ChannelInboundMessage
 {
     public required string ChannelId { get; init; }
+    /// <summary>频道侧身份 ID（绑定/会话/权限键）：私聊 = chat id；群组 = 发送者 from id。</summary>
     public required string ExternalId { get; init; }
+    /// <summary>回复目标（发送地址）：群组 = 群 chat id；私聊 = null（用 ExternalId）。</summary>
+    public string? ReplyTo { get; init; }
     public string ExternalName { get; init; } = "";
     public required string Text { get; init; }
     /// <summary>
@@ -71,6 +74,7 @@ public sealed class ChannelMedia
 public sealed class CallbackAction
 {
     public required string ChannelId { get; init; }
+    /// <summary>身份 ID（群组 = 点击者 from id；私聊 = chat id）。</summary>
     public required string ExternalId { get; init; }
     public required string SessionId { get; init; }
     public required string ToolCallId { get; init; }
@@ -79,6 +83,7 @@ public sealed class CallbackAction
     public required string Permit { get; init; }
     /// <summary>回调回执所需（AnswerCallbackQuery / 编辑消息清按钮）。</summary>
     public required string CallbackQueryId { get; init; }
+    /// <summary>发送目标（回复地址；群组 = 群 chat id）。</summary>
     public required string ChatId { get; init; }
     public int MessageId { get; init; }
 }
@@ -97,9 +102,12 @@ public sealed class CallbackResult
 /// <summary>频道菜单按钮回调（模型分页/选择/搜索、档位切换），频道无关。</summary>
 public sealed class ChannelMenuAction
 {
-    /// <summary>model-nav | model-select | model-search | tier-select。</summary>
+    /// <summary>model-nav | model-select | model-search | tier-select | help-* | model-*。</summary>
     public required string Kind { get; init; }
     public required string ChannelId { get; init; }
+    /// <summary>身份 ID（群组 = 点击者 from id；私聊 = chat id）。</summary>
+    public required string ExternalId { get; init; }
+    /// <summary>发送目标（回复地址；群组 = 群 chat id）。</summary>
     public required string ChatId { get; init; }
     public required string CallbackQueryId { get; init; }
     public int MessageId { get; init; }
@@ -455,9 +463,9 @@ public class TelegramChannelAdapter : IAiChannelAdapter
             _approvalButtons.TryRemove(token, out _);
             return null;
         }
-        // 归属校验：按钮只能被发起对话的外部用户点击（私聊 chat_id == 用户 id）。
-        var chatId = msg.Chat.Id.ToString();
-        if (btn.ChannelId != channel.Id || btn.ExternalId != chatId) return null;
+        // 归属校验：按钮只能被发起对话的外部用户点击（群组按 from.id，私聊 chat_id == from id）。
+        var identityId = cq.From?.Id.ToString() ?? msg.Chat.Id.ToString();
+        if (btn.ChannelId != channel.Id || btn.ExternalId != identityId) return null;
 
         var permit = "one-time";
         if (approved && parts.Length > 2)
@@ -478,7 +486,7 @@ public class TelegramChannelAdapter : IAiChannelAdapter
             Approved = approved,
             Permit = permit,
             CallbackQueryId = cq.Id,
-            ChatId = chatId,
+            ChatId = msg.Chat.Id.ToString(),
             MessageId = msg.MessageId,
         };
     }
@@ -747,6 +755,8 @@ public class TelegramChannelAdapter : IAiChannelAdapter
         {
             Kind = kind,
             ChannelId = channel.Id,
+            // 群组按点击者身份（from.id）走绑定/会话/权限，ChatId 仅作发送目标。
+            ExternalId = cq.From?.Id.ToString() ?? chatId,
             ChatId = chatId,
             CallbackQueryId = cq.Id,
             MessageId = msg.Id,
@@ -756,6 +766,8 @@ public class TelegramChannelAdapter : IAiChannelAdapter
 
     /// <summary>
     /// 把 Telegram 文本消息规范化为入站消息（纯函数，可测试）。
+    /// 身份模型：私聊 ExternalId = chat id；群组 ExternalId = 发送者 from id
+    /// （绑定/会话/权限按用户走），ReplyTo = 群 chat id（回复目标）。
     /// 群组过滤：AllowInGroups=false 时全部丢弃；开启时仅处理 @提及 bot 的
     /// 消息与 /bind 命令（未绑定用户的绑定引导），其余群组消息忽略。
     /// </summary>
@@ -781,7 +793,9 @@ public class TelegramChannelAdapter : IAiChannelAdapter
         return new ChannelInboundMessage
         {
             ChannelId = channel.Id,
-            ExternalId = chatId,
+            // 群组：身份 = 发送者用户 ID；回复目标 = 群 ID。
+            ExternalId = isGroup ? (msg.From?.Id.ToString() ?? chatId) : chatId,
+            ReplyTo = isGroup ? chatId : null,
             ExternalName = name,
             Text = msg.Text,
             // 幂等去重键：message_id 在单个 chat 内唯一，配合入站去重防御重放。

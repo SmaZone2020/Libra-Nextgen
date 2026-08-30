@@ -412,14 +412,14 @@ public class AiChannelService
             menuState.Query = text;
             menuState.Page = 0;
             if (msg.OriginMessageId is { } originId)
-                await AdapterFor(ch.ChannelType).DeleteMessageAsync(ch, msg.ExternalId, originId, ct);
-            await RefreshModelMenuAsync(ch, msg.ExternalId, menuState, ct);
+                await AdapterFor(ch.ChannelType).DeleteMessageAsync(ch, Target(msg), originId, ct);
+            await RefreshModelMenuAsync(ch, Target(msg), menuState, ct);
             return;
         }
 
         if (IsRateLimited($"{ch.Id}|{msg.ExternalId}"))
         {
-            await TrySendAsync(ch, msg.ExternalId, "⏳ 操作过于频繁，请 1 分钟后再试。", ct);
+            await TrySendAsync(ch, Target(msg), "⏳ 操作过于频繁，请 1 分钟后再试。", ct);
             return;
         }
 
@@ -457,7 +457,7 @@ public class AiChannelService
             if (ch.RequireBind)
             {
                 var (h, p) = BuildBindHelp(ch);
-                await TrySendRichAsync(ch, msg.ExternalId, h, p, ct);
+                await TrySendRichAsync(ch, Target(msg), h, p, ct);
                 return;
             }
             // 访客模式（RequireBind=false）：会话归属合成用户，档位强制 Cognitio，
@@ -482,6 +482,9 @@ public class AiChannelService
     private static string GuestUserId(string channelId, string externalId) => $"{GuestPrefix}{channelId}:{externalId}";
     private static bool IsGuestUserId(string userId) => userId.StartsWith(GuestPrefix, StringComparison.Ordinal);
 
+    /// <summary>消息的回复目标（发送地址）：群组 = 群 chat id；私聊 = 身份 id。</summary>
+    private static string Target(ChannelInboundMessage msg) => msg.ReplyTo ?? msg.ExternalId;
+
     private bool IsRateLimited(string key)
     {
         var now = DateTime.UtcNow;
@@ -499,6 +502,9 @@ public class AiChannelService
     {
         var parts = text.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         var cmd = parts.Length > 0 ? parts[0].ToLowerInvariant() : "";
+        // 群组命令常带 @bot 后缀（/help@LibraNT_Bot）：剥离后匹配。
+        var atIdx = cmd.IndexOf('@');
+        if (atIdx > 0) cmd = cmd[..atIdx];
         switch (cmd)
         {
             case "/start":
@@ -506,13 +512,13 @@ public class AiChannelService
                 // /start 只做简单介绍：Telegram 附带常驻键盘（Help），完整指令见 /help。
                 if (ch.ChannelType == AiChannelTypes.Telegram)
                 {
-                    await AdapterFor(ch.ChannelType).SendKeyboardAsync(ch, msg.ExternalId,
+                    await AdapterFor(ch.ChannelType).SendKeyboardAsync(ch, Target(msg),
                         "我是 Justitia。\n输入 <code>/help</code> 查看可用指令。",
                         "我是 Justitia。\n输入 /help 查看可用指令。", new[] { "Help" }, ct);
                 }
                 else
                 {
-                    await TrySendRichAsync(ch, msg.ExternalId,
+                    await TrySendRichAsync(ch, Target(msg),
                         "我是 Justitia。\n输入 <code>/help</code> 查看可用指令。",
                         "我是 Justitia。\n输入 /help 查看可用指令。", ct);
                 }
@@ -533,11 +539,11 @@ public class AiChannelService
                             ("📊 状态", "help:status"),
                         },
                     };
-                    await AdapterFor(ch.ChannelType).SendMenuAsync(ch, msg.ExternalId, h, p, helpRows, ct);
+                    await AdapterFor(ch.ChannelType).SendMenuAsync(ch, Target(msg), h, p, helpRows, ct);
                 }
                 else
                 {
-                    await TrySendRichAsync(ch, msg.ExternalId, h, p, ct);
+                    await TrySendRichAsync(ch, Target(msg), h, p, ct);
                 }
                 break;
             }
@@ -547,7 +553,7 @@ public class AiChannelService
                     .FirstOrDefaultAsync(ct);
                 var tier = user == null ? ch.DefaultTier : Math.Clamp(user.TierOverride ?? ch.DefaultTier, 0, 3);
                 var bound = user == null ? "未绑定" : user.BoundUserName;
-                await TrySendRichAsync(ch, msg.ExternalId,
+                await TrySendRichAsync(ch, Target(msg),
                     $"绑定：<b>{HtmlEncode(bound)}</b>\n档位：<b>{HtmlEncode(TierName(tier))}</b>",
                     $"绑定：{bound}\n档位：{TierName(tier)}", ct);
                 break;
@@ -555,33 +561,33 @@ public class AiChannelService
             case "/bind":
                 if (parts.Length < 2)
                 {
-                    await TrySendRichAsync(ch, msg.ExternalId,
+                    await TrySendRichAsync(ch, Target(msg),
                         "用法：<code>/bind 绑定码</code>", "用法：/bind 绑定码", ct);
                     return;
                 }
                 await TryBindAsync(ch, msg, parts[1], ct);
                 break;
             case "/model":
-                await HandleModelCommandAsync(ch, msg.ExternalId, ct);
+                await HandleModelCommandAsync(ch, msg.ExternalId, msg.ReplyTo, ct);
                 break;
             case "/tier":
             {
                 // /tier：新发档位选择菜单（含返回）。
                 if (ch.ChannelType != AiChannelTypes.Telegram)
                 {
-                    await TrySendAsync(ch, msg.ExternalId, "该功能需要 Telegram 内联菜单支持。", ct);
+                    await TrySendAsync(ch, Target(msg), "该功能需要 Telegram 内联菜单支持。", ct);
                     break;
                 }
                 var tu = await ChannelUsers.Find(x => x.ChannelId == ch.Id && x.ExternalId == msg.ExternalId)
                     .FirstOrDefaultAsync(ct);
                 if (tu == null)
                 {
-                    await TrySendAsync(ch, msg.ExternalId, "请先绑定控制台账号（/bind 绑定码）。", ct);
+                    await TrySendAsync(ch, Target(msg), "请先绑定控制台账号（/bind 绑定码）。", ct);
                     break;
                 }
                 var tcurrent = Math.Clamp(tu.TierOverride ?? ch.DefaultTier, 0, 3);
                 var (th, tp, tb) = BuildTierMenu(ch, tcurrent);
-                await AdapterFor(ch.ChannelType).SendMenuAsync(ch, msg.ExternalId, th, tp, tb, ct);
+                await AdapterFor(ch.ChannelType).SendMenuAsync(ch, Target(msg), th, tp, tb, ct);
                 break;
             }
             case "/approve":
@@ -600,7 +606,7 @@ public class AiChannelService
             default:
             {
                 var (h, p) = BuildHelp(ch);
-                await TrySendRichAsync(ch, msg.ExternalId, h, p, ct);
+                await TrySendRichAsync(ch, Target(msg), h, p, ct);
                 break;
             }
         }
@@ -609,23 +615,23 @@ public class AiChannelService
     // ── 模型/档位菜单 ────────────────────────────────────────────────────
 
     /// <summary>/model：发送供应商选择菜单（点击供应商 → 选择模型）。</summary>
-    private async Task HandleModelCommandAsync(AiChannel ch, string externalId, CancellationToken ct)
+    private async Task HandleModelCommandAsync(AiChannel ch, string externalId, string? replyTo, CancellationToken ct)
     {
         if (ch.ChannelType != AiChannelTypes.Telegram)
         {
-            await TrySendAsync(ch, externalId, "该功能需要 Telegram 内联菜单支持。", ct);
+            await TrySendAsync(ch, replyTo ?? externalId, "该功能需要 Telegram 内联菜单支持。", ct);
             return;
         }
         var state = await CreateModelMenuStateAsync(ch, ct);
         if (state == null)
         {
-            await TrySendAsync(ch, externalId, "⚠️ 未配置可用的 AI 供应商，请联系管理员。", ct);
+            await TrySendAsync(ch, replyTo ?? externalId, "⚠️ 未配置可用的 AI 供应商，请联系管理员。", ct);
             return;
         }
         var key = $"{ch.Id}|{externalId}";
         _modelMenus[key] = state;
         var (html, plain, buttons) = BuildProviderMenu(state);
-        var menuId = await AdapterFor(ch.ChannelType).SendMenuAsync(ch, externalId, html, plain, buttons, ct);
+        var menuId = await AdapterFor(ch.ChannelType).SendMenuAsync(ch, replyTo ?? externalId, html, plain, buttons, ct);
         if (menuId != 0)
         {
             state.MessageId = menuId;
@@ -633,7 +639,7 @@ public class AiChannelService
         else
         {
             _modelMenus.TryRemove(key, out _);
-            await TrySendAsync(ch, externalId, "当前频道不支持菜单按钮，请在控制台切换模型。", ct);
+            await TrySendAsync(ch, replyTo ?? externalId, "当前频道不支持菜单按钮，请在控制台切换模型。", ct);
         }
     }
 
@@ -777,7 +783,7 @@ public class AiChannelService
             var ch = await GetChannelAsync(action.ChannelId, includeSecrets: false, ct);
             if (ch == null || !ch.Enabled) return;
             var adapter = AdapterFor(ch.ChannelType);
-            var key = $"{ch.Id}|{action.ChatId}";
+            var key = $"{ch.Id}|{action.ExternalId}";
 
             switch (action.Kind)
             {
@@ -807,7 +813,7 @@ public class AiChannelService
                 case "help-tier":
                     // 编辑 help 消息 → 档位选择页。
                 {
-                    var user = await ChannelUsers.Find(x => x.ChannelId == ch.Id && x.ExternalId == action.ChatId)
+                    var user = await ChannelUsers.Find(x => x.ChannelId == ch.Id && x.ExternalId == action.ExternalId)
                         .FirstOrDefaultAsync(ct);
                     if (user == null)
                     {
@@ -823,11 +829,11 @@ public class AiChannelService
                 case "help-status":
                     // 编辑 help 消息 → 状态页（含返回）。
                 {
-                    var user = await ChannelUsers.Find(x => x.ChannelId == ch.Id && x.ExternalId == action.ChatId)
+                    var user = await ChannelUsers.Find(x => x.ChannelId == ch.Id && x.ExternalId == action.ExternalId)
                         .FirstOrDefaultAsync(ct);
                     var tier = user == null ? ch.DefaultTier : Math.Clamp(user.TierOverride ?? ch.DefaultTier, 0, 3);
                     var bound = user == null ? "未绑定" : user.BoundUserName;
-                    var session = await _ai.GetChannelSessionByExternalAsync(ch.Id, action.ChatId, ct);
+                    var session = await _ai.GetChannelSessionByExternalAsync(ch.Id, action.ExternalId, ct);
                     var model = session?.Model ?? "";
                     await adapter.EditMenuAsync(ch, action.ChatId, action.MessageId,
                         $"绑定：<b>{HtmlEncode(bound)}</b>\n档位：<b>{HtmlEncode(TierName(tier))}</b>\n模型：<code>{HtmlEncode(model)}</code>",
@@ -911,7 +917,7 @@ public class AiChannelService
                     }
                     var model = filtered[idx];
                     // 更新会话模型（当前对话生效）。
-                    var session = await _ai.GetChannelSessionByExternalAsync(ch.Id, action.ChatId, ct);
+                    var session = await _ai.GetChannelSessionByExternalAsync(ch.Id, action.ExternalId, ct);
                     if (session != null) await _ai.UpdateSessionModelAsync(session.Id, model, ct);
                     _modelMenus.TryRemove(key, out _);
                     await adapter.EditMenuAsync(ch, action.ChatId, st.MessageId,
@@ -929,7 +935,7 @@ public class AiChannelService
                             "❌ 不能高于频道档位。", "❌ 不能高于频道档位。", null, ct);
                         return;
                     }
-                    var ok = await SetUserTierByExternalAsync(ch.Id, action.ChatId, tier, ct);
+                    var ok = await SetUserTierByExternalAsync(ch.Id, action.ExternalId, tier, ct);
                     if (ok)
                     {
                         await adapter.EditMenuAsync(ch, action.ChatId, action.MessageId,
@@ -976,19 +982,19 @@ public class AiChannelService
         var session = await _ai.GetChannelSessionByExternalAsync(ch.Id, msg.ExternalId, ct);
         if (session == null)
         {
-            await TrySendAsync(ch, msg.ExternalId, "当前没有挂起的审批。", ct);
+            await TrySendAsync(ch, Target(msg), "当前没有挂起的审批。", ct);
             return;
         }
         var pending = await _ai.GetPendingApprovalAsync(session.Id, session.UserId, ct);
         if (pending == null)
         {
-            await TrySendAsync(ch, msg.ExternalId, "当前没有挂起的审批。", ct);
+            await TrySendAsync(ch, Target(msg), "当前没有挂起的审批。", ct);
             return;
         }
         var callId = pending["id"]?.GetValue<string>() ?? "";
         if (callId.Length == 0)
         {
-            await TrySendAsync(ch, msg.ExternalId, "审批状态异常，请在控制台处理。", ct);
+            await TrySendAsync(ch, Target(msg), "审批状态异常，请在控制台处理。", ct);
             return;
         }
         var ok = await _ai.ResolveApprovalAsync(session.Id, callId, approved, ct, permit);
@@ -997,7 +1003,7 @@ public class AiChannelService
             // 决策完成：删除审批消息（用户已批准/拒绝，无需保留；仅原生按钮频道生效）。
             await AdapterFor(ch.ChannelType).DeleteApprovalMessageAsync(ch, session.Id, callId, ct);
         }
-        await TrySendAsync(ch, msg.ExternalId, ok
+        await TrySendAsync(ch, Target(msg), ok
             ? (approved
                 ? $"✅ 已批准（{permit}），AI 将继续执行。"
                 : "已拒绝该调用。")
@@ -1010,12 +1016,12 @@ public class AiChannelService
             .FirstOrDefaultAsync(ct);
         if (existing != null)
         {
-            await TrySendAsync(ch, msg.ExternalId, $"已绑定到账号「{existing.BoundUserName}」，如需解绑请联系管理员。", ct);
+            await TrySendAsync(ch, Target(msg), $"已绑定到账号「{existing.BoundUserName}」，如需解绑请联系管理员。", ct);
             return;
         }
         if (string.IsNullOrWhiteSpace(code))
         {
-            await TrySendAsync(ch, msg.ExternalId, "❌ 绑定码无效。", ct);
+            await TrySendAsync(ch, Target(msg), "❌ 绑定码无效。", ct);
             return;
         }
 
@@ -1025,7 +1031,7 @@ public class AiChannelService
                 && x.ExpiresAt > now && x.UsedAt == null).FirstOrDefaultAsync(ct);
         if (bc == null)
         {
-            await TrySendAsync(ch, msg.ExternalId, "❌ 绑定码无效或已过期，请联系管理员重新生成。", ct);
+            await TrySendAsync(ch, Target(msg), "❌ 绑定码无效或已过期，请联系管理员重新生成。", ct);
             return;
         }
 
@@ -1039,7 +1045,7 @@ public class AiChannelService
             cancellationToken: ct);
         if (mark.ModifiedCount == 0)
         {
-            await TrySendAsync(ch, msg.ExternalId, "❌ 绑定码已被使用，请联系管理员重新生成。", ct);
+            await TrySendAsync(ch, Target(msg), "❌ 绑定码已被使用，请联系管理员重新生成。", ct);
             return;
         }
 
@@ -1055,7 +1061,7 @@ public class AiChannelService
             $"channel={ch.Id} type={ch.ChannelType} external={msg.ExternalId} ({msg.ExternalName})",
             "channel", RiskLevel.Safe);
         var tier = Math.Clamp(ch.DefaultTier, 0, 3);
-        await TrySendRichAsync(ch, msg.ExternalId,
+        await TrySendRichAsync(ch, Target(msg),
             $"✅ 绑定成功：<b>{HtmlEncode(bc.BoundUserName)}</b>\n当前档位：<b>{HtmlEncode(TierName(tier))}</b>\n发送 /help 查看可用指令。",
             $"✅ 绑定成功：{bc.BoundUserName}\n当前档位：{TierName(tier)}\n发送 /help 查看可用指令。", ct);
     }
@@ -1067,7 +1073,7 @@ public class AiChannelService
         var (providerId, model, _) = await ResolveProviderAsync(ch, ct);
         if (providerId == null)
         {
-            await TrySendAsync(ch, msg.ExternalId, "⚠️ 未配置可用的 AI 供应商，请联系管理员。", ct);
+            await TrySendAsync(ch, Target(msg), "⚠️ 未配置可用的 AI 供应商，请联系管理员。", ct);
             return;
         }
 
@@ -1139,11 +1145,11 @@ public class AiChannelService
                     // 首条：发送。超长（Telegram 4096 上限）按块发新消息，放弃编辑。
                     if (text.Length > ChunkSize)
                     {
-                        await TrySendAsync(ch, msg.ExternalId, text, ct);
+                        await TrySendAsync(ch, Target(msg), text, ct);
                         lock (streamLock) sb.Clear();
                         return;
                     }
-                    streamMessageId = await AdapterFor(ch.ChannelType).StartStreamAsync(ch, msg.ExternalId, text, ct);
+                    streamMessageId = await AdapterFor(ch.ChannelType).StartStreamAsync(ch, Target(msg), text, ct);
                     if (streamMessageId == 0)
                     {
                         // 频道不支持流式：回退一次性（done 时统一发送），清空缓冲防重复。
@@ -1155,12 +1161,12 @@ public class AiChannelService
                     if (text.Length > ChunkSize)
                     {
                         // 超出单条编辑上限：发新消息段，重置编辑目标。
-                        await TrySendAsync(ch, msg.ExternalId, text, ct);
+                        await TrySendAsync(ch, Target(msg), text, ct);
                         streamMessageId = 0;
                         lock (streamLock) sb.Clear();
                         return;
                     }
-                    await AdapterFor(ch.ChannelType).UpdateStreamAsync(ch, msg.ExternalId, streamMessageId, text, ct);
+                    await AdapterFor(ch.ChannelType).UpdateStreamAsync(ch, Target(msg), streamMessageId, text, ct);
                 }
             }
             catch (Exception ex)
@@ -1224,12 +1230,12 @@ public class AiChannelService
                     {
                         // 访客/异常：纯文本（无按钮），并附命令指引。
                         var guide = "\n\n回复 /approve 批准（或 /approve 5min 临时许可 5 分钟），/reject 拒绝。";
-                        await TrySendRichAsync(ch, msg.ExternalId, approvalHtml + guide, approvalPlain + guide, ct);
+                        await TrySendRichAsync(ch, Target(msg), approvalHtml + guide, approvalPlain + guide, ct);
                     }
                     else
                     {
                         // 已绑定用户：内联按钮（Telegram 原生键盘；其余频道回退纯文本）。
-                        await TrySendApprovalAsync(ch, msg.ExternalId, approvalHtml, approvalPlain, sessionId, callId, ct);
+                        await TrySendApprovalAsync(ch, Target(msg), approvalHtml, approvalPlain, sessionId, callId, ct);
                     }
                     await NotifyConsoleAsync(new
                     {
@@ -1270,7 +1276,7 @@ public class AiChannelService
                     string text;
                     lock (sb) { text = sb.ToString().Trim(); sb.Clear(); }
                     if (text.Length > 0)
-                        await TrySendAsync(ch, msg.ExternalId, text, ct);
+                        await TrySendAsync(ch, Target(msg), text, ct);
                     break;
                 }
                 case "error":
@@ -1280,13 +1286,13 @@ public class AiChannelService
                     var err = evt["message"]?.GetValue<string>() ?? "未知错误";
                     if (stream && streamMessageId != 0)
                     {
-                        await TrySendAsync(ch, msg.ExternalId,
+                        await TrySendAsync(ch, Target(msg),
                             partial.Length > 0 ? $"{partial}\n\n❌ {err}" : $"❌ {err}", ct);
                     }
                     else
                     {
                         var reply = partial.Length > 0 ? $"{partial}\n\n❌ {err}" : $"❌ {err}";
-                        await TrySendAsync(ch, msg.ExternalId, reply, ct);
+                        await TrySendAsync(ch, Target(msg), reply, ct);
                     }
                     break;
                 }
