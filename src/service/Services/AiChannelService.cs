@@ -507,9 +507,17 @@ public class AiChannelService
                 var (h, p) = BuildHelp(ch);
                 if (ch.ChannelType == AiChannelTypes.Telegram)
                 {
-                    // 帮助消息附带快捷菜单（模型/档位/状态）。
-                    await AdapterFor(ch.ChannelType).SendMenuAsync(ch, msg.ExternalId, h, p,
-                        new[] { ("🤖 切换模型", "help:model"), ("🎚 切换档位", "help:tier"), ("📊 我的状态", "help:status") }, ct);
+                    // 帮助消息附带快捷菜单（模型/档位/状态，一行三个）。
+                    var helpRows = new List<List<(string Text, string Data)>>
+                    {
+                        new()
+                        {
+                            ("🤖 切换模型", "help:model"),
+                            ("🎚 切换档位", "help:tier"),
+                            ("📊 我的状态", "help:status"),
+                        },
+                    };
+                    await AdapterFor(ch.ChannelType).SendMenuAsync(ch, msg.ExternalId, h, p, helpRows, ct);
                 }
                 else
                 {
@@ -633,25 +641,31 @@ public class AiChannelService
         };
     }
 
-    /// <summary>供应商选择页（html, plain, 按钮）。</summary>
-    private (string Html, string Plain, List<(string Text, string Data)> Buttons) BuildProviderMenu(ModelMenuState state)
+    /// <summary>供应商选择页：每行两个供应商按钮，最后一行返回。</summary>
+    private static (string Html, string Plain, List<List<(string Text, string Data)>> Buttons) BuildProviderMenu(ModelMenuState state)
     {
         var html = new StringBuilder("<b>选择供应商</b>\n当前模型：<code>" + HtmlEncode(state.CurrentModel) + "</code>\n");
         var plain = new StringBuilder($"选择供应商\n当前模型：{state.CurrentModel}\n");
-        var buttons = new List<(string Text, string Data)>();
-        for (var i = 0; i < state.Providers.Count; i++)
+        var rows = new List<List<(string Text, string Data)>>();
+        for (var i = 0; i < state.Providers.Count; i += 2)
         {
-            var mark = i == state.ProviderIndex ? "● " : "";
-            html.Append($"\n<code>{HtmlEncode(mark + state.Providers[i].Name)}</code>");
-            plain.Append($"\n{mark}{state.Providers[i].Name}");
-            buttons.Add((mark + state.Providers[i].Name, $"mdl:prov:{i}"));
+            var row = new List<(string Text, string Data)>();
+            for (var j = 0; j < 2 && i + j < state.Providers.Count; j++)
+            {
+                var idx = i + j;
+                var mark = idx == state.ProviderIndex ? "● " : "";
+                html.Append($"\n<code>{HtmlEncode(mark + state.Providers[idx].Name)}</code>");
+                plain.Append($"\n{mark}{state.Providers[idx].Name}");
+                row.Add((mark + state.Providers[idx].Name, $"mdl:prov:{idx}"));
+            }
+            rows.Add(row);
         }
-        buttons.Add(("🔙 返回", "help:back"));
-        return (html.ToString(), plain.ToString(), buttons);
+        rows.Add(new List<(string Text, string Data)> { ("🔙 返回", "help:back") });
+        return (html.ToString(), plain.ToString(), rows);
     }
 
-    /// <summary>模型选择页（分页 + 搜索常驻 + 返回供应商）。</summary>
-    private (string Html, string Plain, List<(string Text, string Data)> Buttons) BuildModelMenu(ModelMenuState state)
+    /// <summary>模型选择页：模型每行一个；导航行（上一页/搜索/下一页 同行）；返回行。</summary>
+    private static (string Html, string Plain, List<List<(string Text, string Data)>> Buttons) BuildModelMenu(ModelMenuState state)
     {
         var filtered = string.IsNullOrEmpty(state.Query)
             ? state.Models
@@ -669,63 +683,67 @@ public class AiChannelService
         var html = new StringBuilder($"<b>{HtmlEncode(title)}</b>\n当前：<code>{HtmlEncode(state.CurrentModel)}</code>\n");
         var plain = new StringBuilder($"{title}\n当前：{state.CurrentModel}\n");
 
-        var buttons = new List<(string Text, string Data)>();
+        var rows = new List<List<(string Text, string Data)>>();
         foreach (var m in pageModels)
         {
             var idx = filtered.IndexOf(m);
             var mark = m == state.CurrentModel ? "● " : "";
             html.Append($"\n<code>{HtmlEncode(mark + m)}</code>");
             plain.Append($"\n{mark}{m}");
-            buttons.Add((mark + m, $"mdl:sel:{idx}"));
+            rows.Add(new List<(string Text, string Data)> { (mark + m, $"mdl:sel:{idx}") });
         }
 
-        // 导航行：上一页 / 搜索（常驻）/ 下一页。
+        // 导航行：上一页 / 搜索（常驻）/ 下一页，同一行并排。
         var nav = new List<(string Text, string Data)>();
-        if (state.Page > 0) nav.Add(("◀️ 上一页", $"mdl:nav:{state.Page - 1}"));
+        if (state.Page > 0) nav.Add(("◀️", $"mdl:nav:{state.Page - 1}"));
         nav.Add(("🔍 搜索", "mdl:sea"));
-        if (state.Page < pages - 1) nav.Add(("下一页 ▶️", $"mdl:nav:{state.Page + 1}"));
-        buttons.AddRange(nav);
-        buttons.Add(("🔙 返回", "mdl:provs"));
+        if (state.Page < pages - 1) nav.Add(("▶️", $"mdl:nav:{state.Page + 1}"));
+        rows.Add(nav);
+        // 返回行。
+        rows.Add(new List<(string Text, string Data)> { ("🔙 返回", "mdl:provs") });
 
-        return (html.ToString(), plain.ToString(), buttons);
+        return (html.ToString(), plain.ToString(), rows);
     }
 
     /// <summary>搜索提示页（等待用户发送模型关键词）。</summary>
-    private static (string Html, string Plain, List<(string Text, string Data)> Buttons) BuildSearchPrompt()
+    private static (string Html, string Plain, List<List<(string Text, string Data)>> Buttons) BuildSearchPrompt()
     {
         return (
             "<b>请输入要搜索的模型名</b>",
             "请输入要搜索的模型名",
-            new List<(string Text, string Data)> { ("🔙 返回", "mdl:back") });
+            new List<List<(string Text, string Data)>> { new() { ("🔙 返回", "mdl:back") } });
     }
 
-    /// <summary>档位选择页（含返回 help）。</summary>
-    private static (string Html, string Plain, List<(string Text, string Data)> Buttons) BuildTierMenu(AiChannel ch, int current)
+    /// <summary>档位选择页：档位每行一个，最后一行返回。</summary>
+    private static (string Html, string Plain, List<List<(string Text, string Data)>> Buttons) BuildTierMenu(AiChannel ch, int current)
     {
         var maxTier = Math.Clamp(ch.DefaultTier, 0, 3);
-        var buttons = new List<(string Text, string Data)>();
+        var rows = new List<List<(string Text, string Data)>>();
         for (var t = 0; t <= maxTier; t++)
         {
             var mark = t == current ? " ✓" : "";
-            buttons.Add(($"{TierName(t)}{mark}", $"tier:sel:{t}"));
+            rows.Add(new List<(string Text, string Data)> { ($"{TierName(t)}{mark}", $"tier:sel:{t}") });
         }
-        buttons.Add(("🔙 返回", "help:back"));
+        rows.Add(new List<(string Text, string Data)> { ("🔙 返回", "help:back") });
         var html = $"<b>切换档位</b>\n当前：{HtmlEncode(TierName(current))}\n（仅可 ≤ 频道档位 {HtmlEncode(TierName(maxTier))}）";
         var plain = $"切换档位\n当前：{TierName(current)}\n（仅可 ≤ 频道档位 {TierName(maxTier)}）";
-        return (html, plain, buttons);
+        return (html, plain, rows);
     }
 
-    /// <summary>帮助页（含快捷菜单按钮）。</summary>
-    private (string Html, string Plain, List<(string Text, string Data)> Buttons) BuildHelpMenu(AiChannel ch)
+    /// <summary>帮助页（快捷按钮一行三个）。</summary>
+    private (string Html, string Plain, List<List<(string Text, string Data)>> Buttons) BuildHelpMenu(AiChannel ch)
     {
         var (h, p) = BuildHelp(ch);
-        var buttons = new List<(string Text, string Data)>
+        var rows = new List<List<(string Text, string Data)>>
         {
-            ("🤖 切换模型", "help:model"),
-            ("🎚 切换档位", "help:tier"),
-            ("📊 我的状态", "help:status"),
+            new()
+            {
+                ("🤖 切换模型", "help:model"),
+                ("🎚 切换档位", "help:tier"),
+                ("📊 我的状态", "help:status"),
+            },
         };
-        return (h, p, buttons);
+        return (h, p, rows);
     }
 
     /// <summary>刷新/编辑模型菜单（翻页、搜索后；编辑的是菜单消息本身）。</summary>
@@ -798,7 +816,7 @@ public class AiChannelService
                     await adapter.EditMenuAsync(ch, action.ChatId, action.MessageId,
                         $"绑定：<b>{HtmlEncode(bound)}</b>\n档位：<b>{HtmlEncode(TierName(tier))}</b>\n模型：<code>{HtmlEncode(model)}</code>",
                         $"绑定：{bound}\n档位：{TierName(tier)}\n模型：{model}",
-                        new List<(string Text, string Data)> { ("🔙 返回", "help:back") }, ct);
+                        new List<List<(string Text, string Data)>> { new() { ("🔙 返回", "help:back") } }, ct);
                     break;
                 }
                 case "model-provider":
@@ -901,7 +919,7 @@ public class AiChannelService
                         await adapter.EditMenuAsync(ch, action.ChatId, action.MessageId,
                             $"✅ 已切换档位：<b>{HtmlEncode(TierName(tier))}</b>",
                             $"✅ 已切换档位：{TierName(tier)}",
-                            new List<(string Text, string Data)> { ("🔙 返回", "help:back") }, ct);
+                            new List<List<(string Text, string Data)>> { new() { ("🔙 返回", "help:back") } }, ct);
                     }
                     break;
                 }
@@ -1407,8 +1425,8 @@ public class AiChannelService
         };
         if (isTelegram)
         {
-            commands.Add(("/model", "切换模型"));
-            commands.Add(("/tier", "切换档位"));
+            commands.Add(("/model", "模型"));
+            commands.Add(("/tier", "档位"));
         }
         else
         {

@@ -172,13 +172,14 @@ public interface IAiChannelAdapter
 
     /// <summary>
     /// 发送菜单按钮消息（模型选择/档位切换等内联菜单）。
+    /// rows：行结构（每行一组按钮，同行按钮并排显示）。
     /// 返回消息 ID（0 = 频道不支持菜单，调用方回退纯文本）。
     /// </summary>
-    Task<long> SendMenuAsync(AiChannel channel, string externalId, string html, string plain, IReadOnlyList<(string Text, string Data)> buttons, CancellationToken ct) =>
+    Task<long> SendMenuAsync(AiChannel channel, string externalId, string html, string plain, IReadOnlyList<IReadOnlyList<(string Text, string Data)>> rows, CancellationToken ct) =>
         Task.FromResult(0L);
 
-    /// <summary>编辑菜单消息（翻页/搜索/选择后更新）。返回是否成功。</summary>
-    Task<bool> EditMenuAsync(AiChannel channel, string chatId, long messageId, string html, string plain, IReadOnlyList<(string Text, string Data)>? buttons, CancellationToken ct) =>
+    /// <summary>编辑菜单消息（翻页/搜索/选择后更新）。rows 为 null 表示清空按钮。返回是否成功。</summary>
+    Task<bool> EditMenuAsync(AiChannel channel, string chatId, long messageId, string html, string plain, IReadOnlyList<IReadOnlyList<(string Text, string Data)>>? rows, CancellationToken ct) =>
         Task.FromResult(false);
 
     /// <summary>轮询型适配器拉取增量；非轮询型返回空批。</summary>
@@ -349,10 +350,10 @@ public class TelegramChannelAdapter : IAiChannelAdapter
         await Bot(channel).EditMessageText(externalId, (int)messageId, text, cancellationToken: ct);
     }
 
-    /// <summary>发送内联菜单消息（模型/档位选择）。</summary>
-    public async Task<long> SendMenuAsync(AiChannel channel, string externalId, string html, string plain, IReadOnlyList<(string Text, string Data)> buttons, CancellationToken ct)
+    /// <summary>发送内联菜单消息（模型/档位选择；rows 行结构，同行按钮并排）。</summary>
+    public async Task<long> SendMenuAsync(AiChannel channel, string externalId, string html, string plain, IReadOnlyList<IReadOnlyList<(string Text, string Data)>> rows, CancellationToken ct)
     {
-        var markup = new InlineKeyboardMarkup(buttons.Select(b => new[] { InlineKeyboardButton.WithCallbackData(b.Text, b.Data) }));
+        var markup = BuildMenuMarkup(rows);
         Message sent;
         try
         {
@@ -365,12 +366,10 @@ public class TelegramChannelAdapter : IAiChannelAdapter
         return sent.Id;
     }
 
-    /// <summary>编辑内联菜单消息（翻页/搜索/选择后更新）。</summary>
-    public async Task<bool> EditMenuAsync(AiChannel channel, string chatId, long messageId, string html, string plain, IReadOnlyList<(string Text, string Data)>? buttons, CancellationToken ct)
+    /// <summary>编辑内联菜单消息（翻页/搜索/选择后更新；rows 为 null 清空按钮）。</summary>
+    public async Task<bool> EditMenuAsync(AiChannel channel, string chatId, long messageId, string html, string plain, IReadOnlyList<IReadOnlyList<(string Text, string Data)>>? rows, CancellationToken ct)
     {
-        var markup = buttons is { Count: > 0 }
-            ? new InlineKeyboardMarkup(buttons.Select(b => new[] { InlineKeyboardButton.WithCallbackData(b.Text, b.Data) }))
-            : null;
+        var markup = rows == null ? null : BuildMenuMarkup(rows);
         try
         {
             await Bot(channel).EditMessageText(chatId, (int)messageId, html, parseMode: ParseMode.Html, replyMarkup: markup, cancellationToken: ct);
@@ -390,6 +389,10 @@ public class TelegramChannelAdapter : IAiChannelAdapter
             }
         }
     }
+
+    /// <summary>行结构 → InlineKeyboardMarkup（同一行的按钮并排显示）。</summary>
+    private static InlineKeyboardMarkup BuildMenuMarkup(IReadOnlyList<IReadOnlyList<(string Text, string Data)>> rows) =>
+        new(rows.Select(row => row.Select(b => InlineKeyboardButton.WithCallbackData(b.Text, b.Data)).ToArray()));
 
     /// <summary>
     /// 构造审批内联键盘。按钮 callback data 使用短令牌（Telegram 上限 64 字节）：
