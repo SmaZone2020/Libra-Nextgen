@@ -45,6 +45,8 @@ public sealed class ChannelInboundMessage
     public string? DedupeKey { get; init; }
     /// <summary>原始消息 ID（Telegram message id；搜索词等场景用于删除用户消息）。</summary>
     public long? OriginMessageId { get; init; }
+    /// <summary>消息是否来自群组（群组权限过滤用：仅已绑定账户 + @提及）。</summary>
+    public bool IsGroup { get; init; }
 }
 
 /// <summary>轮询型适配器一次拉取的增量批次。游标为频道不透明字符串（Telegram update_id / iLink get_updates_buf）。</summary>
@@ -562,6 +564,26 @@ public class TelegramChannelAdapter : IAiChannelAdapter
         new() { Command = "tier", Description = "切换档位" },
     };
 
+    /// <summary>channelId → bot username（群组 @提及 判断用，惰性获取并缓存）。</summary>
+    private readonly ConcurrentDictionary<string, string> _botUsernames = new();
+
+    private async Task<string> EnsureBotUsernameAsync(AiChannel channel, CancellationToken ct)
+    {
+        if (_botUsernames.TryGetValue(channel.Id, out var u)) return u;
+        try
+        {
+            var me = await Bot(channel).GetMe(ct);
+            u = me.Username ?? "";
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "Failed to resolve bot username (channel {Channel})", channel.Id);
+            u = "";
+        }
+        _botUsernames[channel.Id] = u;
+        return u;
+    }
+
     private async Task HandleUpdateAsync(
         AiChannel channel, ITelegramBotClient bot, Update update,
         Func<ChannelInboundMessage, CancellationToken, Task> onInbound,
@@ -571,7 +593,8 @@ public class TelegramChannelAdapter : IAiChannelAdapter
     {
         if (update.Message is { } msg)
         {
-            var inbound = TryParseMessage(channel, msg);
+            var botUsername = await EnsureBotUsernameAsync(channel, ct);
+            var inbound = TryParseMessage(channel, msg, botUsername);
             if (inbound != null)
             {
                 // 关键：消息处理（RunChatAsync 可能因审批挂起阻塞很久）绝不能阻塞
@@ -731,13 +754,28 @@ public class TelegramChannelAdapter : IAiChannelAdapter
         };
     }
 
-    /// <summary>把 Telegram 文本消息规范化为入站消息（纯函数，可测试）。</summary>
-    public static ChannelInboundMessage? TryParseMessage(AiChannel channel, Message msg)
+    /// <summary>
+    /// 把 Telegram 文本消息规范化为入站消息（纯函数，可测试）。
+    /// 群组过滤：AllowInGroups=false 时全部丢弃；开启时仅处理 @提及 bot 的
+    /// 消息与 /bind 命令（未绑定用户的绑定引导），其余群组消息忽略。
+    /// </summary>
+    public static ChannelInboundMessage? TryParseMessage(AiChannel channel, Message msg, string? botUsername = null)
     {
         if (string.IsNullOrWhiteSpace(msg.Text) || msg.Chat?.Id == null) return null;
         // 忽略机器人自己的消息（防御性）。
         if (msg.From?.IsBot == true) return null;
         var chatId = msg.Chat.Id.ToString()!;
+
+        // 群组权限：仅 @提及 bot 或 /bind 命令被处理。
+        var isGroup = msg.Chat.Type is ChatType.Group or ChatType.Supergroup;
+        if (isGroup)
+        {
+            if (!channel.AllowInGroups) return null;
+            var text = msg.Text.TrimStart();
+            var isBind = text.StartsWith("/bind", StringComparison.OrdinalIgnoreCase);
+            if (!isBind && !MentionsBot(msg, botUsername)) return null;
+        }
+
         var name = string.Join(' ', new[] { msg.From?.FirstName, msg.From?.LastName }.Where(s => !string.IsNullOrEmpty(s)));
         if (string.IsNullOrEmpty(name)) name = msg.From?.Username ?? chatId;
         return new ChannelInboundMessage
@@ -749,7 +787,28 @@ public class TelegramChannelAdapter : IAiChannelAdapter
             // 幂等去重键：message_id 在单个 chat 内唯一，配合入站去重防御重放。
             DedupeKey = msg.Id.ToString(),
             OriginMessageId = msg.Id,
+            IsGroup = isGroup,
         };
+    }
+
+    /// <summary>消息是否 @提及了本 bot（entities 优先，文本包含兜底）。</summary>
+    private static bool MentionsBot(Message msg, string? botUsername)
+    {
+        if (string.IsNullOrEmpty(botUsername)) return false;
+        var mention = "@" + botUsername;
+        if (msg.Entities is { Length: > 0 } && msg.Text != null)
+        {
+            foreach (var e in msg.Entities)
+            {
+                if (e.Type == MessageEntityType.Mention
+                    && e.Offset >= 0 && e.Offset + e.Length <= msg.Text.Length
+                    && string.Equals(msg.Text.Substring(e.Offset, e.Length), mention, StringComparison.Ordinal))
+                {
+                    return true;
+                }
+            }
+        }
+        return msg.Text?.Contains(mention, StringComparison.OrdinalIgnoreCase) == true;
     }
 }
 

@@ -1031,6 +1031,8 @@ export default {
       showToolCallsDesc: 'Show 🔧 tool-call / ⚠️ failure markers in channel messages',
       streamOutput: 'Stream output',
       streamOutputDesc: 'Send/edit messages live while the AI generates, instead of one final message (Telegram)',
+      allowInGroups: 'Allow in groups',
+      allowInGroupsDesc: 'In groups only respond to @-mentions of the bot; bound accounts only, unbound users get /bind only',
       provider: 'Default provider',
       model: 'Default model',
       test: 'Test connection',

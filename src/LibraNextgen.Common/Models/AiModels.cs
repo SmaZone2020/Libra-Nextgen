@@ -74,6 +74,11 @@ public class AiChannel
     public bool ShowToolCalls { get; set; } = true;
     /// <summary>流式输出：AI 生成时实时发送/编辑消息，而非完成后一次性输出。默认关。</summary>
     public bool StreamOutput { get; set; } = false;
+    /// <summary>
+    /// 是否允许在群组中调用（Telegram）：开启后群组消息仅响应 @提及 bot 的
+    /// 消息与未绑定用户的 /bind 命令，且仅已绑定账户可对话。默认关。
+    /// </summary>
+    public bool AllowInGroups { get; set; } = false;
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 }

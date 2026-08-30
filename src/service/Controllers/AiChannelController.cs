@@ -174,6 +174,7 @@ public class AiChannelController : ControllerBase
         DefaultModel = req.DefaultModel ?? "",
         ShowToolCalls = req.ShowToolCalls,
         StreamOutput = req.StreamOutput,
+        AllowInGroups = req.AllowInGroups,
     };
 }
 
@@ -189,6 +190,7 @@ public class AiChannelReq
     public string? DefaultModel { get; set; }
     public bool ShowToolCalls { get; set; } = true;
     public bool StreamOutput { get; set; }
+    public bool AllowInGroups { get; set; }
 }
 
 /// <summary>新建草稿测试连接：可带已有频道 id 以复用已存密钥。</summary>

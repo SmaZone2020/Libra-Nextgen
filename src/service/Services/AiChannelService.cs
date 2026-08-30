@@ -191,6 +191,7 @@ public class AiChannelService
             DefaultModel = input.DefaultModel ?? "",
             ShowToolCalls = input.ShowToolCalls,
             StreamOutput = input.StreamOutput,
+            AllowInGroups = input.AllowInGroups,
         };
         Validate(ch);
         EncryptSensitive(ch);
@@ -222,6 +223,7 @@ public class AiChannelService
             DefaultModel = input.DefaultModel ?? "",
             ShowToolCalls = input.ShowToolCalls,
             StreamOutput = input.StreamOutput,
+            AllowInGroups = input.AllowInGroups,
             CreatedAt = existing.CreatedAt,
             UpdatedAt = DateTime.UtcNow,
         };
@@ -421,6 +423,20 @@ public class AiChannelService
             return;
         }
 
+        // 群组权限：仅已绑定账户可对话；未绑定账户仅响应 /bind（绑定引导），
+        // 其余群组消息静默忽略（不刷屏）。
+        if (msg.IsGroup)
+        {
+            var bound = await ChannelUsers.Find(x => x.ChannelId == ch.Id && x.ExternalId == msg.ExternalId)
+                .FirstOrDefaultAsync(ct);
+            var isBindCmd = text.StartsWith("/bind", StringComparison.OrdinalIgnoreCase);
+            if (bound == null && !isBindCmd)
+            {
+                _logger.LogDebug("Ignored group message from unbound user {External} (channel {Channel})", msg.ExternalId, ch.Id);
+                return;
+            }
+        }
+
         if (text.StartsWith('/'))
         {
             await HandleCommandAsync(ch, msg, text, ct);
@@ -512,9 +528,9 @@ public class AiChannelService
                     {
                         new()
                         {
-                            ("🤖 切换模型", "help:model"),
-                            ("🎚 切换档位", "help:tier"),
-                            ("📊 我的状态", "help:status"),
+                            ("🤖 模型", "help:model"),
+                            ("🎚 档位", "help:tier"),
+                            ("📊 状态", "help:status"),
                         },
                     };
                     await AdapterFor(ch.ChannelType).SendMenuAsync(ch, msg.ExternalId, h, p, helpRows, ct);
@@ -738,9 +754,9 @@ public class AiChannelService
         {
             new()
             {
-                ("🤖 切换模型", "help:model"),
-                ("🎚 切换档位", "help:tier"),
-                ("📊 我的状态", "help:status"),
+                ("🤖 模型", "help:model"),
+                ("🎚 档位", "help:tier"),
+                ("📊 状态", "help:status"),
             },
         };
         return (h, p, rows);
@@ -1425,7 +1441,7 @@ public class AiChannelService
         };
         if (isTelegram)
         {
-            commands.Add(("/model", "模型"));
+            commands.Add(("/model", "切换模型"));
             commands.Add(("/tier", "档位"));
         }
         else

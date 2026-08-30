@@ -47,6 +47,7 @@ const emptyForm = (): AiChannelInput => ({
   defaultModel: '',
   showToolCalls: true,
   streamOutput: false,
+  allowInGroups: false,
 });
 
 export interface ChannelFormModalProps {
@@ -79,6 +80,7 @@ export function ChannelFormModal({ open, editing, onClose, onSaved }: ChannelFor
         defaultModel: editing.defaultModel,
         showToolCalls: editing.showToolCalls,
         streamOutput: editing.streamOutput,
+        allowInGroups: editing.allowInGroups,
       });
     } else {
       setForm(emptyForm());
@@ -299,42 +301,7 @@ export function ChannelFormModal({ open, editing, onClose, onSaved }: ChannelFor
                 </>
               )}
 
-              <div>
-                <Label className="mb-1.5 block text-sm">{t('channels.defaultTier')}</Label>
-                <Select
-                  selectedKey={String(form.defaultTier)}
-                  onSelectionChange={(key) => { if (key) patch({ defaultTier: Number(key) }); }}
-                  variant="secondary"
-                >
-                  <Select.Trigger className="w-full">
-                    <Select.Value />
-                    <Select.Indicator />
-                  </Select.Trigger>
-                  <Select.Popover>
-                    <ListBox items={TIERS}>
-                      {(item) => (
-                        <ListBox.Item key={String(item.id)} id={String(item.id)} textValue={item.label}>
-                          {item.label}
-                        </ListBox.Item>
-                      )}
-                    </ListBox>
-                  </Select.Popover>
-                </Select>
-              </div>
-              <div className="flex flex-wrap items-end gap-4">
-                <Switch isSelected={form.requireBind} onChange={(v) => patch({ requireBind: v })}>
-                  <Switch.Control><Switch.Thumb /></Switch.Control>
-                  <Label className="ml-2 text-sm">{t('channels.requireBind')}</Label>
-                </Switch>
-                <Switch isSelected={form.showToolCalls} onChange={(v) => patch({ showToolCalls: v })}>
-                  <Switch.Control><Switch.Thumb /></Switch.Control>
-                  <Label className="ml-2 text-sm">{t('channels.showToolCalls')}</Label>
-                </Switch>
-                <Switch isSelected={form.streamOutput} onChange={(v) => patch({ streamOutput: v })}>
-                  <Switch.Control><Switch.Thumb /></Switch.Control>
-                  <Label className="ml-2 text-sm">{t('channels.streamOutput')}</Label>
-                </Switch>
-              </div>
+
 
               <div>
                 <Label className="mb-1.5 block text-sm">{t('channels.provider')}</Label>
@@ -386,18 +353,47 @@ export function ChannelFormModal({ open, editing, onClose, onSaved }: ChannelFor
                 </Select>
               </div>
 
-              <div className="md:col-span-2">
-                <div className="mt-2 flex flex-wrap items-center gap-2">
-                  <Button size="sm" variant="tertiary" isDisabled={testing} onPress={() => void handleTest()}>
-                    {testing ? <Spinner size="sm" /> : <CircleCheck className="size-4" />}
-                    {t('channels.test')}
-                  </Button>
-                  {testResult && (
-                    <span className={`w-full text-xs ${testResult.ok ? 'text-success' : 'text-danger'}`}>
-                      {testResult.ok ? t('channels.testOk') : testResult.message}
-                    </span>
-                  )}
-                </div>
+              <div>
+                <Label className="mb-1.5 block text-sm">{t('channels.defaultTier')}</Label>
+                <Select
+                  selectedKey={String(form.defaultTier)}
+                  onSelectionChange={(key) => { if (key) patch({ defaultTier: Number(key) }); }}
+                  variant="secondary"
+                >
+                  <Select.Trigger className="w-full">
+                    <Select.Value />
+                    <Select.Indicator />
+                  </Select.Trigger>
+                  <Select.Popover>
+                    <ListBox items={TIERS}>
+                      {(item) => (
+                        <ListBox.Item key={String(item.id)} id={String(item.id)} textValue={item.label}>
+                          {item.label}
+                        </ListBox.Item>
+                      )}
+                    </ListBox>
+                  </Select.Popover>
+                </Select>
+              </div>
+              <div className="flex flex-wrap items-end gap-4">
+                <Switch isSelected={form.requireBind} onChange={(v) => patch({ requireBind: v })}>
+                  <Switch.Control><Switch.Thumb /></Switch.Control>
+                  <Label className="ml-2 text-sm">{t('channels.requireBind')}</Label>
+                </Switch>
+                <Switch isSelected={form.showToolCalls} onChange={(v) => patch({ showToolCalls: v })}>
+                  <Switch.Control><Switch.Thumb /></Switch.Control>
+                  <Label className="ml-2 text-sm">{t('channels.showToolCalls')}</Label>
+                </Switch>
+                <Switch isSelected={form.streamOutput} onChange={(v) => patch({ streamOutput: v })}>
+                  <Switch.Control><Switch.Thumb /></Switch.Control>
+                  <Label className="ml-2 text-sm">{t('channels.streamOutput')}</Label>
+                </Switch>
+                {form.channelType === 'telegram' && (
+                  <Switch isSelected={form.allowInGroups} onChange={(v) => patch({ allowInGroups: v })}>
+                    <Switch.Control><Switch.Thumb /></Switch.Control>
+                    <Label className="ml-2 text-sm">{t('channels.allowInGroups')}</Label>
+                  </Switch>
+                )}
               </div>
             </div>
           </Modal.Body>

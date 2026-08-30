@@ -21,6 +21,8 @@ export interface AiChannel {
   showToolCalls: boolean;
   /** 流式输出：AI 生成时实时发送/编辑，而非完成后一次性输出。 */
   streamOutput: boolean;
+  /** 允许在群组中调用（仅 @提及 bot + 已绑定账户；未绑定仅 /bind）。 */
+  allowInGroups: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -49,6 +51,7 @@ export interface AiChannelInput {
   defaultModel: string;
   showToolCalls: boolean;
   streamOutput: boolean;
+  allowInGroups: boolean;
 }
 
 export interface AiBindCode {

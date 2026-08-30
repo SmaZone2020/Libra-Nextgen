@@ -86,6 +86,7 @@ export default function ChannelsTab() {
         defaultModel: ch.defaultModel,
         showToolCalls: ch.showToolCalls,
         streamOutput: ch.streamOutput,
+        allowInGroups: ch.allowInGroups,
       });
     } catch (e) {
       alert(e instanceof Error ? e.message : String(e));
@@ -417,7 +418,7 @@ function ChannelUsersModal({
                         <Select.Trigger><Select.Value /><Select.Indicator /></Select.Trigger>
                         <Select.Popover>
                           <ListBox items={[
-                            { id: 'default', label: `跟随频道（${TIER_LABELS[channel.defaultTier] ?? channel.defaultTier}）` },
+                            { id: 'default', label: `跟随频道` },
                             ...TIER_LABELS.map((label, i) => ({ id: String(i), label })),
                           ]}>
                             {(item) => (
