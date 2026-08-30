@@ -547,15 +547,14 @@ export default function AiPage() {
         >
           <ChevronRight className="size-3.5" />
         </Button>
-
-        <ChatConversation className="min-h-0 flex-1">
+        <div className="w-full shrink-0 px-4 pt-4 flex" >
+          <Button variant='secondary' className="ml-auto text-foreground" onPress={() => setEventSubOpen(true)}>
+            <AntennaSignal/>
+            Submit
+          </Button>
+        </div>
+        <ChatConversation className="min-h-0 flex-1 pt-4 scrollbar-thin scrollbar-track-default-200 scrollbar-thumb-default-300 dark:scrollbar-track-default-800 dark:scrollbar-thumb-default-600">
           <ChatConversation.Content className={`flex flex-col ${!session?.messages.length ? 'h-full' : ''}`}>
-            <div className="w-full shrink-0 px-4 pt-4 flex" >
-              <Button variant='secondary' className="ml-auto text-foreground" onPress={() => setEventSubOpen(true)}>
-                <AntennaSignal/>
-                Submit
-              </Button>
-            </div>
             <div className="m-auto flex w-full sm:w-[80%] flex-col gap-6 px-4 pb-4">
               {showEmptyState ? (
                 <div className="flex h-[80vh] flex-1 flex-col items-center justify-center">

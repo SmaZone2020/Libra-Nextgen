@@ -27,6 +27,20 @@ public class AiChannelService
     private const string SecretSentinel = "********";
     private const string GuestPrefix = "ch:guest:";
 
+    /// <summary>Telegram 思考状态文案（轮换显示，AI 开始输出时编辑覆盖）。</summary>
+    private static readonly string[] ThinkingPhrases =
+    {
+        "Thinking…",
+        "Looking for bugs…",
+        "Blushing…",
+        "Hmm, let me think…",
+        "Analyzing…",
+        "Consulting the oracle…",
+    };
+    private static int _thinkingIdx;
+    private static string NextThinkingPhrase() =>
+        ThinkingPhrases[(Interlocked.Increment(ref _thinkingIdx) & 0x7fffffff) % ThinkingPhrases.Length];
+
     private readonly MongoDbContext _db;
     private readonly AiService _ai;
     private readonly AuditService _audit;
@@ -1186,6 +1200,21 @@ public class AiChannelService
         await gate.WaitAsync(ct);
         try
         {
+            // Telegram：入站立即发一条"思考中"状态消息（轮换文案），
+            // AI 开始输出时通过编辑覆盖它；无输出/出错时删除。
+            long thinkingMessageId = 0;
+            if (ch.ChannelType == AiChannelTypes.Telegram)
+            {
+                try
+                {
+                    thinkingMessageId = await _telegram.StartStreamAsync(ch, Target(msg), NextThinkingPhrase(), ct);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogDebug(ex, "Telegram thinking message send failed ({Channel})", ch.Id);
+                    thinkingMessageId = 0;
+                }
+            }
             // 微信 iLink：先显示"对方正在输入中"（getconfig → sendtyping），
             // AI 生成期间每 5 秒续一次；完成后发 sendtyping status=2 收尾。
             var typing = ch.ChannelType == AiChannelTypes.WechatClaw
@@ -1194,7 +1223,7 @@ public class AiChannelService
             try
             {
                 await _ai.RunChatAsync(session, msg.Text,
-                    BuildSink(ch, msg, session.Id, guest, ct), ct, (JustitiaTier)tier);
+                    BuildSink(ch, msg, session.Id, guest, thinkingMessageId, ct), ct, (JustitiaTier)tier);
             }
             finally
             {
@@ -1262,16 +1291,17 @@ public class AiChannelService
     /// 把 RunChatAsync 的 SSE 事件流翻译成 IM 回复：
     /// - 文本增量累积；工具调用/失败以独立段落插入（\n\n 分隔，不粘连）；
     /// - ShowToolCalls=false 时省略工具标记段；
-    /// - StreamOutput=true 且频道支持时，增量实时发送/编辑（否则 done 一次性输出）；
+    /// - StreamOutput=true 或 Telegram（编辑消息天然支持）时，增量实时编辑
+    ///   （Telegram 用入站时发的"思考中"消息作为编辑目标，AI 输出覆盖它）；
     /// - 审批转通知（控制台/IM 按钮决策后同流续跑），done 收尾。
     /// </summary>
-    private Func<string, Task> BuildSink(AiChannel ch, ChannelInboundMessage msg, string sessionId, bool guest, CancellationToken ct)
+    private Func<string, Task> BuildSink(AiChannel ch, ChannelInboundMessage msg, string sessionId, bool guest, long initialStreamMessageId, CancellationToken ct)
     {
         var sb = new StringBuilder();
         var showToolCalls = ch.ShowToolCalls;
-        // 流式输出状态（仅 StreamOutput 且适配器支持时启用）。
-        var stream = ch.StreamOutput;
-        long streamMessageId = 0;
+        // 流式输出：显式开启，或 Telegram（以"思考中"消息为编辑目标，体验等价于流式）。
+        var stream = ch.StreamOutput || ch.ChannelType == AiChannelTypes.Telegram;
+        long streamMessageId = initialStreamMessageId;
         var streamLock = new object();
         var lastFlush = DateTime.MinValue;
         // Telegram 编辑限流：增量合并到 ≥600ms 一次才真正编辑。
@@ -1324,6 +1354,21 @@ public class AiChannelService
                 // 编辑失败（消息被删/限流）：降级为一次性输出。
                 streamMessageId = 0;
             }
+        }
+
+        // 删除"思考中"状态消息（无输出 / 出错时清理，避免残留）。
+        async Task DeleteThinkingMessageAsync()
+        {
+            if (streamMessageId == 0) return;
+            try
+            {
+                await AdapterFor(ch.ChannelType).DeleteMessageAsync(ch, Target(msg), streamMessageId, ct);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogDebug(ex, "Delete thinking message failed ({Channel} → {External})", ch.Id, msg.ExternalId);
+            }
+            streamMessageId = 0;
         }
 
         return async payload =>
@@ -1418,6 +1463,14 @@ public class AiChannelService
                     {
                         if (stream && streamMessageId != 0)
                         {
+                            // 无实际输出（空回复）：删除"思考中"状态消息，避免残留。
+                            bool hasText;
+                            lock (sb) { hasText = sb.ToString().Trim().Length > 0; }
+                            if (!hasText)
+                            {
+                                await DeleteThinkingMessageAsync();
+                                break;
+                            }
                             // 流式：最终文本已在编辑的消息里，强制 flush 一次收尾。
                             await FlushStreamAsync(force: true);
                             break;
@@ -1434,15 +1487,9 @@ public class AiChannelService
                         lock (sb) { partial = sb.ToString().Trim(); sb.Clear(); }
                         var err = evt["message"]?.GetValue<string>() ?? "未知错误";
                         if (stream && streamMessageId != 0)
-                        {
-                            await TrySendAsync(ch, Target(msg),
-                                partial.Length > 0 ? $"{partial}\n\n❌ {err}" : $"❌ {err}", ct);
-                        }
-                        else
-                        {
-                            var reply = partial.Length > 0 ? $"{partial}\n\n❌ {err}" : $"❌ {err}";
-                            await TrySendAsync(ch, Target(msg), reply, ct);
-                        }
+                            await DeleteThinkingMessageAsync(); // 出错：删掉状态消息，再发错误（避免两条消息）。
+                        var reply = partial.Length > 0 ? $"{partial}\n\n❌ {err}" : $"❌ {err}";
+                        await TrySendAsync(ch, Target(msg), reply, ct);
                         break;
                     }
             }
