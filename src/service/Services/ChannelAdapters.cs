@@ -104,13 +104,24 @@ public interface IAiChannelAdapter
 
     /// <summary>
     /// 发送审批请求（带操作按钮的频道原生实现，如 Telegram 内联键盘）。
+    /// html/plain 双版本：支持富文本的频道渲染 html（含按钮），其余发 plain。
     /// 默认降级为纯文本（其他频道现状：IM 内 /approve /reject 命令）。
     /// </summary>
-    Task SendApprovalAsync(AiChannel channel, string externalId, string text, string sessionId, string toolCallId, CancellationToken ct) =>
-        SendTextAsync(channel, externalId, text, ct);
+    Task SendApprovalAsync(AiChannel channel, string externalId, string html, string plain, string sessionId, string toolCallId, CancellationToken ct) =>
+        SendTextAsync(channel, externalId, plain, ct);
 
     /// <summary>连通性自检（设置页"测试连接"）。返回 (ok, message)。</summary>
     Task<(bool Ok, string Message)> TestAsync(AiChannel channel, CancellationToken ct);
+
+    /// <summary>是否支持富文本（HTML 解析模式）。Telegram 支持；其余频道回退纯文本。</summary>
+    bool SupportsRichText => false;
+
+    /// <summary>
+    /// 发送富文本消息：html 供支持 Markdown 的频道渲染，plain 供其他频道。
+    /// 调用方保证 html 内容已做 HTML 转义（用户输入不可信）。
+    /// </summary>
+    Task SendRichTextAsync(AiChannel channel, string externalId, string html, string plain, CancellationToken ct) =>
+        SendTextAsync(channel, externalId, plain, ct);
 
     /// <summary>
     /// 流式输出：发送首条消息并返回消息 ID（用于后续编辑更新）。
@@ -156,6 +167,9 @@ public class TelegramChannelAdapter : IAiChannelAdapter
 
     public string ChannelType => AiChannelTypes.Telegram;
 
+    /// <summary>Telegram 支持 HTML 解析模式（宽松免转义，仅需调用方转义用户输入）。</summary>
+    public bool SupportsRichText => true;
+
     private static string? Token(AiChannel ch) =>
         ch.Config.TryGetValue("botToken", out var t) && t.Length > 0 ? t : null;
 
@@ -168,6 +182,20 @@ public class TelegramChannelAdapter : IAiChannelAdapter
     public async Task SendTextAsync(AiChannel channel, string externalId, string text, CancellationToken ct)
     {
         await Bot(channel).SendMessage(externalId, text, cancellationToken: ct);
+    }
+
+    /// <summary>富文本：HTML 解析模式（调用方负责转义用户输入）。</summary>
+    public async Task SendRichTextAsync(AiChannel channel, string externalId, string html, string plain, CancellationToken ct)
+    {
+        try
+        {
+            await Bot(channel).SendMessage(externalId, html, parseMode: ParseMode.Html, cancellationToken: ct);
+        }
+        catch (Exception)
+        {
+            // HTML 渲染失败（如非法标签）：回退纯文本，保证消息必达。
+            await Bot(channel).SendMessage(externalId, plain, cancellationToken: ct);
+        }
     }
 
     public async Task SendMediaAsync(AiChannel channel, string externalId, ChannelMedia media, CancellationToken ct)
@@ -195,11 +223,18 @@ public class TelegramChannelAdapter : IAiChannelAdapter
         }
     }
 
-    /// <summary>发送审批请求：文本 + 内联按钮（批准 / 5min / 20min / 拒绝）。</summary>
-    public async Task SendApprovalAsync(AiChannel channel, string externalId, string text, string sessionId, string toolCallId, CancellationToken ct)
+    /// <summary>发送审批请求：HTML 富文本 + 内联按钮（批准 / 5min / 20min / 拒绝）；失败回退纯文本。</summary>
+    public async Task SendApprovalAsync(AiChannel channel, string externalId, string html, string plain, string sessionId, string toolCallId, CancellationToken ct)
     {
         var markup = BuildApprovalMarkup(channel.Id, externalId, sessionId, toolCallId);
-        await Bot(channel).SendMessage(externalId, text, replyMarkup: markup, cancellationToken: ct);
+        try
+        {
+            await Bot(channel).SendMessage(externalId, html, parseMode: ParseMode.Html, replyMarkup: markup, cancellationToken: ct);
+        }
+        catch (Exception)
+        {
+            await Bot(channel).SendMessage(externalId, plain, replyMarkup: markup, cancellationToken: ct);
+        }
     }
 
     /// <summary>流式输出：发送首条消息，返回 message id 供后续编辑。</summary>

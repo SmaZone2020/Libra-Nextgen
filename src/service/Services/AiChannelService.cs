@@ -398,7 +398,8 @@ public class AiChannelService
         {
             if (ch.RequireBind)
             {
-                await TrySendAsync(ch, msg.ExternalId, BuildBindHelp(ch), ct);
+                var (h, p) = BuildBindHelp(ch);
+                await TrySendRichAsync(ch, msg.ExternalId, h, p, ct);
                 return;
             }
             // 访客模式（RequireBind=false）：会话归属合成用户，档位强制 Cognitio，
@@ -444,21 +445,27 @@ public class AiChannelService
         {
             case "/start":
             case "/help":
-                await TrySendAsync(ch, msg.ExternalId, BuildHelp(ch), ct);
+            {
+                var (h, p) = BuildHelp(ch);
+                await TrySendRichAsync(ch, msg.ExternalId, h, p, ct);
                 break;
+            }
             case "/status":
             {
                 var user = await ChannelUsers.Find(x => x.ChannelId == ch.Id && x.ExternalId == msg.ExternalId)
                     .FirstOrDefaultAsync(ct);
                 var tier = user == null ? ch.DefaultTier : Math.Clamp(user.TierOverride ?? ch.DefaultTier, 0, 3);
-                var bound = user == null ? "未绑定" : $"{user.BoundUserName}";
-                await TrySendAsync(ch, msg.ExternalId, $"绑定：{bound}\n档位：{TierName(tier)}（{(JustitiaTier)tier}）", ct);
+                var bound = user == null ? "未绑定" : user.BoundUserName;
+                await TrySendRichAsync(ch, msg.ExternalId,
+                    $"绑定：<b>{HtmlEncode(bound)}</b>\n档位：<b>{HtmlEncode(TierName(tier))}</b>",
+                    $"绑定：{bound}\n档位：{TierName(tier)}", ct);
                 break;
             }
             case "/bind":
                 if (parts.Length < 2)
                 {
-                    await TrySendAsync(ch, msg.ExternalId, "用法：/bind <绑定码>", ct);
+                    await TrySendRichAsync(ch, msg.ExternalId,
+                        "用法：<code>/bind 绑定码</code>", "用法：/bind 绑定码", ct);
                     return;
                 }
                 await TryBindAsync(ch, msg, parts[1], ct);
@@ -477,8 +484,11 @@ public class AiChannelService
                 break;
             }
             default:
-                await TrySendAsync(ch, msg.ExternalId, BuildHelp(ch), ct);
+            {
+                var (h, p) = BuildHelp(ch);
+                await TrySendRichAsync(ch, msg.ExternalId, h, p, ct);
                 break;
+            }
         }
     }
 
@@ -565,8 +575,9 @@ public class AiChannelService
             $"channel={ch.Id} type={ch.ChannelType} external={msg.ExternalId} ({msg.ExternalName})",
             "channel", RiskLevel.Safe);
         var tier = Math.Clamp(ch.DefaultTier, 0, 3);
-        await TrySendAsync(ch, msg.ExternalId,
-            $"✅ 绑定成功：{bc.BoundUserName}\n当前档位：{TierName(tier)}（{(JustitiaTier)tier}）\n发送 /help 查看可用指令。", ct);
+        await TrySendRichAsync(ch, msg.ExternalId,
+            $"✅ 绑定成功：<b>{HtmlEncode(bc.BoundUserName)}</b>\n当前档位：<b>{HtmlEncode(TierName(tier))}</b>\n发送 /help 查看可用指令。",
+            $"✅ 绑定成功：{bc.BoundUserName}\n当前档位：{TierName(tier)}\n发送 /help 查看可用指令。", ct);
     }
 
     private async Task RunChatAsync(
@@ -724,18 +735,21 @@ public class AiChannelService
                     var toolName = evt["toolCall"]?["toolName"]?.GetValue<string>() ?? "";
                     var callId = evt["toolCall"]?["id"]?.GetValue<string>() ?? "";
                     var args = evt["toolCall"]?["argsText"]?.GetValue<string>() ?? "";
-                    var argsDetail = args.Length > 0 ? $"\n参数：{args[..Math.Min(args.Length, 500)]}" : "";
-                    var approvalText = $"⏳ Justitia 请求审批：\n工具「{toolName}」{argsDetail}";
+                    // 美化：工具名 execute_shell → Execute Shell；参数剔除 agentId、键名美化。
+                    var toolPretty = PrettyName(toolName);
+                    var (argsHtml, argsPlain) = FormatApprovalArgs(args);
+                    var approvalHtml = $"⏳ <b>审批请求</b>：\n工具：<b>{HtmlEncode(toolPretty)}</b>{argsHtml}";
+                    var approvalPlain = $"⏳ 审批请求：\n工具：{toolPretty}{argsPlain}";
                     if (guest || callId.Length == 0)
                     {
                         // 访客/异常：纯文本（无按钮），并附命令指引。
-                        await TrySendAsync(ch, msg.ExternalId, approvalText +
-                            "\n\n回复 /approve 批准（或 /approve 5min 临时许可 5 分钟），/reject 拒绝。", ct);
+                        var guide = "\n\n回复 /approve 批准（或 /approve 5min 临时许可 5 分钟），/reject 拒绝。";
+                        await TrySendRichAsync(ch, msg.ExternalId, approvalHtml + guide, approvalPlain + guide, ct);
                     }
                     else
                     {
                         // 已绑定用户：内联按钮（Telegram 原生键盘；其余频道回退纯文本）。
-                        await TrySendApprovalAsync(ch, msg.ExternalId, approvalText, sessionId, callId, ct);
+                        await TrySendApprovalAsync(ch, msg.ExternalId, approvalHtml, approvalPlain, sessionId, callId, ct);
                     }
                     await NotifyConsoleAsync(new
                     {
@@ -810,12 +824,12 @@ public class AiChannelService
         }
     }
 
-    /// <summary>发送审批请求：Telegram 带内联按钮，其余频道回退纯文本。</summary>
-    private async Task TrySendApprovalAsync(AiChannel ch, string externalId, string text, string sessionId, string callId, CancellationToken ct)
+    /// <summary>发送审批请求：Telegram 带 HTML 富文本 + 内联按钮，其余频道回退纯文本。</summary>
+    private async Task TrySendApprovalAsync(AiChannel ch, string externalId, string html, string plain, string sessionId, string callId, CancellationToken ct)
     {
         try
         {
-            await AdapterFor(ch.ChannelType).SendApprovalAsync(ch, externalId, text, sessionId, callId, ct);
+            await AdapterFor(ch.ChannelType).SendApprovalAsync(ch, externalId, html, plain, sessionId, callId, ct);
         }
         catch (Exception ex)
         {
@@ -897,31 +911,108 @@ public class AiChannelService
         }
     }
 
-    // ── 文案 ─────────────────────────────────────────────────────────────
+    // ── 文案（HTML 富文本 + 纯文本双版本；Telegram 用 HTML，其余回退纯文本）────
+
+    /// <summary>HTML 转义（所有用户输入/工具输出进富文本前必须经过）。</summary>
+    private static string HtmlEncode(string s) =>
+        System.Net.WebUtility.HtmlEncode(s);
+
+    /// <summary>snake_case → 空格分隔 + 单词首字母大写：execute_shell → Execute Shell。</summary>
+    private static string PrettyName(string raw) =>
+        string.Join(' ', (raw ?? "").Split('_', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(w => w.Length > 0 ? char.ToUpperInvariant(w[0]) + w[1..] : w));
 
     private static string TierName(int tier) => tier switch
     {
-        0 => "Cognitio 审理（只读）",
-        1 => "Arbitrium 裁量（常规）",
-        2 => "Imperium 治权（高危需审批）",
-        3 => "Dictatura 独裁（全权）",
-        _ => "Cognitio 审理（只读）",
+        0 => "Cognitio 审理",
+        1 => "Arbitrium 裁量",
+        2 => "Imperium 治权",
+        3 => "Dictatura 独裁",
+        _ => "Cognitio 审理",
     };
 
-    private string BuildHelp(AiChannel ch) =>
-        $"🤖 我是 Justitia（Libra-Nextgen AI 助手）。\n" +
-        $"频道档位：{TierName(Math.Clamp(ch.DefaultTier, 0, 3))}\n\n" +
-        "可用指令：\n" +
-        "/start 或 /help — 显示本帮助\n" +
-        "/status — 查看绑定与档位\n" +
-        "/bind &lt;绑定码&gt; — 绑定控制台账号\n" +
-        "/approve [one-time|5min|20min] — 批准挂起的工具调用\n" +
-        "/reject — 拒绝挂起的工具调用\n\n" +
-        "直接发送消息即可与我对话。涉及工具的操作受档位约束，高危操作会请求你审批（也可在控制台批准）。";
+    /// <summary>富文本发送：频道支持 HTML 时渲染 html，否则发 plain。</summary>
+    private async Task TrySendRichAsync(AiChannel ch, string externalId, string html, string plain, CancellationToken ct)
+    {
+        try
+        {
+            await AdapterFor(ch.ChannelType).SendRichTextAsync(ch, externalId, html, plain, ct);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Channel rich send failed ({Channel} → {External})", ch.Id, externalId);
+        }
+    }
 
-    private string BuildBindHelp(AiChannel ch) =>
-        "🔒 该频道需要绑定控制台账号后才能使用。\n" +
-        "请在控制台「设置 → AI 频道」中由管理员生成绑定码，然后在此发送：\n" +
-        "/bind <绑定码>\n\n" +
-        "绑定后即可使用 AI 助手（档位受频道配置约束）。";
+    private (string Html, string Plain) BuildHelp(AiChannel ch)
+    {
+        var tier = TierName(Math.Clamp(ch.DefaultTier, 0, 3));
+        var html =
+            $"我是 Justitia（Libra-Nextgen AI 助手）。\n" +
+            $"频道档位：<b>{HtmlEncode(tier)}</b>\n\n" +
+            "<b>可用指令：</b>\n" +
+            "<code>/start</code> 或 <code>/help</code> — 显示本帮助\n" +
+            "<code>/status</code> — 查看绑定与档位\n" +
+            "<code>/bind 绑定码</code> — 绑定控制台账号\n" +
+            "<code>/approve [one-time|5min|20min]</code> — 批准工具调用\n" +
+            "<code>/reject</code> — 拒绝工具调用\n\n" +
+            "直接发送消息即可与我对话。";
+        var plain =
+            $"我是 Justitia（Libra-Nextgen AI 助手）。\n" +
+            $"频道档位：{tier}\n\n" +
+            "可用指令：\n" +
+            "/start 或 /help — 显示本帮助\n" +
+            "/status — 查看绑定与档位\n" +
+            "/bind 绑定码 — 绑定控制台账号\n" +
+            "/approve [one-time|5min|20min] — 批准工具调用\n" +
+            "/reject — 拒绝工具调用\n\n" +
+            "直接发送消息即可与我对话。";
+        return (html, plain);
+    }
+
+    private (string Html, string Plain) BuildBindHelp(AiChannel ch)
+    {
+        var html =
+            "🔒 该频道需要绑定控制台账号后才能使用。\n" +
+            "请在控制台「设置 → AI 频道」中由管理员生成绑定码，然后在此发送：\n" +
+            "<code>/bind 绑定码</code>\n\n" +
+            "绑定后即可使用 AI 助手（档位受频道配置约束）。";
+        var plain =
+            "🔒 该频道需要绑定控制台账号后才能使用。\n" +
+            "请在控制台「设置 → AI 频道」中由管理员生成绑定码，然后在此发送：\n" +
+            "/bind 绑定码\n\n" +
+            "绑定后即可使用 AI 助手（档位受频道配置约束）。";
+        return (html, plain);
+    }
+
+    /// <summary>
+    /// 审批请求参数美化：解析 JSON，剔除 agentId，其余键名美化（command → Command），
+    /// 值做 HTML 转义。返回 (html 行, plain 行) 或空。
+    /// </summary>
+    private static (string Html, string Plain) FormatApprovalArgs(string argsText)
+    {
+        try
+        {
+            var obj = JsonNode.Parse(argsText) as JsonObject;
+            if (obj == null || obj.Count == 0) return ("", "");
+            var htmlLines = new List<string>();
+            var plainLines = new List<string>();
+            foreach (var kv in obj)
+            {
+                if (kv.Key.Equals("agentId", StringComparison.OrdinalIgnoreCase)) continue;
+                var value = kv.Value?.GetValue<string>()
+                    ?? (kv.Value is JsonValue jv ? jv.ToJsonString() : "")
+                    ?? "";
+                if (value.Length > 200) value = value[..200] + "…";
+                htmlLines.Add($"<code>{HtmlEncode(PrettyName(kv.Key))}</code>: {HtmlEncode(value)}");
+                plainLines.Add($"{PrettyName(kv.Key)}: {value}");
+            }
+            if (htmlLines.Count == 0) return ("", "");
+            return ("\n参数：\n" + string.Join("\n", htmlLines), "\n参数：\n" + string.Join("\n", plainLines));
+        }
+        catch
+        {
+            return ("", "");
+        }
+    }
 }
