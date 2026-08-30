@@ -536,6 +536,8 @@ export default function AiPage() {
 
         <ChatConversation className="min-h-0 flex-1">
           <ChatConversation.Content className={`flex flex-col ${!session?.messages.length ? 'h-full' : ''}`}>
+            {/* 顶部导航栏容器 */}
+            <div className="w-full shrink-0" />
             <div className="m-auto flex w-full sm:w-[80%] flex-col gap-6 px-4 pt-6 pb-4">
               {showEmptyState ? (
                 <div className="flex h-[80vh] flex-1 flex-col items-center justify-center">
