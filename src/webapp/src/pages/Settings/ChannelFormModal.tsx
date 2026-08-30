@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Button,
@@ -448,9 +448,17 @@ function WechatAuthModal({
   const { t } = useTranslation();
   const [phase, setPhase] = useState<'idle' | 'loading' | 'scanning' | 'done' | 'error'>('idle');
   const [imageUrl, setImageUrl] = useState('');
+  const [qrDataUrl, setQrDataUrl] = useState('');
   const [qrcode, setQrcode] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [polling, setPolling] = useState(false);
+
+  // iLink 返回的 qrcode_img_content 是微信 liteapp 网页（JS 渲染），不能当图片直接显示；
+  // 把该 URL 本身编码成二维码（与参考项目一致，用 qrcode 包 toDataURL）。
+  const buildQrFromUrl = useCallback(async (url: string) => {
+    const QRCode = await import('qrcode');
+    return QRCode.toDataURL(url, { width: 280, margin: 2 });
+  }, []);
 
   // 打开时申请二维码（登录接口匿名，不依赖频道是否已保存）；关闭时停止轮询并复位。
   useEffect(() => {
@@ -459,11 +467,20 @@ function WechatAuthModal({
     setPhase('loading');
     setError(null);
     void getAiChannelWechatQrCode()
-      .then((r) => {
+      .then(async (r) => {
         if (cancelled) return;
         setQrcode(r.qrcode);
         setImageUrl(r.imageUrl);
-        setPhase('scanning');
+        try {
+          const url = await buildQrFromUrl(r.imageUrl);
+          if (cancelled) return;
+          setQrDataUrl(url);
+          setPhase('scanning');
+        } catch (e) {
+          if (cancelled) return;
+          setError(e instanceof Error ? e.message : String(e));
+          setPhase('error');
+        }
       })
       .catch((e) => {
         if (cancelled) return;
@@ -473,7 +490,7 @@ function WechatAuthModal({
     return () => {
       cancelled = true;
     };
-  }, [open]);
+  }, [open, buildQrFromUrl]);
 
   // 扫描阶段：前端轮询扫码状态；confirmed → 写入 token（编辑态直接存频道，新建态回填表单待保存）。
   // 与参考实现一致：轮询请求失败/超时视为 wait，继续轮询（后端对 iLink 长轮询超时也返回 wait）。
@@ -538,12 +555,18 @@ function WechatAuthModal({
               )}
               {phase === 'scanning' && (
                 <>
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={imageUrl}
-                    alt={t('channels.clawAuthorize')}
-                    className="size-56 rounded-2xl border border-default-200 object-contain p-2 dark:border-default-800"
-                  />
+                  {qrDataUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={qrDataUrl}
+                      alt={t('channels.clawAuthorize')}
+                      className="size-56 rounded-2xl border border-default-200 bg-white object-contain p-2 dark:border-default-800"
+                    />
+                  ) : (
+                    <div className="flex size-56 items-center justify-center rounded-2xl border border-default-200 dark:border-default-800">
+                      <Spinner size="lg" />
+                    </div>
+                  )}
                   <p className="flex items-center gap-2 text-sm text-default-500">
                     {polling && <Spinner size="sm" />}
                     {t('channels.clawQrHint')}
@@ -566,11 +589,18 @@ function WechatAuthModal({
                       setPhase('loading');
                       setError(null);
                       setQrcode('');
+                      setQrDataUrl('');
                       void getAiChannelWechatQrCode()
-                        .then((r) => {
+                        .then(async (r) => {
                           setQrcode(r.qrcode);
                           setImageUrl(r.imageUrl);
-                          setPhase('scanning');
+                          try {
+                            setQrDataUrl(await buildQrFromUrl(r.imageUrl));
+                            setPhase('scanning');
+                          } catch (e) {
+                            setError(e instanceof Error ? e.message : String(e));
+                            setPhase('error');
+                          }
                         })
                         .catch((e) => {
                           setError(e instanceof Error ? e.message : String(e));
