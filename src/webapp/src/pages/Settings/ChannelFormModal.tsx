@@ -297,7 +297,6 @@ export function ChannelFormModal({ open, editing, onClose, onSaved }: ChannelFor
                       <Button
                         size="sm"
                         variant="primary"
-                        isDisabled={!editing}
                         className="shrink-0"
                         onPress={() => setAuthOpen(true)}
                       >
@@ -305,19 +304,16 @@ export function ChannelFormModal({ open, editing, onClose, onSaved }: ChannelFor
                         {t('channels.clawAuthorize')}
                       </Button>
                     </div>
-                    <p className="mt-1 text-xs text-default-500">{t('channels.clawTokenHint')}</p>
                   </div>
-                  {editing && (
-                    <WechatAuthModal
-                      channel={editing}
-                      open={authOpen}
-                      onClose={() => setAuthOpen(false)}
-                      onTokenSet={(token) => {
-                        patchConfig('botToken', token);
-                        setAuthOpen(false);
-                      }}
-                    />
-                  )}
+                  <WechatAuthModal
+                    channel={editing}
+                    open={authOpen}
+                    onClose={() => setAuthOpen(false)}
+                    onTokenSet={(token) => {
+                      patchConfig('botToken', token);
+                      setAuthOpen(false);
+                    }}
+                  />
                 </>
               )}
 
@@ -435,14 +431,16 @@ export function ChannelFormModal({ open, editing, onClose, onSaved }: ChannelFor
   );
 }
 
-/** 微信 iLink 扫码授权弹窗：申请二维码 → 展示 → 前端轮询状态 → confirmed 自动回填 bot_token。 */
+/** 微信 iLink 扫码授权弹窗：申请二维码 → 展示 → 前端轮询状态 → confirmed 自动回填 bot_token。
+ * 支持新建（channel 为 null）与编辑（channel 已保存）两种形态：新建时先扫码拿 token，
+ * 随频道一起保存；编辑时确认后直接写入频道配置。 */
 function WechatAuthModal({
   channel,
   open,
   onClose,
   onTokenSet,
 }: {
-  channel: AiChannel;
+  channel: AiChannel | null;
   open: boolean;
   onClose: () => void;
   onTokenSet: (token: string) => void;
@@ -456,7 +454,7 @@ function WechatAuthModal({
 
   // 打开时申请二维码；关闭/切换频道时停止轮询并复位。
   useEffect(() => {
-    if (!open) return;
+    if (!open || !channel) return;
     let cancelled = false;
     setPhase('loading');
     setError(null);
@@ -475,11 +473,11 @@ function WechatAuthModal({
     return () => {
       cancelled = true;
     };
-  }, [open, channel.id]);
+  }, [open, channel?.id]);
 
-  // 扫描阶段：前端轮询扫码状态；confirmed → 自动写入 bot_token 并回填表单。
+  // 扫描阶段：前端轮询扫码状态；confirmed → 写入 token（编辑态直接存频道，新建态回填表单待保存）。
   useEffect(() => {
-    if (!open || phase !== 'scanning' || qrcode.length === 0) return;
+    if (!open || !channel || phase !== 'scanning' || qrcode.length === 0) return;
     let stopped = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
     const poll = async () => {
@@ -489,7 +487,7 @@ function WechatAuthModal({
         if (r.status === 'confirmed' && r.botToken) {
           setPolling(false);
           setPhase('done');
-          await setAiChannelWechatToken(channel.id, r.botToken);
+          if (channel.id.length > 0) await setAiChannelWechatToken(channel.id, r.botToken);
           if (!stopped) onTokenSet(r.botToken);
           return;
         }
@@ -514,7 +512,7 @@ function WechatAuthModal({
       setPolling(false);
       if (timer) clearTimeout(timer);
     };
-  }, [open, phase, qrcode, channel.id, t, onTokenSet]);
+  }, [open, channel?.id, phase, qrcode, t, onTokenSet]);
 
   return (
     <Modal.Backdrop isOpen={open} onOpenChange={(o) => { if (!o) onClose(); }}>
@@ -522,7 +520,7 @@ function WechatAuthModal({
         <Modal.Dialog>
           <Modal.CloseTrigger />
           <Modal.Header>
-            <Modal.Heading>{t('channels.clawAuthorize')} · {channel.name}</Modal.Heading>
+            <Modal.Heading>{t('channels.clawAuthorize')} · {channel?.name ?? ''}</Modal.Heading>
           </Modal.Header>
           <Modal.Body>
             <div className="flex flex-col items-center gap-3 py-2">
@@ -552,7 +550,7 @@ function WechatAuthModal({
                   <p className="text-sm font-medium">{t('channels.clawQrSuccess')}</p>
                 </div>
               )}
-              {phase === 'error' && (
+              {phase === 'error' && channel && (
                 <div className="flex w-full flex-col items-center gap-3 py-4 text-center">
                   <p className="text-sm text-danger">{error}</p>
                   <Button
