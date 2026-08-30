@@ -8,6 +8,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using LibraNextgen.Common.Authorization;
 using LibraNextgen.Common.Models;
+using LibraNextgen.Common.Protocol;
 using LibraNextgen.Service.Configuration;
 using LibraNextgen.Service.Data;
 using LibraNextgen.Service.Mcp;
@@ -71,6 +72,7 @@ public class AiService
     private readonly AiPromptFileLoader _promptLoader;
     private readonly AuditService _audit;
     private readonly IHttpContextAccessor _http;
+    private readonly ConnectionManager _ws;
     private readonly ConcurrentDictionary<string, AiRunState> _runs = new();
     /// <summary>审批决策门闩：callId → 等待中的 TaskCompletionSource（普通 MCP 等待语义）。</summary>
     private readonly ConcurrentDictionary<string, TaskCompletionSource<string>> _approvalGates = new();
@@ -89,7 +91,8 @@ public class AiService
         ILogger<AiService> logger,
         AiPromptFileLoader promptLoader,
         AuditService audit,
-        IHttpContextAccessor http)
+        IHttpContextAccessor http,
+        ConnectionManager ws)
     {
         _db = db;
         _services = services;
@@ -97,6 +100,7 @@ public class AiService
         _promptLoader = promptLoader;
         _audit = audit;
         _http = http;
+        _ws = ws;
     }
 
     /// <summary>在请求作用域内解析 Scoped 服务（工具反射注入用；单例下不可直接 GetService）。</summary>
@@ -1703,6 +1707,32 @@ public class AiService
             session,
             new ReplaceOptions { IsUpsert = false },
             ct);
+        // 实时同步：广播会话变更，控制台 AI 页（含频道会话、事件触发运行、多操作员）实时刷新。
+        NotifySessionUpdated(session);
+    }
+
+    /// <summary>广播 ai.session.updated（fire-and-forget，失败仅记日志不影响主流程）。</summary>
+    private void NotifySessionUpdated(AiSession session)
+    {
+        try
+        {
+            var msg = new WebSocketMessage
+            {
+                Type = "ai.session.updated",
+                Channel = "console",
+                Data = JsonSerializer.SerializeToElement(new
+                {
+                    sessionId = session.Id,
+                    channelId = session.ChannelId,
+                    updatedAt = session.UpdatedAt,
+                }),
+            };
+            _ = _ws.BroadcastToConsoleAsync(msg);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "Broadcast ai.session.updated failed ({Session})", session.Id);
+        }
     }
 
     // ── 密钥保护（与 JwtSettings 一致：Windows DPAPI CurrentUser）─────────

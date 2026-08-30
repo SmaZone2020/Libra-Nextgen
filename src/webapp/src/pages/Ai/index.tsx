@@ -70,6 +70,9 @@ export default function AiPage() {
   const pendingSessionIdRef = useRef<string | null>(null);
   const sidebarRefreshKeyRef = useRef(0);
   const [sidebarRefreshKey, setSidebarRefreshKey] = useState(0);
+  // WS 回调闭包读取的流式状态镜像（避免重新订阅导致回调里拿到旧值）。
+  const streamingRef = useRef<StreamingState>('idle');
+  useEffect(() => { streamingRef.current = streaming; }, [streaming]);
 
   const activeId = sessionId ?? null;
 
@@ -110,16 +113,23 @@ export default function AiPage() {
     };
   }, []);
 
-  // 事件订阅通知：服务端事件触发 AI 提醒后广播 ai.notify → 刷新侧边栏，若当前正打开该会话则重新拉取。
+  // 实时刷新：服务端广播 ai.session.updated（会话落库，含频道会话/事件触发/多操作员）与
+  // ai.notify（事件订阅提醒）→ 刷新侧边栏；若当前正打开该会话且非本地流式中，重新拉取会话。
   useEffect(() => {
-    return consoleWs.on('ai.notify', (msg) => {
+    const refresh = (msg: { data?: unknown }) => {
       const data = msg?.data as { sessionId?: string } | null | undefined;
-      if (data?.sessionId === activeId) {
+      if (data?.sessionId === activeId && streamingRef.current === 'idle') {
         void getAiSession(activeId).then(setSession).catch(() => undefined);
       }
       sidebarRefreshKeyRef.current += 1;
       setSidebarRefreshKey(sidebarRefreshKeyRef.current);
-    });
+    };
+    const offNotify = consoleWs.on('ai.notify', refresh);
+    const offUpdated = consoleWs.on('ai.session.updated', refresh);
+    return () => {
+      offNotify();
+      offUpdated();
+    };
   }, [activeId]);
 
   const enabledProviders = useMemo(
