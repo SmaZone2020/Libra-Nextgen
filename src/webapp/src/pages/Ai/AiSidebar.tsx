@@ -183,7 +183,7 @@ export function AiSidebar({ activeSessionId, refreshKey = 0, onSelectSession, on
           <div className="flex justify-center py-8">
             <Spinner size="sm" />
           </div>
-        ) : filtered.length === 0 ? (
+        ) : filtered.length === 0 && filteredChannel.length === 0 ? (
           <div className="px-3 py-8 text-center text-xs text-muted">
             NONE
           </div>
