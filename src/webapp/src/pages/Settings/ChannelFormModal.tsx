@@ -476,6 +476,7 @@ function WechatAuthModal({
   }, [open]);
 
   // 扫描阶段：前端轮询扫码状态；confirmed → 写入 token（编辑态直接存频道，新建态回填表单待保存）。
+  // 与参考实现一致：轮询请求失败/超时视为 wait，继续轮询（后端对 iLink 长轮询超时也返回 wait）。
   useEffect(() => {
     if (!open || phase !== 'scanning' || qrcode.length === 0) return;
     let stopped = false;
@@ -487,7 +488,13 @@ function WechatAuthModal({
         if (r.status === 'confirmed' && r.botToken) {
           setPolling(false);
           setPhase('done');
-          if (channel) await setAiChannelWechatToken(channel.id, r.botToken);
+          if (channel) {
+            try {
+              await setAiChannelWechatToken(channel.id, r.botToken, r.baseUrl, r.ilinkBotId);
+            } catch {
+              /* 写频道失败不阻断回填：表单保存时仍会带上 token */
+            }
+          }
           if (!stopped) onTokenSet(r.botToken);
           return;
         }
@@ -498,11 +505,10 @@ function WechatAuthModal({
           return;
         }
         timer = setTimeout(() => void poll(), 2000);
-      } catch (e) {
+      } catch {
+        // 轮询错误（网络抖动/超时）→ 继续轮询，不中断授权流程。
         if (stopped) return;
-        setPolling(false);
-        setError(e instanceof Error ? e.message : String(e));
-        setPhase('error');
+        timer = setTimeout(() => void poll(), 2000);
       }
     };
     setPolling(true);

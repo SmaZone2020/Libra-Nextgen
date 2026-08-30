@@ -128,9 +128,14 @@ export async function getAiChannelQrStatus(qrcode: string): Promise<AiChannelQrS
   return api.post<AiChannelQrStatus>('/ai/channels/wechat/qrcode/status', { qrcode });
 }
 
-/** 把扫码确认得到的 bot_token 写入频道配置（服务端加密存储）。 */
-export async function setAiChannelWechatToken(channelId: string, token: string): Promise<void> {
-  await api.post<void>(`/ai/channels/${channelId}/token`, { token });
+/** 把扫码确认得到的 bot_token 写入频道配置（服务端加密存储；baseUrl/ilinkBotId 来自 confirmed 响应，按官方协议一并持久化）。 */
+export async function setAiChannelWechatToken(
+  channelId: string,
+  token: string,
+  baseUrl?: string | null,
+  ilinkBotId?: string | null,
+): Promise<void> {
+  await api.post<void>(`/ai/channels/${channelId}/token`, { token, baseUrl, ilinkBotId });
 }
 
 /** 生成一次性绑定码（15 分钟有效，仅本次响应可见）。 */

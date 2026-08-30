@@ -334,9 +334,12 @@ public class AiChannelService
 
     /// <summary>
     /// 设置频道的 bot_token（iLink 扫码登录确认后的令牌）。
+    /// 按官方协议：confirmed 响应里的 baseurl 可能与默认基座不同，必须持久化并用于后续所有调用；
+    /// ilink_bot_id 一并保存（多账号区分用）。
     /// 仅当令牌为哨兵或空时按"未配置"处理（不覆盖已存密钥）。
     /// </summary>
-    public async Task<bool> SetChannelTokenAsync(string id, string token, CancellationToken ct = default)
+    public async Task<bool> SetChannelTokenAsync(
+        string id, string token, string? baseUrl = null, string? ilinkBotId = null, CancellationToken ct = default)
     {
         var ch = await GetChannelAsync(id, includeSecrets: true, ct);
         if (ch == null) return false;
@@ -350,6 +353,11 @@ public class AiChannelService
         else
         {
             ch.Config["botToken"] = value;
+            // 官方协议：始终使用 confirmed 返回的 baseurl（与默认不同时以后端返回值为准）。
+            if (!string.IsNullOrWhiteSpace(baseUrl))
+                ch.Config["baseUrl"] = baseUrl.Trim().TrimEnd('/');
+            if (!string.IsNullOrWhiteSpace(ilinkBotId))
+                ch.Config["ilinkBotId"] = ilinkBotId.Trim();
         }
         EncryptSensitive(ch);
         await Channels.ReplaceOneAsync(x => x.Id == id, ch, cancellationToken: ct);

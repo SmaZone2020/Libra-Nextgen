@@ -106,14 +106,14 @@ public class AiChannelController : ControllerBase
         return ok ? Ok(new { ok = true }) : Ok(new { ok = false, error });
     }
 
-    /// <summary>设置微信频道的 bot_token（iLink 扫码授权确认后由"授权"流程写入）。</summary>
+    /// <summary>设置微信频道的 bot_token（iLink 扫码授权确认后由"授权"流程写入；同时持久化返回的 baseurl / ilink_bot_id）。</summary>
     [HttpPost("{id}/token")]
     [Authorize(Roles = "Admin")]
     public async Task<IActionResult> SetToken(string id, [FromBody] AiChannelTokenReq req, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(req.Token))
             return BadRequest(new { error = "token is required" });
-        var ok = await _channels.SetChannelTokenAsync(id, req.Token.Trim(), ct);
+        var ok = await _channels.SetChannelTokenAsync(id, req.Token.Trim(), req.BaseUrl, req.ILinkBotId, ct);
         return ok ? Ok(new { saved = true }) : NotFound(new { error = "channel not found" });
     }
 
@@ -300,10 +300,12 @@ public class AiChannelReq
     public bool AllowInGroups { get; set; }
 }
 
-/// <summary>写入频道 bot_token（iLink 扫码授权确认后由"授权"流程调用）。</summary>
+/// <summary>写入频道 bot_token（iLink 扫码授权确认后由"授权"流程调用；baseUrl/ilinkBotId 来自 confirmed 响应，按官方协议一并持久化）。</summary>
 public class AiChannelTokenReq
 {
     public string? Token { get; set; }
+    public string? BaseUrl { get; set; }
+    public string? ILinkBotId { get; set; }
 }
 
 /// <summary>微信 iLink 扫码状态轮询请求（携带 get_bot_qrcode 返回的 qrcode 令牌）。</summary>
