@@ -57,6 +57,8 @@ export interface AiChannelInput {
 export interface AiBindCode {
   code: string;
   expiresAt: string;
+  /** Telegram 深链绑定链接（t.me/{bot}?start=CODE），点击即触发绑定。 */
+  bindUrl?: string | null;
 }
 
 // ── API ──────────────────────────────────────────────────────────────────

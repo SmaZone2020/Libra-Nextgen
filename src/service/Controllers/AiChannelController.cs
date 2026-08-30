@@ -115,8 +115,8 @@ public class AiChannelController : ControllerBase
             return BadRequest(new { error = "userId is required" });
         try
         {
-            var (code, expiresAt) = await _channels.CreateBindCodeAsync(id, req.UserId.Trim(), ct);
-            return Ok(new { code, expiresAt });
+            var (code, expiresAt, bindUrl) = await _channels.CreateBindCodeAsync(id, req.UserId.Trim(), ct);
+            return Ok(new { code, expiresAt, bindUrl });
         }
         catch (KeyNotFoundException ex)
         {

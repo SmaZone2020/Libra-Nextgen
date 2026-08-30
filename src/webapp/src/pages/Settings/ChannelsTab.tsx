@@ -317,6 +317,16 @@ function BindCodeModal({ channel, onClose }: { channel: AiChannel; onClose: () =
                       <Copy className="size-4" />
                     </Button>
                   </div>
+                  {result.bindUrl && (
+                    <a
+                      href={result.bindUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="mt-2 block truncate text-xs text-primary underline"
+                    >
+                      {result.bindUrl}
+                    </a>
+                  )}
                   <p className="mt-2 text-xs text-default-500">
                     {t('channels.expires')} {new Date(result.expiresAt).toLocaleString()}
                   </p>

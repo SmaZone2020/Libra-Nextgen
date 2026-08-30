@@ -324,8 +324,11 @@ public class AiChannelService
     public static string HashCode(string code) =>
         Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(code.Trim().ToUpperInvariant())));
 
-    /// <summary>管理员为指定控制台账号生成一次性绑定码（15 分钟有效，只存哈希）。</summary>
-    public async Task<(string Code, DateTime ExpiresAt)> CreateBindCodeAsync(
+    /// <summary>
+    /// 管理员为指定控制台账号生成一次性绑定码（15 分钟有效，只存哈希）。
+    /// bindUrl：Telegram 频道的深链绑定链接（t.me/{bot}?start=CODE），点击即触发 /start CODE。
+    /// </summary>
+    public async Task<(string Code, DateTime ExpiresAt, string? BindUrl)> CreateBindCodeAsync(
         string channelId, string boundUserId, CancellationToken ct = default)
     {
         var ch = await Channels.Find(x => x.Id == channelId).FirstOrDefaultAsync(ct)
@@ -343,7 +346,14 @@ public class AiChannelService
             ExpiresAt = expiresAt,
         }, cancellationToken: ct);
         _logger.LogInformation("Bind code created for channel {Channel} → user {User}", channelId, user.Username);
-        return (code, expiresAt);
+        string? bindUrl = null;
+        if (ch.ChannelType == AiChannelTypes.Telegram)
+        {
+            var username = await AdapterFor(ch.ChannelType).GetBotUsernameAsync(ch, ct);
+            if (!string.IsNullOrEmpty(username))
+                bindUrl = $"https://t.me/{username}?start={code}";
+        }
+        return (code, expiresAt, bindUrl);
     }
 
     public async Task<List<AiChannelUser>> ListUsersAsync(string channelId, CancellationToken ct = default)
@@ -509,6 +519,12 @@ public class AiChannelService
         {
             case "/start":
             {
+                // 深链绑定：https://t.me/{bot}?start=CODE → Telegram 自动发送 /start CODE。
+                if (parts.Length > 1)
+                {
+                    await TryBindAsync(ch, msg, parts[1], ct);
+                    break;
+                }
                 // /start 只做简单介绍：Telegram 附带常驻键盘（Help），完整指令见 /help。
                 if (ch.ChannelType == AiChannelTypes.Telegram)
                 {
@@ -1016,7 +1032,10 @@ public class AiChannelService
             .FirstOrDefaultAsync(ct);
         if (existing != null)
         {
-            await TrySendAsync(ch, Target(msg), $"已绑定到账号「{existing.BoundUserName}」，如需解绑请联系管理员。", ct);
+            // 已绑定：明确提示，避免误读为"绑定成功"。
+            await TrySendRichAsync(ch, Target(msg),
+                $"你已经绑定到账号 <b>{HtmlEncode(existing.BoundUserName)}</b>，无需重复绑定。\n如需更换，请联系管理员解绑。",
+                $"你已经绑定到账号「{existing.BoundUserName}」，无需重复绑定。\n如需更换，请联系管理员解绑。", ct);
             return;
         }
         if (string.IsNullOrWhiteSpace(code))

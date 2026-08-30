@@ -140,6 +140,12 @@ public class MongoIndexBuilder
                     .Ascending(b => b.ChannelId)
                     .Ascending(b => b.ExpiresAt)),
             cancellationToken: ct);
+        // TTL：过期绑定码自动清理（防未使用码堆积）。
+        await codes.Indexes.CreateOneAsync(
+            new CreateIndexModel<AiChannelBindCode>(
+                Builders<AiChannelBindCode>.IndexKeys.Ascending(b => b.ExpiresAt),
+                new CreateIndexOptions { ExpireAfter = TimeSpan.Zero }),
+            cancellationToken: ct);
 
         var cursors = _context.GetCollection<AiChannelCursor>("ai_channel_cursors");
         await cursors.Indexes.CreateOneAsync(

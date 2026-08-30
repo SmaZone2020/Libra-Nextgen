@@ -162,6 +162,10 @@ public interface IAiChannelAdapter
     Task<bool> DeleteMessageAsync(AiChannel channel, string externalId, long messageId, CancellationToken ct) =>
         Task.FromResult(false);
 
+    /// <summary>获取 bot 用户名（深链绑定 t.me/{username}?start=CODE 用）。默认空。</summary>
+    Task<string> GetBotUsernameAsync(AiChannel channel, CancellationToken ct) =>
+        Task.FromResult("");
+
     /// <summary>
     /// 发送带自定义键盘的消息（聊天框下方常驻按钮，点击发送按钮文本）。
     /// 默认 no-op（仅 Telegram 支持）。
@@ -591,6 +595,10 @@ public class TelegramChannelAdapter : IAiChannelAdapter
         _botUsernames[channel.Id] = u;
         return u;
     }
+
+    /// <summary>获取 bot 用户名（深链绑定链接用；惰性获取并缓存）。</summary>
+    public Task<string> GetBotUsernameAsync(AiChannel channel, CancellationToken ct) =>
+        EnsureBotUsernameAsync(channel, ct);
 
     private async Task HandleUpdateAsync(
         AiChannel channel, ITelegramBotClient bot, Update update,
