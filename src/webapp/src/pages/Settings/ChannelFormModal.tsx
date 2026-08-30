@@ -12,14 +12,18 @@ import {
   Spinner,
   Switch,
 } from '@heroui/react';
-import { CircleCheck } from '@gravity-ui/icons';
+import { CircleCheck, QrCode } from '@gravity-ui/icons';
 import {
   createAiChannel,
+  getAiChannelQrStatus,
+  getAiChannelWechatQrCode,
+  setAiChannelWechatToken,
   testAiChannel,
   updateAiChannel,
   type AiChannel,
   type AiChannelInput,
   type AiChannelType,
+  type AiChannelQrStatus,
 } from '../../api/aiChannels';
 import { getAiProviders, type AiProvider } from '../../api/ai';
 
@@ -65,6 +69,7 @@ export function ChannelFormModal({ open, editing, onClose, onSaved }: ChannelFor
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<{ ok: boolean; message?: string } | null>(null);
   const [providers, setProviders] = useState<AiProvider[]>([]);
+  const [authOpen, setAuthOpen] = useState(false);
 
   useEffect(() => {
     if (!open) return;
@@ -146,7 +151,6 @@ export function ChannelFormModal({ open, editing, onClose, onSaved }: ChannelFor
   };
 
   const cfg = form.config;
-
   return (
     <Modal.Backdrop isOpen={open} onOpenChange={(o) => { if (!o) onClose(); }}>
       <Modal.Container placement="center" size="lg">
@@ -280,28 +284,42 @@ export function ChannelFormModal({ open, editing, onClose, onSaved }: ChannelFor
               {form.channelType === 'wechat-claw' && (
                 <>
                   <div className="md:col-span-2">
-                    <Label className="mb-1.5 block text-sm">{t('channels.clawBaseUrl')}</Label>
-                    <Input
-                      value={cfg.baseUrl ?? ''}
-                      onChange={(e) => patchConfig('baseUrl', e.target.value)}
-                      placeholder="https://ilinkai.weixin.qq.com"
-                      variant="secondary"
-                    />
-                  </div>
-                  <div className="md:col-span-2">
                     <Label className="mb-1.5 block text-sm">{t('channels.clawToken')}</Label>
-                    <Input
-                      type="password"
-                      value={cfg.botToken ?? ''}
-                      onChange={(e) => patchConfig('botToken', e.target.value)}
-                      placeholder={editing ? t('channels.keepSecret') : ''}
-                      variant="secondary"
-                    />
+                    <div className="flex items-center gap-2">
+                      <Input
+                        type="password"
+                        className="flex-1"
+                        value={cfg.botToken ?? ''}
+                        onChange={(e) => patchConfig('botToken', e.target.value)}
+                        placeholder={editing ? t('channels.keepSecret') : ''}
+                        variant="secondary"
+                      />
+                      <Button
+                        size="sm"
+                        variant="primary"
+                        isDisabled={!editing}
+                        className="shrink-0"
+                        onPress={() => setAuthOpen(true)}
+                      >
+                        <QrCode className="size-4" />
+                        {t('channels.clawAuthorize')}
+                      </Button>
+                    </div>
+                    <p className="mt-1 text-xs text-default-500">{t('channels.clawTokenHint')}</p>
                   </div>
+                  {editing && (
+                    <WechatAuthModal
+                      channel={editing}
+                      open={authOpen}
+                      onClose={() => setAuthOpen(false)}
+                      onTokenSet={(token) => {
+                        patchConfig('botToken', token);
+                        setAuthOpen(false);
+                      }}
+                    />
+                  )}
                 </>
               )}
-
-
 
               <div>
                 <Label className="mb-1.5 block text-sm">{t('channels.provider')}</Label>
@@ -384,15 +402,20 @@ export function ChannelFormModal({ open, editing, onClose, onSaved }: ChannelFor
                   <Switch.Control><Switch.Thumb /></Switch.Control>
                   <Label className="ml-2 text-sm">{t('channels.showToolCalls')}</Label>
                 </Switch>
-                <Switch isSelected={form.streamOutput} onChange={(v) => patch({ streamOutput: v })}>
-                  <Switch.Control><Switch.Thumb /></Switch.Control>
-                  <Label className="ml-2 text-sm">{t('channels.streamOutput')}</Label>
-                </Switch>
+                {form.channelType !== 'wechat-claw' && (
+                  <Switch isSelected={form.streamOutput} onChange={(v) => patch({ streamOutput: v })}>
+                    <Switch.Control><Switch.Thumb /></Switch.Control>
+                    <Label className="ml-2 text-sm">{t('channels.streamOutput')}</Label>
+                  </Switch>
+                )}
                 {form.channelType === 'telegram' && (
                   <Switch isSelected={form.allowInGroups} onChange={(v) => patch({ allowInGroups: v })}>
                     <Switch.Control><Switch.Thumb /></Switch.Control>
                     <Label className="ml-2 text-sm">{t('channels.allowInGroups')}</Label>
                   </Switch>
+                )}
+                {form.channelType === 'wechat-claw' && (
+                  <p className="w-full text-xs text-default-500">{t('channels.clawNoStream')}</p>
                 )}
               </div>
             </div>
@@ -404,6 +427,162 @@ export function ChannelFormModal({ open, editing, onClose, onSaved }: ChannelFor
             <Button variant="primary" isDisabled={saving || !form.name.trim()} onPress={() => void handleSave()}>
               {saving ? <Spinner size="sm" /> : null}
               {t('common.save')}
+            </Button>
+          </Modal.Footer>
+        </Modal.Dialog>
+      </Modal.Container>
+    </Modal.Backdrop>
+  );
+}
+
+/** 微信 iLink 扫码授权弹窗：申请二维码 → 展示 → 前端轮询状态 → confirmed 自动回填 bot_token。 */
+function WechatAuthModal({
+  channel,
+  open,
+  onClose,
+  onTokenSet,
+}: {
+  channel: AiChannel;
+  open: boolean;
+  onClose: () => void;
+  onTokenSet: (token: string) => void;
+}) {
+  const { t } = useTranslation();
+  const [phase, setPhase] = useState<'idle' | 'loading' | 'scanning' | 'done' | 'error'>('idle');
+  const [imageUrl, setImageUrl] = useState('');
+  const [qrcode, setQrcode] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [polling, setPolling] = useState(false);
+
+  // 打开时申请二维码；关闭/切换频道时停止轮询并复位。
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    setPhase('loading');
+    setError(null);
+    void getAiChannelWechatQrCode(channel.id)
+      .then((r) => {
+        if (cancelled) return;
+        setQrcode(r.qrcode);
+        setImageUrl(r.imageUrl);
+        setPhase('scanning');
+      })
+      .catch((e) => {
+        if (cancelled) return;
+        setError(e instanceof Error ? e.message : String(e));
+        setPhase('error');
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, channel.id]);
+
+  // 扫描阶段：前端轮询扫码状态；confirmed → 自动写入 bot_token 并回填表单。
+  useEffect(() => {
+    if (!open || phase !== 'scanning' || qrcode.length === 0) return;
+    let stopped = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const poll = async () => {
+      try {
+        const r: AiChannelQrStatus = await getAiChannelQrStatus(channel.id, qrcode);
+        if (stopped) return;
+        if (r.status === 'confirmed' && r.botToken) {
+          setPolling(false);
+          setPhase('done');
+          await setAiChannelWechatToken(channel.id, r.botToken);
+          if (!stopped) onTokenSet(r.botToken);
+          return;
+        }
+        if (r.status === 'expired') {
+          setPolling(false);
+          setError(t('channels.clawQrExpired'));
+          setPhase('error');
+          return;
+        }
+        timer = setTimeout(() => void poll(), 2000);
+      } catch (e) {
+        if (stopped) return;
+        setPolling(false);
+        setError(e instanceof Error ? e.message : String(e));
+        setPhase('error');
+      }
+    };
+    setPolling(true);
+    void poll();
+    return () => {
+      stopped = true;
+      setPolling(false);
+      if (timer) clearTimeout(timer);
+    };
+  }, [open, phase, qrcode, channel.id, t, onTokenSet]);
+
+  return (
+    <Modal.Backdrop isOpen={open} onOpenChange={(o) => { if (!o) onClose(); }}>
+      <Modal.Container placement="center" size="sm">
+        <Modal.Dialog>
+          <Modal.CloseTrigger />
+          <Modal.Header>
+            <Modal.Heading>{t('channels.clawAuthorize')} · {channel.name}</Modal.Heading>
+          </Modal.Header>
+          <Modal.Body>
+            <div className="flex flex-col items-center gap-3 py-2">
+              {phase === 'loading' && (
+                <div className="flex flex-col items-center gap-3 py-8">
+                  <Spinner size="lg" />
+                  <p className="text-sm text-default-500">{t('channels.clawQrLoading')}</p>
+                </div>
+              )}
+              {phase === 'scanning' && (
+                <>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={imageUrl}
+                    alt={t('channels.clawAuthorize')}
+                    className="size-56 rounded-2xl border border-default-200 object-contain p-2 dark:border-default-800"
+                  />
+                  <p className="flex items-center gap-2 text-sm text-default-500">
+                    {polling && <Spinner size="sm" />}
+                    {t('channels.clawQrHint')}
+                  </p>
+                </>
+              )}
+              {phase === 'done' && (
+                <div className="flex flex-col items-center gap-2 py-6 text-center">
+                  <CircleCheck className="size-10 text-success" />
+                  <p className="text-sm font-medium">{t('channels.clawQrSuccess')}</p>
+                </div>
+              )}
+              {phase === 'error' && (
+                <div className="flex w-full flex-col items-center gap-3 py-4 text-center">
+                  <p className="text-sm text-danger">{error}</p>
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onPress={() => {
+                      setPhase('loading');
+                      setError(null);
+                      setQrcode('');
+                      void getAiChannelWechatQrCode(channel.id)
+                        .then((r) => {
+                          setQrcode(r.qrcode);
+                          setImageUrl(r.imageUrl);
+                          setPhase('scanning');
+                        })
+                        .catch((e) => {
+                          setError(e instanceof Error ? e.message : String(e));
+                          setPhase('error');
+                        });
+                    }}
+                  >
+                    {t('common.retry')}
+                  </Button>
+                </div>
+              )}
+            </div>
+          </Modal.Body>
+          <Modal.Footer>
+            <Button variant="ghost" onPress={onClose}>
+              {phase === 'done' ? t('common.close') : t('common.cancel')}
             </Button>
           </Modal.Footer>
         </Modal.Dialog>

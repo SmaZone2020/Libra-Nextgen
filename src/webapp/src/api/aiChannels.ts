@@ -61,6 +61,24 @@ export interface AiBindCode {
   bindUrl?: string | null;
 }
 
+/** 微信 iLink 扫码登录：get_bot_qrcode 响应。 */
+export interface AiChannelWechatQrCode {
+  /** 二维码轮询令牌（传给状态轮询接口）。 */
+  qrcode: string;
+  /** 可直接渲染的二维码图片 URL（微信 liteapp 链接）。 */
+  imageUrl: string;
+}
+
+/** 微信 iLink 扫码状态轮询结果。 */
+export interface AiChannelQrStatus {
+  /** wait | scaned | confirmed | expired。 */
+  status: 'wait' | 'scaned' | 'confirmed' | 'expired' | string;
+  /** confirmed 时返回的 bot_token（仅该次响应可见一次）。 */
+  botToken?: string | null;
+  ilinkBotId?: string | null;
+  baseUrl?: string | null;
+}
+
 /** 绑定码记录（列表展示；仅尾号可见）。 */
 export interface AiBindCodeInfo {
   id: string;
@@ -98,6 +116,24 @@ export async function testAiChannel(
   input: AiChannelInput,
 ): Promise<{ ok: boolean; error?: string }> {
   return api.post<{ ok: boolean; error?: string }>(`/ai/channels/${id}/test`, input);
+}
+
+/** 微信 iLink 授权：申请登录二维码（返回 qrcode 令牌 + 二维码图片 URL）。 */
+export async function getAiChannelWechatQrCode(channelId: string): Promise<AiChannelWechatQrCode> {
+  return api.post<AiChannelWechatQrCode>(`/ai/channels/${channelId}/wechat/qrcode`);
+}
+
+/** 微信 iLink 授权：轮询扫码状态；confirmed 时返回 bot_token（仅该次响应可见一次）。 */
+export async function getAiChannelQrStatus(
+  channelId: string,
+  qrcode: string,
+): Promise<AiChannelQrStatus> {
+  return api.post<AiChannelQrStatus>(`/ai/channels/${channelId}/wechat/qrcode/status`, { qrcode });
+}
+
+/** 把扫码确认得到的 bot_token 写入频道配置（服务端加密存储）。 */
+export async function setAiChannelWechatToken(channelId: string, token: string): Promise<void> {
+  await api.post<void>(`/ai/channels/${channelId}/token`, { token });
 }
 
 /** 生成一次性绑定码（15 分钟有效，仅本次响应可见）。 */

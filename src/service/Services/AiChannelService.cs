@@ -12,8 +12,9 @@ namespace LibraNextgen.Service.Services;
 
 /// <summary>
 /// AI 频道网关：IM 接入（Telegram / 飞书 / 微信 Claw）的统一入口。
-/// 职责：频道配置 CRUD、一次性绑定码、入站消息管线（限流 → 命令 → 身份解析 → 会话路由 →
-/// 复用 AiService.RunChatAsync 的聊天/工具/审批管线，事件出口换成 ChannelSink 回发 IM）。
+/// 职责：频道配置 CRUD、微信扫码授权（bot_token 写入）、一次性绑定码、入站消息管线
+/// （限流 → 命令 → 身份解析 → 会话路由 → 复用 AiService.RunChatAsync 的聊天/工具/审批管线，
+/// 事件出口换成 ChannelSink 回发 IM）。
 /// 权限：频道会话的 Justitia 档位由服务端强制（频道默认档位 + 用户覆盖），不信任客户端；
 /// 审批永远发生在控制台（复用现有 /api/ai/chat/action 门闩），频道只是展示端。
 /// </summary>
@@ -135,7 +136,11 @@ public class AiChannelService
         {
             AiChannelTypes.Telegram => new[] { "botToken" },
             AiChannelTypes.Lark => new[] { "appId", "appSecret" },
-            _ => new[] { "clawBaseUrl" },
+            // 微信 iLink：基座地址固定为官方地址（无需填写）；bot_token 允许留空，
+            // 留空时频道可保存但不可用，管理员随后用"授权"扫码填入。bot_token 为空
+            // 与哨兵值在创建/更新时都会被视为"未配置"（不覆盖已存密钥）。
+            AiChannelTypes.WechatClaw => Array.Empty<string>(),
+            _ => throw new ArgumentException($"unsupported channel type '{ch.ChannelType}'"),
         };
         foreach (var k in required)
             if (!ch.Config.TryGetValue(k, out var v) || string.IsNullOrWhiteSpace(v) || v == SecretSentinel)
@@ -173,7 +178,13 @@ public class AiChannelService
             if (list.Count > 0) filter &= Builders<AiChannel>.Filter.In(c => c.ChannelType, list);
         }
         var result = await Channels.Find(filter).ToListAsync(ct);
-        foreach (var ch in result) DecryptSensitive(ch);
+        foreach (var ch in result)
+        {
+            // 配置持久化时为静态加密；解密失败（历史明文/旧格式）直接跳过敏感项，
+            // 后台轮询仍可运行，不因配置异常拖垮整个 reconcile。
+            try { DecryptSensitive(ch); }
+            catch (Exception ex) { _logger.LogWarning(ex, "Failed to decrypt channel config ({Channel}) — sensitive fields skipped", ch.Id); }
+        }
         return result;
     }
 
@@ -193,6 +204,12 @@ public class AiChannelService
             StreamOutput = input.StreamOutput,
             AllowInGroups = input.AllowInGroups,
         };
+        // 微信 iLink：基座地址固定为官方地址（用户无需填写）；微信不支持流式输出（iLink 无消息编辑能力）。
+        if (ch.ChannelType == AiChannelTypes.WechatClaw)
+        {
+            ch.Config["baseUrl"] = WeChatClawAdapter.DefaultBase;
+            ch.StreamOutput = false;
+        }
         Validate(ch);
         EncryptSensitive(ch);
         await Channels.InsertOneAsync(ch, cancellationToken: ct);
@@ -227,6 +244,11 @@ public class AiChannelService
             CreatedAt = existing.CreatedAt,
             UpdatedAt = DateTime.UtcNow,
         };
+        // 更新后渠道类型若变为微信：补默认基座地址（历史数据可能没有 baseUrl）。
+        if (ch.ChannelType == AiChannelTypes.WechatClaw && !ch.Config.ContainsKey("baseUrl"))
+            ch.Config["baseUrl"] = WeChatClawAdapter.DefaultBase;
+        // 微信不支持流式输出（iLink 无消息编辑能力）：强制关闭，避免误开启后静默回退。
+        if (ch.ChannelType == AiChannelTypes.WechatClaw) ch.StreamOutput = false;
         Validate(ch);
         EncryptSensitive(ch);
         var r = await Channels.ReplaceOneAsync(x => x.Id == id, ch, cancellationToken: ct);
@@ -306,6 +328,30 @@ public class AiChannelService
     public async Task DeletePollCursorAsync(string channelId, CancellationToken ct = default)
     {
         await Cursors.DeleteManyAsync(x => x.ChannelId == channelId, ct);
+    }
+
+    /// <summary>
+    /// 设置频道的 bot_token（iLink 扫码登录确认后的令牌）。
+    /// 仅当令牌为哨兵或空时按"未配置"处理（不覆盖已存密钥）。
+    /// </summary>
+    public async Task<bool> SetChannelTokenAsync(string id, string token, CancellationToken ct = default)
+    {
+        var ch = await GetChannelAsync(id, includeSecrets: true, ct);
+        if (ch == null) return false;
+        var value = token?.Trim() ?? "";
+        if (value.Length == 0 || value == SecretSentinel)
+        {
+            ch.Config["botToken"] = "";
+            // 会话失效后旧游标已无意义：清掉，避免 -14 后带着旧游标重放。
+            await DeletePollCursorAsync(id, ct);
+        }
+        else
+        {
+            ch.Config["botToken"] = value;
+        }
+        EncryptSensitive(ch);
+        await Channels.ReplaceOneAsync(x => x.Id == id, ch, cancellationToken: ct);
+        return true;
     }
 
     // ── 绑定码 / 绑定用户 ────────────────────────────────────────────────

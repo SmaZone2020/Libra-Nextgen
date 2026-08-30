@@ -8,7 +8,7 @@ namespace LibraNextgen.Service.Controllers;
 
 /// <summary>
 /// AI 频道（IM 接入）管理 API：
-/// 频道 CRUD / 测试连接（Admin）；一次性绑定码 / 绑定用户管理（Admin）；
+/// 频道 CRUD / 测试连接 / 微信扫码授权（Admin）；一次性绑定码 / 绑定用户管理（Admin）；
 /// 绑定用户查询自己的频道会话（登录用户）。
 /// </summary>
 [ApiController]
@@ -17,10 +17,12 @@ namespace LibraNextgen.Service.Controllers;
 public class AiChannelController : ControllerBase
 {
     private readonly AiChannelService _channels;
+    private readonly WeChatClawAdapter _claw;
 
-    public AiChannelController(AiChannelService channels)
+    public AiChannelController(AiChannelService channels, WeChatClawAdapter claw)
     {
         _channels = channels;
+        _claw = claw;
     }
 
     private string UserId => User.FindFirst(ClaimTypes.NameIdentifier)?.Value
@@ -102,6 +104,59 @@ public class AiChannelController : ControllerBase
         }
         var (ok, error) = await _channels.TestChannelAsync(input, ct);
         return ok ? Ok(new { ok = true }) : Ok(new { ok = false, error });
+    }
+
+    /// <summary>设置微信频道的 bot_token（iLink 扫码授权确认后由"授权"流程写入）。</summary>
+    [HttpPost("{id}/token")]
+    [Authorize(Roles = "Admin")]
+    public async Task<IActionResult> SetToken(string id, [FromBody] AiChannelTokenReq req, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(req.Token))
+            return BadRequest(new { error = "token is required" });
+        var ok = await _channels.SetChannelTokenAsync(id, req.Token.Trim(), ct);
+        return ok ? Ok(new { saved = true }) : NotFound(new { error = "channel not found" });
+    }
+
+    /// <summary>微信 iLink 扫码登录：申请授权二维码。返回 qrcode 令牌与二维码图片 URL。</summary>
+    [HttpPost("{id}/wechat/qrcode")]
+    [Authorize(Roles = "Admin")]
+    public async Task<IActionResult> WeChatQrCode(string id, CancellationToken ct)
+    {
+        var ch = await _channels.GetChannelAsync(id, includeSecrets: true, ct);
+        if (ch == null) return NotFound(new { error = "channel not found" });
+        if (ch.ChannelType != AiChannelTypes.WechatClaw)
+            return BadRequest(new { error = "channel is not wechat-claw" });
+        try
+        {
+            var (qrcode, imageUrl) = await _claw.CreateQrCodeAsync(ch, ct);
+            return Ok(new { qrcode, imageUrl });
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+    }
+
+    /// <summary>微信 iLink 扫码登录：轮询扫码状态。confirmed 时返回 bot_token（本次响应仅此一次）。</summary>
+    [HttpPost("{id}/wechat/qrcode/status")]
+    [Authorize(Roles = "Admin")]
+    public async Task<IActionResult> WeChatQrStatus(string id, [FromBody] AiChannelQrStatusReq req, CancellationToken ct)
+    {
+        var ch = await _channels.GetChannelAsync(id, includeSecrets: true, ct);
+        if (ch == null) return NotFound(new { error = "channel not found" });
+        if (ch.ChannelType != AiChannelTypes.WechatClaw)
+            return BadRequest(new { error = "channel is not wechat-claw" });
+        if (string.IsNullOrWhiteSpace(req.Qrcode))
+            return BadRequest(new { error = "qrcode is required" });
+        try
+        {
+            var result = await _claw.GetQrCodeStatusAsync(ch, req.Qrcode.Trim(), ct);
+            return Ok(result);
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
     }
 
     // ── 绑定码 / 绑定用户（Admin）─────────────────────────────────────────
@@ -206,6 +261,18 @@ public class AiChannelReq
     public bool ShowToolCalls { get; set; } = true;
     public bool StreamOutput { get; set; }
     public bool AllowInGroups { get; set; }
+}
+
+/// <summary>写入频道 bot_token（iLink 扫码授权确认后由"授权"流程调用）。</summary>
+public class AiChannelTokenReq
+{
+    public string? Token { get; set; }
+}
+
+/// <summary>微信 iLink 扫码状态轮询请求（携带 get_bot_qrcode 返回的 qrcode 令牌）。</summary>
+public class AiChannelQrStatusReq
+{
+    public string? Qrcode { get; set; }
 }
 
 /// <summary>新建草稿测试连接：可带已有频道 id 以复用已存密钥。</summary>

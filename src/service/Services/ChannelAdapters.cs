@@ -201,6 +201,19 @@ public interface IAiChannelAdapter
         Task.FromResult(new ChannelPollBatch { NewCursor = cursor });
 }
 
+/// <summary>微信 iLink 扫码状态轮询结果。</summary>
+public sealed class WeChatQrStatusResult
+{
+    /// <summary>wait | scaned | confirmed | expired。</summary>
+    public string Status { get; init; } = "wait";
+    /// <summary>confirmed 时返回的 bot_token（仅此一次响应可见）。</summary>
+    public string? BotToken { get; init; }
+    /// <summary>confirmed 时返回的 bot 账号 ID（…@im.bot）。</summary>
+    public string? ILinkBotId { get; init; }
+    /// <summary>confirmed 时返回的业务基座地址（与默认一致时可为空）。</summary>
+    public string? BaseUrl { get; init; }
+}
+
 /// <summary>iLink 会话过期（ret/errcode -14），需要重新扫码登录。</summary>
 public sealed class SessionExpiredException : Exception
 {
@@ -1058,12 +1071,13 @@ public class LarkChannelAdapter : IAiChannelAdapter
 ///   - 出站：POST /ilink/bot/sendmessage，必须回传入站消息的 context_token（按用户缓存）；
 ///   - 鉴权：AuthorizationType: ilink_bot_token + Bearer bot_token + X-WECHAT-UIN + iLink-App-Id/ClientVersion；
 ///   - 会话过期：ret/errcode -14 → 需重新扫码登录（换 bot_token）。
-/// bot_token 通过扫码登录获得（/ilink/bot/get_bot_qrcode → /get_qrcode_status 轮询），
-/// 设置页"测试连接"会提示登录状态。
+/// bot_token 通过扫码登录获得（/ilink/bot/get_bot_qrcode → /get_qrcode_status 轮询）。
+/// 基座地址固定为官方地址（设置页无需填写）；微信不支持流式输出（iLink 无消息编辑能力）。
 /// </summary>
 public class WeChatClawAdapter : IAiChannelAdapter
 {
-    private const string DefaultBase = "https://ilinkai.weixin.qq.com";
+    /// <summary>微信 iLink 官方业务基座（固定，无需用户填写）。</summary>
+    public const string DefaultBase = "https://ilinkai.weixin.qq.com";
     private readonly IHttpClientFactory _httpFactory;
     private readonly ILogger<WeChatClawAdapter> _logger;
     /// <summary>每用户 context_token 缓存（键 = channelId|externalId；会话过期时清除）。</summary>
@@ -1146,7 +1160,7 @@ public class WeChatClawAdapter : IAiChannelAdapter
         var ret = JsonNode.Parse(respBody)?["ret"]?.GetValue<int>() ?? 0;
         if (ret == -14)
         {
-            _contextTokens.TryRemove(ctxKey, out _);
+            _contextTokens.Clear(); // 会话过期：所有用户缓存 token 一并失效
             throw new SessionExpiredException("iLink 会话已过期，需要重新扫码登录");
         }
         if (ret != 0)
@@ -1156,7 +1170,7 @@ public class WeChatClawAdapter : IAiChannelAdapter
     public async Task<(bool Ok, string Message)> TestAsync(AiChannel channel, CancellationToken ct)
     {
         if (BotToken(channel) == null)
-            return (false, "缺少 botToken（需先完成 iLink 扫码登录）");
+            return (false, "缺少 bot_token（需先在设置页完成扫码授权）");
         try
         {
             using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
@@ -1185,7 +1199,10 @@ public class WeChatClawAdapter : IAiChannelAdapter
         var doc = JsonNode.Parse(respBody) as JsonObject ?? new JsonObject();
         var ret = doc["ret"]?.GetValue<int>() ?? 0;
         if (ret == -14)
+        {
+            _contextTokens.Clear(); // 会话过期：所有用户缓存 token 一并失效
             throw new SessionExpiredException("iLink 会话已过期，需要重新扫码登录");
+        }
         if (ret != 0)
             throw new InvalidOperationException($"iLink getupdates ret={ret}: {Clip(respBody)}");
 
@@ -1214,6 +1231,52 @@ public class WeChatClawAdapter : IAiChannelAdapter
             }
         }
         return new ChannelPollBatch { NewCursor = newCursor, Messages = messages };
+    }
+
+    /// <summary>获取 iLink 登录二维码（GET /ilink/bot/get_bot_qrcode?bot_type=3）。</summary>
+    public async Task<(string Qrcode, string ImageUrl)> CreateQrCodeAsync(AiChannel channel, CancellationToken ct)
+    {
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        cts.CancelAfter(TimeSpan.FromSeconds(15));
+        var req = new HttpRequestMessage(HttpMethod.Get, $"{BaseUrl(channel)}/ilink/bot/get_bot_qrcode?bot_type=3");
+        // 官方 SDK：登录阶段仅带 SKRouteTag（可选）；不要求 X-WECHAT-UIN / Authorization。
+        req.Headers.Add("SKRouteTag", "1001");
+        var resp = await Client().SendAsync(req, cts.Token);
+        var respBody = await resp.Content.ReadAsStringAsync(ct);
+        if (!resp.IsSuccessStatusCode)
+            throw new InvalidOperationException($"iLink get_bot_qrcode HTTP {(int)resp.StatusCode}: {Clip(respBody)}");
+        var doc = JsonNode.Parse(respBody) as JsonObject ?? new JsonObject();
+        var qrcode = doc["qrcode"]?.GetValue<string>() ?? "";
+        var imageUrl = doc["qrcode_img_content"]?.GetValue<string>() ?? "";
+        if (qrcode.Length == 0)
+            throw new InvalidOperationException($"iLink get_bot_qrcode 响应缺少 qrcode: {Clip(respBody)}");
+        return (qrcode, imageUrl);
+    }
+
+    /// <summary>
+    /// 轮询 iLink 扫码状态（GET /ilink/bot/get_qrcode_status?qrcode=…）。
+    /// 返回 (status, botToken?, ilinkBotId?, baseUrl?)；status ∈ wait | scaned | confirmed | expired。
+    /// </summary>
+    public async Task<WeChatQrStatusResult> GetQrCodeStatusAsync(AiChannel channel, string qrcode, CancellationToken ct)
+    {
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        cts.CancelAfter(TimeSpan.FromSeconds(40)); // 官方实现长轮询 ~35s
+        var req = new HttpRequestMessage(HttpMethod.Get, $"{BaseUrl(channel)}/ilink/bot/get_qrcode_status?qrcode={Uri.EscapeDataString(qrcode)}");
+        req.Headers.Add("iLink-App-ClientVersion", "1");
+        req.Headers.Add("SKRouteTag", "1001");
+        var resp = await Client().SendAsync(req, cts.Token);
+        var respBody = await resp.Content.ReadAsStringAsync(ct);
+        if (!resp.IsSuccessStatusCode)
+            throw new InvalidOperationException($"iLink get_qrcode_status HTTP {(int)resp.StatusCode}: {Clip(respBody)}");
+        var doc = JsonNode.Parse(respBody) as JsonObject ?? new JsonObject();
+        var status = doc["status"]?.GetValue<string>() ?? "wait";
+        return new WeChatQrStatusResult
+        {
+            Status = status,
+            BotToken = doc["bot_token"]?.GetValue<string>() ?? "",
+            ILinkBotId = doc["ilink_bot_id"]?.GetValue<string>() ?? "",
+            BaseUrl = doc["baseurl"]?.GetValue<string>() ?? "",
+        };
     }
 
     private static string ExtractText(JsonArray? items)
