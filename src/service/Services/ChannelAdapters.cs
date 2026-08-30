@@ -1067,11 +1067,12 @@ public class LarkChannelAdapter : IAiChannelAdapter
 /// <summary>
 /// 微信 ClawBot 适配器——微信官方 iLink Bot API（HTTP/JSON）。
 /// 参考 https://www.wechatbot.dev/zh/protocol （微信 ClawBot 背后协议，基座 https://ilinkai.weixin.qq.com）：
+///   - 登录：GET /ilink/bot/get_bot_qrcode?bot_type=3 → GET /get_qrcode_status 轮询（wait/scaned/confirmed/expired）；
 ///   - 入站：POST /ilink/bot/getupdates 长轮询（~35s 挂起），get_updates_buf 为不透明游标；
 ///   - 出站：POST /ilink/bot/sendmessage，必须回传入站消息的 context_token（按用户缓存）；
+///   - 输入指示：POST /getconfig 取 typing_ticket（按用户缓存）→ POST /sendtyping status=1/2；
 ///   - 鉴权：AuthorizationType: ilink_bot_token + Bearer bot_token + X-WECHAT-UIN + iLink-App-Id/ClientVersion；
 ///   - 会话过期：ret/errcode -14 → 需重新扫码登录（换 bot_token）。
-/// bot_token 通过扫码登录获得（/ilink/bot/get_bot_qrcode → /get_qrcode_status 轮询）。
 /// 基座地址固定为官方地址（设置页无需填写）；微信不支持流式输出（iLink 无消息编辑能力）。
 /// </summary>
 public class WeChatClawAdapter : IAiChannelAdapter
@@ -1129,6 +1130,93 @@ public class WeChatClawAdapter : IAiChannelAdapter
         "{\"channel_version\":\"2.0.0\",\"bot_agent\":\"Libra-Nextgen/1.0\"}";
 
     private static string Clip(string s) => s.Length > 300 ? s[..300] : s;
+
+    /// <summary>按用户缓存的 typing_ticket（键 = channelId|externalId；有效期约 24h，失败时自动重取）。</summary>
+    private readonly ConcurrentDictionary<string, string> _typingTickets = new();
+
+    /// <summary>
+    /// 微信输入指示：getconfig 获取 typing_ticket（首次/失效时）→ sendtyping。
+    /// start=true 显示"对方正在输入中"，false 取消。无 context_token 也能调用（按用户缓存）。
+    /// </summary>
+    public async Task<bool> SendTypingAsync(AiChannel channel, string externalId, bool start, CancellationToken ct)
+    {
+        if (!_typingTickets.TryGetValue($"{channel.Id}|{externalId}", out var ticket) || ticket.Length == 0)
+        {
+            ticket = await FetchTypingTicketAsync(channel, externalId, ct);
+            if (ticket.Length == 0) return false;
+        }
+        var body = new JsonObject
+        {
+            ["ilink_user_id"] = externalId,
+            ["typing_ticket"] = ticket,
+            ["status"] = start ? 1 : 2,
+            ["base_info"] = JsonNode.Parse(BaseInfo()),
+        };
+        try
+        {
+            var resp = await Client().SendAsync(BuildRequest(channel, "/ilink/bot/sendtyping", body.ToJsonString()), ct);
+            var respBody = await resp.Content.ReadAsStringAsync(ct);
+            if (!resp.IsSuccessStatusCode)
+                throw new InvalidOperationException($"iLink sendtyping HTTP {(int)resp.StatusCode}: {Clip(respBody)}");
+            var ret = JsonNode.Parse(respBody)?["ret"]?.GetValue<int>() ?? 0;
+            if (ret == -14)
+            {
+                _contextTokens.Clear();
+                _typingTickets.TryRemove($"{channel.Id}|{externalId}", out _);
+                throw new SessionExpiredException("iLink 会话已过期，需要重新扫码登录");
+            }
+            if (ret != 0)
+            {
+                // ticket 可能失效：清掉缓存，下次重取。
+                _typingTickets.TryRemove($"{channel.Id}|{externalId}", out _);
+                return false;
+            }
+            return true;
+        }
+        catch (SessionExpiredException) { throw; }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "iLink sendtyping failed ({Channel} → {External})", channel.Id, externalId);
+            return false;
+        }
+    }
+
+    private async Task<string> FetchTypingTicketAsync(AiChannel channel, string externalId, CancellationToken ct)
+    {
+        var body = new JsonObject
+        {
+            ["ilink_user_id"] = externalId,
+            ["base_info"] = JsonNode.Parse(BaseInfo()),
+        };
+        // getconfig 官方实现会带 context_token（若有）。
+        var ctx = _contextTokens.GetValueOrDefault($"{channel.Id}|{externalId}");
+        if (!string.IsNullOrEmpty(ctx)) body["context_token"] = ctx;
+        try
+        {
+            var resp = await Client().SendAsync(BuildRequest(channel, "/ilink/bot/getconfig", body.ToJsonString()), ct);
+            var respBody = await resp.Content.ReadAsStringAsync(ct);
+            if (!resp.IsSuccessStatusCode)
+                throw new InvalidOperationException($"iLink getconfig HTTP {(int)resp.StatusCode}: {Clip(respBody)}");
+            var doc = JsonNode.Parse(respBody) as JsonObject ?? new JsonObject();
+            var ret = doc["ret"]?.GetValue<int>() ?? 0;
+            if (ret == -14)
+            {
+                _contextTokens.Clear();
+                _typingTickets.Clear();
+                throw new SessionExpiredException("iLink 会话已过期，需要重新扫码登录");
+            }
+            if (ret != 0) return "";
+            var ticket = doc["typing_ticket"]?.GetValue<string>() ?? "";
+            if (ticket.Length > 0) _typingTickets[$"{channel.Id}|{externalId}"] = ticket;
+            return ticket;
+        }
+        catch (SessionExpiredException) { throw; }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "iLink getconfig failed ({Channel} → {External})", channel.Id, externalId);
+            return "";
+        }
+    }
 
     public async Task SendTextAsync(AiChannel channel, string externalId, string text, CancellationToken ct)
     {

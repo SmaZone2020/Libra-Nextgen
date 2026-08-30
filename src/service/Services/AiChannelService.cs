@@ -41,6 +41,8 @@ public class AiChannelService
     private readonly ConcurrentDictionary<string, Queue<DateTime>> _rateBuckets = new();
     /// <summary>每用户运行闸：(channelId|externalId) → 同时只允许一个运行。</summary>
     private readonly ConcurrentDictionary<string, SemaphoreSlim> _gates = new();
+    /// <summary>微信输入指示续期停止回调（键 = channelId|externalId）。</summary>
+    private readonly ConcurrentDictionary<string, Action> _typingKeepalives = new();
 
     public AiChannelService(
         MongoDbContext db,
@@ -1176,13 +1178,62 @@ public class AiChannelService
         await gate.WaitAsync(ct);
         try
         {
-            await _ai.RunChatAsync(session, msg.Text,
-                BuildSink(ch, msg, session.Id, guest, ct), ct, (JustitiaTier)tier);
+            // 微信 iLink：先显示"对方正在输入中"（getconfig → sendtyping），
+            // AI 生成期间每 5 秒续一次；完成后发 sendtyping status=2 收尾。
+            var typing = ch.ChannelType == AiChannelTypes.WechatClaw
+                ? StartWeChatTypingAsync(ch, msg, ct)
+                : Task.CompletedTask;
+            try
+            {
+                await _ai.RunChatAsync(session, msg.Text,
+                    BuildSink(ch, msg, session.Id, guest, ct), ct, (JustitiaTier)tier);
+            }
+            finally
+            {
+                if (ch.ChannelType == AiChannelTypes.WechatClaw)
+                {
+                    try { await typing; } catch { /* 静默：输入指示失败不影响回复 */ }
+                    await StopWeChatTypingAsync(ch, msg, ct);
+                }
+            }
         }
         finally
         {
             gate.Release();
         }
+    }
+
+    /// <summary>微信输入指示：getconfig 取 typing_ticket（按用户缓存，24h 内复用）→ sendtyping status=1 开始；生成期间每 5 秒续一次。</summary>
+    private async Task StartWeChatTypingAsync(AiChannel ch, ChannelInboundMessage msg, CancellationToken ct)
+    {
+        var adapter = (WeChatClawAdapter)AdapterFor(ch.ChannelType);
+        if (!await adapter.SendTypingAsync(ch, msg.ExternalId, start: true, ct)) return;
+        var running = true;
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                while (running)
+                {
+                    await Task.Delay(TimeSpan.FromSeconds(5), ct);
+                    if (!running) break;
+                    await adapter.SendTypingAsync(ch, msg.ExternalId, start: true, ct);
+                }
+            }
+            catch (OperationCanceledException) { /* 会话结束 */ }
+            catch { /* 网络抖动：忽略，下一轮再续 */ }
+        }, ct);
+        // 注册结束回调：RunChatAsync 完成/异常后停止续期。
+        _typingKeepalives[ch.Id + "|" + msg.ExternalId] = new Action(() => { running = false; });
+    }
+
+    /// <summary>微信输入指示收尾：停止续期并 sendtyping status=2（无 context_token 也能发）。</summary>
+    private async Task StopWeChatTypingAsync(AiChannel ch, ChannelInboundMessage msg, CancellationToken ct)
+    {
+        if (_typingKeepalives.TryRemove(ch.Id + "|" + msg.ExternalId, out var stop)) stop();
+        var adapter = (WeChatClawAdapter)AdapterFor(ch.ChannelType);
+        try { await adapter.SendTypingAsync(ch, msg.ExternalId, start: false, ct); }
+        catch (Exception ex) { _logger.LogDebug(ex, "WeChat typing stop failed ({Channel})", ch.Id); }
     }
 
     private async Task<(string? ProviderId, string Model, List<string> Models)> ResolveProviderAsync(AiChannel ch, CancellationToken ct)
