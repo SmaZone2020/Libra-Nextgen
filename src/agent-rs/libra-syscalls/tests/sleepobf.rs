@@ -22,7 +22,11 @@ fn obfuscated_sleep_roundtrip() {
         let is_ci = std::env::var("CI").map(|v| v == "true").unwrap_or(false);
         eprintln!(
             "obfuscated sleep fell back to plain sleep (elapsed {elapsed:?}{})",
-            if is_ci { ", CI environment — tolerated" } else { "" }
+            if is_ci {
+                ", CI environment — tolerated"
+            } else {
+                ""
+            }
         );
         if !is_ci {
             panic!("obfuscated sleep should succeed");
