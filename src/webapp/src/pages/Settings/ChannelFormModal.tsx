@@ -452,13 +452,13 @@ function WechatAuthModal({
   const [error, setError] = useState<string | null>(null);
   const [polling, setPolling] = useState(false);
 
-  // 打开时申请二维码；关闭/切换频道时停止轮询并复位。
+  // 打开时申请二维码（登录接口匿名，不依赖频道是否已保存）；关闭时停止轮询并复位。
   useEffect(() => {
-    if (!open || !channel) return;
+    if (!open) return;
     let cancelled = false;
     setPhase('loading');
     setError(null);
-    void getAiChannelWechatQrCode(channel.id)
+    void getAiChannelWechatQrCode()
       .then((r) => {
         if (cancelled) return;
         setQrcode(r.qrcode);
@@ -473,21 +473,21 @@ function WechatAuthModal({
     return () => {
       cancelled = true;
     };
-  }, [open, channel?.id]);
+  }, [open]);
 
   // 扫描阶段：前端轮询扫码状态；confirmed → 写入 token（编辑态直接存频道，新建态回填表单待保存）。
   useEffect(() => {
-    if (!open || !channel || phase !== 'scanning' || qrcode.length === 0) return;
+    if (!open || phase !== 'scanning' || qrcode.length === 0) return;
     let stopped = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
     const poll = async () => {
       try {
-        const r: AiChannelQrStatus = await getAiChannelQrStatus(channel.id, qrcode);
+        const r: AiChannelQrStatus = await getAiChannelQrStatus(qrcode);
         if (stopped) return;
         if (r.status === 'confirmed' && r.botToken) {
           setPolling(false);
           setPhase('done');
-          if (channel.id.length > 0) await setAiChannelWechatToken(channel.id, r.botToken);
+          if (channel) await setAiChannelWechatToken(channel.id, r.botToken);
           if (!stopped) onTokenSet(r.botToken);
           return;
         }
@@ -512,7 +512,7 @@ function WechatAuthModal({
       setPolling(false);
       if (timer) clearTimeout(timer);
     };
-  }, [open, channel?.id, phase, qrcode, t, onTokenSet]);
+  }, [open, phase, qrcode, channel, t, onTokenSet]);
 
   return (
     <Modal.Backdrop isOpen={open} onOpenChange={(o) => { if (!o) onClose(); }}>
@@ -550,7 +550,7 @@ function WechatAuthModal({
                   <p className="text-sm font-medium">{t('channels.clawQrSuccess')}</p>
                 </div>
               )}
-              {phase === 'error' && channel && (
+              {phase === 'error' && (
                 <div className="flex w-full flex-col items-center gap-3 py-4 text-center">
                   <p className="text-sm text-danger">{error}</p>
                   <Button
@@ -560,7 +560,7 @@ function WechatAuthModal({
                       setPhase('loading');
                       setError(null);
                       setQrcode('');
-                      void getAiChannelWechatQrCode(channel.id)
+                      void getAiChannelWechatQrCode()
                         .then((r) => {
                           setQrcode(r.qrcode);
                           setImageUrl(r.imageUrl);

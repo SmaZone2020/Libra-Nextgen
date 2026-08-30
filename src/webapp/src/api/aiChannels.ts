@@ -118,17 +118,14 @@ export async function testAiChannel(
   return api.post<{ ok: boolean; error?: string }>(`/ai/channels/${id}/test`, input);
 }
 
-/** 微信 iLink 授权：申请登录二维码（返回 qrcode 令牌 + 二维码图片 URL）。 */
-export async function getAiChannelWechatQrCode(channelId: string): Promise<AiChannelWechatQrCode> {
-  return api.post<AiChannelWechatQrCode>(`/ai/channels/${channelId}/wechat/qrcode`);
+/** 微信 iLink 授权：申请登录二维码（登录接口匿名，无需频道已存在；返回 qrcode 令牌 + 二维码图片 URL）。 */
+export async function getAiChannelWechatQrCode(): Promise<AiChannelWechatQrCode> {
+  return api.post<AiChannelWechatQrCode>('/ai/channels/wechat/qrcode');
 }
 
 /** 微信 iLink 授权：轮询扫码状态；confirmed 时返回 bot_token（仅该次响应可见一次）。 */
-export async function getAiChannelQrStatus(
-  channelId: string,
-  qrcode: string,
-): Promise<AiChannelQrStatus> {
-  return api.post<AiChannelQrStatus>(`/ai/channels/${channelId}/wechat/qrcode/status`, { qrcode });
+export async function getAiChannelQrStatus(qrcode: string): Promise<AiChannelQrStatus> {
+  return api.post<AiChannelQrStatus>('/ai/channels/wechat/qrcode/status', { qrcode });
 }
 
 /** 把扫码确认得到的 bot_token 写入频道配置（服务端加密存储）。 */

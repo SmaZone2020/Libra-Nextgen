@@ -159,6 +159,43 @@ public class AiChannelController : ControllerBase
         }
     }
 
+    /// <summary>
+    /// 微信 iLink 扫码登录：申请授权二维码（无需频道已存在，新建频道也能先扫码拿 token）。
+    /// 登录接口本身匿名，仅需管理员权限（返回 qrcode 令牌 + 二维码图片 URL）。
+    /// </summary>
+    [HttpPost("wechat/qrcode")]
+    [Authorize(Roles = "Admin")]
+    public async Task<IActionResult> WeChatQrCodeDraft(CancellationToken ct)
+    {
+        try
+        {
+            var (qrcode, imageUrl) = await _claw.CreateQrCodeAsync(ct);
+            return Ok(new { qrcode, imageUrl });
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+    }
+
+    /// <summary>微信 iLink 扫码登录：轮询扫码状态（草稿模式，不依赖频道）。confirmed 时返回 bot_token（仅此一次）。</summary>
+    [HttpPost("wechat/qrcode/status")]
+    [Authorize(Roles = "Admin")]
+    public async Task<IActionResult> WeChatQrStatusDraft([FromBody] AiChannelQrStatusReq req, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(req.Qrcode))
+            return BadRequest(new { error = "qrcode is required" });
+        try
+        {
+            var result = await _claw.GetQrCodeStatusAsync(req.Qrcode.Trim(), ct);
+            return Ok(result);
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+    }
+
     // ── 绑定码 / 绑定用户（Admin）─────────────────────────────────────────
 
     /// <summary>为指定控制台账号生成一次性绑定码（15 分钟有效，返回后仅在本次响应中可见）。</summary>

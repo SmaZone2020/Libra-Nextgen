@@ -1321,12 +1321,19 @@ public class WeChatClawAdapter : IAiChannelAdapter
         return new ChannelPollBatch { NewCursor = newCursor, Messages = messages };
     }
 
-    /// <summary>获取 iLink 登录二维码（GET /ilink/bot/get_bot_qrcode?bot_type=3）。</summary>
+    /// <summary>获取 iLink 登录二维码（GET /ilink/bot/get_bot_qrcode?bot_type=3）。登录接口匿名，无需 bot_token。</summary>
+    public async Task<(string Qrcode, string ImageUrl)> CreateQrCodeAsync(CancellationToken ct)
+        => await CreateQrCodeAsync(DefaultBase, ct);
+
+    /// <summary>获取 iLink 登录二维码（按频道基座地址；登录接口匿名，无需 bot_token）。</summary>
     public async Task<(string Qrcode, string ImageUrl)> CreateQrCodeAsync(AiChannel channel, CancellationToken ct)
+        => await CreateQrCodeAsync(BaseUrl(channel), ct);
+
+    private async Task<(string Qrcode, string ImageUrl)> CreateQrCodeAsync(string baseUrl, CancellationToken ct)
     {
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         cts.CancelAfter(TimeSpan.FromSeconds(15));
-        var req = new HttpRequestMessage(HttpMethod.Get, $"{BaseUrl(channel)}/ilink/bot/get_bot_qrcode?bot_type=3");
+        var req = new HttpRequestMessage(HttpMethod.Get, $"{baseUrl}/ilink/bot/get_bot_qrcode?bot_type=3");
         // 官方 SDK：登录阶段仅带 SKRouteTag（可选）；不要求 X-WECHAT-UIN / Authorization。
         req.Headers.Add("SKRouteTag", "1001");
         var resp = await Client().SendAsync(req, cts.Token);
@@ -1342,14 +1349,21 @@ public class WeChatClawAdapter : IAiChannelAdapter
     }
 
     /// <summary>
-    /// 轮询 iLink 扫码状态（GET /ilink/bot/get_qrcode_status?qrcode=…）。
+    /// 轮询 iLink 扫码状态（GET /ilink/bot/get_qrcode_status?qrcode=…）。登录接口匿名，无需 bot_token。
     /// 返回 (status, botToken?, ilinkBotId?, baseUrl?)；status ∈ wait | scaned | confirmed | expired。
     /// </summary>
+    public async Task<WeChatQrStatusResult> GetQrCodeStatusAsync(string qrcode, CancellationToken ct)
+        => await GetQrCodeStatusAsync(DefaultBase, qrcode, ct);
+
+    /// <summary>轮询 iLink 扫码状态（按频道基座地址）。</summary>
     public async Task<WeChatQrStatusResult> GetQrCodeStatusAsync(AiChannel channel, string qrcode, CancellationToken ct)
+        => await GetQrCodeStatusAsync(BaseUrl(channel), qrcode, ct);
+
+    private async Task<WeChatQrStatusResult> GetQrCodeStatusAsync(string baseUrl, string qrcode, CancellationToken ct)
     {
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         cts.CancelAfter(TimeSpan.FromSeconds(40)); // 官方实现长轮询 ~35s
-        var req = new HttpRequestMessage(HttpMethod.Get, $"{BaseUrl(channel)}/ilink/bot/get_qrcode_status?qrcode={Uri.EscapeDataString(qrcode)}");
+        var req = new HttpRequestMessage(HttpMethod.Get, $"{baseUrl}/ilink/bot/get_qrcode_status?qrcode={Uri.EscapeDataString(qrcode)}");
         req.Headers.Add("iLink-App-ClientVersion", "1");
         req.Headers.Add("SKRouteTag", "1001");
         var resp = await Client().SendAsync(req, cts.Token);
