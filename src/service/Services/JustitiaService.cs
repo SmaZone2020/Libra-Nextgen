@@ -62,6 +62,8 @@ public static class JustitiaPolicy
         ["delete_file"] = JustitiaTier.Imperium,
         ["get_rdp_credentials"] = JustitiaTier.Imperium,
         ["get_ssh_keys"] = JustitiaTier.Imperium,
+        // 插件服务端脚本在 TeamServer 上执行（可发网络请求）：默认按高危处理，须人工批准。
+        ["plugin_call"] = JustitiaTier.Imperium,
 
         // ── Dictatura (3) 全权：删除设备 / 破坏性操作，仅管理员可启 ──
         ["delete_agent"] = JustitiaTier.Dictatura,
