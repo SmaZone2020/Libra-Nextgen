@@ -2,6 +2,7 @@
 
 import { useEffect, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import QRCode from 'qrcode';
 import {
   Button,
   Input,
@@ -454,9 +455,8 @@ function WechatAuthModal({
   const [polling, setPolling] = useState(false);
 
   // iLink 返回的 qrcode_img_content 是微信 liteapp 网页（JS 渲染），不能当图片直接显示；
-  // 把该 URL 本身编码成二维码（与参考项目一致，用 qrcode 包 toDataURL）。
+  // 把该 URL 本身编码成二维码（与参考项目一致，用 qrcode 包 toDataURL；静态导入避免 Vite 动态依赖缓存问题）。
   const buildQrFromUrl = useCallback(async (url: string) => {
-    const QRCode = await import('qrcode');
     return QRCode.toDataURL(url, { width: 280, margin: 2 });
   }, []);
 
