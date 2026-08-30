@@ -57,6 +57,7 @@ extern "system" {
         lpWideCharStr: *mut u16,
         cchWideChar: i32,
     ) -> i32;
+    fn GetOEMCP() -> u32;
 }
 
 #[cfg(not(windows))]
@@ -89,7 +90,18 @@ mod tests {
         ];
         let decoded = decode_shell_bytes(&gbk);
         #[cfg(windows)]
-        assert_eq!(decoded, "中文输出测试", "decoded: {decoded}");
+        {
+            // 回退解码使用系统 OEM 代码页：中文系统 OEM=936(GBK) 可精确还原；
+            // 其他语言系统（如 CI 英文 runner OEM=437）按各自代码页解码，
+            // 结果与系统相关——只验证回退路径不 panic 且产生非空输出。
+            let oem = unsafe { GetOEMCP() };
+            if oem == 936 {
+                assert_eq!(decoded, "中文输出测试", "decoded: {decoded}");
+            } else {
+                eprintln!("OEM code page {oem} — skipping GBK exact-match assertion");
+                assert!(!decoded.is_empty(), "OEM fallback produced empty output");
+            }
+        }
         #[cfg(not(windows))]
         assert!(decoded.contains('\u{FFFD}'), "lossy fallback: {decoded}");
     }
