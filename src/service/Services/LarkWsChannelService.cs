@@ -67,33 +67,33 @@ public sealed class FeishuFrame
                 case 3: frame.Service = (int)(uint)ReadVarint(span, ref pos); break;
                 case 4: frame.Method = (int)(uint)ReadVarint(span, ref pos); break;
                 case 5:
-                {
-                    var len = (int)ReadVarint(span, ref pos);
-                    var nested = span.Slice(pos, len);
-                    pos += len;
-                    var np = 0;
-                    string? k = null, v = null;
-                    while (np < nested.Length)
                     {
-                        var nk = (int)ReadVarint(nested, ref np);
-                        var nf = nk >> 3;
-                        var nlen = (int)ReadVarint(nested, ref np);
-                        if (nf == 1) k = Encoding.UTF8.GetString(nested.Slice(np, nlen));
-                        else if (nf == 2) v = Encoding.UTF8.GetString(nested.Slice(np, nlen));
-                        np += nlen;
+                        var len = (int)ReadVarint(span, ref pos);
+                        var nested = span.Slice(pos, len);
+                        pos += len;
+                        var np = 0;
+                        string? k = null, v = null;
+                        while (np < nested.Length)
+                        {
+                            var nk = (int)ReadVarint(nested, ref np);
+                            var nf = nk >> 3;
+                            var nlen = (int)ReadVarint(nested, ref np);
+                            if (nf == 1) k = Encoding.UTF8.GetString(nested.Slice(np, nlen));
+                            else if (nf == 2) v = Encoding.UTF8.GetString(nested.Slice(np, nlen));
+                            np += nlen;
+                        }
+                        frame.Headers.Add((k ?? "", v ?? ""));
+                        break;
                     }
-                    frame.Headers.Add((k ?? "", v ?? ""));
-                    break;
-                }
                 case 6: frame.PayloadEncoding = ReadString(span, ref pos); break;
                 case 7: frame.PayloadType = ReadString(span, ref pos); break;
                 case 8:
-                {
-                    var len = (int)ReadVarint(span, ref pos);
-                    frame.Payload = span.Slice(pos, len).ToArray();
-                    pos += len;
-                    break;
-                }
+                    {
+                        var len = (int)ReadVarint(span, ref pos);
+                        frame.Payload = span.Slice(pos, len).ToArray();
+                        pos += len;
+                        break;
+                    }
                 case 9: frame.LogIdNew = ReadString(span, ref pos); break;
                 default:
                     // 跳过未知字段（wire 2 = length-delimited，0 = varint）。

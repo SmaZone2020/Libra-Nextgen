@@ -1287,44 +1287,44 @@ public class AiService
             switch (type)
             {
                 case "response.output_item.added":
-                {
-                    var item = obj["item"] as JsonObject;
-                    if (item?["type"]?.GetValue<string>() == "function_call")
                     {
-                        var callId = item["id"]?.GetValue<string>() ?? Guid.NewGuid().ToString("N");
-                        var name = item["name"]?.GetValue<string>() ?? "";
-                        idxByCallId[callId] = nextIndex;
-                        toolCalls[nextIndex++] = (callId, name, "");
+                        var item = obj["item"] as JsonObject;
+                        if (item?["type"]?.GetValue<string>() == "function_call")
+                        {
+                            var callId = item["id"]?.GetValue<string>() ?? Guid.NewGuid().ToString("N");
+                            var name = item["name"]?.GetValue<string>() ?? "";
+                            idxByCallId[callId] = nextIndex;
+                            toolCalls[nextIndex++] = (callId, name, "");
+                        }
+                        break;
                     }
-                    break;
-                }
                 case "response.function_call_arguments.delta":
-                {
-                    var cid = obj["item_id"]?.GetValue<string>() ?? "";
-                    var part = obj["delta"]?.GetValue<string>() ?? "";
-                    if (idxByCallId.TryGetValue(cid, out var idx) && toolCalls.TryGetValue(idx, out var ex))
-                        toolCalls[idx] = (ex.Id, ex.Name, ex.Args + part);
-                    break;
-                }
+                    {
+                        var cid = obj["item_id"]?.GetValue<string>() ?? "";
+                        var part = obj["delta"]?.GetValue<string>() ?? "";
+                        if (idxByCallId.TryGetValue(cid, out var idx) && toolCalls.TryGetValue(idx, out var ex))
+                            toolCalls[idx] = (ex.Id, ex.Name, ex.Args + part);
+                        break;
+                    }
                 case "response.output_text.delta":
-                {
-                    var text = obj["delta"]?.GetValue<string>() ?? "";
-                    state.AssistantText += text;
-                    state.TurnText += text;
-                    await onEvent(JsonSerializer.Serialize(new { type = "message", delta = text }, JsonOpts));
-                    break;
-                }
+                    {
+                        var text = obj["delta"]?.GetValue<string>() ?? "";
+                        state.AssistantText += text;
+                        state.TurnText += text;
+                        await onEvent(JsonSerializer.Serialize(new { type = "message", delta = text }, JsonOpts));
+                        break;
+                    }
                 case "response.reasoning_summary_text.delta":
                 case "response.reasoning_text.delta":
-                {
-                    var text = obj["delta"]?.GetValue<string>() ?? "";
-                    if (text.Length > 0)
                     {
-                        state.Reasoning.Add(new AiReasoningStep { Label = "推理", Content = text });
-                        await onEvent(JsonSerializer.Serialize(new { type = "reasoning", label = "推理", content = text }, JsonOpts));
+                        var text = obj["delta"]?.GetValue<string>() ?? "";
+                        if (text.Length > 0)
+                        {
+                            state.Reasoning.Add(new AiReasoningStep { Label = "推理", Content = text });
+                            await onEvent(JsonSerializer.Serialize(new { type = "reasoning", label = "推理", content = text }, JsonOpts));
+                        }
+                        break;
                     }
-                    break;
-                }
                 case "response.completed":
                 case "response.failed":
                 case "response.incomplete":
@@ -1396,63 +1396,63 @@ public class AiService
             switch (type)
             {
                 case "content_block_start":
-                {
-                    var idx = obj["index"]?.GetValue<int>() ?? 0;
-                    var block = obj["content_block"] as JsonObject;
-                    var btype = block?["type"]?.GetValue<string>() ?? "";
-                    if (btype == "tool_use")
                     {
-                        var callId = block?["id"]?.GetValue<string>() ?? Guid.NewGuid().ToString("N");
-                        var name = block?["name"]?.GetValue<string>() ?? "";
-                        toolCalls[idx] = (callId, name, "");
-                    }
-                    break;
-                }
-                case "content_block_delta":
-                {
-                    var idx = obj["index"]?.GetValue<int>() ?? 0;
-                    var delta = obj["delta"] as JsonObject;
-                    var dtype = delta?["type"]?.GetValue<string>() ?? "";
-                    if (dtype == "text_delta")
-                    {
-                        var text = delta?["text"]?.GetValue<string>() ?? "";
-                        state.AssistantText += text;
-                        state.TurnText += text;
-                        await onEvent(JsonSerializer.Serialize(new { type = "message", delta = text }, JsonOpts));
-                    }
-                    else if (dtype == "input_json_delta")
-                    {
-                        var part = delta?["partial_json"]?.GetValue<string>() ?? "";
-                        if (toolCalls.TryGetValue(idx, out var ex))
-                            toolCalls[idx] = (ex.Id, ex.Name, ex.Args + part);
-                    }
-                    else if (dtype == "thinking_delta")
-                    {
-                        var text = delta?["thinking"]?.GetValue<string>() ?? "";
-                        if (text.Length > 0)
+                        var idx = obj["index"]?.GetValue<int>() ?? 0;
+                        var block = obj["content_block"] as JsonObject;
+                        var btype = block?["type"]?.GetValue<string>() ?? "";
+                        if (btype == "tool_use")
                         {
-                            state.Reasoning.Add(new AiReasoningStep { Label = "推理", Content = text });
-                            await onEvent(JsonSerializer.Serialize(new { type = "reasoning", label = "推理", content = text }, JsonOpts));
+                            var callId = block?["id"]?.GetValue<string>() ?? Guid.NewGuid().ToString("N");
+                            var name = block?["name"]?.GetValue<string>() ?? "";
+                            toolCalls[idx] = (callId, name, "");
                         }
+                        break;
                     }
-                    break;
-                }
+                case "content_block_delta":
+                    {
+                        var idx = obj["index"]?.GetValue<int>() ?? 0;
+                        var delta = obj["delta"] as JsonObject;
+                        var dtype = delta?["type"]?.GetValue<string>() ?? "";
+                        if (dtype == "text_delta")
+                        {
+                            var text = delta?["text"]?.GetValue<string>() ?? "";
+                            state.AssistantText += text;
+                            state.TurnText += text;
+                            await onEvent(JsonSerializer.Serialize(new { type = "message", delta = text }, JsonOpts));
+                        }
+                        else if (dtype == "input_json_delta")
+                        {
+                            var part = delta?["partial_json"]?.GetValue<string>() ?? "";
+                            if (toolCalls.TryGetValue(idx, out var ex))
+                                toolCalls[idx] = (ex.Id, ex.Name, ex.Args + part);
+                        }
+                        else if (dtype == "thinking_delta")
+                        {
+                            var text = delta?["thinking"]?.GetValue<string>() ?? "";
+                            if (text.Length > 0)
+                            {
+                                state.Reasoning.Add(new AiReasoningStep { Label = "推理", Content = text });
+                                await onEvent(JsonSerializer.Serialize(new { type = "reasoning", label = "推理", content = text }, JsonOpts));
+                            }
+                        }
+                        break;
+                    }
                 case "message_delta":
-                {
-                    var stopReason = obj["delta"]?["stop_reason"]?.GetValue<string>() ?? "";
-                    if (stopReason is "tool_use" or "end_turn" or "max_tokens" or "stop_sequence") done = true;
-                    break;
-                }
+                    {
+                        var stopReason = obj["delta"]?["stop_reason"]?.GetValue<string>() ?? "";
+                        if (stopReason is "tool_use" or "end_turn" or "max_tokens" or "stop_sequence") done = true;
+                        break;
+                    }
                 case "message_stop":
                     done = true;
                     break;
                 case "error":
-                {
-                    var msg = obj["error"]?.ToJsonString() ?? "unknown anthropic error";
-                    await onEvent(JsonSerializer.Serialize(new { type = "error", message = msg }, JsonOpts));
-                    done = true;
-                    break;
-                }
+                    {
+                        var msg = obj["error"]?.ToJsonString() ?? "unknown anthropic error";
+                        await onEvent(JsonSerializer.Serialize(new { type = "error", message = msg }, JsonOpts));
+                        done = true;
+                        break;
+                    }
             }
             if (done) break;
         }
