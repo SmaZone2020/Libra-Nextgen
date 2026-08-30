@@ -3,8 +3,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Button, Tooltip } from '@heroui/react';
-import { ArrowLeft, ChevronLeft, ChevronRight } from '@gravity-ui/icons';
+import { Button } from '@heroui/react';
+import { AntennaSignal, ChevronLeft, ChevronRight } from '@gravity-ui/icons';
 import {
   createAiSession,
   deleteAiMessage,
@@ -27,8 +27,10 @@ import { AiSidebar, AiSidebarDrawer } from './AiSidebar';
 import { AiThreadMessage } from './AiThreadMessage';
 import { AiComposer } from './AiComposer';
 import { AiApprovalModal, type AiPermit } from './AiApprovalModal';
+import { EventSubscriptionModal } from './EventSubscriptionModal';
 import { loadJustitiaTier, saveJustitiaTier, type JustitiaTierKey } from './justitia';
 import { useDialog } from '../../hooks/useDialog';
+import { consoleWs } from '../../ws/consoleWs';
 
 type StreamingState = 'idle' | 'streaming' | 'approval';
 export default function AiPage() {
@@ -47,17 +49,16 @@ export default function AiPage() {
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   // 桌面端会话列表伸缩（收起后仅剩右缘按钮）。
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  // Justitia 档位（浏览器持久化，随 SSE 请求提交）。
   const [justitiaTier, setJustitiaTier] = useState<JustitiaTierKey>(() => loadJustitiaTier());
   const [streamingText, setStreamingText] = useState('');
   const [streamingReasoning, setStreamingReasoning] = useState('');
   const [streamingTools, setStreamingTools] = useState<AiToolCall[]>([]);
   const [pendingApproval, setPendingApproval] = useState<AiToolCall | null>(null);
-  // 审批模态框：可关闭留痕，对话流中稍后可再次批准/拒绝。
   const [approvalModalOpen, setApprovalModalOpen] = useState(false);
   const [streamError, setStreamError] = useState<string | null>(null);
+  // 事件订阅模态框
+  const [eventSubOpen, setEventSubOpen] = useState(false);
 
-  // 鏂板缓浼氳瘽鍋忓ソ锛堟祻瑙堝櫒鎸佷箙鍖栵級锛氫緵搴斿晢涓庢ā鍨嬮粯璁ゅ€笺€?
   const [prefProviderId, setPrefProviderId] = useState<string | null>(() =>
     localStorage.getItem('ai.prefProviderId'),
   );
@@ -86,8 +87,6 @@ export default function AiPage() {
         if (activeId) {
           const s = await getAiSession(activeId);
           setSession(s);
-          // 恢复挂起的审批（含频道会话在 IM 侧触发、控制台接管的场景）：
-          // 运行态按 sessionId 保留，打开会话时重新弹审批模态框。
           const pending = await getPendingAiApproval(activeId);
           if (pending) {
             setPendingApproval(pending);
@@ -110,6 +109,18 @@ export default function AiPage() {
       abortRef.current?.abort();
     };
   }, []);
+
+  // 事件订阅通知：服务端事件触发 AI 提醒后广播 ai.notify → 刷新侧边栏，若当前正打开该会话则重新拉取。
+  useEffect(() => {
+    return consoleWs.on('ai.notify', (msg) => {
+      const data = msg?.data as { sessionId?: string } | null | undefined;
+      if (data?.sessionId === activeId) {
+        void getAiSession(activeId).then(setSession).catch(() => undefined);
+      }
+      sidebarRefreshKeyRef.current += 1;
+      setSidebarRefreshKey(sidebarRefreshKeyRef.current);
+    });
+  }, [activeId]);
 
   const enabledProviders = useMemo(
     () => providers.filter((p) => p.enabled && p.models.length > 0),
@@ -184,7 +195,6 @@ export default function AiPage() {
     (evt: AiSseEvent, sessionId: string) => {
       switch (evt.type) {
         case 'reasoning':
-          // 拼接成一段连续思考文本，避免每个增量片段渲染成独立"思考中…"。
           setStreamingReasoning((prev) => prev + evt.content);
           break;
         case 'message':
@@ -329,7 +339,6 @@ export default function AiPage() {
   const handleStop = useCallback(() => {
     if (activeId) void stopAiChat(activeId);
     abortRef.current?.abort();
-    // 保留已输出的内容：把本次流式文本固定为一条助手消息（若确实有输出）。
     setSession((prev) => {
       if (!prev) return prev;
       const text = streamingText.trim();
@@ -360,12 +369,9 @@ export default function AiPage() {
       if (!pendingApproval || !activeId) return;
       const id = activeId;
       setApprovalModalOpen(false);
-      // 决策通过普通 POST 交给后端；原 SSE 流（send 里的 streamAiChat）
-      // 会继续推送 tool_result/message/done，这里不接管流、不动 streaming 状态。
       setPendingApproval((prev) => (prev && prev.id === toolCallId ? { ...prev, state: 'running' } : prev));
       try {
         await resolveAiApproval(id, toolCallId, true, permit);
-        // 频道会话：审批后运行在服务端续跑并回推 IM；这里刷新本地会话让控制台同步。
         void getAiSession(id).then(setSession).catch(() => undefined);
       } catch (e) {
         if ((e as Error).name !== 'AbortError') {
@@ -489,7 +495,6 @@ export default function AiPage() {
 
   return (
     <div className="relative flex h-full min-h-0 w-full flex-1">
-      {/* 桌面端：内联会话侧边栏（可收缩） */}
       <aside
         className={`hidden shrink-0 overflow-hidden border-r border-default-200 transition-[width] duration-200 md:block dark:border-default-800 ${
           sidebarCollapsed ? 'w-0 border-r-0' : 'w-64'
@@ -503,26 +508,25 @@ export default function AiPage() {
         />
       </aside>
 
-          <Button
-            isIconOnly
-            variant="secondary"
-            size="sm"
-            onPress={() => setSidebarCollapsed((v) => !v)}
-            className="absolute top-3/7 -translate-y-1/2 z-20 hidden size-5 h-14 rounded-l-none rounded-r-lg border border-default-200 shadow-md md:inline-flex dark:border-default-800"
-            style={{
-              left: sidebarCollapsed ? 0 : 256,
-              transition: 'left 200ms ease',
-            }}
-          >
-            {sidebarCollapsed ? (
-              <ChevronRight className="size-3.5" />
-            ) : (
-              <ChevronLeft className="size-3.5" />
-            )}
-          </Button>
-
+      <Button
+        isIconOnly
+        variant="secondary"
+        size="sm"
+        onPress={() => setSidebarCollapsed((v) => !v)}
+        className="absolute top-3/7 -translate-y-1/2 z-20 hidden size-5 h-14 rounded-l-none rounded-r-lg border border-default-200 shadow-md md:inline-flex dark:border-default-800"
+        style={{
+          left: sidebarCollapsed ? 0 : 256,
+          transition: 'left 200ms ease',
+        }}
+      >
+        {sidebarCollapsed ? (
+          <ChevronRight className="size-3.5" />
+        ) : (
+          <ChevronLeft className="size-3.5" />
+        )}
+      </Button>
+      
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-        {/* 移动端：抽屉打开按钮（替代原顶部 Header 的汉堡按钮） */}
         <Button
           isIconOnly
           variant="secondary"
@@ -536,9 +540,13 @@ export default function AiPage() {
 
         <ChatConversation className="min-h-0 flex-1">
           <ChatConversation.Content className={`flex flex-col ${!session?.messages.length ? 'h-full' : ''}`}>
-            {/* 顶部导航栏容器 */}
-            <div className="w-full shrink-0" />
-            <div className="m-auto flex w-full sm:w-[80%] flex-col gap-6 px-4 pt-6 pb-4">
+            <div className="w-full shrink-0 px-4 pt-4 flex" >
+              <Button variant='secondary' className="ml-auto text-foreground" onPress={() => setEventSubOpen(true)}>
+                <AntennaSignal/>
+                Submit
+              </Button>
+            </div>
+            <div className="m-auto flex w-full sm:w-[80%] flex-col gap-6 px-4 pb-4">
               {showEmptyState ? (
                 <div className="flex h-[80vh] flex-1 flex-col items-center justify-center">
                   <PromptSuggestion>
@@ -606,7 +614,6 @@ export default function AiPage() {
                   onDelete={() => undefined}
                   onFeedback={() => undefined}
                   onApprove={(id) => {
-                    // 对话流中批准：重新打开模态框选择许可时长。
                     setApprovalModalOpen(true);
                   }}
                   onReject={(id) => void handleReject(id)}
@@ -654,7 +661,6 @@ export default function AiPage() {
         </div>
       </div>
 
-      {/* 移动端会话列表 Drawer（内容区左缘按钮打开） */}
       <AiSidebarDrawer
         open={mobileSidebarOpen}
         onOpenChange={setMobileSidebarOpen}
@@ -664,7 +670,6 @@ export default function AiPage() {
         onNewSession={() => void handleNewSession()}
       />
 
-      {/* 档位提升审批模态框：可关闭留痕，对话流中稍后可再次批准/拒绝 */}
       <AiApprovalModal
         tool={pendingApproval}
         open={approvalModalOpen}
@@ -675,6 +680,11 @@ export default function AiPage() {
         onReject={() => {
           if (pendingApproval) void handleReject(pendingApproval.id);
         }}
+      />
+
+      <EventSubscriptionModal
+        open={eventSubOpen}
+        onClose={() => setEventSubOpen(false)}
       />
       {DialogComponent}
     </div>

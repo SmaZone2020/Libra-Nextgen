@@ -81,6 +81,7 @@ builder.Services.AddSingleton<TelegramChannelAdapter>();
 builder.Services.AddSingleton<LarkChannelAdapter>();
 builder.Services.AddSingleton<WeChatClawAdapter>();
 builder.Services.AddSingleton<AiChannelService>();
+builder.Services.AddSingleton<AiEventNotifier>();
 builder.Services.AddHostedService<TelegramBotHostedService>();
 builder.Services.AddHostedService<ChannelPollingHostedService>();
 builder.Services.AddHostedService<LarkWsChannelService>();

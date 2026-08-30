@@ -140,6 +140,26 @@ public class AiChannelCursor
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 }
 
+/// <summary>
+/// AI 事件订阅：Agent 上线/下线等系统事件触发后，由 Justitia 以系统视角接收事件信息，
+/// 生成提醒并送达目标（控制台会话或 IM 频道）。
+/// </summary>
+public class AiEventSubscription
+{
+    public string Id { get; set; } = Guid.NewGuid().ToString("N");
+    /// <summary>订阅的事件：agent.online | agent.offline。</summary>
+    public List<string> Events { get; set; } = new();
+    /// <summary>送达目标类型：session（控制台会话）| channel（IM 频道）。</summary>
+    public string TargetType { get; set; } = "session";
+    /// <summary>目标 id：会话 id 或频道 id。</summary>
+    public string TargetId { get; set; } = "";
+    /// <summary>会话目标所属用户 id（会话按用户隔离；频道目标为空）。</summary>
+    public string? TargetUserId { get; set; }
+    public string CreatedBy { get; set; } = "";
+    public string CreatedByName { get; set; } = "";
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+}
+
 /// <summary>AI 会话中的一条消息。</summary>
 public class AiMessage
 {

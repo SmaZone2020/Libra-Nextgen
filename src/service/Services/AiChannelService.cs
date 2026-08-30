@@ -1491,6 +1491,23 @@ public class AiChannelService
         await AdapterFor(ch.ChannelType).SendMediaAsync(ch, externalId, media, ct);
     }
 
+    /// <summary>向频道用户发送纯文本（服务端主动通知场景，如 AI 事件订阅提醒）。</summary>
+    public async Task SendChannelTextAsync(string channelId, string externalId, string text, CancellationToken ct = default)
+    {
+        var ch = await GetChannelAsync(channelId, includeSecrets: true, ct)
+            ?? throw new InvalidOperationException("channel not found");
+        if (!ch.Enabled) throw new InvalidOperationException("channel disabled");
+        await AdapterFor(ch.ChannelType).SendTextAsync(ch, externalId, text, ct);
+    }
+
+    /// <summary>频道的最近活跃绑定用户（事件订阅"频道目标"的默认送达对象）。</summary>
+    public async Task<AiChannelUser?> GetLatestBoundUserAsync(string channelId, CancellationToken ct = default)
+    {
+        return await ChannelUsers.Find(x => x.ChannelId == channelId)
+            .Sort(Builders<AiChannelUser>.Sort.Descending(u => u.LastSeenAt))
+            .FirstOrDefaultAsync(ct);
+    }
+
     /// <summary>审批按钮回调（Telegram 内联键盘）：写入门闩，原运行经 Sink 续跑回推 IM。</summary>
     public async Task<CallbackResult> HandleCallbackAsync(CallbackAction action, CancellationToken ct = default)
     {

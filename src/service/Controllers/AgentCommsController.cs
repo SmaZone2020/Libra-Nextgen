@@ -46,6 +46,7 @@ public class AgentCommsController : ControllerBase
     private readonly AgentService _agentService;
     private readonly AgentEventHub _eventHub;
     private readonly TaskService _taskService;
+    private readonly AiEventNotifier _aiEventNotifier;
 
     public AgentCommsController(
         AgentCommsService commsService,
@@ -54,7 +55,8 @@ public class AgentCommsController : ControllerBase
         IOptions<BeaconSettings> beaconSettings,
         AgentService agentService,
         AgentEventHub eventHub,
-        TaskService taskService)
+        TaskService taskService,
+        AiEventNotifier aiEventNotifier)
     {
         _commsService = commsService;
         _traffic = traffic;
@@ -63,6 +65,7 @@ public class AgentCommsController : ControllerBase
         _agentService = agentService;
         _eventHub = eventHub;
         _taskService = taskService;
+        _aiEventNotifier = aiEventNotifier;
     }
 
     [HttpPost("register")]
@@ -158,7 +161,13 @@ public class AgentCommsController : ControllerBase
             await _wsManager.BroadcastToConsoleAsync(msg);
             _wsManager.AppendEvent("agent", $"Agent {hostname} ({ipAddress}) 上线");
         }
-        catch { /* best-effort */ }
+        catch (Exception ex)
+        {
+            // 广播失败不阻断注册流程。
+            _ = ex;
+        }
+        // AI 事件订阅：Agent 上线 → Justitia 生成提醒并送达订阅目标。
+        _ = _aiEventNotifier.NotifyAsync(agentId, hostname, ipAddress, AiEventNotifier.EvtAgentOnline);
     }
 
     // ══════════════════════════════════════════════════════════════════
