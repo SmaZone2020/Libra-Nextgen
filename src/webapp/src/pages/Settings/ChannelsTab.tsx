@@ -158,7 +158,6 @@ export default function ChannelsTab() {
                     <Chip size="sm" variant="soft">
                       {TIER_LABELS[ch.defaultTier] ?? ch.defaultTier}
                     </Chip>
-                    {ch.requireBind && <Chip size="sm" variant="soft">{t('channels.bindReq')}</Chip>}
                   </div>
                   <span className="truncate font-mono text-xs text-default-500">
                     {ch.channelType === 'lark' && (ch.config.transport ?? 'websocket') === 'websocket'

@@ -40,6 +40,8 @@ const pageTransition = {
 };
 
 const SIDEBAR_W = { collapsed: 72, expanded: 256 };
+/** 内容区宽度阈值（px）：视口减去展开侧边栏后 ≤ 此值时自动缩回侧边栏。 */
+const AUTO_COLLAPSE_CONTENT_MIN = 640;
 
 
 const AGENT_ROUTES = new Set(['/agents', '/shell', '/files', '/system', '/othersoft', '/proxy']);
@@ -202,6 +204,23 @@ export function App() {
   const handleToggle = useCallback((v: boolean) => {
     setCollapsed(v);
     localStorage.setItem('sidebar_collapsed', String(v));
+  }, []);
+
+  // 侧边栏自适应：内容区宽度（视口 − 展开侧边栏）≤ 640px 时自动缩回图标栏；
+  // 窗口拉宽后恢复用户手动偏好（localStorage 不被自动折叠覆盖）。
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const apply = () => {
+      const narrow = window.innerWidth - SIDEBAR_W.expanded <= AUTO_COLLAPSE_CONTENT_MIN;
+      if (narrow) {
+        setCollapsed(true);
+      } else {
+        setCollapsed(localStorage.getItem('sidebar_collapsed') === 'true');
+      }
+    };
+    apply();
+    window.addEventListener('resize', apply);
+    return () => window.removeEventListener('resize', apply);
   }, []);
 
   useEffect(() => {

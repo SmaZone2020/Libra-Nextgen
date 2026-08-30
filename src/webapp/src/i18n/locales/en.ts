@@ -1016,7 +1016,6 @@ export default {
       name: 'Name',
       type: 'Type',
       deleteConfirm: 'Delete channel "{{name}}"? Its bindings and sessions will be removed too.',
-      bindReq: 'bind required',
       bindCode: 'Create bind code',
       boundUsers: 'Bound users',
       bindForUser: 'Bind to console account',

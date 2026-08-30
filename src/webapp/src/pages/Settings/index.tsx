@@ -130,7 +130,6 @@ export default function SettingsPage() {
 
   return (
     <div className="space-y-3">
-      {/* 移动端：Item Card 路由列表 → /settings/:id */}
       <div className="sm:hidden">
         <div className="mt-3 flex flex-col gap-3">
           {visibleRoutes.map((route) => {

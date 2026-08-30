@@ -1012,7 +1012,6 @@ export default {
       name: '名称',
       type: '类型',
       deleteConfirm: '确定删除频道「{{name}}」吗？将同时删除其绑定关系与会话。',
-      bindReq: '需绑定',
       bindCode: '生成绑定码',
       boundUsers: '绑定用户',
       bindForUser: '绑定到控制台账号',
