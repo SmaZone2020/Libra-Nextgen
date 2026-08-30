@@ -33,6 +33,11 @@ public sealed class ChannelInboundMessage
     public required string ExternalId { get; init; }
     public string ExternalName { get; init; } = "";
     public required string Text { get; init; }
+    /// <summary>
+    /// 幂等去重键（Telegram update_id / 飞书 event_id / iLink message_id）。
+    /// 非空时由 AiChannelService 在入站管线入口去重，防御并发循环 / 重启重放。
+    /// </summary>
+    public string? DedupeKey { get; init; }
 }
 
 /// <summary>轮询型适配器一次拉取的增量批次。游标为频道不透明字符串（Telegram update_id / iLink get_updates_buf）。</summary>
@@ -157,7 +162,10 @@ public class TelegramChannelAdapter : IAiChannelAdapter
             foreach (var item in arr.OfType<JsonObject>())
             {
                 var updateId = item["update_id"]?.GetValue<long>() ?? 0;
-                if (updateId > newOffset) newOffset = updateId;
+                // Telegram 确认语义：offset 必须推进到「最大已处理 update_id + 1」，
+                // 服务端只重发 update_id >= offset 的更新——若只推进到 update_id 本身，
+                // 同一条消息会被无限重复下发（表现为 bot 对一条消息反复响应）。
+                if (updateId + 1 > newOffset) newOffset = updateId + 1;
                 var msg = item["message"] as JsonObject;
                 if (msg == null) continue;
                 var text = msg["text"]?.GetValue<string>() ?? "";
@@ -179,6 +187,8 @@ public class TelegramChannelAdapter : IAiChannelAdapter
                     ExternalId = chatId.ToString()!,
                     ExternalName = name,
                     Text = text,
+                    // 幂等去重键（防御并发循环/重启重放导致的重复处理）。
+                    DedupeKey = updateId.ToString(),
                 });
             }
         }
@@ -366,6 +376,8 @@ public class LarkChannelAdapter : IAiChannelAdapter
             ExternalId = chatType == "p2p" ? openId : chatId,
             ExternalName = name,
             Text = text,
+            // 飞书事件唯一 ID（WS 模式下事件未 ack 会被服务端重推，用它在入口去重）。
+            DedupeKey = root["header"]?["event_id"]?.GetValue<string>(),
         };
     }
 
@@ -549,6 +561,7 @@ public class WeChatClawAdapter : IAiChannelAdapter
                     ExternalId = from,
                     ExternalName = from,
                     Text = text,
+                    DedupeKey = m["message_id"]?.GetValue<long>().ToString(),
                 });
             }
         }

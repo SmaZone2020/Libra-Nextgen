@@ -66,6 +66,12 @@ public class AiChannelService
     private IMongoCollection<AiChannel> Channels => _db.GetCollection<AiChannel>("ai_channels");
     private IMongoCollection<AiChannelUser> ChannelUsers => _db.GetCollection<AiChannelUser>("ai_channel_users");
     private IMongoCollection<AiChannelBindCode> BindCodes => _db.GetCollection<AiChannelBindCode>("ai_channel_bind_codes");
+    private IMongoCollection<AiChannelCursor> Cursors => _db.GetCollection<AiChannelCursor>("ai_channel_cursors");
+
+    /// <summary>幂等去重表：channelId|dedupeKey → 首次看到时间（防并发循环/重启重放）。</summary>
+    private readonly ConcurrentDictionary<string, DateTime> _seenInbound = new();
+    private const int SeenInboundMax = 2000;
+    private static readonly TimeSpan SeenInboundTtl = TimeSpan.FromMinutes(30);
 
     private IAiChannelAdapter AdapterFor(string type) => type switch
     {
@@ -206,6 +212,7 @@ public class AiChannelService
         if (r.DeletedCount == 0) return false;
         await ChannelUsers.DeleteManyAsync(x => x.ChannelId == id, ct);
         await BindCodes.DeleteManyAsync(x => x.ChannelId == id, ct);
+        await DeletePollCursorAsync(id, ct);
         await _ai.DeleteChannelSessionsAsync(id, ct);
         return true;
     }
@@ -240,6 +247,39 @@ public class AiChannelService
     /// <summary>轮询型频道拉取增量（由 ChannelPollingHostedService 驱动，按类型分发到适配器）。</summary>
     public Task<ChannelPollBatch> PollChannelAsync(AiChannel channel, string? cursor, CancellationToken ct = default)
         => AdapterFor(channel.ChannelType).PollAsync(channel, cursor, ct);
+
+    /// <summary>读取频道轮询游标（服务重启后恢复，避免重放 24h 内消息）。</summary>
+    public async Task<string> GetPollCursorAsync(string channelId, CancellationToken ct = default)
+    {
+        var c = await Cursors.Find(x => x.ChannelId == channelId).FirstOrDefaultAsync(ct);
+        return c?.Cursor ?? "";
+    }
+
+    /// <summary>持久化频道轮询游标（upsert）。</summary>
+    public async Task SetPollCursorAsync(string channelId, string cursor, CancellationToken ct = default)
+    {
+        if (string.IsNullOrEmpty(cursor)) return;
+        var existing = await Cursors.Find(x => x.ChannelId == channelId).FirstOrDefaultAsync(ct);
+        if (existing == null)
+        {
+            await Cursors.InsertOneAsync(new AiChannelCursor { ChannelId = channelId, Cursor = cursor }, cancellationToken: ct);
+        }
+        else
+        {
+            await Cursors.UpdateOneAsync(
+                x => x.Id == existing.Id,
+                Builders<AiChannelCursor>.Update
+                    .Set(c => c.Cursor, cursor)
+                    .Set(c => c.UpdatedAt, DateTime.UtcNow),
+                cancellationToken: ct);
+        }
+    }
+
+    /// <summary>删除频道的轮询游标（频道删除时清理）。</summary>
+    public async Task DeletePollCursorAsync(string channelId, CancellationToken ct = default)
+    {
+        await Cursors.DeleteManyAsync(x => x.ChannelId == channelId, ct);
+    }
 
     // ── 绑定码 / 绑定用户 ────────────────────────────────────────────────
 
@@ -308,9 +348,27 @@ public class AiChannelService
 
     // ── 入站管线 ────────────────────────────────────────────────────────
 
-    /// <summary>IM 入站消息统一入口（适配器轮询 / Webhook 均汇入此处）。</summary>
+    /// <summary>IM 入站消息统一入口（适配器轮询 / Webhook / 长连接均汇入此处）。</summary>
     public async Task HandleInboundAsync(ChannelInboundMessage msg, CancellationToken ct = default)
     {
+        // 幂等去重：Telegram update_id / 飞书 event_id / iLink message_id。
+        // 防御：并发轮询循环、重启后 Telegram 24h 重放、飞书未 ack 重推。
+        if (!string.IsNullOrEmpty(msg.DedupeKey))
+        {
+            var seenKey = $"{msg.ChannelId}|{msg.DedupeKey}";
+            if (!_seenInbound.TryAdd(seenKey, DateTime.UtcNow))
+            {
+                _logger.LogDebug("Dropped duplicate inbound {Key}", seenKey);
+                return;
+            }
+            if (_seenInbound.Count > SeenInboundMax)
+            {
+                var cutoff = DateTime.UtcNow - SeenInboundTtl;
+                foreach (var kv in _seenInbound.Where(kv => kv.Value < cutoff).ToList())
+                    _seenInbound.TryRemove(kv.Key, out _);
+            }
+        }
+
         var ch = await GetChannelAsync(msg.ChannelId, includeSecrets: true, ct);
         if (ch == null || !ch.Enabled) return; // 未找到/停用频道：静默丢弃。
 

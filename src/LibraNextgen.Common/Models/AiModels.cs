@@ -115,6 +115,18 @@ public class AiChannelBindCode
     public string? UsedByExternalName { get; set; }
 }
 
+/// <summary>
+/// 频道轮询游标（Telegram update_id / iLink get_updates_buf）持久化：
+/// 服务重启后从库恢复，避免 Telegram 重放 24 小时内未确认的更新。
+/// </summary>
+public class AiChannelCursor
+{
+    public string Id { get; set; } = Guid.NewGuid().ToString("N");
+    public string ChannelId { get; set; } = "";
+    public string Cursor { get; set; } = "";
+    public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
+}
+
 /// <summary>AI 会话中的一条消息。</summary>
 public class AiMessage
 {

@@ -41,7 +41,7 @@ const TIER_LABELS = ['Cognitio', 'Arbitrium', 'Imperium', 'Dictatura'];
 function ChannelIcon({ type, className }: { type: string; className?: string }) {
   const src = TYPE_ICONS[type];
   if (!src) return null;
-  return <img src={src} alt={type} className={`size-5 object-contain ${className ?? ''}`} />;
+  return <img src={src} alt={type} className={`size-10 object-contain rounded-full ${className ?? ''}`} />;
 }
 
 export default function ChannelsTab() {
@@ -111,7 +111,7 @@ export default function ChannelsTab() {
 
   return (
     <div className="space-y-6">
-      <Card className="p-6">
+      <Card className="p-6 bg-transparent sm:bg-default-0">
         <div className="mb-4 flex items-center justify-between">
           <div>
             <h2 className="text-lg font-semibold">{t('channels.title')}</h2>
@@ -138,9 +138,9 @@ export default function ChannelsTab() {
         ) : (
           <div className="space-y-3">
             {channels.map((ch) => (
-              <div
+              <Card
                 key={ch.id}
-                className="flex flex-col gap-3 rounded-2xl border border-default-200 p-4 sm:flex-row sm:items-center dark:border-default-800"
+                className="flex flex-col gap-3 sm:flex-row sm:items-center"
               >
                 <ChannelIcon type={ch.channelType} />
                 <div className="flex min-w-0 flex-1 flex-col gap-1">
@@ -149,7 +149,6 @@ export default function ChannelsTab() {
                     <Chip size="sm" color={ch.enabled ? 'success' : 'default'} variant="soft">
                       {ch.enabled ? t('mcp.enabled') : t('mcp.disabled')}
                     </Chip>
-                    <Chip size="sm" variant="tertiary">{ch.channelType}</Chip>
                     <Chip size="sm" variant="soft">
                       {TIER_LABELS[ch.defaultTier] ?? ch.defaultTier}
                     </Chip>
@@ -183,16 +182,22 @@ export default function ChannelsTab() {
                     </Button>
                     <Tooltip.Content>{t('channels.boundUsers')}</Tooltip.Content>
                   </Tooltip>
-                  <Button size="sm" variant="tertiary" onPress={() => { setEditing(ch); setModalOpen(true); }}>
-                    <Pencil className="size-4" />
-                    {t('common.edit')}
-                  </Button>
-                  <Button size="sm" variant="ghost" className="text-danger" onPress={() => void handleDelete(ch)}>
-                    <TrashBin className="size-4" />
-                    {t('common.delete')}
-                  </Button>
+
+                  <Tooltip delay={0}>
+                    <Button size="sm" isIconOnly variant="tertiary" onPress={() => { setEditing(ch); setModalOpen(true); }}>
+                      <Pencil className="size-4" />
+                    </Button>
+                    <Tooltip.Content>{t('common.edit')}</Tooltip.Content>
+                  </Tooltip>
+
+                  <Tooltip delay={0}>
+                    <Button size="sm" isIconOnly variant="ghost" className="text-danger" onPress={() => void handleDelete(ch)}>
+                      <TrashBin className="size-4" />
+                    </Button>
+                    <Tooltip.Content>{t('common.delete')}</Tooltip.Content>
+                  </Tooltip>
                 </div>
-              </div>
+              </Card>
             ))}
           </div>
         )}

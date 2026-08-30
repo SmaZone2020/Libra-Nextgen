@@ -140,5 +140,12 @@ public class MongoIndexBuilder
                     .Ascending(b => b.ChannelId)
                     .Ascending(b => b.ExpiresAt)),
             cancellationToken: ct);
+
+        var cursors = _context.GetCollection<AiChannelCursor>("ai_channel_cursors");
+        await cursors.Indexes.CreateOneAsync(
+            new CreateIndexModel<AiChannelCursor>(
+                Builders<AiChannelCursor>.IndexKeys.Ascending(c => c.ChannelId),
+                new CreateIndexOptions { Unique = true }),
+            cancellationToken: ct);
     }
 }

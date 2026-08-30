@@ -281,7 +281,6 @@ export function ChannelFormModal({ open, editing, onClose, onSaved }: ChannelFor
                       placeholder="https://ilinkai.weixin.qq.com"
                       variant="secondary"
                     />
-                    <p className="mt-1 text-xs text-default-500">{t('channels.clawBaseUrlHint')}</p>
                   </div>
                   <div className="md:col-span-2">
                     <Label className="mb-1.5 block text-sm">{t('channels.clawToken')}</Label>
@@ -292,7 +291,6 @@ export function ChannelFormModal({ open, editing, onClose, onSaved }: ChannelFor
                       placeholder={editing ? t('channels.keepSecret') : ''}
                       variant="secondary"
                     />
-                    <p className="mt-1 text-xs text-default-500">{t('channels.clawTokenHint')}</p>
                   </div>
                 </>
               )}
