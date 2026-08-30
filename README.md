@@ -43,7 +43,7 @@ Agent 通过 HTTP(S) 与 WebSocket 与服务器通信，全链路 AES-256-GCM �
 
 ## 快速开始
 
-需要 MongoDB 7.0+、.NET SDK 10、Node.js 20+（构建 Agent 载荷另需 Rust 1.80+）。详见 [部署手册](docs/部署手册.md)。
+需要 MongoDB 7.0+、.NET SDK 10、Node.js 20+（构建 Agent 载荷另需 Rust 1.80+）。详见 [部署手册](docs/deployment.md)。
 
 ```bash
 # 启动 Server（端口 5270）
@@ -66,14 +66,14 @@ npm run dev
 | Linux x64 | 交叉编译通过，运行时待验证 |
 | Windows x86 | 不支持 |
 
-详见 [平台支持矩阵](docs/平台支持矩阵.md)。
+详见 [平台支持矩阵](docs/platform-support.md)。
 
 ## 文档
 
-- [插件开发](docs/zh/插件开发.md) — meta.json 契约、zip 结构、JS / native 双通道
-- [部署手册](docs/部署手册.md) — MongoDB 认证、nginx/TLS、Builder 与云载模块
-- [操作手册](docs/zh/操作手册.md) — Agent 上线、插件安装、Shell / 文件 / MCP、审计与风险策略
-- [LLM 插件开发指南](docs/LLM-插件开发指南.md)
+- [插件开发](docs/zh/plugin-development.md) — meta.json 契约、zip 结构、JS / native 双通道
+- [部署手册](docs/deployment.md) — MongoDB 认证、nginx/TLS、Builder 与云载模块
+- [操作手册](docs/zh/operations.md) — Agent 上线、插件安装、Shell / 文件 / MCP、审计与风险策略
+- [LLM 插件开发指南](docs/llm-plugin-development.md)
 
 ## 相关仓库
 

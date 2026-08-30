@@ -2,7 +2,7 @@
 
 ## First Login
 
-1. Start Server + Console (see [README Quick Start](../../README_en.md) or the [Deployment Manual](../../部署手册.md)):
+1. Start Server + Console (see [README Quick Start](../../README_en.md) or the [Deployment Manual](../../deployment.md)):
    - Server: `cd src/service && dotnet run` (port 5270; MongoDB must be running first)
    - Console: `cd src/webapp && npm install && npm run dev` (port 5173)
 2. Open <http://localhost:5173> → `/setup` and create the admin account

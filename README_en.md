@@ -43,7 +43,7 @@ Agents communicate with the server over HTTP(S) and WebSocket, with AES-256-GCM 
 
 ## Getting Started
 
-Requires MongoDB 7.0+, .NET SDK 10, Node.js 20+ (Rust 1.80+ is only needed to build Agent payloads). See the [Deployment Manual](docs/部署手册.md).
+Requires MongoDB 7.0+, .NET SDK 10, Node.js 20+ (Rust 1.80+ is only needed to build Agent payloads). See the [Deployment Manual](docs/deployment.md).
 
 ```bash
 # Start the server (port 5270)
@@ -66,14 +66,14 @@ Open <http://localhost:5173> — the first visit creates the admin account. Agen
 | Linux x64 | Cross-compilation passes; runtime verification pending |
 | Windows x86 | Unsupported |
 
-See the [platform support matrix](docs/平台支持矩阵.md).
+See the [platform support matrix](docs/platform-support.md).
 
 ## Docs
 
-- [Plugin Development](docs/zh/插件开发.md) — meta.json contract, zip layout, JS / native channels
-- [Deployment Manual](docs/部署手册.md) — MongoDB auth, nginx/TLS, Builder & cloud modules
-- [Operations](docs/zh/操作手册.md) — Agent onboarding, plugin installs, Shell / files / MCP, audit & risk policy
-- [LLM Plugin Guide](docs/LLM-插件开发指南.md)
+- [Plugin Development](docs/zh/plugin-development.md) — meta.json contract, zip layout, JS / native channels
+- [Deployment Manual](docs/deployment.md) — MongoDB auth, nginx/TLS, Builder & cloud modules
+- [Operations](docs/zh/operations.md) — Agent onboarding, plugin installs, Shell / files / MCP, audit & risk policy
+- [LLM Plugin Guide](docs/llm-plugin-development.md)
 
 ## Related Repositories
 
