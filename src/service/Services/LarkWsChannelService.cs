@@ -331,7 +331,23 @@ public class LarkWsChannelService : BackgroundService
                 if (root != null)
                 {
                     var msg = lark.ParseEventEnvelope(channel, root);
-                    if (msg != null) await channels.HandleInboundAsync(msg, ct);
+                    if (msg != null)
+                    {
+                        // 事件处理（审批挂起可能阻塞）不阻塞 WS 读取循环：
+                        // 立即 ACK 并异步处理，避免事件堆积导致重推风暴。
+                        var m = msg;
+                        _ = Task.Run(async () =>
+                        {
+                            try
+                            {
+                                await channels.HandleInboundAsync(m, ct);
+                            }
+                            catch (Exception ex)
+                            {
+                                _logger.LogWarning(ex, "Lark inbound handling failed (channel {Channel})", channel.Id);
+                            }
+                        }, ct);
+                    }
                 }
             }
             catch (Exception ex)

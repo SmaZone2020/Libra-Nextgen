@@ -304,16 +304,22 @@ public class TelegramChannelAdapter : IAiChannelAdapter
         CancellationToken ct)
     {
         var bot = Bot(channel);
+        _logger.LogInformation("Telegram StartReceiving (channel {Channel})", channel.Id);
         bot.StartReceiving(
             async (b, update, c) =>
             {
+                // 诊断：每个到达的更新先记类型（排查用；正常运行时保持 Debug）。
+                _logger.LogDebug("Telegram update {UpdateId} type={Type}", update.Id,
+                    update.CallbackQuery != null ? "callback_query"
+                    : update.Message != null ? "message"
+                    : update.Type.ToString());
                 try
                 {
                     await HandleUpdateAsync(channel, b, update, onInbound, onCallback, c);
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogWarning(ex, "Telegram update handling failed (channel {Channel})", channel.Id);
+                    _logger.LogWarning(ex, "Telegram update handling failed (channel {Channel}, update {UpdateId})", channel.Id, update.Id);
                 }
             },
             (b, ex, c) =>
@@ -324,7 +330,8 @@ public class TelegramChannelAdapter : IAiChannelAdapter
             },
             new ReceiverOptions
             {
-                AllowedUpdates = new[] { UpdateType.Message, UpdateType.CallbackQuery },
+                // null = 接收全部更新类型（handler 只处理 Message/CallbackQuery，其余忽略）。
+                AllowedUpdates = null,
             },
             ct);
         return Task.CompletedTask;
@@ -339,7 +346,23 @@ public class TelegramChannelAdapter : IAiChannelAdapter
         if (update.Message is { } msg)
         {
             var inbound = TryParseMessage(channel, msg);
-            if (inbound != null) await onInbound(inbound, ct);
+            if (inbound != null)
+            {
+                // 关键：消息处理（RunChatAsync 可能因审批挂起阻塞很久）绝不能阻塞
+                // Telegram 接收循环——否则后续更新（含按钮回调）全部积压无响应。
+                // per-user 并发闸 + 限流在 AiChannelService 内保证串行与安全。
+                _ = Task.Run(async () =>
+                {
+                    try
+                    {
+                        await onInbound(inbound, ct);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Telegram inbound handling failed (channel {Channel})", channel.Id);
+                    }
+                }, ct);
+            }
             return;
         }
         if (update.CallbackQuery is { } cq)
@@ -347,22 +370,36 @@ public class TelegramChannelAdapter : IAiChannelAdapter
             var action = ResolveCallback(channel, cq);
             if (action == null)
             {
+                _logger.LogDebug("Telegram callback rejected (channel {Channel}, data '{Data}')", channel.Id, cq.Data);
                 await bot.AnswerCallbackQuery(cq.Id, "按钮已失效，请在对话中重新发起审批", showAlert: false, cancellationToken: ct);
                 return;
             }
-            var result = await onCallback(action, ct);
-            await bot.AnswerCallbackQuery(cq.Id,
-                result.Ok ? (action.Approved ? $"✅ 已批准（{action.Permit}）" : "❌ 已拒绝") : result.Message,
-                showAlert: !result.Ok, cancellationToken: ct);
-            // 按钮已处理：移除键盘，避免重复点击。
-            try
+            // 异步处理：审批续跑（工具执行）可能耗时，同样不阻塞接收循环。
+            _ = Task.Run(async () =>
             {
-                await bot.EditMessageReplyMarkup(action.ChatId, action.MessageId, replyMarkup: null, cancellationToken: ct);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogDebug(ex, "Failed to clear approval keyboard (message {MessageId})", action.MessageId);
-            }
+                try
+                {
+                    var result = await onCallback(action, ct);
+                    _logger.LogInformation("Telegram callback resolved (channel {Channel}, approved={Approved}, permit={Permit}, session={Session})",
+                        channel.Id, action.Approved, action.Permit, action.SessionId);
+                    await bot.AnswerCallbackQuery(action.CallbackQueryId,
+                        result.Ok ? (action.Approved ? $"✅ 已批准（{action.Permit}）" : "❌ 已拒绝") : result.Message,
+                        showAlert: !result.Ok, cancellationToken: ct);
+                    // 按钮已处理：移除键盘，避免重复点击。
+                    try
+                    {
+                        await bot.EditMessageReplyMarkup(action.ChatId, action.MessageId, replyMarkup: null, cancellationToken: ct);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogDebug(ex, "Failed to clear approval keyboard (message {MessageId})", action.MessageId);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Telegram callback handling failed (channel {Channel})", channel.Id);
+                }
+            }, ct);
         }
     }
 

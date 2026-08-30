@@ -125,7 +125,20 @@ public class ChannelPollingHostedService : BackgroundService
                 sessionExpiredLogged = false;
                 foreach (var msg in batch.Messages)
                 {
-                    await channels.HandleInboundAsync(msg, ct);
+                    // 消息处理（RunChatAsync 可能因审批挂起阻塞很久）不阻塞轮询循环，
+                    // 否则该频道后续消息全部积压；per-user 并发闸保证同用户串行。
+                    var m = msg;
+                    _ = Task.Run(async () =>
+                    {
+                        try
+                        {
+                            await channels.HandleInboundAsync(m, ct);
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.LogWarning(ex, "Inbound handling failed (channel {Channel})", channel.Id);
+                        }
+                    }, ct);
                 }
             }
             catch (OperationCanceledException)
