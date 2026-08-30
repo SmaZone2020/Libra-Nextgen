@@ -5,9 +5,10 @@ using LibraNextgen.Service.Data;
 namespace LibraNextgen.Service.Services;
 
 /// <summary>
-/// AI 频道轮询后台服务：为每个启用的长轮询型频道（Telegram getUpdates / 微信 iLink getupdates）
+/// AI 频道轮询后台服务：为每个启用的手写长轮询型频道（微信 iLink getupdates）
 /// 跑一条长轮询循环（无需公网回调地址，适配 C2 局域网/内网部署）。
-/// - 游标（Telegram update_id / iLink get_updates_buf）持久化到 MongoDB，服务重启不重放；
+/// Telegram 已改用 Telegram.Bot 库自带接收（TelegramBotHostedService），不在此列。
+/// - 游标（iLink get_updates_buf）持久化到 MongoDB，服务重启不重放；
 /// - 频道停用/删除时自动取消对应循环；循环异常退出后由 Reconcile 自动拉起（死循环自愈）；
 /// - iLink 会话过期（-14）时退避重试并提示重新登录。
 /// </summary>

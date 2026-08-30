@@ -103,7 +103,7 @@ export function AiSidebarSessionRow({
             }`}
           >
             {channelIcon && (
-              <img src={channelIcon} alt={channelType ?? ''} className="size-3.5 object-contain" />
+              <img src={channelIcon} alt={channelType ?? ''} className="size-4.5 rounded-full object-contain" />
             )}
             {channelType
               ? `${channelExternalName || session.title || t('ai.untitled')} · ${session.model}`

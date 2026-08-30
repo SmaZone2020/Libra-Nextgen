@@ -6,6 +6,11 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using LibraNextgen.Common.Models;
+using Telegram.Bot;
+using Telegram.Bot.Polling;
+using Telegram.Bot.Types;
+using Telegram.Bot.Types.Enums;
+using Telegram.Bot.Types.ReplyMarkups;
 
 namespace LibraNextgen.Service.Services;
 
@@ -22,8 +27,8 @@ public static class AiChannelTypes
         "botToken", "appSecret", "encryptKey", "ilinkKey", "webhookSecret",
     };
 
-    /// <summary>长轮询型频道（由 ChannelPollingHostedService 驱动）。</summary>
-    public static readonly string[] PollingTypes = { Telegram, WechatClaw };
+    /// <summary>手写长轮询型频道（由 ChannelPollingHostedService 驱动；Telegram 改用 Telegram.Bot 库自带接收）。</summary>
+    public static readonly string[] PollingTypes = { WechatClaw };
 }
 
 /// <summary>适配器规范化后的入站消息（频道无关）。</summary>
@@ -47,13 +52,62 @@ public sealed class ChannelPollBatch
     public List<ChannelInboundMessage> Messages { get; init; } = new();
 }
 
-/// <summary>AI 频道适配器统一抽象。入站两种形态：长轮询（PollAsync）或 Webhook/长连接（解析函数）。</summary>
+/// <summary>媒体消息（原生发送图片/视频/文件等；v1 支持 URL 形态）。</summary>
+public sealed class ChannelMedia
+{
+    /// <summary>photo | video | document | audio | animation。</summary>
+    public required string Type { get; init; }
+    /// <summary>媒体文件 URL（http/https）。</summary>
+    public required string Url { get; init; }
+    public string? FileName { get; init; }
+    public string? Caption { get; init; }
+}
+
+/// <summary>内联按钮审批回调（Telegram callback query 解析结果，频道无关）。</summary>
+public sealed class CallbackAction
+{
+    public required string ChannelId { get; init; }
+    public required string ExternalId { get; init; }
+    public required string SessionId { get; init; }
+    public required string ToolCallId { get; init; }
+    public bool Approved { get; init; }
+    /// <summary>one-time | 5min | 20min。</summary>
+    public required string Permit { get; init; }
+    /// <summary>回调回执所需（AnswerCallbackQuery / 编辑消息清按钮）。</summary>
+    public required string CallbackQueryId { get; init; }
+    public required string ChatId { get; init; }
+    public int MessageId { get; init; }
+}
+
+public sealed class CallbackResult
+{
+    public bool Ok { get; init; }
+    public string? Message { get; init; }
+    public CallbackResult(bool ok, string? message = null)
+    {
+        Ok = ok;
+        Message = message;
+    }
+}
+
+/// <summary>AI 频道适配器统一抽象。入站形态：长轮询（PollAsync）、库回调（Telegram）、Webhook/长连接（解析函数）。</summary>
 public interface IAiChannelAdapter
 {
     string ChannelType { get; }
 
     /// <summary>向指定外部用户发送文本（适配器自行处理分块/失败）。</summary>
     Task SendTextAsync(AiChannel channel, string externalId, string text, CancellationToken ct);
+
+    /// <summary>发送媒体（图片/视频/文件等）。默认降级为发送 URL 文本。</summary>
+    Task SendMediaAsync(AiChannel channel, string externalId, ChannelMedia media, CancellationToken ct) =>
+        SendTextAsync(channel, externalId, string.IsNullOrEmpty(media.Caption) ? media.Url : $"{media.Caption}\n{media.Url}", ct);
+
+    /// <summary>
+    /// 发送审批请求（带操作按钮的频道原生实现，如 Telegram 内联键盘）。
+    /// 默认降级为纯文本（其他频道现状：IM 内 /approve /reject 命令）。
+    /// </summary>
+    Task SendApprovalAsync(AiChannel channel, string externalId, string text, string sessionId, string toolCallId, CancellationToken ct) =>
+        SendTextAsync(channel, externalId, text, ct);
 
     /// <summary>连通性自检（设置页"测试连接"）。返回 (ok, message)。</summary>
     Task<(bool Ok, string Message)> TestAsync(AiChannel channel, CancellationToken ct);
@@ -70,50 +124,158 @@ public sealed class SessionExpiredException : Exception
 }
 
 /// <summary>
-/// Telegram Bot API 适配器（长轮询，无需公网回调地址）。
-/// 出站：POST /bot{token}/sendMessage；入站：GET /bot{token}/getUpdates?timeout=30。
+/// Telegram 适配器——基于官方 Telegram.Bot（.NET）库，不手写 HTTP/轮询。
+/// 入站：StartReceiving 长轮询回调（库内部管理 offset，无需公网回调）；
+/// 出站：SendTextMessageAsync / SendPhotoAsync / SendDocumentAsync 等原生 API；
+/// 审批：InlineKeyboardMarkup 内联按钮（批准 / 临时批准 5min / 20min / 拒绝），
+///       callback data 用短令牌（Telegram 上限 64 字节），点击经 CallbackQuery 回执。
 /// </summary>
 public class TelegramChannelAdapter : IAiChannelAdapter
 {
-    private const string ApiBase = "https://api.telegram.org/bot{0}/";
-    private readonly IHttpClientFactory _httpFactory;
     private readonly ILogger<TelegramChannelAdapter> _logger;
+    /// <summary>channelId → bot client（每频道一个；Token 变化时旧 client 失效由轮询重启兜底）。</summary>
+    private readonly ConcurrentDictionary<string, ITelegramBotClient> _clients = new();
+    /// <summary>审批按钮令牌表：token → 审批上下文（TTL 10 分钟）。</summary>
+    private readonly ConcurrentDictionary<string, ApprovalButton> _approvalButtons = new();
 
-    public TelegramChannelAdapter(IHttpClientFactory httpFactory, ILogger<TelegramChannelAdapter> logger)
+    public TelegramChannelAdapter(ILogger<TelegramChannelAdapter> logger)
     {
-        _httpFactory = httpFactory;
         _logger = logger;
     }
 
     public string ChannelType => AiChannelTypes.Telegram;
 
-    private HttpClient Client(string token)
-    {
-        var c = _httpFactory.CreateClient("ai-channel");
-        c.Timeout = TimeSpan.FromSeconds(90); // 长轮询需放宽
-        c.BaseAddress = new Uri(string.Format(ApiBase, token));
-        return c;
-    }
-
     private static string? Token(AiChannel ch) =>
         ch.Config.TryGetValue("botToken", out var t) && t.Length > 0 ? t : null;
 
+    private ITelegramBotClient Bot(AiChannel ch)
+    {
+        var token = Token(ch) ?? throw new InvalidOperationException("Telegram botToken 未配置");
+        return _clients.GetOrAdd(ch.Id, _ => new TelegramBotClient(token) { Timeout = TimeSpan.FromSeconds(60) });
+    }
+
     public async Task SendTextAsync(AiChannel channel, string externalId, string text, CancellationToken ct)
     {
-        var token = Token(channel);
-        if (token == null) throw new InvalidOperationException("Telegram botToken 未配置");
-        var body = new JsonObject
+        await Bot(channel).SendMessage(externalId, text, cancellationToken: ct);
+    }
+
+    public async Task SendMediaAsync(AiChannel channel, string externalId, ChannelMedia media, CancellationToken ct)
+    {
+        var bot = Bot(channel);
+        var file = InputFile.FromUri(media.Url);
+        switch (media.Type)
         {
-            ["chat_id"] = externalId,
-            ["text"] = text,
-            ["disable_web_page_preview"] = true,
-        };
-        var resp = await Client(token).PostAsJsonAsync("sendMessage", body, ct);
-        if (!resp.IsSuccessStatusCode)
-        {
-            var err = await resp.Content.ReadAsStringAsync(ct);
-            throw new InvalidOperationException($"Telegram sendMessage HTTP {(int)resp.StatusCode}: {err[..Math.Min(err.Length, 300)]}");
+            case "photo":
+                await bot.SendPhoto(externalId, file, caption: media.Caption, cancellationToken: ct);
+                break;
+            case "video":
+                await bot.SendVideo(externalId, file, caption: media.Caption, cancellationToken: ct);
+                break;
+            case "audio":
+                await bot.SendAudio(externalId, file, caption: media.Caption, cancellationToken: ct);
+                break;
+            case "animation":
+                await bot.SendAnimation(externalId, file, caption: media.Caption, cancellationToken: ct);
+                break;
+            default:
+                // fileName 由 URL/文件名推断（22.x 的 InputFile 自带文件名）。
+                await bot.SendDocument(externalId, file, caption: media.Caption, cancellationToken: ct);
+                break;
         }
+    }
+
+    /// <summary>发送审批请求：文本 + 内联按钮（批准 / 5min / 20min / 拒绝）。</summary>
+    public async Task SendApprovalAsync(AiChannel channel, string externalId, string text, string sessionId, string toolCallId, CancellationToken ct)
+    {
+        var markup = BuildApprovalMarkup(channel.Id, externalId, sessionId, toolCallId);
+        await Bot(channel).SendMessage(externalId, text, replyMarkup: markup, cancellationToken: ct);
+    }
+
+    /// <summary>
+    /// 构造审批内联键盘。按钮 callback data 使用短令牌（Telegram 上限 64 字节）：
+    ///   ap:&lt;token&gt;[:ot|5m|20m] 批准；rj:&lt;token&gt; 拒绝。
+    /// </summary>
+    public InlineKeyboardMarkup BuildApprovalMarkup(string channelId, string externalId, string sessionId, string toolCallId)
+    {
+        var token = CreateApprovalToken(channelId, externalId, sessionId, toolCallId);
+        return new InlineKeyboardMarkup(new[]
+        {
+            new[]
+            {
+                InlineKeyboardButton.WithCallbackData("✅ 批准", $"ap:{token}:ot"),
+                InlineKeyboardButton.WithCallbackData("⏱ 5 分钟", $"ap:{token}:5m"),
+                InlineKeyboardButton.WithCallbackData("⏱ 20 分钟", $"ap:{token}:20m"),
+            },
+            new[]
+            {
+                InlineKeyboardButton.WithCallbackData("❌ 拒绝", $"rj:{token}"),
+            },
+        });
+    }
+
+    /// <summary>生成审批令牌并登记（TTL 10 分钟）。</summary>
+    public string CreateApprovalToken(string channelId, string externalId, string sessionId, string toolCallId)
+    {
+        var token = Convert.ToHexString(RandomNumberGenerator.GetBytes(8)).ToLowerInvariant();
+        _approvalButtons[token] = new ApprovalButton
+        {
+            ChannelId = channelId,
+            ExternalId = externalId,
+            SessionId = sessionId,
+            ToolCallId = toolCallId,
+            ExpiresAt = DateTime.UtcNow.AddMinutes(10),
+        };
+        return token;
+    }
+
+    /// <summary>
+    /// 解析按钮回调：校验令牌存在、未过期、归属（externalId = 消息 chat_id）。
+    /// 返回 null 表示按钮无效（已过期/不属于该用户）。
+    /// </summary>
+    public CallbackAction? ResolveCallback(AiChannel channel, CallbackQuery cq)
+    {
+        if (cq.Data is not { } data || cq.Message is not { } msg) return null;
+        if (cq.Id.Length == 0) return null;
+
+        var approved = data.StartsWith("ap:", StringComparison.Ordinal);
+        var rejected = data.StartsWith("rj:", StringComparison.Ordinal);
+        if (!approved && !rejected) return null;
+
+        var parts = data.Split(':');
+        if (parts.Length < 2) return null;
+        var token = parts[1];
+        if (!_approvalButtons.TryGetValue(token, out var btn)) return null;
+        if (btn.ExpiresAt < DateTime.UtcNow)
+        {
+            _approvalButtons.TryRemove(token, out _);
+            return null;
+        }
+        // 归属校验：按钮只能被发起对话的外部用户点击（私聊 chat_id == 用户 id）。
+        var chatId = msg.Chat.Id.ToString();
+        if (btn.ChannelId != channel.Id || btn.ExternalId != chatId) return null;
+
+        var permit = "one-time";
+        if (approved && parts.Length > 2)
+        {
+            permit = parts[2] switch
+            {
+                "5m" => "5min",
+                "20m" => "20min",
+                _ => "one-time",
+            };
+        }
+        return new CallbackAction
+        {
+            ChannelId = channel.Id,
+            ExternalId = btn.ExternalId,
+            SessionId = btn.SessionId,
+            ToolCallId = btn.ToolCallId,
+            Approved = approved,
+            Permit = permit,
+            CallbackQueryId = cq.Id,
+            ChatId = chatId,
+            MessageId = msg.MessageId,
+        };
     }
 
     public async Task<(bool Ok, string Message)> TestAsync(AiChannel channel, CancellationToken ct)
@@ -122,12 +284,8 @@ public class TelegramChannelAdapter : IAiChannelAdapter
         if (token == null) return (false, "缺少 botToken");
         try
         {
-            var resp = await Client(token).GetAsync("getMe", ct);
-            if (!resp.IsSuccessStatusCode)
-                return (false, $"HTTP {(int)resp.StatusCode}");
-            var doc = JsonNode.Parse(await resp.Content.ReadAsStringAsync(ct));
-            var uname = doc?["result"]?["username"]?.GetValue<string>() ?? "";
-            return (true, $"@{uname}");
+            var me = await Bot(channel).GetMe(ct);
+            return (true, $"@{me.Username}");
         }
         catch (Exception ex)
         {
@@ -135,65 +293,108 @@ public class TelegramChannelAdapter : IAiChannelAdapter
         }
     }
 
-    public async Task<ChannelPollBatch> PollAsync(AiChannel channel, string? cursor, CancellationToken ct)
+    /// <summary>
+    /// 启动库驱动的长轮询接收（每频道一次，由 TelegramBotHostedService 调用）。
+    /// onInbound：文本消息入站；onCallback：审批按钮回调（返回回执结果）。
+    /// </summary>
+    public Task StartReceivingAsync(
+        AiChannel channel,
+        Func<ChannelInboundMessage, CancellationToken, Task> onInbound,
+        Func<CallbackAction, CancellationToken, Task<CallbackResult>> onCallback,
+        CancellationToken ct)
     {
-        var token = Token(channel);
-        if (token == null) return new ChannelPollBatch { NewCursor = cursor };
-        var offset = long.TryParse(cursor, out var o) ? o : 0;
-        var url = $"getUpdates?offset={offset}&timeout=30&allowed_updates=%5B%22message%22%5D";
-        var resp = await Client(token).GetAsync(url, ct);
-        if (!resp.IsSuccessStatusCode)
-        {
-            var err = await resp.Content.ReadAsStringAsync(ct);
-            throw new InvalidOperationException($"Telegram getUpdates HTTP {(int)resp.StatusCode}: {err[..Math.Min(err.Length, 200)]}");
-        }
-        var doc = JsonNode.Parse(await resp.Content.ReadAsStringAsync(ct)) as JsonObject;
-        var ok = doc?["ok"]?.GetValue<bool>() ?? false;
-        if (!ok)
-        {
-            var desc = doc?["description"]?.GetValue<string>() ?? "unknown error";
-            throw new InvalidOperationException($"Telegram getUpdates failed: {desc}");
-        }
-
-        long newOffset = offset;
-        var messages = new List<ChannelInboundMessage>();
-        if (doc?["result"] is JsonArray arr)
-        {
-            foreach (var item in arr.OfType<JsonObject>())
+        var bot = Bot(channel);
+        bot.StartReceiving(
+            async (b, update, c) =>
             {
-                var updateId = item["update_id"]?.GetValue<long>() ?? 0;
-                // Telegram 确认语义：offset 必须推进到「最大已处理 update_id + 1」，
-                // 服务端只重发 update_id >= offset 的更新——若只推进到 update_id 本身，
-                // 同一条消息会被无限重复下发（表现为 bot 对一条消息反复响应）。
-                if (updateId + 1 > newOffset) newOffset = updateId + 1;
-                var msg = item["message"] as JsonObject;
-                if (msg == null) continue;
-                var text = msg["text"]?.GetValue<string>() ?? "";
-                var chatId = msg["chat"]?["id"]?.GetValue<long>();
-                if (chatId == null || text.Length == 0) continue;
-                // 忽略机器人自己发出的消息（Telegram 不会回推，防御性跳过）。
-                var isBot = msg["from"]?["is_bot"]?.GetValue<bool>() ?? false;
-                if (isBot) continue;
-                var from = msg["from"] as JsonObject;
-                var firstName = from?["first_name"]?.GetValue<string>() ?? "";
-                var lastName = from?["last_name"]?.GetValue<string>() ?? "";
-                var uname = from?["username"]?.GetValue<string>() ?? "";
-                var name = string.Join(' ', new[] { firstName, lastName }.Where(s => s.Length > 0));
-                if (name.Length == 0) name = uname;
-                if (name.Length == 0) name = chatId.ToString()!;
-                messages.Add(new ChannelInboundMessage
+                try
                 {
-                    ChannelId = channel.Id,
-                    ExternalId = chatId.ToString()!,
-                    ExternalName = name,
-                    Text = text,
-                    // 幂等去重键（防御并发循环/重启重放导致的重复处理）。
-                    DedupeKey = updateId.ToString(),
-                });
+                    await HandleUpdateAsync(channel, b, update, onInbound, onCallback, c);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Telegram update handling failed (channel {Channel})", channel.Id);
+                }
+            },
+            (b, ex, c) =>
+            {
+                if (ex is not OperationCanceledException)
+                    _logger.LogWarning(ex, "Telegram receive error (channel {Channel})", channel.Id);
+                return Task.CompletedTask;
+            },
+            new ReceiverOptions
+            {
+                AllowedUpdates = new[] { UpdateType.Message, UpdateType.CallbackQuery },
+            },
+            ct);
+        return Task.CompletedTask;
+    }
+
+    private async Task HandleUpdateAsync(
+        AiChannel channel, ITelegramBotClient bot, Update update,
+        Func<ChannelInboundMessage, CancellationToken, Task> onInbound,
+        Func<CallbackAction, CancellationToken, Task<CallbackResult>> onCallback,
+        CancellationToken ct)
+    {
+        if (update.Message is { } msg)
+        {
+            var inbound = TryParseMessage(channel, msg);
+            if (inbound != null) await onInbound(inbound, ct);
+            return;
+        }
+        if (update.CallbackQuery is { } cq)
+        {
+            var action = ResolveCallback(channel, cq);
+            if (action == null)
+            {
+                await bot.AnswerCallbackQuery(cq.Id, "按钮已失效，请在对话中重新发起审批", showAlert: false, cancellationToken: ct);
+                return;
+            }
+            var result = await onCallback(action, ct);
+            await bot.AnswerCallbackQuery(cq.Id,
+                result.Ok ? (action.Approved ? $"✅ 已批准（{action.Permit}）" : "❌ 已拒绝") : result.Message,
+                showAlert: !result.Ok, cancellationToken: ct);
+            // 按钮已处理：移除键盘，避免重复点击。
+            try
+            {
+                await bot.EditMessageReplyMarkup(action.ChatId, action.MessageId, replyMarkup: null, cancellationToken: ct);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogDebug(ex, "Failed to clear approval keyboard (message {MessageId})", action.MessageId);
             }
         }
-        return new ChannelPollBatch { NewCursor = newOffset.ToString(), Messages = messages };
     }
+
+    /// <summary>把 Telegram 文本消息规范化为入站消息（纯函数，可测试）。</summary>
+    public static ChannelInboundMessage? TryParseMessage(AiChannel channel, Message msg)
+    {
+        if (string.IsNullOrWhiteSpace(msg.Text) || msg.Chat?.Id == null) return null;
+        // 忽略机器人自己的消息（防御性）。
+        if (msg.From?.IsBot == true) return null;
+        var chatId = msg.Chat.Id.ToString()!;
+        var name = string.Join(' ', new[] { msg.From?.FirstName, msg.From?.LastName }.Where(s => !string.IsNullOrEmpty(s)));
+        if (string.IsNullOrEmpty(name)) name = msg.From?.Username ?? chatId;
+        return new ChannelInboundMessage
+        {
+            ChannelId = channel.Id,
+            ExternalId = chatId,
+            ExternalName = name,
+            Text = msg.Text,
+            // 幂等去重键：message_id 在单个 chat 内唯一，配合入站去重防御重放。
+            DedupeKey = msg.MessageId.ToString(),
+        };
+    }
+}
+
+/// <summary>审批按钮令牌上下文（Telegram callback data 短令牌映射）。</summary>
+public sealed class ApprovalButton
+{
+    public required string ChannelId { get; init; }
+    public required string ExternalId { get; init; }
+    public required string SessionId { get; init; }
+    public required string ToolCallId { get; init; }
+    public DateTime ExpiresAt { get; init; }
 }
 
 /// <summary>

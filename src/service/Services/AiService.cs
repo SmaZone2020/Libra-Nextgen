@@ -50,6 +50,8 @@ public sealed class AiRunState
     public bool Finished { get; set; }
     public CancellationTokenSource? Cts { get; set; }
     public DateTime StartedAt { get; set; } = DateTime.UtcNow;
+    /// <summary>频道会话的上下文（审批续跑时 AsyncLocal 不流动，工具调用前从此恢复注入）。</summary>
+    public AiRunContextState? ChannelContext { get; set; }
 
     /// <summary>向当前 SSE 连接推送事件（approval 挂起后前端仍保持同一连接）。</summary>
     public Func<string, Task>? Notify { get; set; }
@@ -764,6 +766,21 @@ public class AiService
         _logger.LogInformation("RunChatAsync started for session {Session} (tier {Tier})", session.Id, justitiaTier);
         state.Cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
 
+        // 频道会话：注入运行上下文（AsyncLocal），供 MCP 工具（send_channel_media 等）
+        // 读取"当前对话者"，工具无需用户显式传目标，天然防越权。
+        var hadContext = false;
+        if (session.ChannelId != null)
+        {
+            state.ChannelContext = new AiRunContextState
+            {
+                ChannelId = session.ChannelId,
+                ChannelType = session.ChannelType ?? "",
+                ExternalId = session.ChannelExternalId ?? "",
+            };
+            AiRunContext.Set(state.ChannelContext);
+            hadContext = true;
+        }
+
         // 历史消息（含刚追加的用户消息）→ OpenAI 格式。
         foreach (var m in session.Messages)
         {
@@ -805,6 +822,7 @@ public class AiService
         }
         finally
         {
+            if (hadContext) AiRunContext.Clear();
             state.Finished = true;
             // 挂起审批时保留运行态：ResolveApprovalAsync 需要从 _runs 恢复续跑，
             // 只有真正结束（无待审批调用）才移除，避免 /chat/action 找不到 state 而静默失败。
@@ -1616,6 +1634,9 @@ public class AiService
             else
             {
                 // 普通工具：执行并把结果交给 LLM（与 ChatLoopAsync 直接执行路径一致）。
+                // 审批由控制台/IM 回调触发，AsyncLocal 上下文不流动——从运行态恢复频道上下文。
+                var prevCtx = AiRunContext.Current;
+                if (state.ChannelContext != null) AiRunContext.Set(state.ChannelContext);
                 try
                 {
                     output = await InvokeToolAsync(pending.ToolName, JsonNode.Parse(pending.ArgsText) as JsonObject ?? new JsonObject(), ct);
@@ -1624,6 +1645,10 @@ public class AiService
                 {
                     _logger.LogWarning(ex, "AI tool {Tool} threw unhandled exception after approval", pending.ToolName);
                     output = McpUtils.Error($"tool '{pending.ToolName}' failed: {ex.Message}");
+                }
+                finally
+                {
+                    if (prevCtx != null) AiRunContext.Set(prevCtx); else AiRunContext.Clear();
                 }
                 // 审批后执行的工具审计（风险按提升后的档位计）。
                 var isErr = output.Contains("\"error\"", StringComparison.Ordinal);

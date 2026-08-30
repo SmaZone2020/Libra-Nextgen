@@ -647,9 +647,18 @@ public class AiChannelService
                     var callId = evt["toolCall"]?["id"]?.GetValue<string>() ?? "";
                     var args = evt["toolCall"]?["argsText"]?.GetValue<string>() ?? "";
                     var argsDetail = args.Length > 0 ? $"\n参数：{args[..Math.Min(args.Length, 500)]}" : "";
-                    await TrySendAsync(ch, msg.ExternalId,
-                        $"⏳ Justitia 请求审批：\n工具「{toolName}」{argsDetail}\n\n" +
-                        $"回复 /approve 批准（或 /approve 5min 临时许可 5 分钟），/reject 拒绝。", ct);
+                    var approvalText = $"⏳ Justitia 请求审批：\n工具「{toolName}」{argsDetail}";
+                    if (guest || callId.Length == 0)
+                    {
+                        // 访客/异常：纯文本（无按钮），并附命令指引。
+                        await TrySendAsync(ch, msg.ExternalId, approvalText +
+                            "\n\n回复 /approve 批准（或 /approve 5min 临时许可 5 分钟），/reject 拒绝。", ct);
+                    }
+                    else
+                    {
+                        // 已绑定用户：内联按钮（Telegram 原生键盘；其余频道回退纯文本）。
+                        await TrySendApprovalAsync(ch, msg.ExternalId, approvalText, sessionId, callId, ct);
+                    }
                     await NotifyConsoleAsync(new
                     {
                         kind = "approval",
@@ -702,6 +711,53 @@ public class AiChannelService
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Channel send failed ({Channel} → {External})", ch.Id, externalId);
+        }
+    }
+
+    /// <summary>发送审批请求：Telegram 带内联按钮，其余频道回退纯文本。</summary>
+    private async Task TrySendApprovalAsync(AiChannel ch, string externalId, string text, string sessionId, string callId, CancellationToken ct)
+    {
+        try
+        {
+            await AdapterFor(ch.ChannelType).SendApprovalAsync(ch, externalId, text, sessionId, callId, ct);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Channel approval send failed ({Channel} → {External})", ch.Id, externalId);
+        }
+    }
+
+    /// <summary>向频道用户发送媒体（供 MCP 工具 send_channel_media 调用）。</summary>
+    public async Task SendMediaToChannelAsync(
+        string channelId, string externalId, string type, string url, string? fileName, string? caption, CancellationToken ct = default)
+    {
+        var ch = await GetChannelAsync(channelId, includeSecrets: true, ct)
+            ?? throw new InvalidOperationException("channel not found");
+        if (!ch.Enabled) throw new InvalidOperationException("channel disabled");
+        var media = new ChannelMedia
+        {
+            Type = type,
+            Url = url,
+            FileName = fileName,
+            Caption = caption,
+        };
+        await AdapterFor(ch.ChannelType).SendMediaAsync(ch, externalId, media, ct);
+    }
+
+    /// <summary>审批按钮回调（Telegram 内联键盘）：写入门闩，原运行经 Sink 续跑回推 IM。</summary>
+    public async Task<CallbackResult> HandleCallbackAsync(CallbackAction action, CancellationToken ct = default)
+    {
+        try
+        {
+            var ok = await _ai.ResolveApprovalAsync(action.SessionId, action.ToolCallId, action.Approved, ct, action.Permit);
+            return ok
+                ? new CallbackResult(true)
+                : new CallbackResult(false, "审批已失效（可能已在控制台或 IM 中处理）");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Approval callback failed (session {Session})", action.SessionId);
+            return new CallbackResult(false, ex.Message);
         }
     }
 

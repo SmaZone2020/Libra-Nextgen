@@ -18,6 +18,7 @@
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp.Scripting" Version="4.*" />
     <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.*" />
     <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="8.*" />
+    <PackageReference Include="Telegram.Bot" Version="22.10.3" />
   </ItemGroup>
 
   <ItemGroup>
