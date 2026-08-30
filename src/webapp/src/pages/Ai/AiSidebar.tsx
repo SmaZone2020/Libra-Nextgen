@@ -17,7 +17,6 @@ import { AiSidebarSessionRow } from './AiSidebarSessionRow';
 
 export interface AiSidebarProps {
   activeSessionId: string | null;
-  /** 变化时强制重新拉取会话列表（如首条消息创建新会话后）。 */
   refreshKey?: number;
   onSelectSession: (id: string) => void;
   onNewSession: () => void;

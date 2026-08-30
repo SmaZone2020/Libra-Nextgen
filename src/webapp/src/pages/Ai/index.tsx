@@ -505,9 +505,9 @@ export default function AiPage() {
             variant="secondary"
             size="sm"
             onPress={() => setSidebarCollapsed((v) => !v)}
-            className="absolute top-1/2 -translate-y-1/2 z-20 hidden size-6 rounded-full border border-default-200 shadow-md md:inline-flex dark:border-default-800"
+            className="absolute top-3/7 -translate-y-1/2 z-20 hidden size-5 h-14 rounded-l-none rounded-r-lg border border-default-200 shadow-md md:inline-flex dark:border-default-800"
             style={{
-              left: sidebarCollapsed ? 2 : 244,
+              left: sidebarCollapsed ? 0 : 256,
               transition: 'left 200ms ease',
             }}
           >

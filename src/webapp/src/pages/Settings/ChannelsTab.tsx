@@ -314,33 +314,36 @@ function BindCodeModal({ channel, onClose }: { channel: AiChannel; onClose: () =
           </Modal.Header>
           <Modal.Body>
             <div className="space-y-3">
-              <div>
-                <Label className="mb-1.5 block text-sm">{t('channels.bindForUser')}</Label>
-                <Select
-                  selectedKey={userId}
-                  onSelectionChange={(key) => { if (key) setUserId(String(key)); }}
-                  variant="secondary"
-                >
-                  <Select.Trigger className="w-full">
-                    <Select.Value />
-                    <Select.Indicator />
-                  </Select.Trigger>
-                  <Select.Popover>
-                    <ListBox items={accounts}>
-                      {(item) => (
-                        <ListBox.Item key={item.id} id={item.id} textValue={item.username}>
-                          {item.username}
-                        </ListBox.Item>
-                      )}
-                    </ListBox>
-                  </Select.Popover>
-                </Select>
+              {/* 账号选择 + 生成按钮同行：按钮与 Select 底边对齐（不与 Label 对齐） */}
+              <div className="flex items-end gap-2">
+                <div className="min-w-0 flex-1">
+                  <Label className="mb-1.5 block text-sm">{t('channels.bindForUser')}</Label>
+                  <Select
+                    selectedKey={userId}
+                    onSelectionChange={(key) => { if (key) setUserId(String(key)); }}
+                    variant="secondary"
+                  >
+                    <Select.Trigger className="w-full">
+                      <Select.Value />
+                      <Select.Indicator />
+                    </Select.Trigger>
+                    <Select.Popover>
+                      <ListBox items={accounts}>
+                        {(item) => (
+                          <ListBox.Item key={item.id} id={item.id} textValue={item.username}>
+                            {item.username}
+                          </ListBox.Item>
+                        )}
+                      </ListBox>
+                    </Select.Popover>
+                  </Select>
+                </div>
+                <Button size="sm" variant="primary" isDisabled={!userId} className="shrink-0"
+                  onPress={() => void handleGenerate()}>
+                  {generating ? <Spinner size="sm" /> : null}
+                  {t('channels.generate')}
+                </Button>
               </div>
-              <Button size="sm" variant="primary" isDisabled={!userId}
-                onPress={() => void handleGenerate()}>
-                {generating ? <Spinner size="sm" /> : null}
-                {t('channels.generate')}
-              </Button>
               {error && <p className="text-xs text-danger">{error}</p>}
               {result && (
                 <div className="rounded-2xl border border-default-200 p-4 dark:border-default-800">
