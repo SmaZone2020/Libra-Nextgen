@@ -30,6 +30,8 @@ public class V1BootstrapController : ControllerBase
     private readonly AgentService _agentService;
     private readonly DownloadTicketStore _tickets;
     private readonly IWebHostEnvironment _env;
+    private readonly ConnectionManager _wsManager;
+    private readonly AiEventNotifier _aiEventNotifier;
 
     public V1BootstrapController(
         AgentCommsService commsService,
@@ -37,7 +39,9 @@ public class V1BootstrapController : ControllerBase
         IOptions<BeaconSettings> beaconSettings,
         AgentService agentService,
         DownloadTicketStore tickets,
-        IWebHostEnvironment env)
+        IWebHostEnvironment env,
+        ConnectionManager wsManager,
+        AiEventNotifier aiEventNotifier)
     {
         _commsService = commsService;
         _serverKeys = serverKeys;
@@ -45,6 +49,8 @@ public class V1BootstrapController : ControllerBase
         _agentService = agentService;
         _tickets = tickets;
         _env = env;
+        _wsManager = wsManager;
+        _aiEventNotifier = aiEventNotifier;
     }
 
     /// <summary>
@@ -102,6 +108,10 @@ public class V1BootstrapController : ControllerBase
         if (agent == null)
             return StatusCode(500, new { error = "registration failed" });
 
+        // 上线广播 + AI 事件订阅通知（与 /api/beacon/register 路径一致；
+        // 否则走 v1 加密注册的 agent 永远不会触发"上线"事件）。
+        _ = BroadcastOnlineAsync(agent, clientIp);
+
         var sessionKey = _commsService.EstablishSessionKey(agent.Id, request.PublicKey, request.HasSessionKey);
         var sessionToken = _commsService.IssueSessionToken(agent.Id);
 
@@ -117,6 +127,27 @@ public class V1BootstrapController : ControllerBase
             profile = BuildTransformJson(profile)
         };
         return Ok(response);
+    }
+
+    /// <summary>上线广播 + AI 事件订阅（Agent 上线 → Justitia 生成提醒并送达订阅目标）。</summary>
+    private async Task BroadcastOnlineAsync(Agent agent, string clientIp)
+    {
+        try
+        {
+            var msg = new WebSocketMessage
+            {
+                Type = "agent.status",
+                Channel = agent.Id,
+                Data = JsonSerializer.SerializeToElement(new { agentId = agent.Id, status = AgentStatus.Online.ToString() })
+            };
+            await _wsManager.BroadcastToConsoleAsync(msg);
+            _wsManager.AppendEvent("agent", $"Agent {agent.Hostname} ({clientIp}) 上线");
+        }
+        catch
+        {
+            // 广播失败不阻断注册流程。
+        }
+        _ = _aiEventNotifier.NotifyAsync(agent.Id, agent.Hostname, clientIp, AiEventNotifier.EvtAgentOnline);
     }
 
     /// <summary>loader 协商 core 解密密钥：同样 OAuth 风格（client_id=密文体, client_secret=RSA(AES key)）。</summary>
