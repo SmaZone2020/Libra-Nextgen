@@ -421,6 +421,13 @@ public class AiChannelService
             await HandleCommandAsync(ch, msg, text, ct);
             return;
         }
+        // 自定义键盘按钮别名（/start 的常驻键盘：点击发送纯文本按钮词）。
+        var alias = text.Trim().ToLowerInvariant();
+        if (alias is "help" or "setting" or "start")
+        {
+            await HandleCommandAsync(ch, msg, "/" + alias, ct);
+            return;
+        }
 
         var user = await ChannelUsers.Find(x => x.ChannelId == ch.Id && x.ExternalId == msg.ExternalId)
             .FirstOrDefaultAsync(ct);
@@ -475,16 +482,50 @@ public class AiChannelService
         {
             case "/start":
             {
-                // /start 只做简单介绍，完整指令见 /help。
-                await TrySendRichAsync(ch, msg.ExternalId,
-                    "我是 Justitia（Libra-Nextgen AI 助手）。\n输入 <code>/help</code> 查看可用指令。",
-                    "我是 Justitia（Libra-Nextgen AI 助手）。\n输入 /help 查看可用指令。", ct);
+                // /start 只做简单介绍：Telegram 附带常驻键盘（Help / Setting），完整指令见 /help。
+                if (ch.ChannelType == AiChannelTypes.Telegram)
+                {
+                    await AdapterFor(ch.ChannelType).SendKeyboardAsync(ch, msg.ExternalId,
+                        "我是 Justitia。\n输入 <code>/help</code> 查看可用指令。",
+                        "我是 Justitia。\n输入 /help 查看可用指令。",
+                        new[] { "Help", "Setting" }, ct);
+                }
+                else
+                {
+                    await TrySendRichAsync(ch, msg.ExternalId,
+                        "我是 Justitia。\n输入 <code>/help</code> 查看可用指令。",
+                        "我是 Justitia。\n输入 /help 查看可用指令。", ct);
+                }
                 break;
             }
             case "/help":
             {
                 var (h, p) = BuildHelp(ch);
-                await TrySendRichAsync(ch, msg.ExternalId, h, p, ct);
+                if (ch.ChannelType == AiChannelTypes.Telegram)
+                {
+                    // 帮助消息附带快捷菜单（模型/档位/状态）。
+                    await AdapterFor(ch.ChannelType).SendMenuAsync(ch, msg.ExternalId, h, p,
+                        new[] { ("🤖 切换模型", "help:model"), ("🎚 切换档位", "help:tier"), ("📊 我的状态", "help:status") }, ct);
+                }
+                else
+                {
+                    await TrySendRichAsync(ch, msg.ExternalId, h, p, ct);
+                }
+                break;
+            }
+            case "/setting":
+            {
+                // 设置菜单：模型 / 档位 / 状态（Telegram 内联按钮；其余频道提示）。
+                if (ch.ChannelType == AiChannelTypes.Telegram)
+                {
+                    await AdapterFor(ch.ChannelType).SendMenuAsync(ch, msg.ExternalId,
+                        "<b>设置</b>", "设置",
+                        new[] { ("🤖 切换模型", "help:model"), ("🎚 切换档位", "help:tier"), ("📊 我的状态", "help:status") }, ct);
+                }
+                else
+                {
+                    await TrySendAsync(ch, msg.ExternalId, "该功能需要 Telegram 内联菜单支持。", ct);
+                }
                 break;
             }
             case "/status":
@@ -508,10 +549,10 @@ public class AiChannelService
                 await TryBindAsync(ch, msg, parts[1], ct);
                 break;
             case "/model":
-                await HandleModelCommandAsync(ch, msg, ct);
+                await HandleModelCommandAsync(ch, msg.ExternalId, ct);
                 break;
             case "/tier":
-                await HandleTierCommandAsync(ch, msg, ct);
+                await HandleTierCommandAsync(ch, msg.ExternalId, ct);
                 break;
             case "/approve":
             case "/reject":
@@ -538,24 +579,24 @@ public class AiChannelService
     // ── 模型/档位菜单 ────────────────────────────────────────────────────
 
     /// <summary>/model：发送模型选择内联菜单（分页；超过 3 页支持搜索）。</summary>
-    private async Task HandleModelCommandAsync(AiChannel ch, ChannelInboundMessage msg, CancellationToken ct)
+    private async Task HandleModelCommandAsync(AiChannel ch, string externalId, CancellationToken ct)
     {
         if (ch.ChannelType != AiChannelTypes.Telegram)
         {
-            await TrySendAsync(ch, msg.ExternalId, "该功能需要 Telegram 内联菜单支持。", ct);
+            await TrySendAsync(ch, externalId, "该功能需要 Telegram 内联菜单支持。", ct);
             return;
         }
         var (providerId, defaultModel, models) = await ResolveProviderAsync(ch, ct);
         if (providerId == null || models.Count == 0)
         {
-            await TrySendAsync(ch, msg.ExternalId, "⚠️ 未配置可用的 AI 供应商，请联系管理员。", ct);
+            await TrySendAsync(ch, externalId, "⚠️ 未配置可用的 AI 供应商，请联系管理员。", ct);
             return;
         }
-        var key = $"{ch.Id}|{msg.ExternalId}";
+        var key = $"{ch.Id}|{externalId}";
         var state = new ModelMenuState { Models = models, CurrentModel = defaultModel };
         _modelMenus[key] = state;
         var (html, plain, buttons) = BuildModelMenu(state);
-        var menuId = await AdapterFor(ch.ChannelType).SendMenuAsync(ch, msg.ExternalId, html, plain, buttons, ct);
+        var menuId = await AdapterFor(ch.ChannelType).SendMenuAsync(ch, externalId, html, plain, buttons, ct);
         if (menuId != 0)
         {
             state.MessageId = menuId;
@@ -563,23 +604,23 @@ public class AiChannelService
         else
         {
             _modelMenus.TryRemove(key, out _);
-            await TrySendAsync(ch, msg.ExternalId, "当前频道不支持菜单按钮，请在控制台切换模型。", ct);
+            await TrySendAsync(ch, externalId, "当前频道不支持菜单按钮，请在控制台切换模型。", ct);
         }
     }
 
     /// <summary>/tier：发送档位选择内联菜单（仅可切换 ≤ 频道默认档位）。</summary>
-    private async Task HandleTierCommandAsync(AiChannel ch, ChannelInboundMessage msg, CancellationToken ct)
+    private async Task HandleTierCommandAsync(AiChannel ch, string externalId, CancellationToken ct)
     {
         if (ch.ChannelType != AiChannelTypes.Telegram)
         {
-            await TrySendAsync(ch, msg.ExternalId, "该功能需要 Telegram 内联菜单支持。", ct);
+            await TrySendAsync(ch, externalId, "该功能需要 Telegram 内联菜单支持。", ct);
             return;
         }
-        var user = await ChannelUsers.Find(x => x.ChannelId == ch.Id && x.ExternalId == msg.ExternalId)
+        var user = await ChannelUsers.Find(x => x.ChannelId == ch.Id && x.ExternalId == externalId)
             .FirstOrDefaultAsync(ct);
         if (user == null)
         {
-            await TrySendAsync(ch, msg.ExternalId, "请先绑定控制台账号（/bind 绑定码）。", ct);
+            await TrySendAsync(ch, externalId, "请先绑定控制台账号（/bind 绑定码）。", ct);
             return;
         }
         var current = Math.Clamp(user.TierOverride ?? ch.DefaultTier, 0, 3);
@@ -592,7 +633,7 @@ public class AiChannelService
         }
         var html = $"<b>切换档位</b>\n当前：{HtmlEncode(TierName(current))}\n（仅可 ≤ 频道档位 {HtmlEncode(TierName(maxTier))}）";
         var plain = $"切换档位\n当前：{TierName(current)}\n（仅可 ≤ 频道档位 {TierName(maxTier)}）";
-        await AdapterFor(ch.ChannelType).SendMenuAsync(ch, msg.ExternalId, html, plain, buttons, ct);
+        await AdapterFor(ch.ChannelType).SendMenuAsync(ch, externalId, html, plain, buttons, ct);
     }
 
     /// <summary>构建模型菜单（分页/搜索）：返回 (html, plain, 按钮)。</summary>
@@ -716,6 +757,25 @@ public class AiChannelService
                             $"✅ 已切换档位：<b>{HtmlEncode(TierName(tier))}</b>",
                             $"✅ 已切换档位：{TierName(tier)}", null, ct);
                     }
+                    break;
+                }
+                case "help-model":
+                    await HandleModelCommandAsync(ch, action.ChatId, ct);
+                    break;
+                case "help-tier":
+                    await HandleTierCommandAsync(ch, action.ChatId, ct);
+                    break;
+                case "help-status":
+                {
+                    var user = await ChannelUsers.Find(x => x.ChannelId == ch.Id && x.ExternalId == action.ChatId)
+                        .FirstOrDefaultAsync(ct);
+                    var tier = user == null ? ch.DefaultTier : Math.Clamp(user.TierOverride ?? ch.DefaultTier, 0, 3);
+                    var bound = user == null ? "未绑定" : user.BoundUserName;
+                    var session = await _ai.GetChannelSessionByExternalAsync(ch.Id, action.ChatId, ct);
+                    var model = session?.Model ?? "";
+                    await TrySendRichAsync(ch, action.ChatId,
+                        $"绑定：<b>{HtmlEncode(bound)}</b>\n档位：<b>{HtmlEncode(TierName(tier))}</b>\n模型：<code>{HtmlEncode(model)}</code>",
+                        $"绑定：{bound}\n档位：{TierName(tier)}\n模型：{model}", ct);
                     break;
                 }
             }
@@ -1251,12 +1311,12 @@ public class AiChannelService
             "🔒 该频道需要绑定控制台账号后才能使用。\n" +
             "请在控制台「设置 → AI 频道」中由管理员生成绑定码，然后在此发送：\n" +
             "<code>/bind 绑定码</code>\n\n" +
-            "绑定后即可使用 AI 助手（档位受频道配置约束）。";
+            "绑定后即可与 Justitia 对话。";
         var plain =
             "🔒 该频道需要绑定控制台账号后才能使用。\n" +
             "请在控制台「设置 → AI 频道」中由管理员生成绑定码，然后在此发送：\n" +
             "/bind 绑定码\n\n" +
-            "绑定后即可使用 AI 助手（档位受频道配置约束）。";
+            "绑定后即可与 Justitia 对话。";
         return (html, plain);
     }
 

@@ -144,6 +144,13 @@ public interface IAiChannelAdapter
         SendTextAsync(channel, externalId, plain, ct);
 
     /// <summary>
+    /// 发送带自定义键盘的消息（聊天框下方常驻按钮，点击发送按钮文本）。
+    /// 默认 no-op（仅 Telegram 支持）。
+    /// </summary>
+    Task SendKeyboardAsync(AiChannel channel, string externalId, string html, string plain, IReadOnlyList<string> buttons, CancellationToken ct) =>
+        Task.CompletedTask;
+
+    /// <summary>
     /// 流式输出：发送首条消息并返回消息 ID（用于后续编辑更新）。
     /// 返回 0 表示该频道不支持流式（调用方回退一次性输出）。
     /// </summary>
@@ -228,6 +235,23 @@ public class TelegramChannelAdapter : IAiChannelAdapter
         {
             // HTML 渲染失败（如非法标签）：回退纯文本，保证消息必达。
             await Bot(channel).SendMessage(externalId, plain, cancellationToken: ct);
+        }
+    }
+
+    /// <summary>发送带自定义键盘的消息（聊天框下方常驻按钮；按钮点击即发送其文本）。</summary>
+    public async Task SendKeyboardAsync(AiChannel channel, string externalId, string html, string plain, IReadOnlyList<string> buttons, CancellationToken ct)
+    {
+        var keyboard = new ReplyKeyboardMarkup(buttons.Select(b => new[] { new KeyboardButton(b) }))
+        {
+            ResizeKeyboard = true,
+        };
+        try
+        {
+            await Bot(channel).SendMessage(externalId, html, parseMode: ParseMode.Html, replyMarkup: keyboard, cancellationToken: ct);
+        }
+        catch (Exception)
+        {
+            await Bot(channel).SendMessage(externalId, plain, replyMarkup: keyboard, cancellationToken: ct);
         }
     }
 
@@ -505,6 +529,7 @@ public class TelegramChannelAdapter : IAiChannelAdapter
     {
         new() { Command = "start", Description = "开始使用" },
         new() { Command = "help", Description = "显示帮助" },
+        new() { Command = "setting", Description = "打开设置" },
         new() { Command = "status", Description = "查看绑定与档位" },
         new() { Command = "bind", Description = "绑定控制台账号" },
         new() { Command = "model", Description = "切换模型" },
@@ -549,10 +574,12 @@ public class TelegramChannelAdapter : IAiChannelAdapter
                 HandleApprovalCallbackAsync(channel, bot, action, onCallback, ct);
                 return;
             }
-            // 菜单按钮（模型/档位）。
+            // 菜单按钮（模型/档位/帮助快捷）。
             var menu = TryResolveMenu(channel, cq);
             if (menu != null)
             {
+                // 先回执（避免按钮转圈），再异步处理。
+                _ = bot.AnswerCallbackQuery(cq.Id, cancellationToken: ct);
                 _ = Task.Run(async () =>
                 {
                     try
@@ -608,8 +635,8 @@ public class TelegramChannelAdapter : IAiChannelAdapter
     }
 
     /// <summary>
-    /// 解析菜单按钮回调（模型分页/选择/搜索、档位切换）。返回 null 表示不是菜单按钮。
-    /// callback data 前缀：mdl:nav:页码 / mdl:sel:索引 / mdl:sea / tier:sel:档位。
+    /// 解析菜单按钮回调（模型分页/选择/搜索、档位切换、帮助快捷菜单）。返回 null 表示不是菜单按钮。
+    /// callback data 前缀：mdl:nav:页码 / mdl:sel:索引 / mdl:sea / tier:sel:档位 / help:model|tier|status。
     /// </summary>
     public ChannelMenuAction? TryResolveMenu(AiChannel channel, CallbackQuery cq)
     {
@@ -634,6 +661,18 @@ public class TelegramChannelAdapter : IAiChannelAdapter
         {
             kind = "tier-select";
             payload = data["tier:sel:".Length..];
+        }
+        else if (data == "help:model")
+        {
+            kind = "help-model";
+        }
+        else if (data == "help:tier")
+        {
+            kind = "help-tier";
+        }
+        else if (data == "help:status")
+        {
+            kind = "help-status";
         }
         if (kind == null) return null;
         return new ChannelMenuAction

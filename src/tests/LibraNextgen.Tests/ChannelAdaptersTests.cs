@@ -205,6 +205,14 @@ public class ChannelAdaptersTests
         Assert.Equal("tier-select", tier!.Kind);
         Assert.Equal("1", tier.Data);
 
+        // 帮助快捷菜单。
+        cq.Data = "help:model";
+        Assert.Equal("help-model", adapter.TryResolveMenu(ch, cq)!.Kind);
+        cq.Data = "help:tier";
+        Assert.Equal("help-tier", adapter.TryResolveMenu(ch, cq)!.Kind);
+        cq.Data = "help:status";
+        Assert.Equal("help-status", adapter.TryResolveMenu(ch, cq)!.Kind);
+
         // 审批/未知前缀不识别为菜单。
         cq.Data = "ap:abcdef1234567890:ot";
         Assert.Null(adapter.TryResolveMenu(ch, cq));
