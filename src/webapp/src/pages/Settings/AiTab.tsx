@@ -23,9 +23,11 @@ import {
   type AiToolDescriptor,
 } from '../../api/ai';
 import { ProviderFormModal } from './ProviderFormModal';
+import { useDialog } from '../../hooks/useDialog';
 
 export default function AiTab() {
   const { t } = useTranslation();
+  const { confirm, alert, DialogComponent } = useDialog();
   const [providers, setProviders] = useState<AiProvider[]>([]);
   const [loading, setLoading] = useState(true);
   const [mcp, setMcp] = useState<AiMcpInfo | null>(null);
@@ -62,12 +64,13 @@ export default function AiTab() {
   };
 
   const handleDelete = async (p: AiProvider) => {
-    if (!window.confirm(t('settings.aiDeleteConfirm', { name: p.name }))) return;
+    const { confirmed } = await confirm(t('settings.aiDeleteConfirm', { name: p.name }));
+    if (!confirmed) return;
     try {
       await deleteAiProvider(p.id);
       await reload();
     } catch (e) {
-      alert(e instanceof Error ? e.message : String(e));
+      await alert(e instanceof Error ? e.message : String(e));
     }
   };
 
@@ -78,7 +81,7 @@ export default function AiTab() {
     try {
       await setAiMcp(next);
     } catch (e) {
-      alert(e instanceof Error ? e.message : String(e));
+      await alert(e instanceof Error ? e.message : String(e));
     }
   };
 
@@ -97,7 +100,7 @@ export default function AiTab() {
     try {
       await setAiMcp(next);
     } catch (e) {
-      alert(e instanceof Error ? e.message : String(e));
+      await alert(e instanceof Error ? e.message : String(e));
     }
   };
 
@@ -194,6 +197,7 @@ export default function AiTab() {
         </div>
 
       </Card>
+      {DialogComponent}
     </div>
   );
 }

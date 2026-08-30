@@ -77,6 +77,11 @@ export default {
       byteUnits: { B: 'B', KB: 'KB', MB: 'MB', GB: 'GB', TB: 'TB' },
       confirm: '确认',
     },
+    dialog: {
+      notice: '提示',
+      confirm: '确认',
+      input: '输入',
+    },
     agentRequired: {
       title: '请先选择设备',
       desc: '选择一个在线 Agent 后开始使用',
@@ -978,6 +983,7 @@ export default {
       back: '返回',
       scrollToBottom: '滚动到底部',
       deleteSessionConfirm: '确定删除该会话吗？',
+      deleteSessionTitle: '删除会话',
       suggestListAgents: '列出当前所有在线设备',
       suggestAnalyzeAgent: '分析某台设备的主机指纹与网络信息',
       suggestExplainTool: '解释 MCP 工具 execute_process 的用法',

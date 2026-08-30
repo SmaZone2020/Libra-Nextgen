@@ -31,6 +31,7 @@ import {
   type AiChannelUser,
 } from '../../api/aiChannels';
 import { listAccounts } from '../../api/account';
+import { useDialog } from '../../hooks/useDialog';
 import { ChannelFormModal } from './ChannelFormModal';
 
 const TYPE_ICONS: Record<string, string> = {
@@ -49,6 +50,7 @@ function ChannelIcon({ type, className }: { type: string; className?: string }) 
 
 export default function ChannelsTab() {
   const { t } = useTranslation();
+  const { confirm, alert, DialogComponent } = useDialog();
   const [channels, setChannels] = useState<AiChannel[]>([]);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
@@ -92,18 +94,19 @@ export default function ChannelsTab() {
         allowInGroups: ch.allowInGroups,
       });
     } catch (e) {
-      alert(e instanceof Error ? e.message : String(e));
+      await alert(e instanceof Error ? e.message : String(e));
       await reload();
     }
   };
 
   const handleDelete = async (ch: AiChannel) => {
-    if (!window.confirm(t('channels.deleteConfirm', { name: ch.name }))) return;
+    const { confirmed } = await confirm(t('channels.deleteConfirm', { name: ch.name }));
+    if (!confirmed) return;
     try {
       await deleteAiChannel(ch.id);
       await reload();
     } catch (e) {
-      alert(e instanceof Error ? e.message : String(e));
+      await alert(e instanceof Error ? e.message : String(e));
     }
   };
 
@@ -231,6 +234,7 @@ export default function ChannelsTab() {
           onChanged={() => void reload()}
         />
       )}
+      {DialogComponent}
     </div>
   );
 }
@@ -238,6 +242,7 @@ export default function ChannelsTab() {
 /** 生成一次性绑定码：选择控制台账号 → 生成 → 展示（15 分钟有效）；可查看并作废未使用码。 */
 function BindCodeModal({ channel, onClose }: { channel: AiChannel; onClose: () => void }) {
   const { t } = useTranslation();
+  const { confirm, alert, DialogComponent } = useDialog();
   const [accounts, setAccounts] = useState<{ id: string; username: string }[]>([]);
   const [userId, setUserId] = useState('');
   const [generating, setGenerating] = useState(false);
@@ -281,13 +286,14 @@ function BindCodeModal({ channel, onClose }: { channel: AiChannel; onClose: () =
   };
 
   const handleRevoke = async (code: AiBindCodeInfo) => {
-    if (!window.confirm(t('channels.revokeCodeConfirm', { tail: code.codeTail }))) return;
+    const { confirmed } = await confirm(t('channels.revokeCodeConfirm', { tail: code.codeTail }));
+    if (!confirmed) return;
     setRevoking(code.id);
     try {
       await revokeAiBindCode(channel.id, code.id);
       await loadCodes();
     } catch (e) {
-      alert(e instanceof Error ? e.message : String(e));
+      await alert(e instanceof Error ? e.message : String(e));
     } finally {
       setRevoking(null);
     }
@@ -306,6 +312,7 @@ function BindCodeModal({ channel, onClose }: { channel: AiChannel; onClose: () =
   };
 
   return (
+    <>
     <Modal.Backdrop isOpen onOpenChange={(o) => { if (!o) onClose(); }}>
       <Modal.Container placement="center" size="sm">
         <Modal.Dialog>
@@ -421,6 +428,8 @@ function BindCodeModal({ channel, onClose }: { channel: AiChannel; onClose: () =
         </Modal.Dialog>
       </Modal.Container>
     </Modal.Backdrop>
+    {DialogComponent}
+    </>
   );
 }
 
@@ -435,6 +444,7 @@ function ChannelUsersModal({
   onChanged: () => void;
 }) {
   const { t } = useTranslation();
+  const { confirm, alert, DialogComponent } = useDialog();
   const [users, setUsers] = useState<AiChannelUser[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -460,22 +470,24 @@ function ChannelUsersModal({
       await load();
       onChanged();
     } catch (e) {
-      alert(e instanceof Error ? e.message : String(e));
+      await alert(e instanceof Error ? e.message : String(e));
     }
   };
 
   const handleUnbind = async (u: AiChannelUser) => {
-    if (!window.confirm(t('channels.unbindConfirm', { name: u.externalName }))) return;
+    const { confirmed } = await confirm(t('channels.unbindConfirm', { name: u.externalName }));
+    if (!confirmed) return;
     try {
       await unbindAiChannelUser(u.id);
       await load();
       onChanged();
     } catch (e) {
-      alert(e instanceof Error ? e.message : String(e));
+      await alert(e instanceof Error ? e.message : String(e));
     }
   };
 
   return (
+    <>
     <Modal.Backdrop isOpen onOpenChange={(o) => { if (!o) onClose(); }}>
       <Modal.Container placement="center" size="md">
         <Modal.Dialog>
@@ -536,5 +548,7 @@ function ChannelUsersModal({
         </Modal.Dialog>
       </Modal.Container>
     </Modal.Backdrop>
+    {DialogComponent}
+    </>
   );
 }

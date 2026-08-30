@@ -20,6 +20,7 @@ import {
   type AiProvider,
   type AiProviderInput,
 } from '../../api/ai';
+import { useDialog } from '../../hooks/useDialog';
 
 const PROVIDER_TYPES = [
   { id: 'openai-chat', label: '[OI] Chat' },
@@ -56,6 +57,7 @@ export interface ProviderFormModalProps {
 
 export function ProviderFormModal({ open, editing, onClose, onSaved }: ProviderFormModalProps) {
   const { t } = useTranslation();
+  const { alert, DialogComponent } = useDialog();
   const [form, setForm] = useState<AiProviderInput>(emptyForm());
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
@@ -131,13 +133,14 @@ export function ProviderFormModal({ open, editing, onClose, onSaved }: ProviderF
       onClose();
       onSaved();
     } catch (e) {
-      alert(e instanceof Error ? e.message : String(e));
+      await alert(e instanceof Error ? e.message : String(e));
     } finally {
       setSaving(false);
     }
   };
 
   return (
+    <>
     <Modal.Backdrop isOpen={open} onOpenChange={(o) => { if (!o) onClose(); }}>
       <Modal.Container placement="center" size="lg">
         <Modal.Dialog>
@@ -247,5 +250,7 @@ export function ProviderFormModal({ open, editing, onClose, onSaved }: ProviderF
         </Modal.Dialog>
       </Modal.Container>
     </Modal.Backdrop>
+    {DialogComponent}
+    </>
   );
 }

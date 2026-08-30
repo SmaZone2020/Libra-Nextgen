@@ -28,12 +28,14 @@ import { AiThreadMessage } from './AiThreadMessage';
 import { AiComposer } from './AiComposer';
 import { AiApprovalModal, type AiPermit } from './AiApprovalModal';
 import { loadJustitiaTier, saveJustitiaTier, type JustitiaTierKey } from './justitia';
+import { useDialog } from '../../hooks/useDialog';
 
 type StreamingState = 'idle' | 'streaming' | 'approval';
 export default function AiPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { sessionId } = useParams<{ sessionId?: string }>();
+  const { alert, DialogComponent } = useDialog();
 
   const [providers, setProviders] = useState<AiProvider[]>([]);
   const [sessions, setSessions] = useState<AiSession[]>([]);
@@ -285,7 +287,7 @@ export default function AiPage() {
           sidebarRefreshKeyRef.current += 1;
           setSidebarRefreshKey(sidebarRefreshKeyRef.current);
         } catch (e) {
-          alert(e instanceof Error ? e.message : String(e));
+          await alert(e instanceof Error ? e.message : String(e));
           return;
         }
       }
@@ -435,7 +437,7 @@ export default function AiPage() {
         );
       } catch (e) {
         setSession(prev);
-        alert(e instanceof Error ? e.message : String(e));
+        await alert(e instanceof Error ? e.message : String(e));
       }
     },
     [activeId, session],
@@ -460,7 +462,7 @@ export default function AiPage() {
         );
       } catch (e) {
         setSession(prev);
-        alert(e instanceof Error ? e.message : String(e));
+        await alert(e instanceof Error ? e.message : String(e));
       }
     },
     [activeId, session],
@@ -672,6 +674,7 @@ export default function AiPage() {
           if (pendingApproval) void handleReject(pendingApproval.id);
         }}
       />
+      {DialogComponent}
     </div>
   );
 }

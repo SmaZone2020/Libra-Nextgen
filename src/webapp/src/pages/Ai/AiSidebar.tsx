@@ -13,6 +13,7 @@ import {
   type AiSession,
 } from '../../api/ai';
 import { getMyChannelSessions } from '../../api/aiChannels';
+import { useDialog } from '../../hooks/useDialog';
 import { AiSidebarSessionRow } from './AiSidebarSessionRow';
 
 export interface AiSidebarProps {
@@ -25,6 +26,7 @@ export interface AiSidebarProps {
 export function AiSidebar({ activeSessionId, refreshKey = 0, onSelectSession, onNewSession }: AiSidebarProps) {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const { confirm, alert, DialogComponent } = useDialog();
   const [sessions, setSessions] = useState<AiSession[]>([]);
   const [channelSessions, setChannelSessions] = useState<AiSession[]>([]);
   const [providers, setProviders] = useState<AiProvider[]>([]);
@@ -94,7 +96,8 @@ export function AiSidebar({ activeSessionId, refreshKey = 0, onSelectSession, on
   );
 
   const handleDelete = async (session: AiSession) => {
-    if (!window.confirm(t('ai.deleteSessionConfirm'))) return;
+    const { confirmed } = await confirm(t('ai.deleteSessionConfirm'), t('ai.deleteSessionTitle'));
+    if (!confirmed) return;
     setDeleting(true);
     try {
       await deleteAiSession(session.id);
@@ -103,7 +106,7 @@ export function AiSidebar({ activeSessionId, refreshKey = 0, onSelectSession, on
       }
       await load();
     } catch (e) {
-      alert(e instanceof Error ? e.message : String(e));
+      await alert(e instanceof Error ? e.message : String(e));
     } finally {
       setDeleting(false);
     }
@@ -125,7 +128,7 @@ export function AiSidebar({ activeSessionId, refreshKey = 0, onSelectSession, on
       await renameAiSession(session.id, title);
       await load();
     } catch (e) {
-      alert(e instanceof Error ? e.message : String(e));
+      await alert(e instanceof Error ? e.message : String(e));
     }
     setRenamingId(null);
   };
@@ -138,7 +141,7 @@ export function AiSidebar({ activeSessionId, refreshKey = 0, onSelectSession, on
       await load();
       onSelectSession(fork.id);
     } catch (e) {
-      alert(e instanceof Error ? e.message : String(e));
+      await alert(e instanceof Error ? e.message : String(e));
     } finally {
       setDeleting(false);
     }
@@ -147,7 +150,8 @@ export function AiSidebar({ activeSessionId, refreshKey = 0, onSelectSession, on
   const enabledProviders = providers.filter((p) => p.enabled);
 
   return (
-    <div className="flex h-full min-h-0 p-0 flex-col overflow-hidden">
+    <>
+      <div className="flex h-full min-h-0 p-0 flex-col overflow-hidden">
       <div className="py-3 sm:p-3 flex items-center gap-2">
         <Input
           className="flex-1 min-w-0"
@@ -224,7 +228,9 @@ export function AiSidebar({ activeSessionId, refreshKey = 0, onSelectSession, on
           </Button>
         </div>
       )}
-    </div>
+      </div>
+      {DialogComponent}
+    </>
   );
 }
 

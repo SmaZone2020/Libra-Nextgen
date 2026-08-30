@@ -27,6 +27,7 @@ import {
   type AiChannelQrStatus,
 } from '../../api/aiChannels';
 import { getAiProviders, type AiProvider } from '../../api/ai';
+import { useDialog } from '../../hooks/useDialog';
 
 const CHANNEL_TYPES: { id: AiChannelType; label: string }[] = [
   { id: 'telegram', label: 'Telegram' },
@@ -65,6 +66,7 @@ export interface ChannelFormModalProps {
 
 export function ChannelFormModal({ open, editing, onClose, onSaved }: ChannelFormModalProps) {
   const { t } = useTranslation();
+  const { alert, DialogComponent } = useDialog();
   const [form, setForm] = useState<AiChannelInput>(emptyForm());
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
@@ -145,7 +147,7 @@ export function ChannelFormModal({ open, editing, onClose, onSaved }: ChannelFor
       onClose();
       onSaved();
     } catch (e) {
-      alert(e instanceof Error ? e.message : String(e));
+      await alert(e instanceof Error ? e.message : String(e));
     } finally {
       setSaving(false);
     }
@@ -153,6 +155,7 @@ export function ChannelFormModal({ open, editing, onClose, onSaved }: ChannelFor
 
   const cfg = form.config;
   return (
+    <>
     <Modal.Backdrop isOpen={open} onOpenChange={(o) => { if (!o) onClose(); }}>
       <Modal.Container placement="center" size="lg">
         <Modal.Dialog>
@@ -436,6 +439,8 @@ export function ChannelFormModal({ open, editing, onClose, onSaved }: ChannelFor
         </Modal.Dialog>
       </Modal.Container>
     </Modal.Backdrop>
+    {DialogComponent}
+    </>
   );
 }
 

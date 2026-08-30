@@ -78,6 +78,11 @@ export default {
       byteUnits: { B: 'B', KB: 'KB', MB: 'MB', GB: 'GB', TB: 'TB' },
       confirm: 'Confirm',
     },
+    dialog: {
+      notice: 'Notice',
+      confirm: 'Confirm',
+      input: 'Input',
+    },
     agentRequired: {
       title: 'Select an agent first',
       desc: 'Pick an online agent to get started',
@@ -979,6 +984,7 @@ export default {
       back: 'Back',
       scrollToBottom: 'Scroll to bottom',
       deleteSessionConfirm: 'Delete this conversation?',
+      deleteSessionTitle: 'Delete conversation',
       suggestListAgents: 'List all currently online agents',
       suggestAnalyzeAgent: 'Analyze an agent host fingerprint and network info',
       suggestExplainTool: 'Explain how the MCP tool execute_process works',

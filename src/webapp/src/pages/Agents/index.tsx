@@ -12,7 +12,7 @@ import type { AgentListItem, AgentDetail } from '../../types/models';
 export default function AgentsPage() {
   const { t } = useTranslation();
   const { agentId, selectAgent, disconnect: disconnectAgent } = useAgent();
-  const { confirm, DialogComponent } = useDialog();
+  const { confirm, alert, DialogComponent } = useDialog();
   const [tab, setTab] = useState<string>('online');
   const [modalOpen, setModalOpen] = useState(false);
   const [modalAgent, setModalAgent] = useState<AgentDetail | null>(null);
@@ -76,7 +76,7 @@ export default function AgentsPage() {
     try {
       await createTask({ agentId: id, commandType: 'Restart', command: 'restart', timeoutSeconds: 5 });
     } catch (e) {
-      window.alert(`${t('agents.restartFailed')}\n${e instanceof Error ? e.message : String(e)}`);
+      await alert(`${t('agents.restartFailed')}\n${e instanceof Error ? e.message : String(e)}`);
     }
   };
 
@@ -89,7 +89,7 @@ export default function AgentsPage() {
     try {
       await createTask({ agentId: id, commandType: 'KillAndClean', command: 'kill_and_clean', timeoutSeconds: 5 });
     } catch (e) {
-      window.alert(`${t('agents.destroyFailed')}\n${e instanceof Error ? e.message : String(e)}`);
+      await alert(`${t('agents.destroyFailed')}\n${e instanceof Error ? e.message : String(e)}`);
     }
   };
 
