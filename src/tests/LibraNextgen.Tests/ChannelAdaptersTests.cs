@@ -168,6 +168,50 @@ public class ChannelAdaptersTests
         Assert.Null(adapter.ResolveCallback(ch, ApprovalCallback(adapter, "unknown:data", 42, 42)));
     }
 
+    // ── 菜单按钮回调解析 ──────────────────────────────────────────────────
+
+    [Fact]
+    public void MenuCallback_ParsesModelNavSelectSearchAndTier()
+    {
+        var adapter = NewAdapter();
+        var ch = TelegramChannel();
+        var cq = new CallbackQuery
+        {
+            Id = "cq-m1",
+            Data = "mdl:nav:2",
+            From = new TgUser { Id = 42 },
+            Message = TextMessage(42, 42, "选择模型（1/3）"),
+        };
+        var nav = adapter.TryResolveMenu(ch, cq);
+        Assert.NotNull(nav);
+        Assert.Equal("model-nav", nav!.Kind);
+        Assert.Equal("2", nav.Data);
+        Assert.Equal("42", nav.ChatId);
+
+        cq.Data = "mdl:sel:7";
+        var sel = adapter.TryResolveMenu(ch, cq);
+        Assert.NotNull(sel);
+        Assert.Equal("model-select", sel!.Kind);
+        Assert.Equal("7", sel.Data);
+
+        cq.Data = "mdl:sea";
+        var sea = adapter.TryResolveMenu(ch, cq);
+        Assert.NotNull(sea);
+        Assert.Equal("model-search", sea!.Kind);
+
+        cq.Data = "tier:sel:1";
+        var tier = adapter.TryResolveMenu(ch, cq);
+        Assert.NotNull(tier);
+        Assert.Equal("tier-select", tier!.Kind);
+        Assert.Equal("1", tier.Data);
+
+        // 审批/未知前缀不识别为菜单。
+        cq.Data = "ap:abcdef1234567890:ot";
+        Assert.Null(adapter.TryResolveMenu(ch, cq));
+        cq.Data = "garbage";
+        Assert.Null(adapter.TryResolveMenu(ch, cq));
+    }
+
     // ── 绑定码 ────────────────────────────────────────────────────────────
 
     [Fact]

@@ -90,6 +90,19 @@ public sealed class CallbackResult
     }
 }
 
+/// <summary>频道菜单按钮回调（模型分页/选择/搜索、档位切换），频道无关。</summary>
+public sealed class ChannelMenuAction
+{
+    /// <summary>model-nav | model-select | model-search | tier-select。</summary>
+    public required string Kind { get; init; }
+    public required string ChannelId { get; init; }
+    public required string ChatId { get; init; }
+    public required string CallbackQueryId { get; init; }
+    public int MessageId { get; init; }
+    /// <summary>model-nav: 页码；model-select: 索引；tier-select: 档位 0-3。</summary>
+    public string? Data { get; init; }
+}
+
 /// <summary>AI 频道适配器统一抽象。入站形态：长轮询（PollAsync）、库回调（Telegram）、Webhook/长连接（解析函数）。</summary>
 public interface IAiChannelAdapter
 {
@@ -140,6 +153,17 @@ public interface IAiChannelAdapter
     /// <summary>流式输出：编辑已发送的消息为最新文本（StartStreamAsync 返回非 0 时调用）。</summary>
     Task UpdateStreamAsync(AiChannel channel, string externalId, long messageId, string text, CancellationToken ct) =>
         Task.CompletedTask;
+
+    /// <summary>
+    /// 发送菜单按钮消息（模型选择/档位切换等内联菜单）。
+    /// 返回消息 ID（0 = 频道不支持菜单，调用方回退纯文本）。
+    /// </summary>
+    Task<long> SendMenuAsync(AiChannel channel, string externalId, string html, string plain, IReadOnlyList<(string Text, string Data)> buttons, CancellationToken ct) =>
+        Task.FromResult(0L);
+
+    /// <summary>编辑菜单消息（翻页/搜索/选择后更新）。返回是否成功。</summary>
+    Task<bool> EditMenuAsync(AiChannel channel, string chatId, long messageId, string html, string plain, IReadOnlyList<(string Text, string Data)>? buttons, CancellationToken ct) =>
+        Task.FromResult(false);
 
     /// <summary>轮询型适配器拉取增量；非轮询型返回空批。</summary>
     Task<ChannelPollBatch> PollAsync(AiChannel channel, string? cursor, CancellationToken ct) =>
@@ -277,6 +301,48 @@ public class TelegramChannelAdapter : IAiChannelAdapter
         await Bot(channel).EditMessageText(externalId, (int)messageId, text, cancellationToken: ct);
     }
 
+    /// <summary>发送内联菜单消息（模型/档位选择）。</summary>
+    public async Task<long> SendMenuAsync(AiChannel channel, string externalId, string html, string plain, IReadOnlyList<(string Text, string Data)> buttons, CancellationToken ct)
+    {
+        var markup = new InlineKeyboardMarkup(buttons.Select(b => new[] { InlineKeyboardButton.WithCallbackData(b.Text, b.Data) }));
+        Message sent;
+        try
+        {
+            sent = await Bot(channel).SendMessage(externalId, html, parseMode: ParseMode.Html, replyMarkup: markup, cancellationToken: ct);
+        }
+        catch (Exception)
+        {
+            sent = await Bot(channel).SendMessage(externalId, plain, replyMarkup: markup, cancellationToken: ct);
+        }
+        return sent.Id;
+    }
+
+    /// <summary>编辑内联菜单消息（翻页/搜索/选择后更新）。</summary>
+    public async Task<bool> EditMenuAsync(AiChannel channel, string chatId, long messageId, string html, string plain, IReadOnlyList<(string Text, string Data)>? buttons, CancellationToken ct)
+    {
+        var markup = buttons is { Count: > 0 }
+            ? new InlineKeyboardMarkup(buttons.Select(b => new[] { InlineKeyboardButton.WithCallbackData(b.Text, b.Data) }))
+            : null;
+        try
+        {
+            await Bot(channel).EditMessageText(chatId, (int)messageId, html, parseMode: ParseMode.Html, replyMarkup: markup, cancellationToken: ct);
+            return true;
+        }
+        catch (Exception)
+        {
+            try
+            {
+                await Bot(channel).EditMessageText(chatId, (int)messageId, plain, replyMarkup: markup, cancellationToken: ct);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogDebug(ex, "Menu edit failed (message {MessageId})", messageId);
+                return false;
+            }
+        }
+    }
+
     /// <summary>
     /// 构造审批内联键盘。按钮 callback data 使用短令牌（Telegram 上限 64 字节）：
     ///   ap:&lt;token&gt;[:ot|5m|20m] 批准；rj:&lt;token&gt; 拒绝。
@@ -381,15 +447,27 @@ public class TelegramChannelAdapter : IAiChannelAdapter
 
     /// <summary>
     /// 启动库驱动的长轮询接收（每频道一次，由 TelegramBotHostedService 调用）。
-    /// onInbound：文本消息入站；onCallback：审批按钮回调（返回回执结果）。
+    /// onInbound：文本消息入站；onCallback：审批按钮回调（返回回执结果）；
+    /// onMenuCallback：菜单按钮回调（模型/档位）。启动时同步 bot 指令列表（setMyCommands）。
     /// </summary>
-    public Task StartReceivingAsync(
+    public async Task StartReceivingAsync(
         AiChannel channel,
         Func<ChannelInboundMessage, CancellationToken, Task> onInbound,
         Func<CallbackAction, CancellationToken, Task<CallbackResult>> onCallback,
+        Func<ChannelMenuAction, CancellationToken, Task> onMenuCallback,
         CancellationToken ct)
     {
         var bot = Bot(channel);
+        // 每次连接都同步指令列表（聊天输入框 "/" 菜单）。
+        try
+        {
+            await bot.SetMyCommands(BotCommands, cancellationToken: ct);
+            _logger.LogInformation("Telegram commands synced (channel {Channel})", channel.Id);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to sync Telegram commands (channel {Channel})", channel.Id);
+        }
         _logger.LogInformation("Telegram StartReceiving (channel {Channel})", channel.Id);
         bot.StartReceiving(
             async (b, update, c) =>
@@ -401,7 +479,7 @@ public class TelegramChannelAdapter : IAiChannelAdapter
                     : update.Type.ToString());
                 try
                 {
-                    await HandleUpdateAsync(channel, b, update, onInbound, onCallback, c);
+                    await HandleUpdateAsync(channel, b, update, onInbound, onCallback, onMenuCallback, c);
                 }
                 catch (Exception ex)
                 {
@@ -420,13 +498,24 @@ public class TelegramChannelAdapter : IAiChannelAdapter
                 AllowedUpdates = null,
             },
             ct);
-        return Task.CompletedTask;
     }
+
+    /// <summary>Bot 菜单指令（聊天输入框 "/" 可见，每次连接同步）。</summary>
+    private static readonly BotCommand[] BotCommands =
+    {
+        new() { Command = "start", Description = "开始使用" },
+        new() { Command = "help", Description = "显示帮助" },
+        new() { Command = "status", Description = "查看绑定与档位" },
+        new() { Command = "bind", Description = "绑定控制台账号" },
+        new() { Command = "model", Description = "切换模型" },
+        new() { Command = "tier", Description = "切换档位" },
+    };
 
     private async Task HandleUpdateAsync(
         AiChannel channel, ITelegramBotClient bot, Update update,
         Func<ChannelInboundMessage, CancellationToken, Task> onInbound,
         Func<CallbackAction, CancellationToken, Task<CallbackResult>> onCallback,
+        Func<ChannelMenuAction, CancellationToken, Task> onMenuCallback,
         CancellationToken ct)
     {
         if (update.Message is { } msg)
@@ -453,44 +542,109 @@ public class TelegramChannelAdapter : IAiChannelAdapter
         }
         if (update.CallbackQuery is { } cq)
         {
+            // 审批按钮优先。
             var action = ResolveCallback(channel, cq);
-            if (action == null)
+            if (action != null)
             {
-                _logger.LogDebug("Telegram callback rejected (channel {Channel}, data '{Data}')", channel.Id, cq.Data);
-                await bot.AnswerCallbackQuery(cq.Id, "按钮已失效，请在对话中重新发起审批", showAlert: false, cancellationToken: ct);
+                HandleApprovalCallbackAsync(channel, bot, action, onCallback, ct);
                 return;
             }
-            // 异步处理：审批续跑（工具执行）可能耗时，同样不阻塞接收循环。
-            _ = Task.Run(async () =>
+            // 菜单按钮（模型/档位）。
+            var menu = TryResolveMenu(channel, cq);
+            if (menu != null)
             {
-                try
+                _ = Task.Run(async () =>
                 {
-                    var result = await onCallback(action, ct);
-                    _logger.LogInformation("Telegram callback resolved (channel {Channel}, approved={Approved}, permit={Permit}, session={Session})",
-                        channel.Id, action.Approved, action.Permit, action.SessionId);
-                    await bot.AnswerCallbackQuery(action.CallbackQueryId,
-                        result.Ok ? (action.Approved ? $"✅ 已批准（{action.Permit}）" : "❌ 已拒绝") : result.Message,
-                        showAlert: !result.Ok, cancellationToken: ct);
-                    if (result.Ok)
+                    try
                     {
-                        // 决策完成：删除审批消息（用户已批准/拒绝，无需保留）。
-                        try
-                        {
-                            await bot.DeleteMessage(action.ChatId, action.MessageId, ct);
-                        }
-                        catch (Exception ex)
-                        {
-                            _logger.LogDebug(ex, "Failed to delete approval message (message {MessageId})", action.MessageId);
-                        }
-                        _pendingApprovalMessages.TryRemove($"{action.SessionId}:{action.ToolCallId}", out _);
+                        await onMenuCallback(menu, ct);
                     }
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogWarning(ex, "Telegram callback handling failed (channel {Channel})", channel.Id);
-                }
-            }, ct);
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Telegram menu callback handling failed (channel {Channel})", channel.Id);
+                    }
+                }, ct);
+                return;
+            }
+            _logger.LogDebug("Telegram callback rejected (channel {Channel}, data '{Data}')", channel.Id, cq.Data);
+            await bot.AnswerCallbackQuery(cq.Id, "按钮已失效，请在对话中重新发起审批", showAlert: false, cancellationToken: ct);
         }
+    }
+
+    private void HandleApprovalCallbackAsync(
+        AiChannel channel, ITelegramBotClient bot, CallbackAction action,
+        Func<CallbackAction, CancellationToken, Task<CallbackResult>> onCallback, CancellationToken ct)
+    {
+        // 异步处理：审批续跑（工具执行）可能耗时，同样不阻塞接收循环。
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                var result = await onCallback(action, ct);
+                _logger.LogInformation("Telegram callback resolved (channel {Channel}, approved={Approved}, permit={Permit}, session={Session})",
+                    channel.Id, action.Approved, action.Permit, action.SessionId);
+                await bot.AnswerCallbackQuery(action.CallbackQueryId,
+                    result.Ok ? (action.Approved ? $"✅ 已批准（{action.Permit}）" : "❌ 已拒绝") : result.Message,
+                    showAlert: !result.Ok, cancellationToken: ct);
+                if (result.Ok)
+                {
+                    // 决策完成：删除审批消息（用户已批准/拒绝，无需保留）。
+                    try
+                    {
+                        await bot.DeleteMessage(action.ChatId, action.MessageId, ct);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogDebug(ex, "Failed to delete approval message (message {MessageId})", action.MessageId);
+                    }
+                    _pendingApprovalMessages.TryRemove($"{action.SessionId}:{action.ToolCallId}", out _);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Telegram callback handling failed (channel {Channel})", channel.Id);
+            }
+        }, ct);
+    }
+
+    /// <summary>
+    /// 解析菜单按钮回调（模型分页/选择/搜索、档位切换）。返回 null 表示不是菜单按钮。
+    /// callback data 前缀：mdl:nav:页码 / mdl:sel:索引 / mdl:sea / tier:sel:档位。
+    /// </summary>
+    public ChannelMenuAction? TryResolveMenu(AiChannel channel, CallbackQuery cq)
+    {
+        if (cq.Data is not { } data || cq.Message is not { } msg || cq.Id.Length == 0) return null;
+        var chatId = msg.Chat.Id.ToString();
+        string? kind = null, payload = null;
+        if (data.StartsWith("mdl:nav:", StringComparison.Ordinal))
+        {
+            kind = "model-nav";
+            payload = data["mdl:nav:".Length..];
+        }
+        else if (data.StartsWith("mdl:sel:", StringComparison.Ordinal))
+        {
+            kind = "model-select";
+            payload = data["mdl:sel:".Length..];
+        }
+        else if (data == "mdl:sea")
+        {
+            kind = "model-search";
+        }
+        else if (data.StartsWith("tier:sel:", StringComparison.Ordinal))
+        {
+            kind = "tier-select";
+            payload = data["tier:sel:".Length..];
+        }
+        if (kind == null) return null;
+        return new ChannelMenuAction
+        {
+            Kind = kind,
+            ChannelId = channel.Id,
+            ChatId = chatId,
+            CallbackQueryId = cq.Id,
+            MessageId = msg.Id,
+            Data = payload,
+        };
     }
 
     /// <summary>把 Telegram 文本消息规范化为入站消息（纯函数，可测试）。</summary>

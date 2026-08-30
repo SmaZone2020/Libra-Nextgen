@@ -73,6 +73,24 @@ public class AiChannelService
     private const int SeenInboundMax = 2000;
     private static readonly TimeSpan SeenInboundTtl = TimeSpan.FromMinutes(30);
 
+    /// <summary>模型菜单状态（分页/搜索）：channelId|externalId → 状态。</summary>
+    private readonly ConcurrentDictionary<string, ModelMenuState> _modelMenus = new();
+    private const int ModelMenuPageSize = 5;
+    /// <summary>超过 3 页（15 个模型）才显示搜索按钮。</summary>
+    private const int ModelMenuSearchThreshold = ModelMenuPageSize * 3;
+
+    private sealed class ModelMenuState
+    {
+        public List<string> Models { get; set; } = new();
+        public string CurrentModel { get; set; } = "";
+        public int Page { get; set; }
+        public string? Query { get; set; }
+        /// <summary>等待用户发送搜索关键词（下一条文本消息被拦截为搜索词）。</summary>
+        public bool Searching { get; set; }
+        public long MessageId { get; set; }
+        public DateTime ExpiresAt { get; set; } = DateTime.UtcNow.AddMinutes(10);
+    }
+
     private IAiChannelAdapter AdapterFor(string type) => type switch
     {
         AiChannelTypes.Telegram => _telegram,
@@ -380,6 +398,18 @@ public class AiChannelService
         if (text.Length == 0) return;
         if (text.Length > MaxMessageLength) text = text[..MaxMessageLength] + "…";
 
+        // 模型菜单搜索拦截：菜单处于"等待关键词"状态时，本条文本作为搜索词，
+        // 不进入 AI 对话。
+        var menuKey = $"{ch.Id}|{msg.ExternalId}";
+        if (_modelMenus.TryGetValue(menuKey, out var menuState) && menuState.Searching)
+        {
+            menuState.Searching = false;
+            menuState.Query = text;
+            menuState.Page = 0;
+            await RefreshModelMenuAsync(ch, msg.ExternalId, menuState, ct);
+            return;
+        }
+
         if (IsRateLimited($"{ch.Id}|{msg.ExternalId}"))
         {
             await TrySendAsync(ch, msg.ExternalId, "⏳ 操作过于频繁，请 1 分钟后再试。", ct);
@@ -444,6 +474,13 @@ public class AiChannelService
         switch (cmd)
         {
             case "/start":
+            {
+                // /start 只做简单介绍，完整指令见 /help。
+                await TrySendRichAsync(ch, msg.ExternalId,
+                    "我是 Justitia（Libra-Nextgen AI 助手）。\n输入 <code>/help</code> 查看可用指令。",
+                    "我是 Justitia（Libra-Nextgen AI 助手）。\n输入 /help 查看可用指令。", ct);
+                break;
+            }
             case "/help":
             {
                 var (h, p) = BuildHelp(ch);
@@ -470,10 +507,16 @@ public class AiChannelService
                 }
                 await TryBindAsync(ch, msg, parts[1], ct);
                 break;
+            case "/model":
+                await HandleModelCommandAsync(ch, msg, ct);
+                break;
+            case "/tier":
+                await HandleTierCommandAsync(ch, msg, ct);
+                break;
             case "/approve":
             case "/reject":
             {
-                // IM 内审批：仅会话所属外部用户可操作（身份 = channelId|externalId）。
+                // 保留文本审批命令（按钮失效时的兜底；非 Telegram 频道的主路径）。
                 var permit = "one-time";
                 if (cmd == "/approve" && parts.Length > 1)
                 {
@@ -490,6 +533,217 @@ public class AiChannelService
                 break;
             }
         }
+    }
+
+    // ── 模型/档位菜单 ────────────────────────────────────────────────────
+
+    /// <summary>/model：发送模型选择内联菜单（分页；超过 3 页支持搜索）。</summary>
+    private async Task HandleModelCommandAsync(AiChannel ch, ChannelInboundMessage msg, CancellationToken ct)
+    {
+        if (ch.ChannelType != AiChannelTypes.Telegram)
+        {
+            await TrySendAsync(ch, msg.ExternalId, "该功能需要 Telegram 内联菜单支持。", ct);
+            return;
+        }
+        var (providerId, defaultModel, models) = await ResolveProviderAsync(ch, ct);
+        if (providerId == null || models.Count == 0)
+        {
+            await TrySendAsync(ch, msg.ExternalId, "⚠️ 未配置可用的 AI 供应商，请联系管理员。", ct);
+            return;
+        }
+        var key = $"{ch.Id}|{msg.ExternalId}";
+        var state = new ModelMenuState { Models = models, CurrentModel = defaultModel };
+        _modelMenus[key] = state;
+        var (html, plain, buttons) = BuildModelMenu(state);
+        var menuId = await AdapterFor(ch.ChannelType).SendMenuAsync(ch, msg.ExternalId, html, plain, buttons, ct);
+        if (menuId != 0)
+        {
+            state.MessageId = menuId;
+        }
+        else
+        {
+            _modelMenus.TryRemove(key, out _);
+            await TrySendAsync(ch, msg.ExternalId, "当前频道不支持菜单按钮，请在控制台切换模型。", ct);
+        }
+    }
+
+    /// <summary>/tier：发送档位选择内联菜单（仅可切换 ≤ 频道默认档位）。</summary>
+    private async Task HandleTierCommandAsync(AiChannel ch, ChannelInboundMessage msg, CancellationToken ct)
+    {
+        if (ch.ChannelType != AiChannelTypes.Telegram)
+        {
+            await TrySendAsync(ch, msg.ExternalId, "该功能需要 Telegram 内联菜单支持。", ct);
+            return;
+        }
+        var user = await ChannelUsers.Find(x => x.ChannelId == ch.Id && x.ExternalId == msg.ExternalId)
+            .FirstOrDefaultAsync(ct);
+        if (user == null)
+        {
+            await TrySendAsync(ch, msg.ExternalId, "请先绑定控制台账号（/bind 绑定码）。", ct);
+            return;
+        }
+        var current = Math.Clamp(user.TierOverride ?? ch.DefaultTier, 0, 3);
+        var maxTier = Math.Clamp(ch.DefaultTier, 0, 3);
+        var buttons = new List<(string Text, string Data)>();
+        for (var t = 0; t <= maxTier; t++)
+        {
+            var mark = t == current ? " ✓" : "";
+            buttons.Add(($"{TierName(t)}{mark}", $"tier:sel:{t}"));
+        }
+        var html = $"<b>切换档位</b>\n当前：{HtmlEncode(TierName(current))}\n（仅可 ≤ 频道档位 {HtmlEncode(TierName(maxTier))}）";
+        var plain = $"切换档位\n当前：{TierName(current)}\n（仅可 ≤ 频道档位 {TierName(maxTier)}）";
+        await AdapterFor(ch.ChannelType).SendMenuAsync(ch, msg.ExternalId, html, plain, buttons, ct);
+    }
+
+    /// <summary>构建模型菜单（分页/搜索）：返回 (html, plain, 按钮)。</summary>
+    private static (string Html, string Plain, List<(string Text, string Data)> Buttons) BuildModelMenu(ModelMenuState state)
+    {
+        var filtered = string.IsNullOrEmpty(state.Query)
+            ? state.Models
+            : state.Models.Where(m => m.Contains(state.Query, StringComparison.OrdinalIgnoreCase)).ToList();
+        var pages = Math.Max(1, (int)Math.Ceiling(filtered.Count / (double)ModelMenuPageSize));
+        state.Page = Math.Clamp(state.Page, 0, pages - 1);
+        var pageModels = filtered.Skip(state.Page * ModelMenuPageSize).Take(ModelMenuPageSize).ToList();
+
+        var title = string.IsNullOrEmpty(state.Query)
+            ? $"选择模型（{state.Page + 1}/{pages}）"
+            : $"搜索「{state.Query}」（{state.Page + 1}/{pages}）";
+        var current = state.CurrentModel;
+        var html = new StringBuilder($"<b>{HtmlEncode(title)}</b>\n当前：<code>{HtmlEncode(current)}</code>\n");
+        var plain = new StringBuilder($"{title}\n当前：{current}\n");
+
+        var buttons = new List<(string Text, string Data)>();
+        foreach (var m in pageModels)
+        {
+            var idx = filtered.IndexOf(m);
+            var mark = m == current ? "● " : "";
+            html.Append($"\n<code>{HtmlEncode(mark + m)}</code>");
+            plain.Append($"\n{mark}{m}");
+            buttons.Add((mark + m, $"mdl:sel:{idx}"));
+        }
+
+        // 导航行：上一页 / 搜索（超过 3 页时）/ 下一页。
+        var nav = new List<(string Text, string Data)>();
+        if (state.Page > 0) nav.Add(("◀️ 上一页", $"mdl:nav:{state.Page - 1}"));
+        if (filtered.Count > ModelMenuSearchThreshold) nav.Add(("🔍 搜索", "mdl:sea"));
+        if (state.Page < pages - 1) nav.Add(($"下一页 ▶️", $"mdl:nav:{state.Page + 1}"));
+        buttons.AddRange(nav);
+
+        return (html.ToString(), plain.ToString(), buttons);
+    }
+
+    /// <summary>刷新/编辑模型菜单（翻页、搜索后）。</summary>
+    private async Task RefreshModelMenuAsync(AiChannel ch, string externalId, ModelMenuState state, CancellationToken ct)
+    {
+        var (html, plain, buttons) = BuildModelMenu(state);
+        await AdapterFor(ch.ChannelType).EditMenuAsync(ch, externalId, state.MessageId, html, plain, buttons, ct);
+    }
+
+    /// <summary>菜单按钮回调（模型分页/选择/搜索、档位切换）。</summary>
+    public async Task HandleMenuCallbackAsync(ChannelMenuAction action, CancellationToken ct = default)
+    {
+        try
+        {
+            var ch = await GetChannelAsync(action.ChannelId, includeSecrets: false, ct);
+            if (ch == null || !ch.Enabled) return;
+
+            switch (action.Kind)
+            {
+                case "model-nav":
+                {
+                    var key = $"{ch.Id}|{action.ChatId}";
+                    if (_modelMenus.TryGetValue(key, out var st) && st.ExpiresAt > DateTime.UtcNow
+                        && int.TryParse(action.Data, out var page))
+                    {
+                        st.Page = page;
+                        await RefreshModelMenuAsync(ch, action.ChatId, st, ct);
+                    }
+                    break;
+                }
+                case "model-search":
+                {
+                    var key = $"{ch.Id}|{action.ChatId}";
+                    if (_modelMenus.TryGetValue(key, out var st) && st.ExpiresAt > DateTime.UtcNow)
+                    {
+                        st.Searching = true;
+                        await AdapterFor(ch.ChannelType).EditMenuAsync(ch, action.ChatId, st.MessageId,
+                            "请发送模型关键词（如 <code>deepseek</code>），或发送 /model 重新打开菜单。",
+                            "请发送模型关键词，或发送 /model 重新打开菜单。", null, ct);
+                    }
+                    break;
+                }
+                case "model-select":
+                {
+                    var key = $"{ch.Id}|{action.ChatId}";
+                    if (!_modelMenus.TryGetValue(key, out var st) || st.ExpiresAt <= DateTime.UtcNow
+                        || !int.TryParse(action.Data, out var idx))
+                    {
+                        await NotifyMenuStaleAsync(ch, action, ct);
+                        return;
+                    }
+                    var filtered = string.IsNullOrEmpty(st.Query)
+                        ? st.Models
+                        : st.Models.Where(m => m.Contains(st.Query, StringComparison.OrdinalIgnoreCase)).ToList();
+                    if (idx < 0 || idx >= filtered.Count)
+                    {
+                        await NotifyMenuStaleAsync(ch, action, ct);
+                        return;
+                    }
+                    var model = filtered[idx];
+                    // 更新会话模型（当前对话生效）。
+                    var session = await _ai.GetChannelSessionByExternalAsync(ch.Id, action.ChatId, ct);
+                    if (session != null) await _ai.UpdateSessionModelAsync(session.Id, model, ct);
+                    _modelMenus.TryRemove(key, out _);
+                    await AdapterFor(ch.ChannelType).EditMenuAsync(ch, action.ChatId, st.MessageId,
+                        $"✅ 已切换模型：<code>{HtmlEncode(model)}</code>",
+                        $"✅ 已切换模型：{model}", null, ct);
+                    break;
+                }
+                case "tier-select":
+                {
+                    if (!int.TryParse(action.Data, out var tier)) return;
+                    if (tier < 0 || tier > Math.Clamp(ch.DefaultTier, 0, 3))
+                    {
+                        // 服务端兜底：不允许高于频道档位。
+                        await AdapterFor(ch.ChannelType).EditMenuAsync(ch, action.ChatId, action.MessageId,
+                            "❌ 不能高于频道档位。", "❌ 不能高于频道档位。", null, ct);
+                        return;
+                    }
+                    var ok = await SetUserTierByExternalAsync(ch.Id, action.ChatId, tier, ct);
+                    if (ok)
+                    {
+                        await AdapterFor(ch.ChannelType).EditMenuAsync(ch, action.ChatId, action.MessageId,
+                            $"✅ 已切换档位：<b>{HtmlEncode(TierName(tier))}</b>",
+                            $"✅ 已切换档位：{TierName(tier)}", null, ct);
+                    }
+                    break;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Menu callback failed (channel {Channel}, kind {Kind})", action.ChannelId, action.Kind);
+        }
+    }
+
+    private async Task NotifyMenuStaleAsync(AiChannel ch, ChannelMenuAction action, CancellationToken ct)
+    {
+        await AdapterFor(ch.ChannelType).EditMenuAsync(ch, action.ChatId, action.MessageId,
+            "菜单已过期，请重新发送 /model 打开。", "菜单已过期，请重新发送 /model 打开。", null, ct);
+    }
+
+    /// <summary>IM 用户自行切换档位：仅允许 ≤ 频道默认档位（防自行提权）。</summary>
+    public async Task<bool> SetUserTierByExternalAsync(string channelId, string externalId, int tier, CancellationToken ct = default)
+    {
+        var ch = await GetChannelAsync(channelId, includeSecrets: false, ct);
+        if (ch == null) return false;
+        if (tier < 0 || tier > Math.Clamp(ch.DefaultTier, 0, 3))
+            throw new ArgumentException($"tier must be ≤ channel default ({ch.DefaultTier})");
+        var r = await ChannelUsers.UpdateOneAsync(
+            x => x.ChannelId == channelId && x.ExternalId == externalId,
+            Builders<AiChannelUser>.Update.Set(u => u.TierOverride, tier),
+            cancellationToken: ct);
+        return r.MatchedCount > 0;
     }
 
     /// <summary>
@@ -589,7 +843,7 @@ public class AiChannelService
         AiChannel ch, ChannelInboundMessage msg,
         string userId, string userName, int tier, bool guest, CancellationToken ct)
     {
-        var (providerId, model) = await ResolveProviderAsync(ch, ct);
+        var (providerId, model, _) = await ResolveProviderAsync(ch, ct);
         if (providerId == null)
         {
             await TrySendAsync(ch, msg.ExternalId, "⚠️ 未配置可用的 AI 供应商，请联系管理员。", ct);
@@ -614,16 +868,16 @@ public class AiChannelService
         }
     }
 
-    private async Task<(string? ProviderId, string Model)> ResolveProviderAsync(AiChannel ch, CancellationToken ct)
+    private async Task<(string? ProviderId, string Model, List<string> Models)> ResolveProviderAsync(AiChannel ch, CancellationToken ct)
     {
         var providers = await _ai.GetProvidersAsync(ct);
         var enabled = providers.Where(p => p.Enabled && p.Models.Count > 0).ToList();
-        if (enabled.Count == 0) return (null, "");
+        if (enabled.Count == 0) return (null, "", new List<string>());
         var p = enabled.FirstOrDefault(x => x.Id == ch.DefaultProviderId) ?? enabled[0];
         var model = ch.DefaultModel.Length > 0 && p.Models.Contains(ch.DefaultModel)
             ? ch.DefaultModel
             : (p.DefaultModel.Length > 0 ? p.DefaultModel : p.Models[0]);
-        return (p.Id, model);
+        return (p.Id, model, p.Models);
     }
 
     // ── 事件出口：ChannelSink（SSE 事件 → IM 消息）────────────────────────
@@ -954,25 +1208,39 @@ public class AiChannelService
     private (string Html, string Plain) BuildHelp(AiChannel ch)
     {
         var tier = TierName(Math.Clamp(ch.DefaultTier, 0, 3));
+        var isTelegram = ch.ChannelType == AiChannelTypes.Telegram;
+        // Telegram：菜单指令（/model /tier），按钮审批，无需文本审批命令。
+        // 其他频道：保留文本审批命令（无按钮审批），菜单指令不支持。
+        var commands = new List<(string Cmd, string Desc)>
+        {
+            ("/start", "开始使用"),
+            ("/help", "显示本帮助"),
+            ("/status", "查看绑定与档位"),
+            ("/bind 绑定码", "绑定控制台账号"),
+        };
+        if (isTelegram)
+        {
+            commands.Add(("/model", "切换模型"));
+            commands.Add(("/tier", "切换档位"));
+        }
+        else
+        {
+            commands.Add(("/approve [one-time|5min|20min]", "批准工具调用"));
+            commands.Add(("/reject", "拒绝工具调用"));
+        }
+        var htmlLines = commands.Select(c => $"<code>{HtmlEncode(c.Cmd)}</code> — {HtmlEncode(c.Desc)}");
+        var plainLines = commands.Select(c => $"{c.Cmd} — {c.Desc}");
         var html =
             $"我是 Justitia\n" +
             $"目前权限档位：<b>{HtmlEncode(tier)}</b>\n\n" +
             "<b>可用指令：</b>\n" +
-            "<code>/start</code> 或 <code>/help</code> — 显示本帮助\n" +
-            "<code>/status</code> — 查看绑定与档位\n" +
-            "<code>/bind 绑定码</code> — 绑定控制台账号\n" +
-            "<code>/approve [one-time|5min|20min]</code> — 批准工具调用\n" +
-            "<code>/reject</code> — 拒绝工具调用\n\n" +
+            string.Join("\n", htmlLines) + "\n\n" +
             "直接发送消息即可与我对话。";
         var plain =
             $"我是 Justitia\n" +
             $"目前权限档位：{tier}\n\n" +
             "可用指令：\n" +
-            "/start 或 /help — 显示本帮助\n" +
-            "/status — 查看绑定与档位\n" +
-            "/bind 绑定码 — 绑定控制台账号\n" +
-            "/approve [one-time|5min|20min] — 批准工具调用\n" +
-            "/reject — 拒绝工具调用\n\n" +
+            string.Join("\n", plainLines) + "\n\n" +
             "直接发送消息即可与我对话。";
         return (html, plain);
     }

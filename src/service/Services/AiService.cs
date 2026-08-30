@@ -380,6 +380,15 @@ public class AiService
             cancellationToken: ct);
     }
 
+    /// <summary>更新会话模型（IM 菜单切换模型用）。</summary>
+    public async Task UpdateSessionModelAsync(string sessionId, string model, CancellationToken ct = default)
+    {
+        await Sessions.UpdateOneAsync(
+            x => x.Id == sessionId,
+            Builders<AiSession>.Update.Set(s => s.Model, model),
+            cancellationToken: ct);
+    }
+
     /// <summary>删除频道下的全部会话（频道删除时清理）。</summary>
     public async Task DeleteChannelSessionsAsync(string channelId, CancellationToken ct = default)
     {

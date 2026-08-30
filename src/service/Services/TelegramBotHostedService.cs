@@ -80,6 +80,7 @@ public class TelegramBotHostedService : BackgroundService
                 channel,
                 onInbound: channels.HandleInboundAsync,
                 onCallback: channels.HandleCallbackAsync,
+                onMenuCallback: channels.HandleMenuCallbackAsync,
                 ct);
         }
         catch (OperationCanceledException)
