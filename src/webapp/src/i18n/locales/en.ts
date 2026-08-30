@@ -986,7 +986,6 @@ export default {
       deleteSessionConfirm: 'Delete this conversation?',
       deleteSessionTitle: 'Delete conversation',
       eventSub: 'Event subscriptions',
-      eventSelect: 'Select events',
       eventSelectDesc: 'When an event fires, Justitia receives it from the system and generates a reminder to the target',
       eventOnline: 'Agent online',
       eventOnlineDesc: 'Remind when an agent registers online',

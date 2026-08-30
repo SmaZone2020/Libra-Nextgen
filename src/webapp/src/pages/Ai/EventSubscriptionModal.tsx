@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Button,
+  Card,
   Checkbox,
   CheckboxGroup,
   Chip,
@@ -13,9 +14,10 @@ import {
   Modal,
   Select,
   Spinner,
+  Tabs,
 } from '@heroui/react';
 import clsx from 'clsx';
-import { ArrowDownToLine, ArrowUpFromLine, TrashBin } from '@gravity-ui/icons';
+import { ArrowRightFromSquare, DisplayPulse, TrashBin } from '@gravity-ui/icons';
 import { getAiSessions, type AiSession } from '../../api/ai';
 import { getAiChannels, type AiChannel } from '../../api/aiChannels';
 import {
@@ -27,14 +29,16 @@ import {
 import { useDialog } from '../../hooks/useDialog';
 
 const EVENT_OPTIONS = [
-  { id: 'agent.online', titleKey: 'ai.eventOnline', descKey: 'ai.eventOnlineDesc', icon: ArrowUpFromLine },
-  { id: 'agent.offline', titleKey: 'ai.eventOffline', descKey: 'ai.eventOfflineDesc', icon: ArrowDownToLine },
+  { id: 'agent.online', titleKey: 'ai.eventOnline', descKey: 'ai.eventOnlineDesc', icon: DisplayPulse },
+  { id: 'agent.offline', titleKey: 'ai.eventOffline', descKey: 'ai.eventOfflineDesc', icon: ArrowRightFromSquare },
 ] as const;
 
-/**
- * 事件订阅模态框：选择事件（Agent 上线/下线）+ 送达目标（控制台会话 或 启用的 IM 频道）。
- * 事件触发时由系统视角告诉 Justitia，AI 生成提醒送达目标（服务端 AiEventNotifier 执行）。
- */
+/** 频道平台图标（与设置页 ChannelsTab 一致）。 */
+const CHANNEL_ICONS: Record<string, string> = {
+  telegram: '/icon/app/tg.png',
+  lark: '/icon/app/lark.png',
+  'wechat-claw': '/icon/app/wechat.png',
+};
 export function EventSubscriptionModal({
   open,
   onClose,
@@ -92,6 +96,11 @@ export function EventSubscriptionModal({
     const map = new Map(channels.map((c) => [c.id, c.name]));
     return (id: string) => map.get(id) ?? id;
   }, [channels]);
+
+  const selectedChannel = useMemo(
+    () => channels.find((c) => c.id === channelId) ?? null,
+    [channels, channelId],
+  );
 
   const canSave = events.length > 0 && (targetType === 'session' ? sessionId : channelId) !== '';
 
@@ -152,16 +161,15 @@ export function EventSubscriptionModal({
                     value={events}
                     onChange={(vals) => setEvents([...vals])}
                   >
-                    <Label className="text-sm">{t('ai.eventSelect')}</Label>
                     <Description className="mb-2">{t('ai.eventSelectDesc')}</Description>
-                    <div className="flex flex-col gap-2">
+                    <div className="grid grid-cols-2 gap-2">
                       {EVENT_OPTIONS.map((opt) => {
                         const Icon = opt.icon;
                         return (
                           <Checkbox key={opt.id} value={opt.id} variant="secondary">
                             <Checkbox.Content
                               className={clsx(
-                                'group relative flex w-full flex-row items-start justify-start gap-4 rounded-2xl bg-surface px-5 py-4 transition-all',
+                                'group relative flex w-full flex-row items-start justify-start gap-4 rounded-2xl bg-default px-5 py-4 transition-all',
                                 'data-[selected=true]:bg-accent/10',
                               )}
                             >
@@ -183,22 +191,21 @@ export function EventSubscriptionModal({
                   {/* 送达目标 */}
                   <div>
                     <Label className="mb-2 block text-sm">{t('ai.eventTarget')}</Label>
-                    <div className="flex items-center gap-2">
-                      <Button
-                        size="sm"
-                        variant={targetType === 'session' ? 'primary' : 'ghost'}
-                        onPress={() => setTargetType('session')}
-                      >
-                        {t('ai.eventTargetSession')}
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant={targetType === 'channel' ? 'primary' : 'ghost'}
-                        onPress={() => setTargetType('channel')}
-                      >
-                        {t('ai.eventTargetChannel')}
-                      </Button>
-                    </div>
+                    
+                    <Tabs className="w-full max-w-md">
+                      <Tabs.ListContainer>
+                        <Tabs.List aria-label="channel">
+                          <Tabs.Tab id="channel" onPress={() => setTargetType('session')}>
+                            {t('ai.eventTargetChannel')}
+                            <Tabs.Indicator />
+                          </Tabs.Tab>
+                          <Tabs.Tab id="session" onPress={() => setTargetType('channel')}>
+                            {t('ai.eventTargetSession')}
+                            <Tabs.Indicator />
+                          </Tabs.Tab>
+                        </Tabs.List>
+                      </Tabs.ListContainer>
+                    </Tabs>
 
                     {targetType === 'session' ? (
                       <div className="mt-3">
@@ -237,6 +244,13 @@ export function EventSubscriptionModal({
                           placeholder={t('ai.eventChannelPlaceholder')}
                         >
                           <Select.Trigger className="w-full">
+                            {selectedChannel && (
+                              <img
+                                src={CHANNEL_ICONS[selectedChannel.channelType]}
+                                alt=""
+                                className="size-4 shrink-0 rounded-full object-contain"
+                              />
+                            )}
                             <Select.Value />
                             <Select.Indicator />
                           </Select.Trigger>
@@ -244,6 +258,11 @@ export function EventSubscriptionModal({
                             <ListBox items={channels}>
                               {(item) => (
                                 <ListBox.Item key={item.id} id={item.id} textValue={item.name}>
+                                  <img
+                                    src={CHANNEL_ICONS[item.channelType]}
+                                    alt=""
+                                    className="size-5 shrink-0 rounded-full object-contain"
+                                  />
                                   <span className="truncate">{item.name}</span>
                                 </ListBox.Item>
                               )}
@@ -257,15 +276,18 @@ export function EventSubscriptionModal({
                     )}
                   </div>
 
-                  <Button
-                    variant="primary"
-                    size="sm"
-                    isDisabled={!canSave || creating}
-                    onPress={() => void handleCreate()}
-                  >
-                    {creating ? <Spinner size="sm" /> : null}
-                    {t('ai.eventCreate')}
-                  </Button>
+                  <div className='w-full flex'>
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      isDisabled={!canSave || creating}
+                      onPress={() => void handleCreate()}
+                      className="ml-auto"
+                    >
+                      {creating ? <Spinner size="sm" /> : null}
+                      {t('ai.eventCreate')}
+                    </Button>
+                  </div>
 
                   {/* 已有订阅 */}
                   <div>
@@ -275,39 +297,37 @@ export function EventSubscriptionModal({
                     ) : (
                       <div className="max-h-56 space-y-1.5 overflow-y-auto">
                         {subs.map((sub) => (
-                          <div
-                            key={sub.id}
-                            className="flex items-center gap-2 rounded-xl border border-default-200 px-3 py-2 dark:border-default-800"
-                          >
-                            <div className="min-w-0 flex-1">
-                              <div className="flex flex-wrap items-center gap-1.5">
-                                {sub.events.map((e) => (
-                                  <Chip key={e} size="sm" variant="soft">{eventLabel(e)}</Chip>
-                                ))}
-                                <Chip size="sm" variant="tertiary">
-                                  {sub.targetType === 'session'
-                                    ? t('ai.eventTargetSession')
-                                    : t('ai.eventTargetChannel')}
-                                  ：{sub.targetType === 'session'
-                                    ? sessionName(sub.targetId)
-                                    : channelName(sub.targetId)}
-                                </Chip>
+                          <Card key={sub.id} className='bg-default'>
+                            <div className="flex items-center gap-2">
+                              <div className="min-w-0 flex-1">
+                                <div className="flex flex-wrap items-center gap-1.5">
+                                  {sub.events.map((e) => (
+                                    <Chip key={e} size="sm" variant="soft">{eventLabel(e)}</Chip>
+                                  ))}
+                                  <Chip size="sm" variant="tertiary">
+                                    {sub.targetType === 'session'
+                                      ? t('ai.eventTargetSession')
+                                      : t('ai.eventTargetChannel')}
+                                    ：{sub.targetType === 'session'
+                                      ? sessionName(sub.targetId)
+                                      : channelName(sub.targetId)}
+                                  </Chip>
+                                </div>
+                                <div className="mt-0.5 text-[11px] text-default-500">
+                                  {new Date(sub.createdAt).toLocaleString()}
+                                </div>
                               </div>
-                              <div className="mt-0.5 text-[11px] text-default-500">
-                                {new Date(sub.createdAt).toLocaleString()}
-                              </div>
+                              <Button
+                                isIconOnly
+                                variant="ghost"
+                                className="text-danger hover:bg-background/30"
+                                aria-label={t('common.delete')}
+                                onPress={() => void handleDelete(sub)}
+                              >
+                                <TrashBin className="size-4" />
+                              </Button>
                             </div>
-                            <Button
-                              size="sm"
-                              isIconOnly
-                              variant="ghost"
-                              className="text-danger"
-                              aria-label={t('common.delete')}
-                              onPress={() => void handleDelete(sub)}
-                            >
-                              <TrashBin className="size-4" />
-                            </Button>
-                          </div>
+                          </Card>
                         ))}
                       </div>
                     )}
