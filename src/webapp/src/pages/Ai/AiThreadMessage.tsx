@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button, Chip, TextArea, Tooltip } from '@heroui/react';
+import { AntennaSignal } from '@gravity-ui/icons';
 import {
   ChainOfThought,
   ChatLoader,
@@ -47,6 +48,28 @@ const ToolStateMap: Record<string, ToolPartState> = {
   'requires-action': 'requires-action',
   'input-streaming': 'input-streaming',
 };
+
+/** 系统事件消息体（服务端 AiEventNotifier 以 JSON 注入，前端检测后渲染为事件卡片）。 */
+interface SystemEventPayload {
+  type: 'system_event';
+  event?: string;
+  agentId?: string;
+  hostname?: string;
+  ip?: string;
+  message?: string;
+}
+
+function parseSystemEvent(content: string): SystemEventPayload | null {
+  if (!content || !content.startsWith('{')) return null;
+  try {
+    const obj = JSON.parse(content);
+    return obj && typeof obj === 'object' && !Array.isArray(obj) && obj.type === 'system_event'
+      ? (obj as SystemEventPayload)
+      : null;
+  } catch {
+    return null;
+  }
+}
 
 function mapToolState(state: string): ToolPartState {
   return ToolStateMap[state] ?? 'output-available';
@@ -159,6 +182,37 @@ export function AiThreadMessage({
   const renderedToolCalls = streamingTools ?? toolCalls ?? [];
 
   if (message.role === 'user') {
+    // 系统事件（Agent 上线/离线订阅）：渲染为居中系统卡片，不显示为用户的普通消息。
+    const sysEvent = parseSystemEvent(message.content);
+    if (sysEvent) {
+      const isOnline = sysEvent.event === 'agent.online';
+      return (
+        <div className="flex justify-center py-1">
+          <div className="flex w-full max-w-[80%] items-start gap-3 rounded-2xl border border-default-200 bg-default/40 px-4 py-3 dark:border-default-800">
+            <AntennaSignal
+              className={`mt-0.5 size-4 shrink-0 ${isOnline ? 'text-success' : 'text-danger'}`}
+            />
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                <span className="text-xs font-medium text-default-700">{t('ai.systemEvent')}</span>
+                <Chip size="sm" variant="soft" color={isOnline ? 'success' : 'danger'}>
+                  {isOnline ? t('ai.eventOnline') : t('ai.eventOffline')}
+                </Chip>
+                {sysEvent.hostname && (
+                  <span className="truncate text-xs font-medium">{sysEvent.hostname}</span>
+                )}
+                {sysEvent.ip && (
+                  <span className="truncate font-mono text-[11px] text-default-500">{sysEvent.ip}</span>
+                )}
+              </div>
+              {sysEvent.message && (
+                <p className="mt-1 text-sm text-default-700">{sysEvent.message}</p>
+              )}
+            </div>
+          </div>
+        </div>
+      );
+    }
     return (
       <ChatMessagePrimitive.User>
         <ChatMessagePrimitive.Bubble>

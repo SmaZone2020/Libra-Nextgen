@@ -27,6 +27,7 @@ import {
   type AiEventSubscription,
 } from '../../api/aiEventSubscriptions';
 import { useDialog } from '../../hooks/useDialog';
+import { TIER_LABELS } from '../Settings/ChannelsTab';
 
 const EVENT_OPTIONS = [
   { id: 'agent.online', titleKey: 'ai.eventOnline', descKey: 'ai.eventOnlineDesc', icon: DisplayPulse },
@@ -206,14 +207,13 @@ export function EventSubscriptionModal({
                         </Tabs.List>
                       </Tabs.ListContainer>
                     </Tabs>
-
-                    {targetType === 'session' ? (
-                      <div className="mt-3">
-                        <Label className="mb-1.5 block text-sm">{t('ai.eventSession')}</Label>
+                    <div className='flex space-x-2 pt-3 w-full'>
+                      {targetType === 'session' ? (
                         <Select
                           selectedKey={sessionId || undefined}
                           onSelectionChange={(key) => { if (key) setSessionId(String(key)); }}
                           variant="secondary"
+                          className="w-full"
                           placeholder={t('ai.eventSessionPlaceholder')}
                         >
                           <Select.Trigger className="w-full">
@@ -230,63 +230,47 @@ export function EventSubscriptionModal({
                             </ListBox>
                           </Select.Popover>
                         </Select>
-                        {sessions.length === 0 && (
-                          <p className="mt-1 text-xs text-default-500">{t('ai.eventNoSessions')}</p>
-                        )}
-                      </div>
-                    ) : (
-                      <div className="mt-3">
-                        <Label className="mb-1.5 block text-sm">{t('ai.eventChannel')}</Label>
+                      ) : (
                         <Select
-                          selectedKey={channelId || undefined}
+                          selectedKey={sessionId || undefined}
                           onSelectionChange={(key) => { if (key) setChannelId(String(key)); }}
                           variant="secondary"
+                          className="w-full"
                           placeholder={t('ai.eventChannelPlaceholder')}
                         >
                           <Select.Trigger className="w-full">
-                            {selectedChannel && (
-                              <img
-                                src={CHANNEL_ICONS[selectedChannel.channelType]}
-                                alt=""
-                                className="size-4 shrink-0 rounded-full object-contain"
-                              />
-                            )}
                             <Select.Value />
                             <Select.Indicator />
                           </Select.Trigger>
                           <Select.Popover>
                             <ListBox items={channels}>
                               {(item) => (
-                                <ListBox.Item key={item.id} id={item.id} textValue={item.name}>
-                                  <img
-                                    src={CHANNEL_ICONS[item.channelType]}
-                                    alt=""
-                                    className="size-5 shrink-0 rounded-full object-contain"
-                                  />
-                                  <span className="truncate">{item.name}</span>
+                                <ListBox.Item key={item.id} id={item.id}>
+                                  <div className='flex space-x-2'>
+                                    <img
+                                      src={CHANNEL_ICONS[item.channelType]}
+                                      alt=""
+                                      className="size-5 shrink-0 rounded-full object-contain"
+                                    />
+                                    <span className="truncate">{item.name} ({TIER_LABELS[item.defaultTier]})</span>
+                                  </div>
                                 </ListBox.Item>
                               )}
                             </ListBox>
                           </Select.Popover>
                         </Select>
-                        {channels.length === 0 && (
-                          <p className="mt-1 text-xs text-default-500">{t('ai.eventNoChannels')}</p>
-                        )}
-                      </div>
-                    )}
-                  </div>
+                      )}
+                      <Button
+                        variant="primary"
+                        isDisabled={!canSave || creating}
+                        onPress={() => void handleCreate()}
+                        className="rounded-[16px]"
+                      >
+                        {creating ? <Spinner size="sm" /> : null}
+                        {t('ai.eventCreate')}
+                      </Button>
+                    </div>
 
-                  <div className='w-full flex'>
-                    <Button
-                      variant="primary"
-                      size="sm"
-                      isDisabled={!canSave || creating}
-                      onPress={() => void handleCreate()}
-                      className="ml-auto"
-                    >
-                      {creating ? <Spinner size="sm" /> : null}
-                      {t('ai.eventCreate')}
-                    </Button>
                   </div>
 
                   {/* 已有订阅 */}
@@ -302,13 +286,10 @@ export function EventSubscriptionModal({
                               <div className="min-w-0 flex-1">
                                 <div className="flex flex-wrap items-center gap-1.5">
                                   {sub.events.map((e) => (
-                                    <Chip key={e} size="sm" variant="soft">{eventLabel(e)}</Chip>
+                                    <p key={e} className='text-foreground'>{eventLabel(e)}</p>
                                   ))}
-                                  <Chip size="sm" variant="tertiary">
+                                  <Chip size="sm" variant="primary" color='accent'>
                                     {sub.targetType === 'session'
-                                      ? t('ai.eventTargetSession')
-                                      : t('ai.eventTargetChannel')}
-                                    ：{sub.targetType === 'session'
                                       ? sessionName(sub.targetId)
                                       : channelName(sub.targetId)}
                                   </Chip>

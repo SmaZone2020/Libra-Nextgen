@@ -61,9 +61,21 @@ public class AiEventNotifier
         var channels = scope.ServiceProvider.GetRequiredService<AiChannelService>();
         var ws = scope.ServiceProvider.GetRequiredService<ConnectionManager>();
 
-        var prompt = eventType == EvtAgentOnline
-            ? $"【系统事件】Agent「{hostname}」（{ipAddress}，ID {agentId}）已上线。请以一句简短提醒告知用户，不要调用工具。"
-            : $"【系统事件】Agent「{hostname}」（{ipAddress}，ID {agentId}）已离线（心跳超时）。请以一句简短提醒告知用户，不要调用工具。";
+        var message = eventType == EvtAgentOnline
+            ? $"Agent「{hostname}」（{ipAddress}）已上线"
+            : $"Agent「{hostname}」（{ipAddress}）已离线（心跳超时）";
+        // 以 JSON（type=system_event）注入：前端检测到该结构时渲染为系统事件卡片，
+        // 而不是普通用户消息；AI 仍能读到事件内容并生成提醒。
+        var prompt = JsonSerializer.Serialize(new
+        {
+            type = "system_event",
+            @event = eventType,
+            agentId,
+            hostname,
+            ip = ipAddress,
+            message,
+            instruction = "这是系统事件，不是用户消息。请以一句简短提醒告知用户，不要调用工具。",
+        });
 
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         cts.CancelAfter(RunTimeout);

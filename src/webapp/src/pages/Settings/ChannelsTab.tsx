@@ -40,7 +40,7 @@ const TYPE_ICONS: Record<string, string> = {
   'wechat-claw': '/icon/app/wechat.png',
 };
 
-const TIER_LABELS = ['Cognitio', 'Arbitrium', 'Imperium', 'Dictatura'];
+export const TIER_LABELS = ['Cognitio', 'Arbitrium', 'Imperium', 'Dictatura'];
 
 function ChannelIcon({ type, className }: { type: string; className?: string }) {
   const src = TYPE_ICONS[type];

@@ -985,6 +985,7 @@ export default {
       deleteSessionConfirm: '确定删除该会话吗？',
       deleteSessionTitle: '删除会话',
       eventSub: '事件订阅',
+      systemEvent: '系统事件',
       eventSelectDesc: '订阅后，事件触发时由 Justitia 以系统视角接收并生成提醒送达目标',
       eventOnline: 'Agent 上线',
       eventOnlineDesc: 'Agent 上线时提醒',
