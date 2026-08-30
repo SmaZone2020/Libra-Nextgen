@@ -172,6 +172,8 @@ public class AiChannelController : ControllerBase
         RequireBind = req.RequireBind,
         DefaultProviderId = req.DefaultProviderId ?? "",
         DefaultModel = req.DefaultModel ?? "",
+        ShowToolCalls = req.ShowToolCalls,
+        StreamOutput = req.StreamOutput,
     };
 }
 
@@ -185,6 +187,8 @@ public class AiChannelReq
     public bool RequireBind { get; set; } = true;
     public string? DefaultProviderId { get; set; }
     public string? DefaultModel { get; set; }
+    public bool ShowToolCalls { get; set; } = true;
+    public bool StreamOutput { get; set; }
 }
 
 /// <summary>新建草稿测试连接：可带已有频道 id 以复用已存密钥。</summary>

@@ -168,6 +168,8 @@ public class AiChannelService
             RequireBind = input.RequireBind,
             DefaultProviderId = input.DefaultProviderId ?? "",
             DefaultModel = input.DefaultModel ?? "",
+            ShowToolCalls = input.ShowToolCalls,
+            StreamOutput = input.StreamOutput,
         };
         Validate(ch);
         EncryptSensitive(ch);
@@ -197,6 +199,8 @@ public class AiChannelService
             RequireBind = input.RequireBind,
             DefaultProviderId = input.DefaultProviderId ?? "",
             DefaultModel = input.DefaultModel ?? "",
+            ShowToolCalls = input.ShowToolCalls,
+            StreamOutput = input.StreamOutput,
             CreatedAt = existing.CreatedAt,
             UpdatedAt = DateTime.UtcNow,
         };
@@ -610,11 +614,72 @@ public class AiChannelService
 
     /// <summary>
     /// 把 RunChatAsync 的 SSE 事件流翻译成 IM 回复：
-    /// 文本增量累积，工具调用给标记，审批转通知（控制台审批后同流续跑），done 一次性回发。
+    /// - 文本增量累积；工具调用/失败以独立段落插入（\n\n 分隔，不粘连）；
+    /// - ShowToolCalls=false 时省略工具标记段；
+    /// - StreamOutput=true 且频道支持时，增量实时发送/编辑（否则 done 一次性输出）；
+    /// - 审批转通知（控制台/IM 按钮决策后同流续跑），done 收尾。
     /// </summary>
     private Func<string, Task> BuildSink(AiChannel ch, ChannelInboundMessage msg, string sessionId, bool guest, CancellationToken ct)
     {
         var sb = new StringBuilder();
+        var showToolCalls = ch.ShowToolCalls;
+        // 流式输出状态（仅 StreamOutput 且适配器支持时启用）。
+        var stream = ch.StreamOutput;
+        long streamMessageId = 0;
+        var streamLock = new object();
+        var lastFlush = DateTime.MinValue;
+        // Telegram 编辑限流：增量合并到 ≥600ms 一次才真正编辑。
+        var minFlushInterval = TimeSpan.FromMilliseconds(600);
+
+        async Task FlushStreamAsync(bool force = false)
+        {
+            string text;
+            lock (streamLock)
+            {
+                if (!force && DateTime.UtcNow - lastFlush < minFlushInterval) return;
+                lastFlush = DateTime.UtcNow;
+                text = sb.ToString().Trim();
+            }
+            if (text.Length == 0) return;
+            try
+            {
+                if (streamMessageId == 0)
+                {
+                    // 首条：发送。超长（Telegram 4096 上限）按块发新消息，放弃编辑。
+                    if (text.Length > ChunkSize)
+                    {
+                        await TrySendAsync(ch, msg.ExternalId, text, ct);
+                        lock (streamLock) sb.Clear();
+                        return;
+                    }
+                    streamMessageId = await AdapterFor(ch.ChannelType).StartStreamAsync(ch, msg.ExternalId, text, ct);
+                    if (streamMessageId == 0)
+                    {
+                        // 频道不支持流式：回退一次性（done 时统一发送），清空缓冲防重复。
+                        lock (streamLock) sb.Clear();
+                    }
+                }
+                else
+                {
+                    if (text.Length > ChunkSize)
+                    {
+                        // 超出单条编辑上限：发新消息段，重置编辑目标。
+                        await TrySendAsync(ch, msg.ExternalId, text, ct);
+                        streamMessageId = 0;
+                        lock (streamLock) sb.Clear();
+                        return;
+                    }
+                    await AdapterFor(ch.ChannelType).UpdateStreamAsync(ch, msg.ExternalId, streamMessageId, text, ct);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Channel stream send failed ({Channel} → {External})", ch.Id, msg.ExternalId);
+                // 编辑失败（消息被删/限流）：降级为一次性输出。
+                streamMessageId = 0;
+            }
+        }
+
         return async payload =>
         {
             JsonObject? evt;
@@ -626,23 +691,36 @@ public class AiChannelService
             switch (type)
             {
                 case "message":
+                {
                     var delta = evt["delta"]?.GetValue<string>() ?? "";
-                    if (delta.Length > 0) { lock (sb) sb.Append(delta); }
+                    if (delta.Length == 0) break;
+                    lock (sb) sb.Append(delta);
+                    if (stream) await FlushStreamAsync();
                     break;
+                }
                 case "reasoning":
                     break; // IM 不展示思维链
                 case "tool_call":
                 {
+                    if (!showToolCalls) break;
                     var toolName = evt["toolCall"]?["toolName"]?.GetValue<string>() ?? "";
-                    lock (sb) sb.Append('\n').Append("🔧 调用工具：").Append(toolName);
+                    // 独立段落：标记与前后内容之间空行分隔，避免粘连。
+                    lock (sb) sb.Append("\n\n🔧 调用工具：").Append(toolName);
+                    if (stream) await FlushStreamAsync(force: true);
                     break;
                 }
                 case "tool_result":
+                    if (!showToolCalls) break;
                     if (evt["state"]?.GetValue<string>() == "error")
-                    { lock (sb) sb.Append("\n⚠️ 工具执行失败"); }
+                    {
+                        lock (sb) sb.Append("\n\n⚠️ 工具执行失败");
+                        if (stream) await FlushStreamAsync(force: true);
+                    }
                     break;
                 case "approval":
                 {
+                    // 流式模式下审批挂起：先收尾当前流（发掉已生成内容），审批卡独立消息。
+                    if (stream) await FlushStreamAsync(force: true);
                     var toolName = evt["toolCall"]?["toolName"]?.GetValue<string>() ?? "";
                     var callId = evt["toolCall"]?["id"]?.GetValue<string>() ?? "";
                     var args = evt["toolCall"]?["argsText"]?.GetValue<string>() ?? "";
@@ -686,18 +764,36 @@ public class AiChannelService
                     break;
                 }
                 case "done":
+                {
+                    if (stream && streamMessageId != 0)
+                    {
+                        // 流式：最终文本已在编辑的消息里，强制 flush 一次收尾。
+                        await FlushStreamAsync(force: true);
+                        break;
+                    }
                     string text;
                     lock (sb) { text = sb.ToString().Trim(); sb.Clear(); }
                     if (text.Length > 0)
                         await TrySendAsync(ch, msg.ExternalId, text, ct);
                     break;
+                }
                 case "error":
+                {
                     string partial;
                     lock (sb) { partial = sb.ToString().Trim(); sb.Clear(); }
                     var err = evt["message"]?.GetValue<string>() ?? "未知错误";
-                    var reply = partial.Length > 0 ? $"{partial}\n\n❌ {err}" : $"❌ {err}";
-                    await TrySendAsync(ch, msg.ExternalId, reply, ct);
+                    if (stream && streamMessageId != 0)
+                    {
+                        await TrySendAsync(ch, msg.ExternalId,
+                            partial.Length > 0 ? $"{partial}\n\n❌ {err}" : $"❌ {err}", ct);
+                    }
+                    else
+                    {
+                        var reply = partial.Length > 0 ? $"{partial}\n\n❌ {err}" : $"❌ {err}";
+                        await TrySendAsync(ch, msg.ExternalId, reply, ct);
+                    }
                     break;
+                }
             }
         };
     }

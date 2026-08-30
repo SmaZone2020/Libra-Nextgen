@@ -17,6 +17,10 @@ export interface AiChannel {
   requireBind: boolean;
   defaultProviderId: string;
   defaultModel: string;
+  /** 频道消息中是否显示工具调用标记（🔧/⚠️）。 */
+  showToolCalls: boolean;
+  /** 流式输出：AI 生成时实时发送/编辑，而非完成后一次性输出。 */
+  streamOutput: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -43,6 +47,8 @@ export interface AiChannelInput {
   requireBind: boolean;
   defaultProviderId: string;
   defaultModel: string;
+  showToolCalls: boolean;
+  streamOutput: boolean;
 }
 
 export interface AiBindCode {

@@ -70,6 +70,10 @@ public class AiChannel
     public string DefaultProviderId { get; set; } = "";
     /// <summary>默认模型（空 = 供应商默认模型）。</summary>
     public string DefaultModel { get; set; } = "";
+    /// <summary>频道消息中是否显示工具调用标记（🔧 调用工具 / ⚠️ 执行失败）。默认开。</summary>
+    public bool ShowToolCalls { get; set; } = true;
+    /// <summary>流式输出：AI 生成时实时发送/编辑消息，而非完成后一次性输出。默认关。</summary>
+    public bool StreamOutput { get; set; } = false;
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 }

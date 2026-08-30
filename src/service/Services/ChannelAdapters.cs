@@ -112,6 +112,17 @@ public interface IAiChannelAdapter
     /// <summary>连通性自检（设置页"测试连接"）。返回 (ok, message)。</summary>
     Task<(bool Ok, string Message)> TestAsync(AiChannel channel, CancellationToken ct);
 
+    /// <summary>
+    /// 流式输出：发送首条消息并返回消息 ID（用于后续编辑更新）。
+    /// 返回 0 表示该频道不支持流式（调用方回退一次性输出）。
+    /// </summary>
+    Task<long> StartStreamAsync(AiChannel channel, string externalId, string text, CancellationToken ct) =>
+        Task.FromResult(0L);
+
+    /// <summary>流式输出：编辑已发送的消息为最新文本（StartStreamAsync 返回非 0 时调用）。</summary>
+    Task UpdateStreamAsync(AiChannel channel, string externalId, long messageId, string text, CancellationToken ct) =>
+        Task.CompletedTask;
+
     /// <summary>轮询型适配器拉取增量；非轮询型返回空批。</summary>
     Task<ChannelPollBatch> PollAsync(AiChannel channel, string? cursor, CancellationToken ct) =>
         Task.FromResult(new ChannelPollBatch { NewCursor = cursor });
@@ -189,6 +200,19 @@ public class TelegramChannelAdapter : IAiChannelAdapter
     {
         var markup = BuildApprovalMarkup(channel.Id, externalId, sessionId, toolCallId);
         await Bot(channel).SendMessage(externalId, text, replyMarkup: markup, cancellationToken: ct);
+    }
+
+    /// <summary>流式输出：发送首条消息，返回 message id 供后续编辑。</summary>
+    public async Task<long> StartStreamAsync(AiChannel channel, string externalId, string text, CancellationToken ct)
+    {
+        var sent = await Bot(channel).SendMessage(externalId, text, cancellationToken: ct);
+        return sent.Id;
+    }
+
+    /// <summary>流式输出：编辑消息为最新文本。</summary>
+    public async Task UpdateStreamAsync(AiChannel channel, string externalId, long messageId, string text, CancellationToken ct)
+    {
+        await Bot(channel).EditMessageText(externalId, (int)messageId, text, cancellationToken: ct);
     }
 
     /// <summary>

@@ -45,6 +45,8 @@ const emptyForm = (): AiChannelInput => ({
   requireBind: true,
   defaultProviderId: '',
   defaultModel: '',
+  showToolCalls: true,
+  streamOutput: false,
 });
 
 export interface ChannelFormModalProps {
@@ -75,6 +77,8 @@ export function ChannelFormModal({ open, editing, onClose, onSaved }: ChannelFor
         requireBind: editing.requireBind,
         defaultProviderId: editing.defaultProviderId,
         defaultModel: editing.defaultModel,
+        showToolCalls: editing.showToolCalls,
+        streamOutput: editing.streamOutput,
       });
     } else {
       setForm(emptyForm());
@@ -317,10 +321,18 @@ export function ChannelFormModal({ open, editing, onClose, onSaved }: ChannelFor
                   </Select.Popover>
                 </Select>
               </div>
-              <div className="flex items-end">
+              <div className="flex flex-wrap items-end gap-4">
                 <Switch isSelected={form.requireBind} onChange={(v) => patch({ requireBind: v })}>
                   <Switch.Control><Switch.Thumb /></Switch.Control>
                   <Label className="ml-2 text-sm">{t('channels.requireBind')}</Label>
+                </Switch>
+                <Switch isSelected={form.showToolCalls} onChange={(v) => patch({ showToolCalls: v })}>
+                  <Switch.Control><Switch.Thumb /></Switch.Control>
+                  <Label className="ml-2 text-sm">{t('channels.showToolCalls')}</Label>
+                </Switch>
+                <Switch isSelected={form.streamOutput} onChange={(v) => patch({ streamOutput: v })}>
+                  <Switch.Control><Switch.Thumb /></Switch.Control>
+                  <Label className="ml-2 text-sm">{t('channels.streamOutput')}</Label>
                 </Switch>
               </div>
 

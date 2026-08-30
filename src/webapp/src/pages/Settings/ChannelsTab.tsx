@@ -84,6 +84,8 @@ export default function ChannelsTab() {
         requireBind: ch.requireBind,
         defaultProviderId: ch.defaultProviderId,
         defaultModel: ch.defaultModel,
+        showToolCalls: ch.showToolCalls,
+        streamOutput: ch.streamOutput,
       });
     } catch (e) {
       alert(e instanceof Error ? e.message : String(e));
