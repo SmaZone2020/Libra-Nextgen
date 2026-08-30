@@ -73,14 +73,17 @@ public class AiChannelService
     private const int SeenInboundMax = 2000;
     private static readonly TimeSpan SeenInboundTtl = TimeSpan.FromMinutes(30);
 
-    /// <summary>模型菜单状态（分页/搜索）：channelId|externalId → 状态。</summary>
+    /// <summary>模型菜单状态（供应商 → 模型 两级、分页/搜索）：channelId|externalId → 状态。</summary>
     private readonly ConcurrentDictionary<string, ModelMenuState> _modelMenus = new();
     private const int ModelMenuPageSize = 5;
-    /// <summary>超过 3 页（15 个模型）才显示搜索按钮。</summary>
-    private const int ModelMenuSearchThreshold = ModelMenuPageSize * 3;
 
     private sealed class ModelMenuState
     {
+        /// <summary>可用供应商（id, name）。</summary>
+        public List<(string Id, string Name)> Providers { get; set; } = new();
+        /// <summary>当前选中的供应商索引；-1 = 显示供应商选择页。</summary>
+        public int ProviderIndex { get; set; } = -1;
+        /// <summary>当前供应商的模型列表。</summary>
         public List<string> Models { get; set; } = new();
         public string CurrentModel { get; set; } = "";
         public int Page { get; set; }
@@ -399,13 +402,15 @@ public class AiChannelService
         if (text.Length > MaxMessageLength) text = text[..MaxMessageLength] + "…";
 
         // 模型菜单搜索拦截：菜单处于"等待关键词"状态时，本条文本作为搜索词，
-        // 不进入 AI 对话。
+        // 不进入 AI 对话。删除用户发送的搜索词消息，并把提示消息编辑为搜索结果。
         var menuKey = $"{ch.Id}|{msg.ExternalId}";
         if (_modelMenus.TryGetValue(menuKey, out var menuState) && menuState.Searching)
         {
             menuState.Searching = false;
             menuState.Query = text;
             menuState.Page = 0;
+            if (msg.OriginMessageId is { } originId)
+                await AdapterFor(ch.ChannelType).DeleteMessageAsync(ch, msg.ExternalId, originId, ct);
             await RefreshModelMenuAsync(ch, msg.ExternalId, menuState, ct);
             return;
         }
@@ -423,7 +428,7 @@ public class AiChannelService
         }
         // 自定义键盘按钮别名（/start 的常驻键盘：点击发送纯文本按钮词）。
         var alias = text.Trim().ToLowerInvariant();
-        if (alias is "help" or "setting" or "start")
+        if (alias is "help" or "start")
         {
             await HandleCommandAsync(ch, msg, "/" + alias, ct);
             return;
@@ -482,13 +487,12 @@ public class AiChannelService
         {
             case "/start":
             {
-                // /start 只做简单介绍：Telegram 附带常驻键盘（Help / Setting），完整指令见 /help。
+                // /start 只做简单介绍：Telegram 附带常驻键盘（Help），完整指令见 /help。
                 if (ch.ChannelType == AiChannelTypes.Telegram)
                 {
                     await AdapterFor(ch.ChannelType).SendKeyboardAsync(ch, msg.ExternalId,
                         "我是 Justitia。\n输入 <code>/help</code> 查看可用指令。",
-                        "我是 Justitia。\n输入 /help 查看可用指令。",
-                        new[] { "Help", "Setting" }, ct);
+                        "我是 Justitia。\n输入 /help 查看可用指令。", new[] { "Help" }, ct);
                 }
                 else
                 {
@@ -510,21 +514,6 @@ public class AiChannelService
                 else
                 {
                     await TrySendRichAsync(ch, msg.ExternalId, h, p, ct);
-                }
-                break;
-            }
-            case "/setting":
-            {
-                // 设置菜单：模型 / 档位 / 状态（Telegram 内联按钮；其余频道提示）。
-                if (ch.ChannelType == AiChannelTypes.Telegram)
-                {
-                    await AdapterFor(ch.ChannelType).SendMenuAsync(ch, msg.ExternalId,
-                        "<b>设置</b>", "设置",
-                        new[] { ("🤖 切换模型", "help:model"), ("🎚 切换档位", "help:tier"), ("📊 我的状态", "help:status") }, ct);
-                }
-                else
-                {
-                    await TrySendAsync(ch, msg.ExternalId, "该功能需要 Telegram 内联菜单支持。", ct);
                 }
                 break;
             }
@@ -552,8 +541,25 @@ public class AiChannelService
                 await HandleModelCommandAsync(ch, msg.ExternalId, ct);
                 break;
             case "/tier":
-                await HandleTierCommandAsync(ch, msg.ExternalId, ct);
+            {
+                // /tier：新发档位选择菜单（含返回）。
+                if (ch.ChannelType != AiChannelTypes.Telegram)
+                {
+                    await TrySendAsync(ch, msg.ExternalId, "该功能需要 Telegram 内联菜单支持。", ct);
+                    break;
+                }
+                var tu = await ChannelUsers.Find(x => x.ChannelId == ch.Id && x.ExternalId == msg.ExternalId)
+                    .FirstOrDefaultAsync(ct);
+                if (tu == null)
+                {
+                    await TrySendAsync(ch, msg.ExternalId, "请先绑定控制台账号（/bind 绑定码）。", ct);
+                    break;
+                }
+                var tcurrent = Math.Clamp(tu.TierOverride ?? ch.DefaultTier, 0, 3);
+                var (th, tp, tb) = BuildTierMenu(ch, tcurrent);
+                await AdapterFor(ch.ChannelType).SendMenuAsync(ch, msg.ExternalId, th, tp, tb, ct);
                 break;
+            }
             case "/approve":
             case "/reject":
             {
@@ -578,7 +584,7 @@ public class AiChannelService
 
     // ── 模型/档位菜单 ────────────────────────────────────────────────────
 
-    /// <summary>/model：发送模型选择内联菜单（分页；超过 3 页支持搜索）。</summary>
+    /// <summary>/model：发送供应商选择菜单（点击供应商 → 选择模型）。</summary>
     private async Task HandleModelCommandAsync(AiChannel ch, string externalId, CancellationToken ct)
     {
         if (ch.ChannelType != AiChannelTypes.Telegram)
@@ -586,16 +592,15 @@ public class AiChannelService
             await TrySendAsync(ch, externalId, "该功能需要 Telegram 内联菜单支持。", ct);
             return;
         }
-        var (providerId, defaultModel, models) = await ResolveProviderAsync(ch, ct);
-        if (providerId == null || models.Count == 0)
+        var state = await CreateModelMenuStateAsync(ch, ct);
+        if (state == null)
         {
             await TrySendAsync(ch, externalId, "⚠️ 未配置可用的 AI 供应商，请联系管理员。", ct);
             return;
         }
         var key = $"{ch.Id}|{externalId}";
-        var state = new ModelMenuState { Models = models, CurrentModel = defaultModel };
         _modelMenus[key] = state;
-        var (html, plain, buttons) = BuildModelMenu(state);
+        var (html, plain, buttons) = BuildProviderMenu(state);
         var menuId = await AdapterFor(ch.ChannelType).SendMenuAsync(ch, externalId, html, plain, buttons, ct);
         if (menuId != 0)
         {
@@ -608,36 +613,45 @@ public class AiChannelService
         }
     }
 
-    /// <summary>/tier：发送档位选择内联菜单（仅可切换 ≤ 频道默认档位）。</summary>
-    private async Task HandleTierCommandAsync(AiChannel ch, string externalId, CancellationToken ct)
+    /// <summary>创建模型菜单状态（供应商列表 + 默认供应商的模型）。返回 null 表示无可用供应商。</summary>
+    private async Task<ModelMenuState?> CreateModelMenuStateAsync(AiChannel ch, CancellationToken ct)
     {
-        if (ch.ChannelType != AiChannelTypes.Telegram)
+        var providers = await _ai.GetProvidersAsync(ct);
+        var enabled = providers.Where(p => p.Enabled && p.Models.Count > 0).ToList();
+        if (enabled.Count == 0) return null;
+        var defaultIdx = Math.Max(0, enabled.FindIndex(p => p.Id == ch.DefaultProviderId));
+        var defaultProvider = enabled[defaultIdx];
+        var defaultModel = ch.DefaultModel.Length > 0 && defaultProvider.Models.Contains(ch.DefaultModel)
+            ? ch.DefaultModel
+            : (defaultProvider.DefaultModel.Length > 0 ? defaultProvider.DefaultModel : defaultProvider.Models[0]);
+        return new ModelMenuState
         {
-            await TrySendAsync(ch, externalId, "该功能需要 Telegram 内联菜单支持。", ct);
-            return;
-        }
-        var user = await ChannelUsers.Find(x => x.ChannelId == ch.Id && x.ExternalId == externalId)
-            .FirstOrDefaultAsync(ct);
-        if (user == null)
-        {
-            await TrySendAsync(ch, externalId, "请先绑定控制台账号（/bind 绑定码）。", ct);
-            return;
-        }
-        var current = Math.Clamp(user.TierOverride ?? ch.DefaultTier, 0, 3);
-        var maxTier = Math.Clamp(ch.DefaultTier, 0, 3);
-        var buttons = new List<(string Text, string Data)>();
-        for (var t = 0; t <= maxTier; t++)
-        {
-            var mark = t == current ? " ✓" : "";
-            buttons.Add(($"{TierName(t)}{mark}", $"tier:sel:{t}"));
-        }
-        var html = $"<b>切换档位</b>\n当前：{HtmlEncode(TierName(current))}\n（仅可 ≤ 频道档位 {HtmlEncode(TierName(maxTier))}）";
-        var plain = $"切换档位\n当前：{TierName(current)}\n（仅可 ≤ 频道档位 {TierName(maxTier)}）";
-        await AdapterFor(ch.ChannelType).SendMenuAsync(ch, externalId, html, plain, buttons, ct);
+            Providers = enabled.Select(p => (p.Id, p.Name)).ToList(),
+            ProviderIndex = defaultIdx,
+            Models = defaultProvider.Models,
+            CurrentModel = defaultModel,
+        };
     }
 
-    /// <summary>构建模型菜单（分页/搜索）：返回 (html, plain, 按钮)。</summary>
-    private static (string Html, string Plain, List<(string Text, string Data)> Buttons) BuildModelMenu(ModelMenuState state)
+    /// <summary>供应商选择页（html, plain, 按钮）。</summary>
+    private (string Html, string Plain, List<(string Text, string Data)> Buttons) BuildProviderMenu(ModelMenuState state)
+    {
+        var html = new StringBuilder("<b>选择供应商</b>\n当前模型：<code>" + HtmlEncode(state.CurrentModel) + "</code>\n");
+        var plain = new StringBuilder($"选择供应商\n当前模型：{state.CurrentModel}\n");
+        var buttons = new List<(string Text, string Data)>();
+        for (var i = 0; i < state.Providers.Count; i++)
+        {
+            var mark = i == state.ProviderIndex ? "● " : "";
+            html.Append($"\n<code>{HtmlEncode(mark + state.Providers[i].Name)}</code>");
+            plain.Append($"\n{mark}{state.Providers[i].Name}");
+            buttons.Add((mark + state.Providers[i].Name, $"mdl:prov:{i}"));
+        }
+        buttons.Add(("🔙 返回", "help:back"));
+        return (html.ToString(), plain.ToString(), buttons);
+    }
+
+    /// <summary>模型选择页（分页 + 搜索常驻 + 返回供应商）。</summary>
+    private (string Html, string Plain, List<(string Text, string Data)> Buttons) BuildModelMenu(ModelMenuState state)
     {
         var filtered = string.IsNullOrEmpty(state.Query)
             ? state.Models
@@ -646,53 +660,175 @@ public class AiChannelService
         state.Page = Math.Clamp(state.Page, 0, pages - 1);
         var pageModels = filtered.Skip(state.Page * ModelMenuPageSize).Take(ModelMenuPageSize).ToList();
 
+        var providerName = state.ProviderIndex >= 0 && state.ProviderIndex < state.Providers.Count
+            ? state.Providers[state.ProviderIndex].Name
+            : "";
         var title = string.IsNullOrEmpty(state.Query)
-            ? $"选择模型（{state.Page + 1}/{pages}）"
-            : $"搜索「{state.Query}」（{state.Page + 1}/{pages}）";
-        var current = state.CurrentModel;
-        var html = new StringBuilder($"<b>{HtmlEncode(title)}</b>\n当前：<code>{HtmlEncode(current)}</code>\n");
-        var plain = new StringBuilder($"{title}\n当前：{current}\n");
+            ? $"选择模型（{providerName} {state.Page + 1}/{pages}）"
+            : $"搜索「{state.Query}」（{providerName} {state.Page + 1}/{pages}）";
+        var html = new StringBuilder($"<b>{HtmlEncode(title)}</b>\n当前：<code>{HtmlEncode(state.CurrentModel)}</code>\n");
+        var plain = new StringBuilder($"{title}\n当前：{state.CurrentModel}\n");
 
         var buttons = new List<(string Text, string Data)>();
         foreach (var m in pageModels)
         {
             var idx = filtered.IndexOf(m);
-            var mark = m == current ? "● " : "";
+            var mark = m == state.CurrentModel ? "● " : "";
             html.Append($"\n<code>{HtmlEncode(mark + m)}</code>");
             plain.Append($"\n{mark}{m}");
             buttons.Add((mark + m, $"mdl:sel:{idx}"));
         }
 
-        // 导航行：上一页 / 搜索（超过 3 页时）/ 下一页。
+        // 导航行：上一页 / 搜索（常驻）/ 下一页。
         var nav = new List<(string Text, string Data)>();
         if (state.Page > 0) nav.Add(("◀️ 上一页", $"mdl:nav:{state.Page - 1}"));
-        if (filtered.Count > ModelMenuSearchThreshold) nav.Add(("🔍 搜索", "mdl:sea"));
-        if (state.Page < pages - 1) nav.Add(($"下一页 ▶️", $"mdl:nav:{state.Page + 1}"));
+        nav.Add(("🔍 搜索", "mdl:sea"));
+        if (state.Page < pages - 1) nav.Add(("下一页 ▶️", $"mdl:nav:{state.Page + 1}"));
         buttons.AddRange(nav);
+        buttons.Add(("🔙 返回", "mdl:provs"));
 
         return (html.ToString(), plain.ToString(), buttons);
     }
 
-    /// <summary>刷新/编辑模型菜单（翻页、搜索后）。</summary>
+    /// <summary>搜索提示页（等待用户发送模型关键词）。</summary>
+    private static (string Html, string Plain, List<(string Text, string Data)> Buttons) BuildSearchPrompt()
+    {
+        return (
+            "<b>请输入要搜索的模型名</b>",
+            "请输入要搜索的模型名",
+            new List<(string Text, string Data)> { ("🔙 返回", "mdl:back") });
+    }
+
+    /// <summary>档位选择页（含返回 help）。</summary>
+    private static (string Html, string Plain, List<(string Text, string Data)> Buttons) BuildTierMenu(AiChannel ch, int current)
+    {
+        var maxTier = Math.Clamp(ch.DefaultTier, 0, 3);
+        var buttons = new List<(string Text, string Data)>();
+        for (var t = 0; t <= maxTier; t++)
+        {
+            var mark = t == current ? " ✓" : "";
+            buttons.Add(($"{TierName(t)}{mark}", $"tier:sel:{t}"));
+        }
+        buttons.Add(("🔙 返回", "help:back"));
+        var html = $"<b>切换档位</b>\n当前：{HtmlEncode(TierName(current))}\n（仅可 ≤ 频道档位 {HtmlEncode(TierName(maxTier))}）";
+        var plain = $"切换档位\n当前：{TierName(current)}\n（仅可 ≤ 频道档位 {TierName(maxTier)}）";
+        return (html, plain, buttons);
+    }
+
+    /// <summary>帮助页（含快捷菜单按钮）。</summary>
+    private (string Html, string Plain, List<(string Text, string Data)> Buttons) BuildHelpMenu(AiChannel ch)
+    {
+        var (h, p) = BuildHelp(ch);
+        var buttons = new List<(string Text, string Data)>
+        {
+            ("🤖 切换模型", "help:model"),
+            ("🎚 切换档位", "help:tier"),
+            ("📊 我的状态", "help:status"),
+        };
+        return (h, p, buttons);
+    }
+
+    /// <summary>刷新/编辑模型菜单（翻页、搜索后；编辑的是菜单消息本身）。</summary>
     private async Task RefreshModelMenuAsync(AiChannel ch, string externalId, ModelMenuState state, CancellationToken ct)
     {
         var (html, plain, buttons) = BuildModelMenu(state);
         await AdapterFor(ch.ChannelType).EditMenuAsync(ch, externalId, state.MessageId, html, plain, buttons, ct);
     }
 
-    /// <summary>菜单按钮回调（模型分页/选择/搜索、档位切换）。</summary>
+    /// <summary>菜单按钮回调（供应商/模型分页/选择/搜索、档位、帮助快捷与返回）。</summary>
     public async Task HandleMenuCallbackAsync(ChannelMenuAction action, CancellationToken ct = default)
     {
         try
         {
             var ch = await GetChannelAsync(action.ChannelId, includeSecrets: false, ct);
             if (ch == null || !ch.Enabled) return;
+            var adapter = AdapterFor(ch.ChannelType);
+            var key = $"{ch.Id}|{action.ChatId}";
 
             switch (action.Kind)
             {
+                case "help-back":
+                    // 返回帮助页：编辑当前消息为帮助菜单。
+                {
+                    var (hh, hp, hb) = BuildHelpMenu(ch);
+                    await adapter.EditMenuAsync(ch, action.ChatId, action.MessageId, hh, hp, hb, ct);
+                    break;
+                }
+                case "help-model":
+                    // 编辑 help 消息 → 供应商选择页。
+                {
+                    var state = await CreateModelMenuStateAsync(ch, ct);
+                    if (state == null)
+                    {
+                        await adapter.EditMenuAsync(ch, action.ChatId, action.MessageId,
+                            "⚠️ 未配置可用的 AI 供应商。", "⚠️ 未配置可用的 AI 供应商。", null, ct);
+                        return;
+                    }
+                    state.MessageId = action.MessageId;
+                    _modelMenus[key] = state;
+                    var (mh, mp, mb) = BuildProviderMenu(state);
+                    await adapter.EditMenuAsync(ch, action.ChatId, action.MessageId, mh, mp, mb, ct);
+                    break;
+                }
+                case "help-tier":
+                    // 编辑 help 消息 → 档位选择页。
+                {
+                    var user = await ChannelUsers.Find(x => x.ChannelId == ch.Id && x.ExternalId == action.ChatId)
+                        .FirstOrDefaultAsync(ct);
+                    if (user == null)
+                    {
+                        await adapter.EditMenuAsync(ch, action.ChatId, action.MessageId,
+                            "请先绑定控制台账号（/bind 绑定码）。", "请先绑定控制台账号（/bind 绑定码）。", null, ct);
+                        return;
+                    }
+                    var current = Math.Clamp(user.TierOverride ?? ch.DefaultTier, 0, 3);
+                    var (th, tp, tb) = BuildTierMenu(ch, current);
+                    await adapter.EditMenuAsync(ch, action.ChatId, action.MessageId, th, tp, tb, ct);
+                    break;
+                }
+                case "help-status":
+                    // 编辑 help 消息 → 状态页（含返回）。
+                {
+                    var user = await ChannelUsers.Find(x => x.ChannelId == ch.Id && x.ExternalId == action.ChatId)
+                        .FirstOrDefaultAsync(ct);
+                    var tier = user == null ? ch.DefaultTier : Math.Clamp(user.TierOverride ?? ch.DefaultTier, 0, 3);
+                    var bound = user == null ? "未绑定" : user.BoundUserName;
+                    var session = await _ai.GetChannelSessionByExternalAsync(ch.Id, action.ChatId, ct);
+                    var model = session?.Model ?? "";
+                    await adapter.EditMenuAsync(ch, action.ChatId, action.MessageId,
+                        $"绑定：<b>{HtmlEncode(bound)}</b>\n档位：<b>{HtmlEncode(TierName(tier))}</b>\n模型：<code>{HtmlEncode(model)}</code>",
+                        $"绑定：{bound}\n档位：{TierName(tier)}\n模型：{model}",
+                        new List<(string Text, string Data)> { ("🔙 返回", "help:back") }, ct);
+                    break;
+                }
+                case "model-provider":
+                {
+                    if (!_modelMenus.TryGetValue(key, out var st) || st.ExpiresAt <= DateTime.UtcNow
+                        || !int.TryParse(action.Data, out var idx) || idx < 0 || idx >= st.Providers.Count)
+                    {
+                        await NotifyMenuStaleAsync(ch, action, ct);
+                        return;
+                    }
+                    st.ProviderIndex = idx;
+                    st.Models = (await _ai.GetProvidersAsync(ct))
+                        .FirstOrDefault(p => p.Id == st.Providers[idx].Id)?.Models ?? new List<string>();
+                    st.Query = null;
+                    st.Page = 0;
+                    var (mh, mp, mb) = BuildModelMenu(st);
+                    await adapter.EditMenuAsync(ch, action.ChatId, st.MessageId, mh, mp, mb, ct);
+                    break;
+                }
+                case "model-providers":
+                {
+                    if (_modelMenus.TryGetValue(key, out var st) && st.ExpiresAt > DateTime.UtcNow)
+                    {
+                        var (ph, pp, pb) = BuildProviderMenu(st);
+                        await adapter.EditMenuAsync(ch, action.ChatId, st.MessageId, ph, pp, pb, ct);
+                    }
+                    break;
+                }
                 case "model-nav":
                 {
-                    var key = $"{ch.Id}|{action.ChatId}";
                     if (_modelMenus.TryGetValue(key, out var st) && st.ExpiresAt > DateTime.UtcNow
                         && int.TryParse(action.Data, out var page))
                     {
@@ -703,19 +839,28 @@ public class AiChannelService
                 }
                 case "model-search":
                 {
-                    var key = $"{ch.Id}|{action.ChatId}";
                     if (_modelMenus.TryGetValue(key, out var st) && st.ExpiresAt > DateTime.UtcNow)
                     {
                         st.Searching = true;
-                        await AdapterFor(ch.ChannelType).EditMenuAsync(ch, action.ChatId, st.MessageId,
-                            "请发送模型关键词（如 <code>deepseek</code>），或发送 /model 重新打开菜单。",
-                            "请发送模型关键词，或发送 /model 重新打开菜单。", null, ct);
+                        var (sh, sp, sb) = BuildSearchPrompt();
+                        await adapter.EditMenuAsync(ch, action.ChatId, st.MessageId, sh, sp, sb, ct);
+                    }
+                    break;
+                }
+                case "model-back":
+                    // 搜索提示页返回：清空搜索词，回到模型页。
+                {
+                    if (_modelMenus.TryGetValue(key, out var st) && st.ExpiresAt > DateTime.UtcNow)
+                    {
+                        st.Searching = false;
+                        st.Query = null;
+                        st.Page = 0;
+                        await RefreshModelMenuAsync(ch, action.ChatId, st, ct);
                     }
                     break;
                 }
                 case "model-select":
                 {
-                    var key = $"{ch.Id}|{action.ChatId}";
                     if (!_modelMenus.TryGetValue(key, out var st) || st.ExpiresAt <= DateTime.UtcNow
                         || !int.TryParse(action.Data, out var idx))
                     {
@@ -735,7 +880,7 @@ public class AiChannelService
                     var session = await _ai.GetChannelSessionByExternalAsync(ch.Id, action.ChatId, ct);
                     if (session != null) await _ai.UpdateSessionModelAsync(session.Id, model, ct);
                     _modelMenus.TryRemove(key, out _);
-                    await AdapterFor(ch.ChannelType).EditMenuAsync(ch, action.ChatId, st.MessageId,
+                    await adapter.EditMenuAsync(ch, action.ChatId, st.MessageId,
                         $"✅ 已切换模型：<code>{HtmlEncode(model)}</code>",
                         $"✅ 已切换模型：{model}", null, ct);
                     break;
@@ -746,36 +891,18 @@ public class AiChannelService
                     if (tier < 0 || tier > Math.Clamp(ch.DefaultTier, 0, 3))
                     {
                         // 服务端兜底：不允许高于频道档位。
-                        await AdapterFor(ch.ChannelType).EditMenuAsync(ch, action.ChatId, action.MessageId,
+                        await adapter.EditMenuAsync(ch, action.ChatId, action.MessageId,
                             "❌ 不能高于频道档位。", "❌ 不能高于频道档位。", null, ct);
                         return;
                     }
                     var ok = await SetUserTierByExternalAsync(ch.Id, action.ChatId, tier, ct);
                     if (ok)
                     {
-                        await AdapterFor(ch.ChannelType).EditMenuAsync(ch, action.ChatId, action.MessageId,
+                        await adapter.EditMenuAsync(ch, action.ChatId, action.MessageId,
                             $"✅ 已切换档位：<b>{HtmlEncode(TierName(tier))}</b>",
-                            $"✅ 已切换档位：{TierName(tier)}", null, ct);
+                            $"✅ 已切换档位：{TierName(tier)}",
+                            new List<(string Text, string Data)> { ("🔙 返回", "help:back") }, ct);
                     }
-                    break;
-                }
-                case "help-model":
-                    await HandleModelCommandAsync(ch, action.ChatId, ct);
-                    break;
-                case "help-tier":
-                    await HandleTierCommandAsync(ch, action.ChatId, ct);
-                    break;
-                case "help-status":
-                {
-                    var user = await ChannelUsers.Find(x => x.ChannelId == ch.Id && x.ExternalId == action.ChatId)
-                        .FirstOrDefaultAsync(ct);
-                    var tier = user == null ? ch.DefaultTier : Math.Clamp(user.TierOverride ?? ch.DefaultTier, 0, 3);
-                    var bound = user == null ? "未绑定" : user.BoundUserName;
-                    var session = await _ai.GetChannelSessionByExternalAsync(ch.Id, action.ChatId, ct);
-                    var model = session?.Model ?? "";
-                    await TrySendRichAsync(ch, action.ChatId,
-                        $"绑定：<b>{HtmlEncode(bound)}</b>\n档位：<b>{HtmlEncode(TierName(tier))}</b>\n模型：<code>{HtmlEncode(model)}</code>",
-                        $"绑定：{bound}\n档位：{TierName(tier)}\n模型：{model}", ct);
                     break;
                 }
             }
@@ -1291,13 +1418,11 @@ public class AiChannelService
         var htmlLines = commands.Select(c => $"<code>{HtmlEncode(c.Cmd)}</code> — {HtmlEncode(c.Desc)}");
         var plainLines = commands.Select(c => $"{c.Cmd} — {c.Desc}");
         var html =
-            $"我是 Justitia\n" +
             $"目前权限档位：<b>{HtmlEncode(tier)}</b>\n\n" +
             "<b>可用指令：</b>\n" +
             string.Join("\n", htmlLines) + "\n\n" +
             "直接发送消息即可与我对话。";
         var plain =
-            $"我是 Justitia\n" +
             $"目前权限档位：{tier}\n\n" +
             "可用指令：\n" +
             string.Join("\n", plainLines) + "\n\n" +

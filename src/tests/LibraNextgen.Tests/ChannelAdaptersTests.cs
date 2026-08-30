@@ -212,6 +212,19 @@ public class ChannelAdaptersTests
         Assert.Equal("help-tier", adapter.TryResolveMenu(ch, cq)!.Kind);
         cq.Data = "help:status";
         Assert.Equal("help-status", adapter.TryResolveMenu(ch, cq)!.Kind);
+        cq.Data = "help:back";
+        Assert.Equal("help-back", adapter.TryResolveMenu(ch, cq)!.Kind);
+
+        // 供应商/返回导航。
+        cq.Data = "mdl:prov:2";
+        var prov = adapter.TryResolveMenu(ch, cq);
+        Assert.NotNull(prov);
+        Assert.Equal("model-provider", prov!.Kind);
+        Assert.Equal("2", prov.Data);
+        cq.Data = "mdl:provs";
+        Assert.Equal("model-providers", adapter.TryResolveMenu(ch, cq)!.Kind);
+        cq.Data = "mdl:back";
+        Assert.Equal("model-back", adapter.TryResolveMenu(ch, cq)!.Kind);
 
         // 审批/未知前缀不识别为菜单。
         cq.Data = "ap:abcdef1234567890:ot";

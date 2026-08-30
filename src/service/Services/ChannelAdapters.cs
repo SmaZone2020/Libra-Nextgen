@@ -43,6 +43,8 @@ public sealed class ChannelInboundMessage
     /// 非空时由 AiChannelService 在入站管线入口去重，防御并发循环 / 重启重放。
     /// </summary>
     public string? DedupeKey { get; init; }
+    /// <summary>原始消息 ID（Telegram message id；搜索词等场景用于删除用户消息）。</summary>
+    public long? OriginMessageId { get; init; }
 }
 
 /// <summary>轮询型适配器一次拉取的增量批次。游标为频道不透明字符串（Telegram update_id / iLink get_updates_buf）。</summary>
@@ -144,6 +146,13 @@ public interface IAiChannelAdapter
         SendTextAsync(channel, externalId, plain, ct);
 
     /// <summary>
+    /// 删除一条消息（搜索词场景：删除用户发送的搜索关键词消息）。
+    /// 默认 no-op（仅 Telegram 支持）。
+    /// </summary>
+    Task<bool> DeleteMessageAsync(AiChannel channel, string externalId, long messageId, CancellationToken ct) =>
+        Task.FromResult(false);
+
+    /// <summary>
     /// 发送带自定义键盘的消息（聊天框下方常驻按钮，点击发送按钮文本）。
     /// 默认 no-op（仅 Telegram 支持）。
     /// </summary>
@@ -235,6 +244,21 @@ public class TelegramChannelAdapter : IAiChannelAdapter
         {
             // HTML 渲染失败（如非法标签）：回退纯文本，保证消息必达。
             await Bot(channel).SendMessage(externalId, plain, cancellationToken: ct);
+        }
+    }
+
+    /// <summary>删除一条消息（搜索关键词等场景）。</summary>
+    public async Task<bool> DeleteMessageAsync(AiChannel channel, string externalId, long messageId, CancellationToken ct)
+    {
+        try
+        {
+            await Bot(channel).DeleteMessage(externalId, (int)messageId, ct);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "Failed to delete message {MessageId}", messageId);
+            return false;
         }
     }
 
@@ -529,7 +553,6 @@ public class TelegramChannelAdapter : IAiChannelAdapter
     {
         new() { Command = "start", Description = "开始使用" },
         new() { Command = "help", Description = "显示帮助" },
-        new() { Command = "setting", Description = "打开设置" },
         new() { Command = "status", Description = "查看绑定与档位" },
         new() { Command = "bind", Description = "绑定控制台账号" },
         new() { Command = "model", Description = "切换模型" },
@@ -635,8 +658,10 @@ public class TelegramChannelAdapter : IAiChannelAdapter
     }
 
     /// <summary>
-    /// 解析菜单按钮回调（模型分页/选择/搜索、档位切换、帮助快捷菜单）。返回 null 表示不是菜单按钮。
-    /// callback data 前缀：mdl:nav:页码 / mdl:sel:索引 / mdl:sea / tier:sel:档位 / help:model|tier|status。
+    /// 解析菜单按钮回调（模型供应商/分页/选择/搜索、档位切换、帮助快捷与返回）。
+    /// 返回 null 表示不是菜单按钮。
+    /// 前缀：mdl:prov:idx / mdl:provs / mdl:nav:页 / mdl:sel:idx / mdl:sea / mdl:back /
+    ///       tier:sel:档位 / help:model|tier|status|back。
     /// </summary>
     public ChannelMenuAction? TryResolveMenu(AiChannel channel, CallbackQuery cq)
     {
@@ -653,9 +678,22 @@ public class TelegramChannelAdapter : IAiChannelAdapter
             kind = "model-select";
             payload = data["mdl:sel:".Length..];
         }
+        else if (data.StartsWith("mdl:prov:", StringComparison.Ordinal))
+        {
+            kind = "model-provider";
+            payload = data["mdl:prov:".Length..];
+        }
+        else if (data == "mdl:provs")
+        {
+            kind = "model-providers";
+        }
         else if (data == "mdl:sea")
         {
             kind = "model-search";
+        }
+        else if (data == "mdl:back")
+        {
+            kind = "model-back";
         }
         else if (data.StartsWith("tier:sel:", StringComparison.Ordinal))
         {
@@ -673,6 +711,10 @@ public class TelegramChannelAdapter : IAiChannelAdapter
         else if (data == "help:status")
         {
             kind = "help-status";
+        }
+        else if (data == "help:back")
+        {
+            kind = "help-back";
         }
         if (kind == null) return null;
         return new ChannelMenuAction
@@ -702,7 +744,8 @@ public class TelegramChannelAdapter : IAiChannelAdapter
             ExternalName = name,
             Text = msg.Text,
             // 幂等去重键：message_id 在单个 chat 内唯一，配合入站去重防御重放。
-            DedupeKey = msg.MessageId.ToString(),
+            DedupeKey = msg.Id.ToString(),
+            OriginMessageId = msg.Id,
         };
     }
 }
