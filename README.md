@@ -38,6 +38,8 @@ Agent 通过 HTTP(S) 与 WebSocket 与服务器通信，全链路 AES-256-GCM �
 - 插件体系：上传 zip / Git 导入 / 插件市场
 - 在线载荷构建（Builder），Windows / Linux
 - 内置 AI 助手 Justitia（分级权限 + 工具调用审计）
+- AI 频道：通过 Telegram / 飞书 / 微信 iLink 在 IM 中指挥 Justitia
+  （一次性绑定码 + 深链绑定、内联按钮审批、菜单指令、群组调用）
 - 内置 MCP 服务器（Streamable HTTP）
 - 多人协同控制台（实时同步、审计日志）
 

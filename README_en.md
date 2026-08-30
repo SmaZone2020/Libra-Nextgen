@@ -38,6 +38,8 @@ Agents communicate with the server over HTTP(S) and WebSocket, with AES-256-GCM 
 - Plugin system: upload zip / Git import / plugin market
 - Online payload building (Builder), Windows / Linux
 - Built-in AI assistant Justitia (tiered authority + tool-call audit)
+- AI channels: command Justitia from IM — Telegram / Feishu Lark / WeChat iLink
+  (one-time bind codes + deep-link binding, inline-button approvals, menu commands, group calls)
 - Built-in MCP server (Streamable HTTP)
 - Collaborative web console (realtime sync, audit logs)
 
