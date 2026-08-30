@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Button, Tooltip } from '@heroui/react';
-import { ArrowLeft, BarsDescendingAlignLeft, ChevronLeft, ChevronRight } from '@gravity-ui/icons';
+import { ArrowLeft, ChevronLeft, ChevronRight } from '@gravity-ui/icons';
 import {
   createAiSession,
   deleteAiMessage,
@@ -41,7 +41,7 @@ export default function AiPage() {
   const [loading, setLoading] = useState(true);
 
   const [streaming, setStreaming] = useState<StreamingState>('idle');
-  // 移动端会话列表 Drawer 开关。
+  // 移动端会话列表 Drawer 开关（由内容区左缘按钮打开）。
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   // 桌面端会话列表伸缩（收起后仅剩右缘按钮）。
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -486,7 +486,8 @@ export default function AiPage() {
   const approvalPending = streaming === 'approval';
 
   return (
-    <div className="relative flex h-full min-h-0 w-full flex-1 flex-col md:flex-row">
+    <div className="relative flex h-full min-h-0 w-full flex-1">
+      {/* 桌面端：内联会话侧边栏（可收缩） */}
       <aside
         className={`hidden shrink-0 overflow-hidden border-r border-default-200 transition-[width] duration-200 md:block dark:border-default-800 ${
           sidebarCollapsed ? 'w-0 border-r-0' : 'w-64'
@@ -519,20 +520,17 @@ export default function AiPage() {
           </Button>
 
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-        <div className="flex shrink-0 items-center gap-2 border-b border-default-200 px-3 py-2 md:hidden dark:border-default-800">
-
-          <Button
-            isIconOnly
-            variant="ghost"
-            aria-label={t('ai.sessions')}
-            onPress={() => setMobileSidebarOpen(true)}
-          >
-            <BarsDescendingAlignLeft className="size-4" />
-          </Button>
-          <span className="min-w-0 flex-1 truncate text-base font-medium">
-            {session?.title || t('ai.title')}
-          </span>
-        </div>
+        {/* 移动端：抽屉打开按钮（替代原顶部 Header 的汉堡按钮） */}
+        <Button
+          isIconOnly
+          variant="secondary"
+          size="sm"
+          aria-label={t('ai.sessions')}
+          onPress={() => setMobileSidebarOpen(true)}
+          className="absolute top-3/7 -translate-y-1/2 left-0 z-20 size-5 h-14 rounded-l-none rounded-r-lg border border-default-200 shadow-md md:hidden dark:border-default-800"
+        >
+          <ChevronRight className="size-3.5" />
+        </Button>
 
         <ChatConversation className="min-h-0 flex-1">
           <ChatConversation.Content className={`flex flex-col ${!session?.messages.length ? 'h-full' : ''}`}>
@@ -652,7 +650,7 @@ export default function AiPage() {
         </div>
       </div>
 
-      {/* 移动端会话列表 Drawer（左侧按钮打开） */}
+      {/* 移动端会话列表 Drawer（内容区左缘按钮打开） */}
       <AiSidebarDrawer
         open={mobileSidebarOpen}
         onOpenChange={setMobileSidebarOpen}
