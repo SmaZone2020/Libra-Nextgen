@@ -45,6 +45,21 @@ namespace PsInline
             trace("enter");
             try
             {
+                // Embedded CLR host (Rust agent loading this stub via hostfxr) has
+                // no valid executable config path. PowerShell's network/config
+                // initialization (ServicePointManager → DiagnosticsConfiguration →
+                // ClientConfigPaths) then throws "path contains illegal characters"
+                // for EVERY command. Pin a valid empty app-config baseline so the
+                // configuration system boots with defaults.
+                try
+                {
+                    var cfgPath = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "ps_inline.config");
+                    if (!System.IO.File.Exists(cfgPath))
+                        System.IO.File.WriteAllText(cfgPath, "<?xml version=\"1.0\"?>\r\n<configuration/>\r\n");
+                    AppDomain.CurrentDomain.SetData("APP_CONFIG_FILE", cfgPath);
+                }
+                catch {}
+
                 string script;
                 try
                 {
