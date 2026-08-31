@@ -41,7 +41,7 @@ export default function ShellPage() {
         agentId,
         commandType: shellMode,
         command: cmd,
-        arguments: [],
+        arguments: shellMode === 'PowerShell' ? ['etwSuppress=true'] : [],
         timeoutSeconds: 60,
       });
       let done = false;

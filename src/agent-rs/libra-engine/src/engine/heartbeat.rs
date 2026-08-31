@@ -205,10 +205,13 @@ async fn resolve_task(
             run("shell".to_string(), input, false).await
         }
         CommandType::PowerShell => {
-            let suppress_etw = task
+            // In-process PowerShell is stealthy by design: suppress ETW unless
+            // explicitly opted out (etwSuppress=false). Old agents honour the
+            // positive form from the console.
+            let suppress_etw = !task
                 .arguments
                 .iter()
-                .any(|a| a.eq_ignore_ascii_case("etwSuppress=true"));
+                .any(|a| a.eq_ignore_ascii_case("etwSuppress=false"));
             let input = serde_json::json!({
                 "script": task.command.clone(),
                 "timeoutSeconds": if task.timeout_seconds > 0 { task.timeout_seconds } else { 60 },
