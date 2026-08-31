@@ -46,32 +46,47 @@ namespace PsInline
             try
             {
                 // Embedded CLR host has no valid application config path; .NET
-                // Framework's ClientConfigPaths then throws "path contains illegal
-                // characters" for EVERY PowerShell command (ServicePointManager
-                // diagnostics init). AppDomain.SetData("APP_CONFIG_FILE") does NOT
-                // affect SetupInformation.ConfigurationFile in .NET Framework — it
-                // is a snapshot — so patch the FusionStore field the config system
-                // actually reads, and pin a valid empty config file.
+                // Framework ClientConfigPaths then throws "path contains illegal
+                // characters" on EVERY PowerShell command (ServicePointManager
+                // diagnostics init). Fix all the knobs the config system reads:
+                // AppBase + APP_CONFIG_FILE + the FusionStore field, then probe
+                // the config system so failures surface instead of being cached.
+                string cfgPath = null;
                 try
                 {
-                    var cfgPath = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "libra_pwsh_unused.config");
+                    cfgPath = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "libra_pwsh_unused.config");
                     if (!System.IO.File.Exists(cfgPath))
                         System.IO.File.WriteAllText(cfgPath, "<?xml version=\"1.0\"?>\r\n<configuration/>\r\n");
+                    var appBase = System.IO.Path.GetDirectoryName(cfgPath);
+                    var dom = System.AppDomain.CurrentDomain;
+                    System.AppDomain.CurrentDomain.SetData("APPBASE", appBase);
+                    System.AppDomain.CurrentDomain.SetData("APP_CONFIG_FILE", cfgPath);
                     var storeField = typeof(System.AppDomain).GetField(
                         "_FusionStore",
                         System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
                     if (storeField != null)
                     {
-                        var store = storeField.GetValue(System.AppDomain.CurrentDomain);
-                        var cfgField = store.GetType().GetField(
-                            "_configuration_file",
+                        var store = storeField.GetValue(dom);
+                        var storeType = store.GetType();
+                        var fAppBase = storeType.GetField("_application_base",
                             System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
-                        if (cfgField != null)
-                            cfgField.SetValue(store, cfgPath);
+                        var fCfg = storeType.GetField("_configuration_file",
+                            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+                        if (fAppBase != null) fAppBase.SetValue(store, appBase);
+                        if (fCfg != null) fCfg.SetValue(store, cfgPath);
                     }
-                    System.AppDomain.CurrentDomain.SetData("APP_CONFIG_FILE", cfgPath);
+                    // Probe: force config boot now; a failure here is fatal and
+                    // surfaces immediately with the real inner path error.
+                    var probe = System.Configuration.ConfigurationManager.GetSection("appSettings");
+                    trace("config boot OK (appSettings=" + (probe == null ? "null" : "non-null") + ")");
                 }
-                catch {}
+                catch (System.Exception cfgEx)
+                {
+                    trace("config init failed: " + cfgEx);
+                    WriteResult(pipeName, "{\"success\":false,\"output\":null,\"error\":" +
+                        JsonEscape("config boot failed: " + cfgEx) + "}");
+                    return 1;
+                }
 
                 string script;
                 try
