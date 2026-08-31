@@ -143,6 +143,26 @@ import { ContactPage } from '../pages/Contact';
 
 完整列表参见 `src/components/` 目录。
 
+## 插件页面(运行时加载,无需重建)
+
+本仓库**不包含任何插件页面源码**。插件页面由服务器在运行时提供(已安装插件走后端 API):
+
+- 清单:`GET /api/plugins/manager/manifests`(后端)
+- 页面:`GET /api/plugins/{id}/page/manifest.json` → `kind: react|html`,再取
+  `page/dist/index.js`(React 插件,<script> 注入)或 `page/index.html`(HTML 插件,iframe + postMessage 桥)
+- 资源:`GET /api/plugins/{id}/assets/**`(后端)
+
+`src/plugins/` 目录只包含加载器本身:
+
+| 文件 | 职责 |
+|---|---|
+| `registry.ts` | 运行时注册:拉清单 → 探测页面 manifest → 组装路由/侧边栏 |
+| `loader.tsx` | `PluginPageHost` 分发:react 形态 script 注入 / html 形态 iframe 桥 |
+| `host.ts` | 注入 `window.LibraPluginHost`(React/HeroUI/图标白名单/usePluginHost/api),插件 bundle 的 external 依赖全部来自这里 |
+| `icons.ts` | 图标白名单(插件可用的图标表) |
+
+`npm run dev` 与 `npm run preview` 行为一致:插件导入到服务器运行时目录后,刷新页面即生效,控制台无需重新构建。详见 `docs/plugins/README.md`。
+
 ## 技术栈
 
 | 类别 | 技术 |

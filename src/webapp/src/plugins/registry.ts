@@ -1,42 +1,32 @@
-import { lazy, useEffect, useState } from 'react';
+import * as React from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { getApiOrigin } from '../api/client';
 import { getPluginManifests, type PluginManifest } from '../api/plugins';
+import { PluginPageHost } from './loader';
+import './host'; // side effect: injects window.LibraPluginHost before any bundle loads
 
 /**
- * Build-time registry of plugin pages. Each entry is a lazy component loaded
- * from `src/plugins/<pluginId>/index.tsx`.
+ * Runtime registry of plugin pages.
  *
- * Vite bundles these into separate chunks via `import.meta.glob`, so they are
- * loaded on demand (never in the initial bundle). The key MUST match the
- * plugin's `pluginId` so the runtime can align a page component with the
- * enabled-manifest served by the backend.
+ * Plugins are NOT compiled into this bundle. The console fetches the enabled
+ * manifest feed from the backend, asks each plugin for its page manifest
+ * (`/api/plugins/<id>/page/manifest.json`), and renders whatever the plugin
+ * ships — a pre-compiled React bundle (kind: react) or a plain html page
+ * (kind: html). dev and preview behave identically; installing or updating a
+ * plugin only needs new files on the server, never a console rebuild.
+ *
+ * Plugins whose manifest has no `entry` (metadata/action-only plugins) or whose
+ * page files are missing are skipped here — no route, no sidebar entry.
  */
-const pageModules = import.meta.glob<{ default: React.ComponentType }>('../plugins/*/index.tsx');
 
-/** Cache a React.lazy wrapper per pluginId so identity is stable across renders. */
-const lazyCache = new Map<string, React.LazyExoticComponent<React.ComponentType>>();
-
-function resolvePage(pluginId: string): React.LazyExoticComponent<React.ComponentType> | null {
-  // Vite normalizes import.meta.glob keys relative to the glob's target dir,
-  // so the actual key is "./<pluginId>/index.tsx" (NOT "../plugins/<id>/...").
-  // Match by suffix instead of hand-building a path to avoid drift.
-  const target = `/${pluginId}/index.tsx`;
-  for (const [key, loader] of Object.entries(pageModules)) {
-    if (key.endsWith(target)) {
-      let comp = lazyCache.get(pluginId);
-      if (!comp) {
-        comp = lazy(loader);
-        lazyCache.set(pluginId, comp);
-      }
-      return comp;
-    }
-  }
-  return null;
+/** Page description fetched from the backend at runtime. */
+export interface PluginPageInfo {
+  pluginId: string;
+  kind: 'react' | 'html';
+  entry: string;
+  version: string;
 }
 
-/**
- * A registered plugin: runtime metadata (from the backend manifest) combined
- * with its page component (from the build-time registry).
- */
 export interface RegisteredPlugin {
   pluginId: string;
   manifest: PluginManifest;
@@ -45,10 +35,43 @@ export interface RegisteredPlugin {
   Page: React.ComponentType;
 }
 
+async function fetchPageInfo(pluginId: string): Promise<PluginPageInfo | null> {
+  const res = await fetch(`${getApiOrigin()}/api/plugins/${encodeURIComponent(pluginId)}/page/manifest.json`, {
+    // Anonymous endpoint; ensure fresh data when a plugin was just reinstalled.
+    cache: 'no-store',
+  });
+  if (!res.ok) return null;
+  const data = (await res.json()) as {
+    kind?: string;
+    entry?: string;
+    version?: string;
+  };
+  if (data.kind !== 'react' && data.kind !== 'html') return null;
+  if (!data.entry) return null;
+  return {
+    pluginId,
+    kind: data.kind,
+    entry: data.entry,
+    version: data.version ?? '',
+  };
+}
+
+/** Stable component identity per plugin@version so routes don't remount. */
+const pageComponentCache = new Map<string, React.ComponentType>();
+
+function pageComponentFor(spec: PluginPageInfo): React.ComponentType {
+  const key = `${spec.pluginId}@${spec.version}`;
+  let comp = pageComponentCache.get(key);
+  if (!comp) {
+    comp = () => React.createElement(PluginPageHost, { spec });
+    pageComponentCache.set(key, comp);
+  }
+  return comp;
+}
+
 /**
- * Fetch the enabled plugin manifests and align them with build-time page
- * components. Plugins whose page component is present in the registry get a
- * route + sidebar entry; metadata-only plugins (no page) are ignored here.
+ * Fetch the enabled plugin manifests, probe each one's page manifest, and
+ * expose only the plugins that actually have a page to render.
  */
 export function useRegisteredPlugins(): RegisteredPlugin[] {
   const [plugins, setPlugins] = useState<RegisteredPlugin[]>([]);
@@ -56,27 +79,32 @@ export function useRegisteredPlugins(): RegisteredPlugin[] {
   useEffect(() => {
     let cancelled = false;
     getPluginManifests()
-      .then((manifests: PluginManifest[]) => {
-        if (cancelled) return;
+      .then(async (manifests: PluginManifest[]) => {
         const registered: RegisteredPlugin[] = [];
-        for (const m of manifests) {
-          if (!m.entry?.route) continue;
-          const page = resolvePage(m.pluginId);
-          if (!page) continue;
+        const probes = manifests
+          .filter((m) => m.entry?.route)
+          .map(async (m) => {
+            const info = await fetchPageInfo(m.pluginId);
+            return { m, info };
+          });
+        for (const p of await Promise.all(probes)) {
+          if (!p.info) continue; // no page output — metadata-only plugin
           registered.push({
-            pluginId: m.pluginId,
-            manifest: m,
-            route: `/plugins/${m.entry.route}`,
-            Page: page,
+            pluginId: p.m.pluginId,
+            manifest: p.m,
+            route: `/plugins/${p.m.entry!.route}`,
+            Page: pageComponentFor(p.info),
           });
         }
-        setPlugins(registered);
+        if (!cancelled) setPlugins(registered);
       })
       .catch(() => {
         if (!cancelled) setPlugins([]);
       });
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
-  return plugins;
+  return useMemo(() => plugins, [plugins]);
 }
