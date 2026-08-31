@@ -20,11 +20,11 @@
 
 Libra-Nextgen is an open-source, cross-platform adversary emulation / red team framework for enterprise security testing. It consists of three parts: a lightweight Agent written in Rust, an ASP.NET Core server, and a React web console. The Agent uses a **Bootstrapper + cloud modules** architecture — a minimal kernel handles communication and scheduling, everything else (files, credentials, recon, shell, etc.) is downloaded on demand from the server and executed in memory. Nothing touches disk.
 
-Agents communicate with the server over HTTP(S) and WebSocket, with AES-256-GCM end-to-end encryption. A plugin system extends it with zip-delivered capabilities: Agent-side JavaScript (QuickJS sandbox) or native modules, server-side scripts, and frontend pages.
+Agents communicate with the server over beacon HTTP(S) and SSE event streams, with AES-256-GCM end-to-end encryption. A plugin system extends it with zip-delivered capabilities: Agent-side JavaScript (QuickJS sandbox) or native modules, server-side scripts, and frontend pages.
 
 ## Features
 
-- HTTP(S) / WebSocket dual-channel, AES-256-GCM end-to-end encryption, RSA dynamic key negotiation
+- Beacon HTTP(S) + SSE event streams, AES-256-GCM end-to-end encryption, RSA dynamic key negotiation
 - Configurable traffic-masquerading profiles (paths / headers / UA)
 - In-memory module loading, nothing touches disk (Bootstrapper + cloud modules)
 - Concurrent task processing, interactive shell
@@ -35,11 +35,10 @@ Agents communicate with the server over HTTP(S) and WebSocket, with AES-256-GCM 
 - SOCKS proxy and intranet web browsing
 - In-memory PowerShell (CLR host)
 - Multi-vector persistence
-- Plugin system: upload zip / Git import / plugin market
+- Plugin system: upload zip / Git import / plugin market, pages are pure HTML+JS+CSS
 - Online payload building (Builder), Windows / Linux
 - Built-in AI assistant Justitia (tiered authority + tool-call audit)
-- AI channels: command Justitia from IM — Telegram / Feishu Lark / WeChat iLink
-  (one-time bind codes + deep-link binding, inline-button approvals, menu commands, group calls)
+- AI channels: command Justitia from IM — Telegram / Feishu Lark / WeChat iLink, with bind codes, inline approvals, menu and group calls
 - Built-in MCP server (Streamable HTTP)
 - Collaborative web console (realtime sync, audit logs)
 
@@ -65,8 +64,7 @@ Open <http://localhost:5173> — the first visit creates the admin account. Agen
 | Platform | Status |
 | --- | --- |
 | Windows x64 | Supported (primary platform, fully verified) |
-| Linux x64 | Cross-compilation passes; runtime verification pending |
-| Windows x86 | Unsupported |
+| Linux x64 | Cross-compilation passes |
 
 See the [platform support matrix](docs/platform-support.md).
 

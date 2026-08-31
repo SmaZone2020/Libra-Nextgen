@@ -32,7 +32,7 @@ cd src/webapp && npm install && npm run dev
                                                    └───────────────────┘
 ```
 
-**Two channels (don't confuse them)**:
+**Two channels**:
 
 - **Agent ↔ Server** (beacon, no WebSocket): the Agent polls over HTTPS at fixed intervals (registration / heartbeat / result reporting); task events are pushed over an SSE long connection. Everything is disguised as normal API calls:
   - `POST /v1/chat/completions` — AI channel: registration/heartbeat/results/module downloads (encrypted)

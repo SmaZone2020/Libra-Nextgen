@@ -188,9 +188,8 @@ SDK 能力:
 | `Libra.usePluginHost()` | `selectedAgent` / `selectAgent` / `dispatchTask(pluginId?, action, args?, agentId?)` / `subscribeOutput(cb, action?)` / `lastOutput` |
 | `Libra.api.get/post/put/delete(path, body?)` | 带 JWT 的后端 API 调用(路径不含 `/api` 前缀) |
 
-完整契约、约定(零外部依赖/CSS 自包含/深浅色)与示例见
-[HTML 插件页面 SDK](plugins/html-plugin-sdk.md)。**开发提示**:把 SDK 文档给
-任何 LLM 编程助手即可直接开发插件页面。
+完整契约与约定(零外部依赖 / CSS 自包含 / 深浅色)见
+[HTML 插件页面 SDK](plugins/html-plugin-sdk.md)。
 
 ## 插件市场（Libra-Plugins）
 

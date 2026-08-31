@@ -179,7 +179,7 @@ SDK capabilities:
 | `Libra.usePluginHost()` | `selectedAgent` / `selectAgent` / `dispatchTask(pluginId?, action, args?, agentId?)` / `subscribeOutput(cb, action?)` / `lastOutput` |
 | `Libra.api.get/post/put/delete(path, body?)` | backend API calls with JWT (path without the `/api` prefix) |
 
-The full contract, conventions (zero external dependencies / self-contained CSS / light & dark themes) and examples are in [HTML Plugin Page SDK](../plugins/html-plugin-sdk.md). **Dev tip**: hand the SDK document to any LLM coding assistant and it can develop plugin pages directly.
+The full contract and conventions (zero external dependencies / self-contained CSS / light & dark themes) are in [HTML Plugin Page SDK](../plugins/html-plugin-sdk.md).
 
 ## Plugin Market (Libra-Plugins)
 

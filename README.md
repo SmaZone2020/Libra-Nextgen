@@ -18,13 +18,13 @@
 
 </div>
 
-Libra-Nextgen 是一个开源的跨平台对抗模拟 / 红队框架，面向企业安全测试场景。它由三部分组成：Rust 编写的轻量 Agent、ASP.NET Core 服务端与 React Web 控制台。Agent 采用 Bootstrapper + 云载模块架构——最小内核只负责通信与调度，其余能力（文件、凭据、侦查、Shell 等）按需从服务端下载并在内存中执行，不落盘。
+Libra-Nextgen 是一个开源的跨平台对抗模拟 / 红队框架，面向企业安全测试场景。它由三部分组成：Rust 编写的轻量 Agent、ASP.NET Core 服务端与 React Web 控制台。Agent 采用 Bootstrapper + 云载模块架构——最小内核只负责通信与调度，其余能力按需从服务端下载并在内存中执行，不落盘。
 
-Agent 通过 HTTP(S) 与 WebSocket 与服务器通信，全链路 AES-256-GCM 加密。插件体系以 zip 包交付自定义能力：Agent 端 JavaScript（QuickJS 沙箱）或 native 模块、服务端脚本、前端页面。
+Agent 通过 beacon HTTP(S) 与 SSE 事件流与服务器通信，全链路 AES-256-GCM 加密。插件体系以 zip 包交付自定义能力：Agent 端 JavaScript（QuickJS 沙箱）或 native 模块、服务端脚本、前端页面。
 
 ## 特性
 
-- HTTP(S) / WebSocket 双信道，AES-256-GCM 全链路加密，RSA 动态密钥协商
+- HTTP(S) beacon + SSE 事件流，AES-256-GCM 全链路加密，RSA 动态密钥协商
 - 可配置流量伪装 Profile（路径 / 请求头 / UA）
 - 内存加载、不落盘（Bootstrapper + 云载模块）
 - 多任务并行，交互式 Shell
@@ -35,11 +35,10 @@ Agent 通过 HTTP(S) 与 WebSocket 与服务器通信，全链路 AES-256-GCM �
 - Socks 代理与内网 Web 浏览
 - 内存态 PowerShell（CLR Host）
 - 多维度持久化
-- 插件体系：上传 zip / Git 导入 / 插件市场；页面为纯 HTML+JS+CSS（注入式 `window.Libra` SDK，运行时加载无需重建前端）
+- 插件体系：上传 zip / Git 导入 / 插件市场，页面为纯 HTML+JS+CSS
 - 在线载荷构建（Builder），Windows / Linux
 - 内置 AI 助手 Justitia（分级权限 + 工具调用审计）
-- AI 频道：通过 Telegram / 飞书 / 微信 iLink 在 IM 中指挥 Justitia
-  （一次性绑定码 + 深链绑定、内联按钮审批、菜单指令、群组调用）
+- AI 频道：Telegram / 飞书 / 微信 iLink 在 IM 中指挥 Justitia，支持绑定码、内联审批、菜单与群组调用
 - 内置 MCP 服务器（Streamable HTTP）
 - 多人协同控制台（实时同步、审计日志）
 
@@ -65,8 +64,7 @@ npm run dev
 | 平台 | 状态 |
 | --- | --- |
 | Windows x64 | 支持（主平台，全功能验证） |
-| Linux x64 | 交叉编译通过，运行时待验证 |
-| Windows x86 | 不支持 |
+| Linux x64 | 交叉编译通过 |
 
 详见 [平台支持矩阵](docs/platform-support.md)。
 

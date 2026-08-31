@@ -39,12 +39,12 @@ Core idea: **do not rewrite the chat pipeline — only swap the event exit**. Co
 Unified abstraction `IAiChannelAdapter`: inbound messages → unified gateway processing; outbound is implemented by the adapter.
 
 - `AiChannelService`: channel CRUD / enabled state / connection test (`/api/ai/channels*`)
-- Inbound uniformly goes through the gateway: rate limit → resolve sender identity (binding) → command routing (`bind` / `/approve` / `/reject` / menu commands / group calls) → session routing (by `sessionId`)
+- Inbound uniformly goes through the gateway: rate limit → identity resolution → command routing → session routing; command routing supports bind, approve, reject, menu commands and group calls
 - Outbound uniformly goes through `ChannelSink`, converting SSE events into IM messages
 
 ## 2. Binding & Identity
 
-- **One-time bind code + deep link**: admins generate a bind code in the console; the IM bot sends `/bind <code>` or the user taps a deep link to complete binding; the sender identity maps to a console account (Operator/Admin role applies accordingly)
+- **One-time bind code + deep link**: admins generate a bind code in the console; the IM bot sends `/bind <code>` or the user taps a deep link to complete binding; the sender identity maps to a console account
 - Messages from unbound users are rejected with a binding prompt; bindings are persisted — switching devices requires re-binding
 
 ## 3. Approval & Commands

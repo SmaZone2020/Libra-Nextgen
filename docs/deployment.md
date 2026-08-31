@@ -29,7 +29,7 @@ cd src/webapp && npm install && npm run dev
    └────────────────────┘                          └───────────────────┘
 ```
 
-**两条通道(不要混淆)**:
+**两条通道**:
 
 - **Agent ↔ Server**(beacon,无 WebSocket):Agent 以固定间隔 HTTPS 轮询
   (注册/心跳/结果上报),任务事件通过 SSE 长连接推送。全部伪装为正常 API 调用:

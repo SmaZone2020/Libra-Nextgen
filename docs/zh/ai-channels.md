@@ -16,7 +16,6 @@
                     ▼
             AiChannelService(频道网关)
             限流 → 身份解析 → 命令路由 → 会话路由
-            (bind /approve /reject 等)
                     │
                     ▼
             AiService.RunChatAsync(复用)
@@ -42,14 +41,14 @@
 统一抽象 `IAiChannelAdapter`:入站消息 → 网关统一处理;出站由适配器实现发送。
 
 - `AiChannelService`:频道 CRUD / 启用状态 / 测试连接(`/api/ai/channels*`)
-- 入站统一经网关:限流 → 解析发送者身份(绑定关系)→ 命令路由
-  (`bind` / `/approve` / `/reject` / 菜单指令 / 群组调用)→ 会话路由(按 `sessionId`)
+- 入站统一经网关:限流 → 身份解析 → 命令路由 → 会话路由;
+  命令路由支持 bind、approve、reject、菜单指令与群组调用
 - 出站统一走 `ChannelSink` 把 SSE 事件流转为 IM 消息
 
 ## 2. 绑定与身份
 
 - **一次性绑定码 + 深链**:管理员在控制台生成绑定码,IM 机器人发送 `/bind <code>`
-  或点击深链完成绑定,发送者身份映射到控制台账户(Operator/Admin 角色随之生效)
+  或点击深链完成绑定,发送者身份映射到控制台账户
 - 未绑定用户的消息被拒绝并提示绑定;绑定关系持久化,换设备需重新绑定
 
 ## 3. 审批与命令
