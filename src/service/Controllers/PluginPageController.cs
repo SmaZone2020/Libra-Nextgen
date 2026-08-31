@@ -71,8 +71,10 @@ public class PluginPageController : ControllerBase
         && filename.All(c => char.IsAsciiLetterOrDigit(c) || c is '.' or '-' or '_' or '/');
 
     /// <summary>
-    /// Describe which page form a plugin ships. The console calls this once per
-    /// plugin at startup and then loads <c>entry</c> accordingly.
+    /// Describe the plugin's page. Every plugin page ships as plain
+    /// <c>page/index.html</c> + js/css — there is no TSX path anymore. The
+    /// console renders it in an iframe and the plugin talks to the console
+    /// through the bridge SDK (<c>page/_bridge.js</c>).
     /// </summary>
     [HttpGet("manifest.json")]
     public async Task<IActionResult> Manifest(string pluginId, CancellationToken ct)
@@ -81,25 +83,9 @@ public class PluginPageController : ControllerBase
             return BadRequest(new { error = "invalid plugin id" });
 
         var pageDir = Path.Combine(PluginService.PluginsBaseDir, pluginId, "page");
-        if (!Directory.Exists(pageDir))
-            return NotFound(new { error = "plugin page not found" });
-
-        string kind;
-        string entry;
-        if (System.IO.File.Exists(Path.Combine(pageDir, "dist", "index.js")))
-        {
-            kind = "react";
-            entry = "dist/index.js";
-        }
-        else if (System.IO.File.Exists(Path.Combine(pageDir, "index.html")))
-        {
-            kind = "html";
-            entry = "index.html";
-        }
-        else
-        {
-            return NotFound(new { error = "plugin page has no build output (expected page/dist/index.js or page/index.html)" });
-        }
+        var htmlFile = Path.Combine(pageDir, "index.html");
+        if (!System.IO.File.Exists(htmlFile))
+            return NotFound(new { error = "plugin page not found (expected page/index.html)" });
 
         // Version for cache-busting: prefer the persisted record, fall back to
         // the newest file timestamp (handles plugins installed without a DB row).
@@ -114,18 +100,20 @@ public class PluginPageController : ControllerBase
             // DB unavailable — timestamp fallback below.
         }
 
-        var newest = Directory.EnumerateFiles(pageDir, "*", SearchOption.AllDirectories)
-            .Select(System.IO.File.GetLastWriteTimeUtc)
-            .DefaultIfEmpty(DateTime.MinValue)
-            .Max();
+        var newest = Directory.Exists(pageDir)
+            ? Directory.EnumerateFiles(pageDir, "*", SearchOption.AllDirectories)
+                .Select(System.IO.File.GetLastWriteTimeUtc)
+                .DefaultIfEmpty(DateTime.MinValue)
+                .Max()
+            : DateTime.MinValue;
         if (string.IsNullOrEmpty(version))
             version = newest.ToFileTimeUtc().ToString();
 
         return Ok(new
         {
             pluginId,
-            kind,
-            entry,
+            kind = "html",
+            entry = "index.html",
             version,
             generatedAt = newest.ToString("o"),
         });
@@ -171,11 +159,16 @@ public class PluginPageController : ControllerBase
 
     private const string BridgeScript = """
         // Libra plugin bridge — runs inside an HTML-form plugin iframe.
-        // Proxies usePluginHost() to the console frame via postMessage RPC.
+        // Exposes window.LibraPluginHost to the page and proxies everything
+        // to the console frame via postMessage RPC.
         (function () {
           'use strict';
           if (window.__libraBridgeLoaded) return;
           window.__libraBridgeLoaded = true;
+
+          // pluginId is derived from the iframe URL: /api/plugins/<id>/page/...
+          var m = /\/api\/plugins\/([^/]+)\/page\//.exec(location.pathname);
+          var PLUGIN_ID = m ? decodeURIComponent(m[1]) : '';
 
           var pending = new Map();
           var nextId = 1;
@@ -215,7 +208,10 @@ public class PluginPageController : ControllerBase
             lastOutput: null,
             selectAgent: function (id) { return request('call', { method: 'selectAgent', params: [id] }); },
             dispatchTask: function (pluginId, action, args, agentId) {
-              return request('call', { method: 'dispatchTask', params: [pluginId, action, args || {}, agentId] });
+              return request('call', {
+                method: 'dispatchTask',
+                params: [pluginId || PLUGIN_ID, action, args || {}, agentId],
+              });
             },
             subscribeOutput: function (cb, action) {
               listeners.push(cb);
@@ -225,6 +221,19 @@ public class PluginPageController : ControllerBase
                 if (i >= 0) listeners.splice(i, 1);
               };
             },
+          };
+
+          // Authenticated backend API on behalf of the page. The plugin cannot
+          // read the console's JWT (cross-origin localStorage), so the console
+          // attaches its own Authorization header and forwards the response.
+          function apiCall(method, path, body) {
+            return request('api', { method: method, path: path, body: body === undefined ? null : body });
+          }
+          var api = {
+            get: function (path) { return apiCall('GET', path); },
+            post: function (path, body) { return apiCall('POST', path, body); },
+            put: function (path, body) { return apiCall('PUT', path, body); },
+            delete: function (path, body) { return apiCall('DELETE', path, body); },
           };
 
           function syncState() {
@@ -240,7 +249,10 @@ public class PluginPageController : ControllerBase
           setInterval(syncState, 2000);
 
           window.LibraPluginHost = Object.freeze({
+            pluginId: PLUGIN_ID,
+            getApiOrigin: function () { return location.origin; },
             usePluginHost: function () { return host; },
+            api: api,
           });
         })();
         """;

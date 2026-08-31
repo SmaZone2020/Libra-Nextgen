@@ -31,13 +31,12 @@ import {
 } from '@gravity-ui/icons';
 
 /**
- * Whitelisted icon name → component map exposed to plugin pages via
- * `window.LibraPluginHost.Icons`.
+ * Whitelisted icon name → component map for the console sidebar.
  *
- * Plugin `entry.icon` carries a string NAME (never a component), and compiled
- * plugin bundles import icons from `@gravity-ui/icons`, which the pack step
- * externalizes onto this same allowlist. This prevents a plugin from pulling an
- * arbitrary icon — only the icons declared here are usable at runtime.
+ * Plugin `entry.icon` carries a string NAME (never a component), which the
+ * shell maps through this allowlist for the sidebar/route icons. Plugin pages
+ * themselves are plain HTML (no icon imports) — this map only affects console
+ * chrome, so it must keep matching the icon names plugins declare in meta.json.
  *
  * To grant plugins a new icon: add it to the import list AND to PLUGIN_ICONS.
  */

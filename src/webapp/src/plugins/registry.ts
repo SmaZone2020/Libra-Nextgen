@@ -3,17 +3,16 @@ import { useEffect, useMemo, useState } from 'react';
 import { getApiOrigin } from '../api/client';
 import { getPluginManifests, type PluginManifest } from '../api/plugins';
 import { PluginPageHost } from './loader';
-import './host'; // side effect: injects window.LibraPluginHost before any bundle loads
 
 /**
  * Runtime registry of plugin pages.
  *
- * Plugins are NOT compiled into this bundle. The console fetches the enabled
- * manifest feed from the backend, asks each plugin for its page manifest
- * (`/api/plugins/<id>/page/manifest.json`), and renders whatever the plugin
- * ships — a pre-compiled React bundle (kind: react) or a plain html page
- * (kind: html). dev and preview behave identically; installing or updating a
- * plugin only needs new files on the server, never a console rebuild.
+ * Plugins are NOT compiled into this bundle and ship no TSX. The console
+ * fetches the enabled manifest feed from the backend, asks each plugin for its
+ * page manifest (`/api/plugins/<id>/page/manifest.json`), and renders the
+ * plugin's `page/index.html` inside an iframe with the postMessage bridge SDK.
+ * dev and preview behave identically; installing or updating a plugin only
+ * needs new files on the server, never a console rebuild.
  *
  * Plugins whose manifest has no `entry` (metadata/action-only plugins) or whose
  * page files are missing are skipped here — no route, no sidebar entry.
@@ -22,7 +21,7 @@ import './host'; // side effect: injects window.LibraPluginHost before any bundl
 /** Page description fetched from the backend at runtime. */
 export interface PluginPageInfo {
   pluginId: string;
-  kind: 'react' | 'html';
+  kind: 'html';
   entry: string;
   version: string;
 }
@@ -46,11 +45,10 @@ async function fetchPageInfo(pluginId: string): Promise<PluginPageInfo | null> {
     entry?: string;
     version?: string;
   };
-  if (data.kind !== 'react' && data.kind !== 'html') return null;
-  if (!data.entry) return null;
+  if (data.kind !== 'html' || !data.entry) return null;
   return {
     pluginId,
-    kind: data.kind,
+    kind: 'html',
     entry: data.entry,
     version: data.version ?? '',
   };
