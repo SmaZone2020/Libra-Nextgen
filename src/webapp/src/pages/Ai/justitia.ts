@@ -1,6 +1,6 @@
 'use client';
 import type { ComponentType, SVGProps } from 'react';
-import { ShieldCheck } from '@gravity-ui/icons';
+import { ShieldCheck, ShieldExclamation, Shield, ShieldKeyhole} from '@gravity-ui/icons';
 
 export type JustitiaTierKey = 'cognitio' | 'arbitrium' | 'imperium' | 'dictatura';
 
@@ -15,21 +15,21 @@ export const JUSTITIA_TIERS: { key: JustitiaTierKey; name: string; icon: Compone
   {
     key: 'arbitrium',
     name: 'Arbitrium',
-    icon: ShieldCheck,
+    icon: Shield,
     desc: '衡而断之 · 常规任务，自主并通报',
     index: 1,
   },
   {
     key: 'imperium',
     name: 'Imperium',
-    icon: ShieldCheck,
+    icon: ShieldKeyhole,
     desc: '请命后行 · 高危操作，须人工批准',
     index: 2,
   },
   {
     key: 'dictatura',
     name: 'Dictatura',
-    icon: ShieldCheck,
+    icon: ShieldExclamation,
     desc: '毋须请命 · 全权行动，仅管理员可启',
     index: 3,
   },
