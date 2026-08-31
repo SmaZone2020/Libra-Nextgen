@@ -5,7 +5,7 @@ CLAUDE.md
 # Plugin sources live in the separate Libra-Plugins repo; anything under a
 # plugin runtime/install directory is runtime state and must NEVER be committed.
 /docs/plugins/*
-!/docs/plugins/README.md
+!/docs/plugins/*.md
 /src/plugins/
 /src/service/plugins-service/
 # Logs
