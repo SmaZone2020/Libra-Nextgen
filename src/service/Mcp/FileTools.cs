@@ -33,6 +33,19 @@ public sealed class FileTools
             new { op = "drives" }, ct, TimeSpan.FromSeconds(30));
     }
 
+    [McpServerTool, Description("Read a file's content from an agent (returns base64 in {content}; large files may be truncated)")]
+    public static async Task<string> read_file(
+        IHttpContextAccessor http,
+        RelayService relay,
+        AgentService agents,
+        [Description("Target agent ID")] string agentId,
+        [Description("Absolute path of the file to read")] string path,
+        CancellationToken ct = default)
+    {
+        return await McpUtils.RelayOrError(relay, agents, McpUtils.GetCaller(http), agentId, "files",
+            new { op = "read", path }, ct, TimeSpan.FromSeconds(45));
+    }
+
     [McpServerTool, Description("Delete a file or directory on an agent (requires Admin)")]
     public static async Task<string> delete_file(
         IHttpContextAccessor http,

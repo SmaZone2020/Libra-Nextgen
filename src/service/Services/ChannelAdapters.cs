@@ -116,6 +116,15 @@ public interface IAiChannelAdapter
 
     /// <summary>
     /// </summary>
+    /// <summary>
+    /// AI reply formatted as Markdown. Adapters that understand Markdown
+    /// (e.g. Telegram) render it; the default is plain text.
+    /// </summary>
+    Task SendMarkdownAsync(AiChannel channel, string externalId, string markdown, CancellationToken ct) =>
+        SendTextAsync(channel, externalId, markdown, ct);
+
+    /// <summary>
+    /// </summary>
     Task SendRichTextAsync(AiChannel channel, string externalId, string html, string plain, CancellationToken ct) =>
         SendTextAsync(channel, externalId, plain, ct);
 
@@ -195,6 +204,22 @@ public class TelegramChannelAdapter : IAiChannelAdapter
     public async Task SendTextAsync(AiChannel channel, string externalId, string text, CancellationToken ct)
     {
         await Bot(channel).SendMessage(externalId, text, cancellationToken: ct);
+    }
+
+    /// <summary>
+    /// AI replies are rendered as Markdown on Telegram; malformed Markdown
+    /// (a 400 from Telegram) falls back to plain text.
+    /// </summary>
+    public async Task SendMarkdownAsync(AiChannel channel, string externalId, string markdown, CancellationToken ct)
+    {
+        try
+        {
+            await Bot(channel).SendMessage(externalId, markdown, parseMode: ParseMode.Markdown, cancellationToken: ct);
+        }
+        catch (Exception)
+        {
+            await Bot(channel).SendMessage(externalId, markdown, cancellationToken: ct);
+        }
     }
 
     public async Task SendRichTextAsync(AiChannel channel, string externalId, string html, string plain, CancellationToken ct)

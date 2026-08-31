@@ -1449,9 +1449,10 @@ public class AiChannelService
 
     private static async Task SendChunkedAsync(IAiChannelAdapter adapter, AiChannel ch, string externalId, string text, CancellationToken ct)
     {
+        // AI replies go out as Markdown (rendered by Telegram; plain text elsewhere).
         if (text.Length <= ChunkSize)
         {
-            await adapter.SendTextAsync(ch, externalId, text, ct);
+            await adapter.SendMarkdownAsync(ch, externalId, text, ct);
             return;
         }
         var buf = new StringBuilder();
@@ -1459,13 +1460,13 @@ public class AiChannelService
         {
             if (buf.Length + line.Length + 1 > ChunkSize && buf.Length > 0)
             {
-                await adapter.SendTextAsync(ch, externalId, buf.ToString().TrimEnd(), ct);
+                await adapter.SendMarkdownAsync(ch, externalId, buf.ToString().TrimEnd(), ct);
                 buf.Clear();
             }
             buf.AppendLine(line);
         }
         if (buf.Length > 0)
-            await adapter.SendTextAsync(ch, externalId, buf.ToString().TrimEnd(), ct);
+            await adapter.SendMarkdownAsync(ch, externalId, buf.ToString().TrimEnd(), ct);
     }
 
     private async Task NotifyConsoleAsync(object data, CancellationToken ct)
