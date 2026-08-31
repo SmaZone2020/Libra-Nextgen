@@ -99,6 +99,18 @@ const LOG_FILE: &str = "";
 /// `config_ptr` must point to valid UTF-8 JSON of length `config_len`.
 #[no_mangle]
 pub unsafe extern "system" fn core_main(config_ptr: *const u8, config_len: usize) {
+    // When the operator runs with LIBRA_DEBUG=1, attach a console so dlog!/vlog!
+    // (stderr) output is visible — dev/diagnostic only, ships silent by default.
+    #[cfg(target_os = "windows")]
+    if libra_common::log::debug_enabled() {
+        unsafe {
+            extern "system" {
+                fn AllocConsole() -> i32;
+            }
+            let _ = AllocConsole();
+        }
+    }
+
     // Immediate file log — doesn't depend on CRT (debug builds only)
     #[cfg(all(debug_assertions, target_os = "windows"))]
     winlog::write_log(LOG_FILE, "[core] core_main entered!\n");

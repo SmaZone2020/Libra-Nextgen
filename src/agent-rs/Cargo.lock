@@ -1243,6 +1243,9 @@ dependencies = [
 [[package]]
 name = "libra-psinline"
 version = "0.1.0"
+dependencies = [
+ "libra-common",
+]
 
 [[package]]
 name = "libra-syscalls"
@@ -1595,7 +1598,9 @@ checksum = "439ee305def115ba05938db6eb1644ff94165c5ab5e9420d1c1bcedbba909391"
 name = "powershell-module"
 version = "0.1.0"
 dependencies = [
+ "libra-common",
  "libra-psinline",
+ "libra-syscalls",
  "serde_json",
 ]
 

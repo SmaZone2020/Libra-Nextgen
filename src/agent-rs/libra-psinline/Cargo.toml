@@ -7,3 +7,4 @@ edition = "2021"
 name = "libra_psinline"
 
 [dependencies]
+libra-common = { path = "../libra-common" }

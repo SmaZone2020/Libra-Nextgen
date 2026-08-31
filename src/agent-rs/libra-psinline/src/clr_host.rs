@@ -462,21 +462,40 @@ fn pipe_reader(
 pub fn execute_inline(script: &str, timeout_secs: u64) -> String {
     #[cfg(target_os = "windows")]
     {
+        let start = std::time::Instant::now();
         let host = match get_clr_host() {
             Ok(h) => h,
-            Err(e) => return format!(r#"{{"success":false,"error":"{e}"}}"#),
+            Err(e) => {
+                libra_common::dlog!("[psinline] get_clr_host failed: {}", e);
+                return format!(r#"{{"success":false,"error":"{e}"}}"#);
+            }
         };
 
+        let use_new = host.use_new;
         let _gate = match host.gate.lock() {
             Ok(g) => g,
-            Err(e) => return format!(r#"{{"success":false,"error":"clr gate poisoned: {e}"}}"#),
+            Err(e) => {
+                libra_common::dlog!("[psinline] clr gate poisoned: {}", e);
+                return format!(r#"{{"success":false,"error":"clr gate poisoned: {e}"}}"#);
+            }
         };
 
         let pipe_name = format!("libra_ps_{:016x}", rand_hex());
         let script_b64 = base64_encode(script.as_bytes());
+        libra_common::dlog!(
+            "[psinline] executing len={} via {} ({}ms)",
+            script.len(),
+            if use_new {
+                "ICLRRuntimeHost"
+            } else {
+                "IDispatch"
+            },
+            timeout_secs,
+        );
 
         let handle = unsafe { create_pipe(&pipe_name) };
         if handle.is_null() || handle == -1isize as *mut c_void {
+            libra_common::dlog!("[psinline] CreateNamedPipe failed");
             return r#"{"success":false,"error":"CreateNamedPipe failed"}"#.to_string();
         }
 
@@ -506,11 +525,13 @@ pub fn execute_inline(script: &str, timeout_secs: u64) -> String {
         };
 
         if let Err(e) = exec_result {
+            libra_common::dlog!("[psinline] CLR exec failed: {}", e);
             unsafe { CloseHandle(handle) };
             let _ = reader.join();
             return format!(r#"{{"success":false,"error":"{e}"}}"#);
         }
         let exit_code = exec_result.unwrap_or(-1);
+        libra_common::dlog!("[psinline] CLR returned exit {}", exit_code);
 
         let deadline_ms = (timeout_secs.max(1) * 1000) + 30_000;
         let start = std::time::Instant::now();

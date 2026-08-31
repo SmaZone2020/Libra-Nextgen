@@ -9,11 +9,27 @@
 //! dlog!(...))`), so it expands to an `if` expression rather than using an
 //! attribute on a block.
 
-/// Log to stderr only in debug builds. Compiles to a dead branch in release.
+/// Whether verbose agent logging is active. Debug builds always log; in release
+/// builds a shipped agent stays silent unless the operator explicitly sets
+/// `LIBRA_DEBUG=1` (dev/diagnostic runs) — the default footprint remains zero.
+pub fn debug_enabled() -> bool {
+    static DBG: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    if cfg!(debug_assertions) {
+        return true;
+    }
+    *DBG.get_or_init(|| {
+        std::env::var("LIBRA_DEBUG")
+            .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+            .unwrap_or(false)
+    })
+}
+
+/// Log to stderr when debugging is active (`debug_enabled()`); dead branch in
+/// a shipped release without the explicit opt-in.
 #[macro_export]
 macro_rules! dlog {
     ($($arg:tt)*) => {
-        if cfg!(debug_assertions) {
+        if $crate::log::debug_enabled() {
             eprintln!($($arg)*);
             let _ = ::std::io::Write::flush(&mut ::std::io::stderr());
         }
