@@ -144,14 +144,13 @@ public class AiController : ControllerBase
     [HttpGet("mcp")]
     public async Task<IActionResult> GetMcp(CancellationToken ct)
     {
-        var cfg = await _ai.GetMcpConfigAsync(ct);
+        // Tool allowlisting removed: every registered MCP tool is open to the AI
+        // (gated by Justitia tiers/approval). Endpoint kept for compatibility.
         return Ok(new
         {
-            cfg.ToolsEnabled,
-            cfg.AllowedTools,
-            // Full tool inventory (unfiltered) so the settings UI can whitelist
-            // tools that were added after a whitelist was saved.
-            tools = await _ai.GetAllToolsAsync(ct),
+            toolsEnabled = true,
+            allowedTools = Array.Empty<string>(),
+            tools = await _ai.GetToolsAsync(ct),
         });
     }
 

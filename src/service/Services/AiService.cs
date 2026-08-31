@@ -543,41 +543,13 @@ public class AiService
     }
 
     /// <summary>
-    /// Tools actually exposed to the AI: filtered by the AllowedTools whitelist
-    /// (empty whitelist = everything enabled).
+    /// Tools exposed to the AI. Per-tool allowlisting (AllowedTools / ToolsEnabled)
+    /// is intentionally removed — every registered MCP tool is open and calls are
+    /// gated by the four Justitia tiers + approval, not by a tool whitelist.
     /// </summary>
     public async Task<List<AiToolDescriptor>> GetToolsAsync(CancellationToken ct = default)
     {
-        var cfg = await GetMcpConfigAsync(ct);
         var result = new List<AiToolDescriptor>();
-        if (!cfg.ToolsEnabled) return result;
-        foreach (var type in typeof(McpService).Assembly.GetTypes())
-        {
-            if (type.GetCustomAttribute<McpServerToolTypeAttribute>() == null) continue;
-            foreach (var method in type.GetMethods(BindingFlags.Public | BindingFlags.Static))
-            {
-                var toolAttr = method.GetCustomAttribute<McpServerToolAttribute>();
-                if (toolAttr == null) continue;
-                var name = method.Name;
-                if (cfg.AllowedTools.Count > 0 && !cfg.AllowedTools.Contains(name)) continue;
-                var desc = method.GetCustomAttribute<DescriptionAttribute>()?.Description ?? "";
-                var schema = BuildToolSchema(method);
-                result.Add(new AiToolDescriptor(name, desc, schema));
-            }
-        }
-        return result.OrderBy(t => t.Name).ToList();
-    }
-
-    /// <summary>
-    /// Every registered tool regardless of the whitelist — used by the settings
-    /// UI so newly added tools (e.g. plugin_action) can be discovered and
-    /// whitelisted instead of being invisible once a whitelist exists.
-    /// </summary>
-    public async Task<List<AiToolDescriptor>> GetAllToolsAsync(CancellationToken ct = default)
-    {
-        var cfg = await GetMcpConfigAsync(ct);
-        var result = new List<AiToolDescriptor>();
-        if (!cfg.ToolsEnabled) return result;
         foreach (var type in typeof(McpService).Assembly.GetTypes())
         {
             if (type.GetCustomAttribute<McpServerToolTypeAttribute>() == null) continue;

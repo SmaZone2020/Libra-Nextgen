@@ -99,19 +99,6 @@ export function mergeSessionLists(prev: AiSession[], next: AiSession[]): AiSessi
   return prev;
 }
 
-export interface AiToolDescriptor {
-  name: string;
-  description: string;
-  schema?: Record<string, unknown>;
-}
-
-export interface AiMcpInfo {
-  toolsEnabled: boolean;
-  allowedTools: string[];
-  tools: AiToolDescriptor[];
-}
-
-
 export type AiSseEvent =
   | { type: 'reasoning'; label: string; content: string }
   | { type: 'message'; delta: string }
@@ -141,11 +128,6 @@ export interface AiProviderInput {
   defaultModel: string;
   enabled: boolean;
   requireApproval: boolean;
-}
-
-export interface AiMcpInput {
-  toolsEnabled: boolean;
-  allowedTools: string[];
 }
 
 // ── API ──────────────────────────────────────────────────────────────────
@@ -207,14 +189,6 @@ export async function deleteAiMessage(id: string, messageId: string): Promise<vo
 
 export async function forkAiSession(id: string): Promise<AiSession> {
   return api.post<AiSession>(`/ai/sessions/${id}/fork`);
-}
-
-export async function getAiMcp(): Promise<AiMcpInfo> {
-  return api.get<AiMcpInfo>('/ai/mcp');
-}
-
-export async function setAiMcp(input: AiMcpInput): Promise<void> {
-  await api.put<void>('/ai/mcp', input);
 }
 
 export async function streamAiChat(
