@@ -211,17 +211,26 @@ impl AgentEngine {
                         let mut recovered = false;
                         for _ in 0..2 {
                             tokio::time::sleep(std::time::Duration::from_millis(1500)).await;
-                            match heartbeat_tick(&hb_http, &hb_agent_id, hb_key.as_ref(), &hb_mm).await {
-                                Ok(()) => { recovered = true; break; }
+                            match heartbeat_tick(&hb_http, &hb_agent_id, hb_key.as_ref(), &hb_mm)
+                                .await
+                            {
+                                Ok(()) => {
+                                    recovered = true;
+                                    break;
+                                }
                                 Err(e2) if e2 == "SESSION_LOST" => {
-                                    libra_common::dlog!("[WARN] session lost — triggering re-registration");
+                                    libra_common::dlog!(
+                                        "[WARN] session lost — triggering re-registration"
+                                    );
                                     let _ = hb_reconnect.send(());
                                     break;
                                 }
                                 Err(_) => continue,
                             }
                         }
-                        if recovered { continue; }
+                        if recovered {
+                            continue;
+                        }
                     }
                 }
 
