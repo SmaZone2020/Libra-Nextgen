@@ -42,11 +42,11 @@ fn dispatch(input: &str) -> String {
         .and_then(|b| b.as_bool())
         .unwrap_or(true);
 
-    // AMSI + NtTraceEvent bypass via VEH + hardware breakpoints (idempotent),
-    // keeping the in-process channel invisible to script scanners and ETW.
-    unsafe {
-        let _ = libra_syscalls::install_amsi_etw_bypass();
-    }
+    libra_common::dlog!(
+        "[powershell] dispatch enter, script_len={} etw={}",
+        script.len(),
+        suppress_etw
+    );
 
     power_shell::PowerShellRunner::execute_opts(script, timeout, suppress_etw)
 }

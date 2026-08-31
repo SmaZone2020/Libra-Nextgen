@@ -11,4 +11,3 @@ crate-type = ["cdylib", "rlib"]
 serde_json = { workspace = true }
 libra-common = { path = "../../libra-common" }
 libra-psinline = { path = "../../libra-psinline" }
-libra-syscalls = { path = "../../libra-syscalls" }
