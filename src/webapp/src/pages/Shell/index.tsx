@@ -1,17 +1,22 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Button } from '@heroui/react';
 import Terminal from '../../components/terminal';
 import type { TerminalHandle } from '../../components/terminal';
 import { createTask, getTask } from '../../api/tasks';
 import { useAgent } from '../../contexts/AgentContext';
+import { useAgentPlatform } from '../../hooks/useAgentPlatform';
 import { AgentRequired } from '../../components/AgentRequired';
 import { unwrapTaskOutput } from './taskOutput';
 
 export default function ShellPage() {
   const { t } = useTranslation();
   const { agentId, selectedAgent } = useAgent();
+  const platform = useAgentPlatform();
+  const isWindows = platform === 'windows';
   const termRef = useRef<TerminalHandle>(null);
   const [running, setRunning] = useState(false);
+  const [shellMode, setShellMode] = useState<'Shell' | 'PowerShell'>('Shell');
   const inputBufRef = useRef('');
 
   /** Prompt shown while waiting for input: "Libra-<deviceName> $ " */
@@ -34,7 +39,7 @@ export default function ShellPage() {
     try {
       const task = await createTask({
         agentId,
-        commandType: 'Shell',
+        commandType: shellMode,
         command: cmd,
         arguments: [],
         timeoutSeconds: 60,
@@ -58,7 +63,7 @@ export default function ShellPage() {
       renderPrompt();
       termRef.current?.focus();
     }
-  }, [agentId, running, print, renderPrompt, t]);
+  }, [agentId, running, shellMode, print, renderPrompt, t]);
 
   const handleInput = useCallback((data: string) => {
     if (data === '\r' || data === '\n' || data === '\r\n') {
@@ -92,6 +97,14 @@ export default function ShellPage() {
       print('^C');
       return;
     }
+    if (data.length > 1) {
+      // Paste support: xterm delivers pasted text as one chunk. Strip newlines
+      // (buffer is a single command line), echo it and wait for Enter.
+      const clean = data.replace(/[\r\n]+/g, ' ');
+      inputBufRef.current += clean;
+      termRef.current?.write(clean);
+      return;
+    }
     if (data.length !== 1 || data.charCodeAt(0) < 0x20) return;
     inputBufRef.current += data;
     termRef.current?.write(data);
@@ -110,13 +123,38 @@ export default function ShellPage() {
       {!agentId && <AgentRequired />}
 
       {agentId && (
-        <Terminal
-          key={agentId}
-          ref={termRef}
-          disabled={!agentId}
-          onInput={handleInput}
-          style={{ height: '100%', width: '100%' }}
-        />
+        <>
+          {isWindows && (
+            <div className="flex items-center gap-1">
+              <Button
+                size="sm"
+                variant={shellMode === 'Shell' ? 'primary' : 'ghost'}
+                isDisabled={running}
+                onPress={() => setShellMode('Shell')}
+                className="rounded-[10px]"
+              >
+                CMD
+              </Button>
+              <Button
+                size="sm"
+                variant={shellMode === 'PowerShell' ? 'primary' : 'ghost'}
+                isDisabled={running}
+                onPress={() => setShellMode('PowerShell')}
+                className="rounded-[10px]"
+              >
+                PowerShell
+              </Button>
+              <span className="ml-2 text-xs text-default-500">{t('shell.modeHint')}</span>
+            </div>
+          )}
+          <Terminal
+            key={agentId}
+            ref={termRef}
+            disabled={!agentId}
+            onInput={handleInput}
+            style={{ height: '100%', width: '100%' }}
+          />
+        </>
       )}
     </div>
   );

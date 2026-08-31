@@ -243,6 +243,7 @@ export default {
       readonly: 'Read-only',
       banner: 'Libra-Nextgen command shell (task mode)\r\nType a command and press Enter; Ctrl+C clears input.\r\n',
       prompt: '$ {{cmd}}',
+      modeHint: 'Choose the command interpreter (Windows)',
       timeout: 'Task timed out',
       error: '[error] {{msg}}',
     },

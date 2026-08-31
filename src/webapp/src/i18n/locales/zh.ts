@@ -242,6 +242,7 @@ export default {
       readonly: '只读',
       banner: 'Libra-Nextgen 命令式 Shell（任务模式）\r\n输入命令后回车执行，Ctrl+C 清空输入。\r\n',
       prompt: '$ {{cmd}}',
+      modeHint: '选择命令解释器（Windows）',
       timeout: '任务超时未完成',
       error: '[error] {{msg}}',
     },
