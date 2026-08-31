@@ -187,7 +187,7 @@ function HtmlPluginFrame({ spec }: { spec: PluginPageSpec }) {
       title={`plugin-${spec.pluginId}`}
       srcDoc={doc ?? undefined}
       sandbox="allow-scripts allow-forms allow-modals"
-      className="w-full h-full min-h-[60vh] rounded-xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-950"
+      className="w-full h-[90vh] min-h-[60vh] rounded-xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-950"
     />
   );
 }
