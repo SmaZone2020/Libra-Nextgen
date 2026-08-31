@@ -36,6 +36,15 @@ const TerminalView = forwardRef<TerminalHandle, Props>(function TerminalView(
   const fitRef = useRef<FitAddon | null>(null);
   const disabledRef = useRef(disabled);
   disabledRef.current = disabled;
+  // Callbacks are held in refs so the terminal instance is created exactly once
+  // on mount: parent re-renders (e.g. ShellPage toggling `running`) change the
+  // handler identities, and recreating xterm on that cleared all output.
+  const onInputRef = useRef(onInput);
+  onInputRef.current = onInput;
+  const onResizeRef = useRef(onResize);
+  onResizeRef.current = onResize;
+  const fontFamilyRef = useRef(fontFamily);
+  fontFamilyRef.current = fontFamily;
 
   useImperativeHandle(ref, () => ({
     write(text: string) {
@@ -71,7 +80,7 @@ const TerminalView = forwardRef<TerminalHandle, Props>(function TerminalView(
     // Create the terminal synchronously so the ref is usable immediately
     // (shell output arriving before webfonts finish is not lost). Cell size
     // is re-measured once the bundled font is ready.
-    const FONT = fontFamily ?? DEFAULT_FONT;
+    const FONT = fontFamilyRef.current ?? DEFAULT_FONT;
     const t = new Terminal({
       cursorBlink: true,
       convertEol: true,
@@ -90,9 +99,9 @@ const TerminalView = forwardRef<TerminalHandle, Props>(function TerminalView(
 
     t.onData((data) => {
       if (disabledRef.current) return;
-      onInput?.(data);
+      onInputRef.current?.(data);
     });
-    t.onResize(({ cols, rows }) => onResize?.(cols, rows));
+    t.onResize(({ cols, rows }) => onResizeRef.current?.(cols, rows));
 
     // Fit the terminal and report geometry only once the container actually
     // has a usable size (cols/rows > 0). On first mount the container may not
@@ -103,7 +112,7 @@ const TerminalView = forwardRef<TerminalHandle, Props>(function TerminalView(
       if (disposed) return false;
       try { f.fit(); } catch { /* container may still be sizing */ }
       if (t.cols > 0 && t.rows > 0) {
-        onResize?.(t.cols, t.rows);
+        onResizeRef.current?.(t.cols, t.rows);
         return true;
       }
       if (retries++ < 10) setTimeout(tryFit, 100);
@@ -134,7 +143,7 @@ const TerminalView = forwardRef<TerminalHandle, Props>(function TerminalView(
     ro = new ResizeObserver(() => {
       if (disposed) return;
       try { f.fit(); } catch { /* ignore */ }
-      if (t.cols > 0 && t.rows > 0) onResize?.(t.cols, t.rows);
+      if (t.cols > 0 && t.rows > 0) onResizeRef.current?.(t.cols, t.rows);
     });
     ro.observe(container);
 
@@ -148,7 +157,8 @@ const TerminalView = forwardRef<TerminalHandle, Props>(function TerminalView(
       termRef.current = null;
       fitRef.current = null;
     };
-  }, [onInput, onResize, fontFamily]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <div

@@ -10,6 +10,7 @@ import {
   Globe,
   HardDrive,
   MusicNote,
+  Person,
   Picture,
   Video,
 } from '@gravity-ui/icons';
@@ -59,7 +60,7 @@ const SPECIAL_ICONS: Record<string, React.ComponentType<React.SVGProps<SVGSVGEle
   pictures: Picture,
   music: MusicNote,
   videos: Video,
-  user: Folder,
+  user: Person,
 };
 
 const SPECIAL_LABEL: Record<string, string> = {
