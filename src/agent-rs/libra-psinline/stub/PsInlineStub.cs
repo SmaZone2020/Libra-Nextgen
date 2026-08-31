@@ -89,6 +89,46 @@ namespace PsInline
                         if (fAppBase != null) fAppBase.SetValue(store, appBase);
                         if (fCfg != null) fCfg.SetValue(store, cfgPath);
                     }
+                    // Final fallback: pre-populate the ClientConfigPaths cache.
+                    // The config system's constructor fallback (no entry
+                    // assembly) builds a path that Path.GetFullPath rejects in
+                    // this embedded host; with a valid instance cached, every
+                    // later GetPaths() returns it without touching the broken
+                    // constructor path.
+                    try
+                    {
+                        var ccpType = typeof(System.Configuration.ConfigurationManager).Assembly
+                            .GetType("System.Configuration.ClientConfigPaths");
+                        if (ccpType != null)
+                        {
+                            var ctor = ccpType.GetConstructor(
+                                System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic,
+                                null,
+                                new System.Type[] { typeof(string), typeof(bool) },
+                                null);
+                            var pathsField = ccpType.GetField("s_paths",
+                                System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic);
+                            if (ctor != null && pathsField != null)
+                            {
+                                var inst = ctor.Invoke(new object[] { cfgPath, true });
+                                pathsField.SetValue(null, inst);
+                                trace("ClientConfigPaths s_paths pre-populated: " + inst);
+                            }
+                            else
+                            {
+                                trace("s_paths inject skipped (ctor=" + (ctor != null) + " field=" + (pathsField != null) + ")");
+                            }
+                        }
+                        else
+                        {
+                            trace("ClientConfigPaths type not found");
+                        }
+                    }
+                    catch (System.Exception e)
+                    {
+                        trace("s_paths inject failed: " + e);
+                    }
+
                     // Probe: try to boot the config system. NOT fatal — the
                     // DontEnableSystemDiagnosticsTracing switch is what stops
                     // ServicePointManager from needing config at all; the probe
