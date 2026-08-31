@@ -1600,7 +1600,6 @@ version = "0.1.0"
 dependencies = [
  "libra-common",
  "libra-psinline",
- "libra-syscalls",
  "serde_json",
 ]
 
