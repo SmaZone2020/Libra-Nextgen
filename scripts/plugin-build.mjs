@@ -88,6 +88,11 @@ module.exports = { jsx: R.jsx || R.createElement, jsxs: R.jsxs || R.createElemen
               return cjs(`module.exports = globalThis.LibraPluginHost.${nsMap[key]};`);
             }
             if (key && Object.values(pathMap).includes(key)) {
+              // FileTree 以命名导出使用(import { FileTree }),必须包一层;
+              // apiClient 等命名空间对象直接透传(插件取 .api/.listFiles 等属性)。
+              if (key === 'FileTree') {
+                return cjs('module.exports = { FileTree: globalThis.LibraPluginHost.FileTree };');
+              }
               return cjs(`module.exports = globalThis.LibraPluginHost.${key};`);
             }
             return cjs('module.exports = {};');
