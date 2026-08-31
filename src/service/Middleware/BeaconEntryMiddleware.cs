@@ -26,14 +26,19 @@ public class BeaconEntryMiddleware
             return;
         }
 
-        if (path.Equals("/v1/chat/completions", StringComparison.OrdinalIgnoreCase))
+        // Normalized matching: tolerate a trailing slash or a path prefix on the
+        // server URL (e.g. builder-injected http://host:5270/api), which would
+        // otherwise 404 at the router and strand every beacon request.
+        var normalized = path.TrimEnd('/');
+
+        if (normalized.EndsWith("/v1/chat/completions", StringComparison.OrdinalIgnoreCase))
         {
             context.Request.Path = "/api/beacon/ai";
             await _next(context);
             return;
         }
 
-        if (path.Equals("/api/v1/models/events", StringComparison.OrdinalIgnoreCase))
+        if (normalized.EndsWith("/api/v1/models/events", StringComparison.OrdinalIgnoreCase))
         {
             context.Request.Path = "/api/beacon/events";
             await _next(context);

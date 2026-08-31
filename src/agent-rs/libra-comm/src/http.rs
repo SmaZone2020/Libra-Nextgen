@@ -290,7 +290,9 @@ impl HttpCommunicator {
         let resp = req.send().await.map_err(|e| e.to_string())?;
         let status = resp.status().as_u16();
         let text = resp.text().await.map_err(|e| e.to_string())?;
-        if status == 401 {
+        // 401 = session lost; 404 = channel/path mismatch (server profile or
+        // builder server_url drift) — re-register to fetch a fresh profile.
+        if status == 401 || status == 404 {
             return Err("SESSION_LOST".to_string());
         }
         if status != 200 {
@@ -339,7 +341,7 @@ impl HttpCommunicator {
 
         let resp = req.send().await.map_err(|e| e.to_string())?;
         let status = resp.status().as_u16();
-        if status == 401 {
+        if status == 401 || status == 404 {
             return Err("SESSION_LOST".to_string());
         }
         if status != 200 {
