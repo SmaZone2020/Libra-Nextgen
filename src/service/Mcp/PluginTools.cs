@@ -14,15 +14,38 @@ namespace LibraNextgen.Service.Mcp;
 public static class PluginTools
 {
     [McpServerTool]
-    [Description("列出所有含服务端脚本（service/main.cs）的插件及其可调用的函数名，作为 plugin_call 的目录。只读。")]
+    [Description("列出已启用插件及其可用能力：Agent 端动作（actions，用 plugin_action 在目标设备执行，如 QQ 的 scan_accounts/list、微信的 collect）与服务端脚本函数（functions，用 plugin_call 在 TeamServer 执行）。只读。")]
     public static async Task<string> plugin_list_functions(
         ServerScriptService scripts,
+        PluginService plugins,
         CancellationToken ct)
     {
         try
         {
-            var items = await scripts.ListPluginScriptsJsonAsync(ct);
-            return McpUtils.Ok(new { plugins = items });
+            var enabled = await plugins.GetEnabledAsync(ct);
+            var enabledIds = enabled.Select(p => p.PluginId).ToHashSet(StringComparer.Ordinal);
+
+            var scriptItems = await scripts.ListPluginScriptsJsonAsync(ct);
+            var funcsByPlugin = scriptItems
+                .Where(s => enabledIds.Contains(s.PluginId))
+                .ToDictionary(s => s.PluginId, s => s.Functions.ToList(), StringComparer.Ordinal);
+
+            var result = enabled
+                .Where(p => p.Entry != null || p.Actions.Count > 0 || funcsByPlugin.ContainsKey(p.PluginId))
+                .Select(p => new
+                {
+                    pluginId = p.PluginId,
+                    name = p.Name,
+                    version = p.Version,
+                    actions = p.Actions.Select(a => new
+                    {
+                        action = a.Action,
+                        label = a.Label,
+                        module = a.Module == null ? null : new { kind = a.Module.Kind, name = a.Module.Name, op = a.Module.Op },
+                    }),
+                    functions = funcsByPlugin.TryGetValue(p.PluginId, out var fns) ? fns : new List<string>(),
+                });
+            return McpUtils.Ok(new { plugins = result });
         }
         catch (Exception ex)
         {
@@ -71,7 +94,7 @@ public static class PluginTools
     /// (script => inline JS via the "script" relay; native => module download).
     /// </summary>
     [McpServerTool]
-    [Description("调用已导入插件的 Agent 端动作（module 模块，在目标设备上执行）：如 QQ 插件 scan_accounts/list/collect（获取 ClientKey 与 QQ 列表）、微信插件 collect（扫描微信账号）。插件动作清单见 meta.json actions 或 plugin_list_functions。")]
+    [Description("调用已启用插件的 Agent 端动作（module 在目标设备上执行）：典型如 QQ 插件 com.libra.qqkey 的 scan_accounts（探测本机 QQ ClientKey 并列出账号）、list（拉取 QQ 列表）；微信插件 com.libra.wechat-file 的 collect（扫描微信账号）。先用 plugin_list_functions 查看可用 actions；args 传动作声明的参数（通常可为空）。")]
     public static async Task<string> plugin_action(
         IHttpContextAccessor http,
         PluginService plugins,

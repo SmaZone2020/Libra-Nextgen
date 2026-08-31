@@ -207,19 +207,51 @@ public class TelegramChannelAdapter : IAiChannelAdapter
     }
 
     /// <summary>
-    /// AI replies are rendered as Markdown on Telegram; malformed Markdown
-    /// (a 400 from Telegram) falls back to plain text.
+    /// AI replies are rendered as Markdown on Telegram. Legacy ParseMode.Markdown
+    /// is strict: unescaped dots in numbered lists or unsupported tables cause a
+    /// 400, which would silently fall back to plain text — sanitize first,
+    /// then fall back to plain text only if it still fails.
     /// </summary>
     public async Task SendMarkdownAsync(AiChannel channel, string externalId, string markdown, CancellationToken ct)
     {
+        var safe = SanitizeTelegramMarkdown(markdown);
         try
         {
-            await Bot(channel).SendMessage(externalId, markdown, parseMode: ParseMode.Markdown, cancellationToken: ct);
+            await Bot(channel).SendMessage(externalId, safe, parseMode: ParseMode.Markdown, cancellationToken: ct);
         }
         catch (Exception)
         {
-            await Bot(channel).SendMessage(externalId, markdown, cancellationToken: ct);
+            await Bot(channel).SendMessage(externalId, safe, cancellationToken: ct);
         }
+    }
+
+    /// <summary>
+    /// Make AI markdown acceptable to Telegram's legacy Markdown parser:
+    /// escape the dot in numbered lists, flatten tables to text lines,
+    /// strip the table separator rows.
+    /// </summary>
+    private static string SanitizeTelegramMarkdown(string md)
+    {
+        var lines = md.Split('\n');
+        for (var i = 0; i < lines.Length; i++)
+        {
+            var trimmed = lines[i].Trim();
+            if (trimmed.StartsWith('|') && trimmed.EndsWith('|') && trimmed.Count(c => c == '|') >= 3)
+            {
+                // 表格分隔行 |---|---| 去掉;数据行 | a | b | 展平为 "• a | b"
+                if (trimmed.Contains("---") && System.Text.RegularExpressions.Regex.IsMatch(trimmed, @"^\|[\s:\-|]+\|$"))
+                {
+                    lines[i] = "";
+                    continue;
+                }
+                var cells = trimmed.Trim('|').Split('|').Select(c => c.Trim()).ToList();
+                lines[i] = "• " + string.Join(" | ", cells);
+            }
+        }
+        var text = string.Join("\n", lines);
+        // 数字列表 "1. " -> "1\. "(legacy Markdown 要求转义圆点,否则 400)
+        text = System.Text.RegularExpressions.Regex.Replace(text, @"(?m)^(\s*\d{1,3})\. ", "$1\\. ");
+        return text;
     }
 
     public async Task SendRichTextAsync(AiChannel channel, string externalId, string html, string plain, CancellationToken ct)
