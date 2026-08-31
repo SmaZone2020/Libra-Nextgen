@@ -29,9 +29,9 @@ import {
 import { getAiProviders, type AiProvider } from '../../api/ai';
 import { useDialog } from '../../hooks/useDialog';
 
-const CHANNEL_TYPES: { id: AiChannelType; label: string }[] = [
+const CHANNEL_TYPES: { id: AiChannelType; label: string; disabled?: boolean }[] = [
   { id: 'telegram', label: 'Telegram' },
-  { id: 'lark', label: '飞书 Lark' },
+  { id: 'lark', label: '飞书 Lark', disabled: true },
   { id: 'wechat-claw', label: '微信 Claw（iLink）' },
 ];
 
@@ -188,8 +188,13 @@ export function ChannelFormModal({ open, editing, onClose, onSaved }: ChannelFor
                   <Select.Popover>
                     <ListBox items={CHANNEL_TYPES}>
                       {(item) => (
-                        <ListBox.Item key={item.id} id={item.id} textValue={item.label}>
-                          {item.label}
+                        <ListBox.Item key={item.id} id={item.id} textValue={item.label} isDisabled={item.disabled}>
+                          <span className="flex flex-1 items-center justify-between gap-2">
+                            {item.label}
+                            {item.disabled && (
+                              <span className="text-[11px] text-default-400">{t('channels.unavailable')}</span>
+                            )}
+                          </span>
                         </ListBox.Item>
                       )}
                     </ListBox>

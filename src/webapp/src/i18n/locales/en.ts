@@ -1045,6 +1045,7 @@ export default {
     channels: {
       title: 'AI Channels',
       desc: 'Command Justitia via IM',
+      unavailable: 'Unavailable',
       add: 'Add channel',
       edit: 'Edit channel',
       empty: 'No channels yet. Add one to use the AI assistant over IM.',

@@ -1041,6 +1041,7 @@ export default {
     channels: {
       title: 'AI 频道',
       desc: '通过 IM 指挥 Justitia',
+      unavailable: '暂不可用',
       add: '添加频道',
       edit: '编辑频道',
       empty: '暂无频道',
