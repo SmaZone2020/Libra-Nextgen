@@ -53,7 +53,22 @@ export default function AiPage() {
 
   const [streaming, setStreaming] = useState<StreamingState>('idle');
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  // Sidebar collapse state persists across sessions/browsers.
+  const SIDEBAR_COLLAPSED_KEY = 'libra.ai.sidebarCollapsed';
+  const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === '1';
+    } catch {
+      return false;
+    }
+  });
+  useEffect(() => {
+    try {
+      localStorage.setItem(SIDEBAR_COLLAPSED_KEY, sidebarCollapsed ? '1' : '0');
+    } catch {
+      /* storage blocked — in-memory only */
+    }
+  }, [sidebarCollapsed]);
   const [justitiaTier, setJustitiaTier] = useState<JustitiaTierKey>(() => loadJustitiaTier());
   const [streamingText, setStreamingText] = useState('');
   const [streamingReasoning, setStreamingReasoning] = useState('');
