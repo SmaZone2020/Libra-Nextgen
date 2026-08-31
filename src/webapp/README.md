@@ -148,9 +148,10 @@ import { ContactPage } from '../pages/Contact';
 本仓库**不包含任何插件页面源码**。插件页面是纯 HTML+JS+CSS,由服务器在运行时提供(已安装插件走后端 API):
 
 - 清单:`GET /api/plugins/manager/manifests`(后端)
-- 页面:`GET /api/plugins/{id}/page/manifest.json` → `kind: html`,再取
-  `page/index.html` 以 iframe 渲染;插件经 `page/_bridge.js`(postMessage 桥)
-  调用 `window.LibraPluginHost`(usePluginHost / api / getApiOrigin)
+- 页面:`GET /api/plugins/{id}/page/manifest.json` → `kind: html`,控制台拉取
+  `page/index.html` 后向 `<head>` 注入 SDK,以 sandbox iframe(srcdoc)渲染;
+  插件直接使用注入的 `window.Libra`(usePluginHost / api / getApiOrigin),
+  无需引用任何 SDK 文件
 - 资源:`GET /api/plugins/{id}/assets/**`(后端)
 
 `src/plugins/` 目录只包含加载器本身:
@@ -158,7 +159,7 @@ import { ContactPage } from '../pages/Contact';
 | 文件 | 职责 |
 |---|---|
 | `registry.ts` | 运行时注册:拉清单 → 探测页面 manifest → 组装路由/侧边栏 |
-| `loader.tsx` | iframe 渲染 + postMessage 桥(选中设备/任务下发/WS 推送/带 JWT 的 API 转发) |
+| `loader.tsx` | fetch 插件 HTML → 注入 `<base>`+SDK → sandbox srcdoc iframe;postMessage 桥(选中设备/任务下发/WS 推送/带 JWT 的 API 转发) |
 | `icons.ts` | 图标白名单(侧边栏/路由图标,按 meta.json entry.icon 映射) |
 
 `npm run dev` 与 `npm run preview` 行为一致:插件导入到服务器运行时目录后,刷新页面即生效,控制台无需重新构建。详见 `docs/plugins/README.md` 与 `docs/plugins/html-plugin-sdk.md`。

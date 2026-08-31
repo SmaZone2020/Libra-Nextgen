@@ -20,8 +20,9 @@
 
 1. `GET /api/plugins/manager/manifests`(启用清单,后端)→
 2. 对每个带 `entry` 的插件 `GET /api/plugins/{id}/page/manifest.json`(后端)→
-3. 插件 `page/index.html` 以 **iframe** 渲染(`/api/plugins/{id}/page/index.html`),页面内
-   `<script src="_bridge.js">` 引入桥 SDK,通过 postMessage RPC 拿到宿主能力。
+3. 控制台拉取插件 `page/index.html`,向 `<head>` 注入 `<base>` + SDK(桥脚本),
+   以 **sandbox iframe(srcdoc)** 渲染。插件页面无需引用任何 SDK 文件,
+   `window.Libra` 直接可用,通过 postMessage RPC 拿到宿主能力。
 
 **效果**:新增/更新插件只需要服务器上出现新文件——`npm run dev` 与 `npm run preview`
 都无需重建控制台,导入插件后刷新页面即生效。页面资源端点与 `assets/` 一致匿名可读
@@ -31,7 +32,7 @@
 
 - **页面形态**:`page/index.html` + `page/index.js` + `page/index.css`,零依赖,
   样式完全自包含(iframe 内宿主 Tailwind/HeroUI 类不存在)。
-- **桥 SDK**:`window.LibraPluginHost` —— `pluginId` / `getApiOrigin()` /
+- **桥 SDK(注入式)**:`window.Libra` —— `pluginId` / `getApiOrigin()` /
   `usePluginHost()`(selectedAgent、selectAgent、dispatchTask、subscribeOutput)/
   `api.get/post/put/delete`(带 JWT 的后端调用)。
   完整契约见 [`html-plugin-sdk.md`](html-plugin-sdk.md)。

@@ -138,6 +138,10 @@ public class PluginPageController : ControllerBase
             return StatusCode(304);
 
         Response.Headers.ETag = etag;
+        // srcdoc-rendered plugin iframes run with an opaque origin (sandboxed
+        // without allow-same-origin); their fetches to this anonymous endpoint
+        // therefore need CORS.
+        Response.Headers.AccessControlAllowOrigin = "*";
         // Short cache: entry bundles are versioned via manifest, sub-assets may
         // change during plugin development — 5 minutes is a safe compromise.
         Response.Headers.CacheControl = "public, max-age=300";
@@ -158,17 +162,28 @@ public class PluginPageController : ControllerBase
     }
 
     private const string BridgeScript = """
-        // Libra plugin bridge — runs inside an HTML-form plugin iframe.
-        // Exposes window.LibraPluginHost to the page and proxies everything
-        // to the console frame via postMessage RPC.
+        // Libra plugin SDK — runs inside an HTML plugin iframe.
+        // Exposes window.Libra (alias LibraPluginHost) to the page and proxies
+        // everything to the console frame via postMessage RPC.
+        //
+        // The console may inject the SDK by prepending to <head>:
+        //   <script>window.__libraSdkConfig = { pluginId, apiOrigin };</script>
+        //   <script src=".../page/_bridge.js"></script>
+        // Without injection (direct <script src="_bridge.js">) the pluginId is
+        // derived from the URL /api/plugins/<id>/page/... and apiOrigin from
+        // location.origin.
         (function () {
           'use strict';
           if (window.__libraBridgeLoaded) return;
           window.__libraBridgeLoaded = true;
 
-          // pluginId is derived from the iframe URL: /api/plugins/<id>/page/...
-          var m = /\/api\/plugins\/([^/]+)\/page\//.exec(location.pathname);
-          var PLUGIN_ID = m ? decodeURIComponent(m[1]) : '';
+          var cfg = window.__libraSdkConfig || {};
+          var PLUGIN_ID = cfg.pluginId || '';
+          if (!PLUGIN_ID) {
+            var m = /\/api\/plugins\/([^/]+)\/page\//.exec(location.pathname || '');
+            if (m) PLUGIN_ID = decodeURIComponent(m[1]);
+          }
+          var API_ORIGIN = cfg.apiOrigin || location.origin;
 
           var pending = new Map();
           var nextId = 1;
@@ -181,7 +196,7 @@ public class PluginPageController : ControllerBase
             return new Promise(function (resolve, reject) {
               var id = nextId++;
               pending.set(id, { resolve: resolve, reject: reject });
-              send({ id: id, op: op, params: params });
+              send({ id: id, op: op, params: params || {} });
               // No hard timeout — long-running actions (e.g. dispatchTask) may
               // legitimately take minutes; the console always resolves.
             });
@@ -206,7 +221,9 @@ public class PluginPageController : ControllerBase
           var host = {
             selectedAgent: null,
             lastOutput: null,
-            selectAgent: function (id) { return request('call', { method: 'selectAgent', params: [id] }); },
+            selectAgent: function (id) {
+              return request('call', { method: 'selectAgent', params: [id] });
+            },
             dispatchTask: function (pluginId, action, args, agentId) {
               return request('call', {
                 method: 'dispatchTask',
@@ -248,12 +265,16 @@ public class PluginPageController : ControllerBase
           // in the iframe without requiring a re-subscribe dance.
           setInterval(syncState, 2000);
 
-          window.LibraPluginHost = Object.freeze({
+          var Libra = Object.freeze({
             pluginId: PLUGIN_ID,
-            getApiOrigin: function () { return location.origin; },
+            getApiOrigin: function () { return API_ORIGIN; },
             usePluginHost: function () { return host; },
             api: api,
           });
+
+          window.Libra = Libra;
+          // Compatibility alias (previously LibraPluginHost).
+          window.LibraPluginHost = Libra;
         })();
         """;
 }

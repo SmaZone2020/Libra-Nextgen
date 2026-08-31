@@ -122,6 +122,10 @@ public class PluginActionController : ControllerBase
         if (!System.IO.File.Exists(path))
             return NotFound();
 
+        // Plugin iframes are sandboxed without allow-same-origin (opaque
+        // origin); their fetches to this anonymous endpoint need CORS.
+        Response.Headers.AccessControlAllowOrigin = "*";
+
         var contentType = Path.GetExtension(filename).ToLowerInvariant() switch
         {
             ".svg" => "image/svg+xml",
