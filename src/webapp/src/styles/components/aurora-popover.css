@@ -147,3 +147,42 @@
   --aurora-text-b: #c084fc;
   --aurora-text-c: #67e8f9;
 }
+
+/* 动态流动:背景 200% 宽,平移产生滚动渐变(此前 keyframes 缺失,文本特效是静态的) */
+@keyframes aurora-text-flow {
+  from {
+    background-position: 0% center;
+  }
+  to {
+    background-position: -200% center;
+  }
+}
+
+/* 图标:SVG 渐变填充 + 色相/辉光流动。
+   不能用 .aurora-text 的 background-clip:text —— 对 SVG 元素不裁剪,
+   且 color:transparent 会让 currentColor 填充的图标直接变白。 */
+.aurora-icon {
+  animation: aurora-icon-flow 3s linear infinite;
+}
+.aurora-icon path,
+.aurora-icon * {
+  fill: url(#aurora-grad) !important;
+}
+@keyframes aurora-icon-flow {
+  0% {
+    filter: hue-rotate(0deg) drop-shadow(0 0 4px rgba(168, 85, 247, 0.55));
+  }
+  50% {
+    filter: hue-rotate(35deg) drop-shadow(0 0 7px rgba(99, 102, 241, 0.6));
+  }
+  100% {
+    filter: hue-rotate(0deg) drop-shadow(0 0 4px rgba(168, 85, 247, 0.55));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .aurora-text,
+  .aurora-icon {
+    animation: none;
+  }
+}

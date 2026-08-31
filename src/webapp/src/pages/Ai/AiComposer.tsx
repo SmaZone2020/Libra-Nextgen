@@ -279,6 +279,16 @@ export function AiComposer({
 
   return (
     <>
+      {/* Aurora 渐变定义:供最高档位文本与图标共用(#aurora-grad) */}
+      <svg width="0" height="0" className="absolute" aria-hidden="true" focusable="false">
+        <defs>
+          <linearGradient id="aurora-grad" x1="0%" y1="0%" x2="100%" y2="0%">
+            <stop offset="0%" style={{ stopColor: 'var(--aurora-text-a)' }} />
+            <stop offset="50%" style={{ stopColor: 'var(--aurora-text-b)' }} />
+            <stop offset="100%" style={{ stopColor: 'var(--aurora-text-c)' }} />
+          </linearGradient>
+        </defs>
+      </svg>
       <PromptInput
         status={isGenerating ? 'streaming' : 'ready'}
         variant="primary"
@@ -346,7 +356,15 @@ export function AiComposer({
                   isDisabled={isGenerating}
                   className="h-9 w-[140px] shrink-0 gap-1"
                 >
-                  <span className={`text-sm font-medium ${activeTierIndex === 3 ? 'aurora-text' : ''}`}>
+                  {(() => {
+                    const TierIcon = activeTier?.icon ?? JUSTITIA_TIERS[permission]?.icon;
+                    if (!TierIcon) return null;
+                    // 最高档位:图标用 SVG 渐变填充 + 流动辉光(避免 background-clip 导致的变白)
+                    return activeTierIndex === 3
+                      ? <TierIcon className="aurora-icon" fill="url(#aurora-grad)" />
+                      : <TierIcon />;
+                  })()}
+                  <span className={`text-sm ml-1 font-medium ${activeTierIndex === 3 ? 'aurora-text' : ''}`}>
                     {activeTier?.name ?? JUSTITIA_TIERS[permission]?.name}
                   </span>
                   <ChevronDown className="size-3.5 shrink-0 text-muted" />
