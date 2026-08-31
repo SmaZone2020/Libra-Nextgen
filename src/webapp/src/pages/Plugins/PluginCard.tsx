@@ -38,10 +38,10 @@ export function PluginCard({ name, description, version, author, route, hasRoute
             )}
           </div>
           <Card.Description>
-            {description && <p className="text-[15px] mt-1 text-default-600 line-clamp-2">{description}</p>}
-            <p className="text-xs text-default-400 mt-1">
+            {description && <div className="text-[15px] mt-1 text-default-600 line-clamp-2">{description}</div>}
+            <div className="text-xs text-default-400 mt-1">
               {author && `${t('plugins.author')}: ${author}`}
-            </p>
+            </div>
           </Card.Description>
         </Card.Header>
         {footer !== undefined && (
