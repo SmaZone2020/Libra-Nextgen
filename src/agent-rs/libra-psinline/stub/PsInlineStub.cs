@@ -124,6 +124,30 @@ namespace PsInline
                                 sb.Append(ea == null ? "<null>" : ea.Location);
                             }
                             catch (System.Exception e) { sb.Append("<err:").Append(e.Message).Append('>'); }
+                            sb.Append("; CLR:");
+                            try { sb.Append(Environment.Version.ToString()); }
+                            catch {}
+                            sb.Append("; FPathCandidates:[");
+                            var candidatePaths = new string[]
+                            {
+                                Environment.CurrentDirectory,
+                                System.AppDomain.CurrentDomain.BaseDirectory,
+                                System.AppDomain.CurrentDomain.FriendlyName,
+                                System.Environment.GetCommandLineArgs().Length > 0 ? System.Environment.GetCommandLineArgs()[0] : null,
+                                System.Runtime.InteropServices.RuntimeEnvironment.GetRuntimeDirectory(),
+                                System.IO.Path.Combine(Environment.CurrentDirectory, "x.exe.config"),
+                                System.IO.Path.Combine("C:\\", "x.config"),
+                            };
+                            foreach (var c in candidatePaths)
+                            {
+                                sb.Append("(");
+                                sb.Append(c == null ? "<null>" : c.Replace("\\", "/"));
+                                sb.Append("=>");
+                                try { System.IO.Path.GetFullPath(c); sb.Append("ok"); }
+                                catch (System.Exception e) { sb.Append("BAD:").Append(e.GetType().Name); }
+                                sb.Append(");");
+                            }
+                            sb.Append(']');
                             HostDiag = sb.ToString();
                         }
                         catch { HostDiag = cfgEx.Message; }
