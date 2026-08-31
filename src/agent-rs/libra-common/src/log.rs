@@ -24,7 +24,40 @@ pub fn debug_enabled() -> bool {
     })
 }
 
-/// Log to stderr when debugging is active (`debug_enabled()`); dead branch in
+/// Debug log file path when debugging is on; `None` otherwise.
+fn debug_log_path() -> Option<std::path::PathBuf> {
+    static PATH: std::sync::OnceLock<Option<std::path::PathBuf>> = std::sync::OnceLock::new();
+    PATH.get_or_init(|| {
+        if !debug_enabled() {
+            return None;
+        }
+        let mut p = std::env::temp_dir();
+        p.push("libra_dbg.log");
+        Some(p)
+    })
+    .clone()
+}
+
+/// Append one line to the debug log (creates it lazily). No-op when debugging
+/// is off, so a shipped agent never touches the disk.
+pub fn append_debug(line: &str) {
+    let Some(path) = debug_log_path() else { return };
+    use std::io::Write;
+    if let Ok(mut f) = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(path)
+    {
+        let ms = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_millis())
+            .unwrap_or(0);
+        let _ = writeln!(f, "[{}] {}", ms, line);
+        let _ = f.flush();
+    }
+}
+
+/// Log to stderr (and the debug file) when debugging is active; dead branch in
 /// a shipped release without the explicit opt-in.
 #[macro_export]
 macro_rules! dlog {
@@ -32,6 +65,7 @@ macro_rules! dlog {
         if $crate::log::debug_enabled() {
             eprintln!($($arg)*);
             let _ = ::std::io::Write::flush(&mut ::std::io::stderr());
+            $crate::log::append_debug(&::std::format!($($arg)*));
         }
     };
 }
