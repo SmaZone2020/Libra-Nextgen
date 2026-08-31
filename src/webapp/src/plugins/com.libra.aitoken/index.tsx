@@ -17,7 +17,6 @@ interface AITokenResult {
   items: AITokenItem[];
 }
 
-/** vendor → 图标文件名（打包在插件 assets/ 目录，经资源端点请求） */
 const VENDOR_META: Record<string, { icon: string; label: string }> = {
   ClaudeCode: { icon: 'claude.svg', label: 'Claude Code' },
   OpenCode: { icon: 'opencode-logo-light.svg', label: 'OpenCode' },
@@ -36,7 +35,6 @@ function assetUrl(file: string): string {
   return `${getApiOrigin()}/api/plugins/${PLUGIN_ID}/assets/${file}`;
 }
 
-/** 插件结果可能是 JSON 字符串（服务端透传）或已是对象，统一解析。 */
 function parseResult(raw: unknown): AITokenResult | null {
   if (raw && typeof raw === 'object' && !Array.isArray(raw)) return raw as AITokenResult;
   if (typeof raw === 'string') {
@@ -48,7 +46,6 @@ function parseResult(raw: unknown): AITokenResult | null {
   return null;
 }
 
-/** 获取本机 AI Agent 工具 APIKey。 */
 export default function AITokenPage() {
   const { selectedAgent, dispatchTask } = usePluginHost();
   const [running, setRunning] = useState(false);
@@ -74,7 +71,6 @@ export default function AITokenPage() {
     }
   }, [selectedAgent, dispatchTask]);
 
-  // 进入页面自动扫描；切换设备后自动重新扫描。
   useEffect(() => {
     if (selectedAgent && autoRanAgentRef.current !== selectedAgent.id) {
       autoRanAgentRef.current = selectedAgent.id;

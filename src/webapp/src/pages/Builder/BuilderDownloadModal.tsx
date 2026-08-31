@@ -15,12 +15,10 @@ export function BuilderDownloadModal({ record, onClose }: BuilderDownloadModalPr
   const { t } = useTranslation();
   const [copied, setCopied] = useState(false);
 
-  // 匿名下载 URL（构建产物直出，无需鉴权）
   const artifactUrl = useMemo(() => (record ? getArtifactUrl(record.id) : ''), [record]);
 
   const os = record?.platform.startsWith('linux') ? 'linux' : 'windows';
 
-  /** 一键命令：按平台给出 PowerShell / Cmd / Bash 变体。 */
   const commands = useMemo(() => {
     if (!record) return { powershell: '', cmd: '', bash: '' };
     const url = artifactUrl;
@@ -67,7 +65,7 @@ export function BuilderDownloadModal({ record, onClose }: BuilderDownloadModalPr
           </Modal.Header>
           <Modal.Body>
             <div className="space-y-4 text-sm">
-              {/* 构建信息 */}
+              {}
               <div className="flex flex-wrap items-center gap-2">
                 <Chip size="sm" variant="secondary">
                   {PLATFORM_LABEL[record.platform] || record.platform}
@@ -80,7 +78,7 @@ export function BuilderDownloadModal({ record, onClose }: BuilderDownloadModalPr
                 </span>
               </div>
 
-              {/* 下半部分：一键执行脚本 */}
+              {}
               <div className="space-y-2">
                 <p className="font-semibold">{t('builder.oneClickCmd')}</p>
                 {os === 'windows' ? (

@@ -20,18 +20,12 @@ function fmtTime(ts: string): string {
   return `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
 }
 
-/**
- * 全局事件流（页面 Header，移动端隐藏）。
- * 铃铛按钮打开右侧抽屉：挂载时主动拉取历史（弥补 WS 回放时序丢失），
- * 订阅实时追加，按设置-首选项里选择的事件类型过滤。
- */
 export function EventViewer() {
   const [events, setEvents] = useState<EventItem[]>([]);
   const [unread, setUnread] = useState(0);
   const [open, setOpen] = useState(false);
   const listRef = useRef<HTMLDivElement>(null);
 
-  // 挂载时拉取事件历史（服务端 WS 回放可能在订阅前到达而丢失）
   useEffect(() => {
     let cancelled = false;
     getRecentEvents(50)
@@ -47,7 +41,6 @@ export function EventViewer() {
     return () => { cancelled = true; };
   }, []);
 
-  // 订阅实时事件
   useEffect(() => {
     const off = consoleWs.on('event.item', (msg) => {
       const e = msg.data as unknown as EventItem;
@@ -60,7 +53,6 @@ export function EventViewer() {
     return off;
   }, [open]);
 
-  // 打开时清零未读并滚到底部
   useEffect(() => {
     if (open) {
       setUnread(0);
@@ -71,7 +63,6 @@ export function EventViewer() {
     }
   }, [open, events]);
 
-  // 按设置的事件类型过滤显示
   const visibleEvents = useMemo(() => {
     const enabled = getEnabledEventTypes();
     if (!enabled) return events;

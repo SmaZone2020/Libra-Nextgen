@@ -161,7 +161,6 @@ public class PluginService
             new JsonSerializerOptions { PropertyNameCaseInsensitive = true })
             ?? throw new InvalidDataException("meta.json could not be parsed");
 
-        // 以仓库名为插件 id（覆盖仓库内 meta.json 自带的 pluginId）。
         meta.PluginId = repoName;
         ValidateMeta(meta);
         InvalidateScriptCache(repoName);

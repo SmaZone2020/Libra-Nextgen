@@ -1,13 +1,11 @@
 import { api, apiBase, getToken } from './client';
 
-// ── 类型（与服务端 AiModels.cs / AiController.cs 对齐）─────────────────────
 
 export interface AiProvider {
   id: string;
   name: string;
   providerType: string;
   baseUrl: string;
-  /** 服务端永不回传密文；创建/更新时作为明文 API Key 提交。 */
   apiKeyEnc: string;
   models: string[];
   defaultModel: string;
@@ -35,7 +33,6 @@ export interface AiToolCall {
   state: AiToolState;
   output?: string;
   error?: string;
-  /** 该工具调用发生时已输出的助手文本（用于把工具调用穿插在文本流中）。 */
   textBefore?: string;
 }
 
@@ -66,7 +63,6 @@ export interface AiSession {
   messages: AiMessage[];
   createdAt: string;
   updatedAt: string;
-  /** 频道会话标记：null = 控制台会话；非 null = IM 频道会话。 */
   channelId?: string | null;
   channelType?: 'telegram' | 'lark' | 'wechat-claw' | null;
   channelExternalId?: string | null;
@@ -85,7 +81,6 @@ export interface AiMcpInfo {
   tools: AiToolDescriptor[];
 }
 
-// ── SSE 事件（POST /api/ai/chat 响应流）───────────────────────────────────
 
 export type AiSseEvent =
   | { type: 'reasoning'; label: string; content: string }
@@ -99,7 +94,6 @@ export type AiSseEvent =
         toolName: string;
         argsText: string;
         reason?: string;
-        /** approval = 供应商审批；escalation = Justitia 档位提升请求。 */
         kind?: 'approval' | 'escalation';
         requiredTier?: number;
         currentTier?: number;
@@ -154,10 +148,6 @@ export async function getAiSession(id: string): Promise<AiSession> {
   return api.get<AiSession>(`/ai/sessions/${id}`);
 }
 
-/**
- * 会话当前是否有挂起的审批（控制台打开会话时恢复审批模态框，含频道会话）。
- * 返回 null 表示无挂起审批。
- */
 export async function getPendingAiApproval(
   id: string,
 ): Promise<AiToolCall | null> {
@@ -177,17 +167,14 @@ export async function renameAiSession(id: string, title: string): Promise<void> 
   await api.put<void>(`/ai/sessions/${id}/rename`, { title });
 }
 
-/** 编辑会话中的一条用户消息内容（仅限 user 消息）。 */
 export async function editAiMessage(id: string, messageId: string, content: string): Promise<void> {
   await api.put<void>(`/ai/sessions/${id}/messages/${messageId}`, { content });
 }
 
-/** 删除会话中的一条消息（用户消息或 AI 消息）。 */
 export async function deleteAiMessage(id: string, messageId: string): Promise<void> {
   await api.delete<void>(`/ai/sessions/${id}/messages/${messageId}`);
 }
 
-/** 分支会话：复制为带 -fork 后缀的新会话（含完整消息历史）。 */
 export async function forkAiSession(id: string): Promise<AiSession> {
   return api.post<AiSession>(`/ai/sessions/${id}/fork`);
 }
@@ -200,11 +187,6 @@ export async function setAiMcp(input: AiMcpInput): Promise<void> {
   await api.put<void>('/ai/mcp', input);
 }
 
-/**
- * 发起流式聊天。以 fetch + ReadableStream 解析 SSE（POST，方便携带长文）。
- * onEvent 依次收到 reasoning/message/tool_call/tool_result/approval/done/error。
- * @param tier Justitia 档位 key（cognitio/arbitrium/imperium/dictatura），后端强制校验。
- */
 export async function streamAiChat(
   sessionId: string,
   content: string,
@@ -255,9 +237,6 @@ export async function streamAiChat(
   }
 }
 
-/** 审批/拒绝/临时批准挂起的工具调用（纯 POST，不返回 SSE）。
- * 后端收到决策后写入门闩，由原 SSE 流（streamAiChat）继续推送
- * tool_result / message / done——本函数仅返回是否接受。 */
 export async function resolveAiApproval(
   sessionId: string,
   toolCallId: string,

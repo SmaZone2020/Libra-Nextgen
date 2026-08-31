@@ -14,76 +14,57 @@ using Telegram.Bot.Types.ReplyMarkups;
 
 namespace LibraNextgen.Service.Services;
 
-/// <summary>频道类型常量。</summary>
 public static class AiChannelTypes
 {
     public const string Telegram = "telegram";
     public const string Lark = "lark";
     public const string WechatClaw = "wechat-claw";
 
-    /// <summary>配置中需要静态加密的敏感键。</summary>
     public static readonly HashSet<string> SensitiveKeys = new(StringComparer.Ordinal)
     {
         "botToken", "appSecret", "encryptKey", "ilinkKey", "webhookSecret",
     };
 
-    /// <summary>手写长轮询型频道（由 ChannelPollingHostedService 驱动；Telegram 改用 Telegram.Bot 库自带接收）。</summary>
     public static readonly string[] PollingTypes = { WechatClaw };
 }
 
-/// <summary>适配器规范化后的入站消息（频道无关）。</summary>
 public sealed class ChannelInboundMessage
 {
     public required string ChannelId { get; init; }
-    /// <summary>频道侧身份 ID（绑定/会话/权限键）：私聊 = chat id；群组 = 发送者 from id。</summary>
     public required string ExternalId { get; init; }
-    /// <summary>回复目标（发送地址）：群组 = 群 chat id；私聊 = null（用 ExternalId）。</summary>
     public string? ReplyTo { get; init; }
     public string ExternalName { get; init; } = "";
     public required string Text { get; init; }
     /// <summary>
-    /// 幂等去重键（Telegram update_id / 飞书 event_id / iLink message_id）。
-    /// 非空时由 AiChannelService 在入站管线入口去重，防御并发循环 / 重启重放。
     /// </summary>
     public string? DedupeKey { get; init; }
-    /// <summary>原始消息 ID（Telegram message id；搜索词等场景用于删除用户消息）。</summary>
     public long? OriginMessageId { get; init; }
-    /// <summary>消息是否来自群组（群组权限过滤用：仅已绑定账户 + @提及）。</summary>
     public bool IsGroup { get; init; }
 }
 
-/// <summary>轮询型适配器一次拉取的增量批次。游标为频道不透明字符串（Telegram update_id / iLink get_updates_buf）。</summary>
 public sealed class ChannelPollBatch
 {
     public string? NewCursor { get; init; }
     public List<ChannelInboundMessage> Messages { get; init; } = new();
 }
 
-/// <summary>媒体消息（原生发送图片/视频/文件等；v1 支持 URL 形态）。</summary>
 public sealed class ChannelMedia
 {
-    /// <summary>photo | video | document | audio | animation。</summary>
     public required string Type { get; init; }
-    /// <summary>媒体文件 URL（http/https）。</summary>
     public required string Url { get; init; }
     public string? FileName { get; init; }
     public string? Caption { get; init; }
 }
 
-/// <summary>内联按钮审批回调（Telegram callback query 解析结果，频道无关）。</summary>
 public sealed class CallbackAction
 {
     public required string ChannelId { get; init; }
-    /// <summary>身份 ID（群组 = 点击者 from id；私聊 = chat id）。</summary>
     public required string ExternalId { get; init; }
     public required string SessionId { get; init; }
     public required string ToolCallId { get; init; }
     public bool Approved { get; init; }
-    /// <summary>one-time | 5min | 20min。</summary>
     public required string Permit { get; init; }
-    /// <summary>回调回执所需（AnswerCallbackQuery / 编辑消息清按钮）。</summary>
     public required string CallbackQueryId { get; init; }
-    /// <summary>发送目标（回复地址；群组 = 群 chat id）。</summary>
     public required string ChatId { get; init; }
     public int MessageId { get; init; }
 }
@@ -99,142 +80,98 @@ public sealed class CallbackResult
     }
 }
 
-/// <summary>频道菜单按钮回调（模型分页/选择/搜索、档位切换），频道无关。</summary>
 public sealed class ChannelMenuAction
 {
-    /// <summary>model-nav | model-select | model-search | tier-select | help-* | model-*。</summary>
     public required string Kind { get; init; }
     public required string ChannelId { get; init; }
-    /// <summary>身份 ID（群组 = 点击者 from id；私聊 = chat id）。</summary>
     public required string ExternalId { get; init; }
-    /// <summary>发送目标（回复地址；群组 = 群 chat id）。</summary>
     public required string ChatId { get; init; }
     public required string CallbackQueryId { get; init; }
     public int MessageId { get; init; }
-    /// <summary>model-nav: 页码；model-select: 索引；tier-select: 档位 0-3。</summary>
     public string? Data { get; init; }
 }
 
-/// <summary>AI 频道适配器统一抽象。入站形态：长轮询（PollAsync）、库回调（Telegram）、Webhook/长连接（解析函数）。</summary>
 public interface IAiChannelAdapter
 {
     string ChannelType { get; }
 
-    /// <summary>向指定外部用户发送文本（适配器自行处理分块/失败）。</summary>
     Task SendTextAsync(AiChannel channel, string externalId, string text, CancellationToken ct);
 
-    /// <summary>发送媒体（图片/视频/文件等）。默认降级为发送 URL 文本。</summary>
     Task SendMediaAsync(AiChannel channel, string externalId, ChannelMedia media, CancellationToken ct) =>
         SendTextAsync(channel, externalId, string.IsNullOrEmpty(media.Caption) ? media.Url : $"{media.Caption}\n{media.Url}", ct);
 
     /// <summary>
-    /// 发送审批请求（带操作按钮的频道原生实现，如 Telegram 内联键盘）。
-    /// html/plain 双版本：支持富文本的频道渲染 html（含按钮），其余发 plain。
-    /// 默认降级为纯文本（其他频道现状：IM 内 /approve /reject 命令）。
     /// </summary>
     Task SendApprovalAsync(AiChannel channel, string externalId, string html, string plain, string sessionId, string toolCallId, CancellationToken ct) =>
         SendTextAsync(channel, externalId, plain, ct);
 
     /// <summary>
-    /// 审批决策完成后删除审批消息（用户已批准/拒绝，无需保留）。
-    /// 仅支持原生按钮的频道实现；默认 no-op。
     /// </summary>
     Task DeleteApprovalMessageAsync(AiChannel channel, string sessionId, string toolCallId, CancellationToken ct) =>
         Task.CompletedTask;
 
-    /// <summary>连通性自检（设置页"测试连接"）。返回 (ok, message)。</summary>
     Task<(bool Ok, string Message)> TestAsync(AiChannel channel, CancellationToken ct);
 
-    /// <summary>是否支持富文本（HTML 解析模式）。Telegram 支持；其余频道回退纯文本。</summary>
     bool SupportsRichText => false;
 
     /// <summary>
-    /// 发送富文本消息：html 供支持 Markdown 的频道渲染，plain 供其他频道。
-    /// 调用方保证 html 内容已做 HTML 转义（用户输入不可信）。
     /// </summary>
     Task SendRichTextAsync(AiChannel channel, string externalId, string html, string plain, CancellationToken ct) =>
         SendTextAsync(channel, externalId, plain, ct);
 
     /// <summary>
-    /// 删除一条消息（搜索词场景：删除用户发送的搜索关键词消息）。
-    /// 默认 no-op（仅 Telegram 支持）。
     /// </summary>
     Task<bool> DeleteMessageAsync(AiChannel channel, string externalId, long messageId, CancellationToken ct) =>
         Task.FromResult(false);
 
-    /// <summary>获取 bot 用户名（深链绑定 t.me/{username}?start=CODE 用）。默认空。</summary>
     Task<string> GetBotUsernameAsync(AiChannel channel, CancellationToken ct) =>
         Task.FromResult("");
 
     /// <summary>
-    /// 发送带自定义键盘的消息（聊天框下方常驻按钮，点击发送按钮文本）。
-    /// 默认 no-op（仅 Telegram 支持）。
     /// </summary>
     Task SendKeyboardAsync(AiChannel channel, string externalId, string html, string plain, IReadOnlyList<string> buttons, CancellationToken ct) =>
         Task.CompletedTask;
 
     /// <summary>
-    /// 流式输出：发送首条消息并返回消息 ID（用于后续编辑更新）。
-    /// 返回 0 表示该频道不支持流式（调用方回退一次性输出）。
     /// </summary>
     Task<long> StartStreamAsync(AiChannel channel, string externalId, string text, CancellationToken ct) =>
         Task.FromResult(0L);
 
-    /// <summary>流式输出：编辑已发送的消息为最新文本（StartStreamAsync 返回非 0 时调用）。</summary>
     Task UpdateStreamAsync(AiChannel channel, string externalId, long messageId, string text, CancellationToken ct) =>
         Task.CompletedTask;
 
     /// <summary>
-    /// 发送菜单按钮消息（模型选择/档位切换等内联菜单）。
-    /// rows：行结构（每行一组按钮，同行按钮并排显示）。
-    /// 返回消息 ID（0 = 频道不支持菜单，调用方回退纯文本）。
     /// </summary>
     Task<long> SendMenuAsync(AiChannel channel, string externalId, string html, string plain, IReadOnlyList<IReadOnlyList<(string Text, string Data)>> rows, CancellationToken ct) =>
         Task.FromResult(0L);
 
-    /// <summary>编辑菜单消息（翻页/搜索/选择后更新）。rows 为 null 表示清空按钮。返回是否成功。</summary>
     Task<bool> EditMenuAsync(AiChannel channel, string chatId, long messageId, string html, string plain, IReadOnlyList<IReadOnlyList<(string Text, string Data)>>? rows, CancellationToken ct) =>
         Task.FromResult(false);
 
-    /// <summary>轮询型适配器拉取增量；非轮询型返回空批。</summary>
     Task<ChannelPollBatch> PollAsync(AiChannel channel, string? cursor, CancellationToken ct) =>
         Task.FromResult(new ChannelPollBatch { NewCursor = cursor });
 }
 
-/// <summary>微信 iLink 扫码状态轮询结果。</summary>
 public sealed class WeChatQrStatusResult
 {
-    /// <summary>wait | scaned | confirmed | expired。</summary>
     public string Status { get; init; } = "wait";
-    /// <summary>confirmed 时返回的 bot_token（仅此一次响应可见）。</summary>
     public string? BotToken { get; init; }
-    /// <summary>confirmed 时返回的 bot 账号 ID（…@im.bot）。</summary>
     public string? ILinkBotId { get; init; }
-    /// <summary>confirmed 时返回的业务基座地址（与默认一致时可为空）。</summary>
     public string? BaseUrl { get; init; }
 }
 
-/// <summary>iLink 会话过期（ret/errcode -14），需要重新扫码登录。</summary>
 public sealed class SessionExpiredException : Exception
 {
     public SessionExpiredException(string message) : base(message) { }
 }
 
 /// <summary>
-/// Telegram 适配器——基于官方 Telegram.Bot（.NET）库，不手写 HTTP/轮询。
-/// 入站：StartReceiving 长轮询回调（库内部管理 offset，无需公网回调）；
-/// 出站：SendTextMessageAsync / SendPhotoAsync / SendDocumentAsync 等原生 API；
-/// 审批：InlineKeyboardMarkup 内联按钮（批准 / 临时批准 5min / 20min / 拒绝），
-///       callback data 用短令牌（Telegram 上限 64 字节），点击经 CallbackQuery 回执。
 /// </summary>
 public class TelegramChannelAdapter : IAiChannelAdapter
 {
     private readonly ILogger<TelegramChannelAdapter> _logger;
-    /// <summary>channelId → bot client（每频道一个；Token 变化时旧 client 失效由轮询重启兜底）。</summary>
     private readonly ConcurrentDictionary<string, ITelegramBotClient> _clients = new();
-    /// <summary>审批按钮令牌表：token → 审批上下文（TTL 10 分钟）。</summary>
     private readonly ConcurrentDictionary<string, ApprovalButton> _approvalButtons = new();
-    /// <summary>待删除的审批消息：sessionId:toolCallId → (chatId, messageId)。决策完成后删除。</summary>
     private readonly ConcurrentDictionary<string, (string ChatId, int MessageId)> _pendingApprovalMessages = new();
 
     public TelegramChannelAdapter(ILogger<TelegramChannelAdapter> logger)
@@ -244,7 +181,6 @@ public class TelegramChannelAdapter : IAiChannelAdapter
 
     public string ChannelType => AiChannelTypes.Telegram;
 
-    /// <summary>Telegram 支持 HTML 解析模式（宽松免转义，仅需调用方转义用户输入）。</summary>
     public bool SupportsRichText => true;
 
     private static string? Token(AiChannel ch) =>
@@ -261,7 +197,6 @@ public class TelegramChannelAdapter : IAiChannelAdapter
         await Bot(channel).SendMessage(externalId, text, cancellationToken: ct);
     }
 
-    /// <summary>富文本：HTML 解析模式（调用方负责转义用户输入）。</summary>
     public async Task SendRichTextAsync(AiChannel channel, string externalId, string html, string plain, CancellationToken ct)
     {
         try
@@ -270,12 +205,10 @@ public class TelegramChannelAdapter : IAiChannelAdapter
         }
         catch (Exception)
         {
-            // HTML 渲染失败（如非法标签）：回退纯文本，保证消息必达。
             await Bot(channel).SendMessage(externalId, plain, cancellationToken: ct);
         }
     }
 
-    /// <summary>删除一条消息（搜索关键词等场景）。</summary>
     public async Task<bool> DeleteMessageAsync(AiChannel channel, string externalId, long messageId, CancellationToken ct)
     {
         try
@@ -290,7 +223,6 @@ public class TelegramChannelAdapter : IAiChannelAdapter
         }
     }
 
-    /// <summary>发送带自定义键盘的消息（聊天框下方常驻按钮；按钮点击即发送其文本）。</summary>
     public async Task SendKeyboardAsync(AiChannel channel, string externalId, string html, string plain, IReadOnlyList<string> buttons, CancellationToken ct)
     {
         var keyboard = new ReplyKeyboardMarkup(buttons.Select(b => new[] { new KeyboardButton(b) }))
@@ -326,13 +258,11 @@ public class TelegramChannelAdapter : IAiChannelAdapter
                 await bot.SendAnimation(externalId, file, caption: media.Caption, cancellationToken: ct);
                 break;
             default:
-                // fileName 由 URL/文件名推断（22.x 的 InputFile 自带文件名）。
                 await bot.SendDocument(externalId, file, caption: media.Caption, cancellationToken: ct);
                 break;
         }
     }
 
-    /// <summary>发送审批请求：HTML 富文本 + 内联按钮（批准 / 5min / 20min / 拒绝）；失败回退纯文本。</summary>
     public async Task SendApprovalAsync(AiChannel channel, string externalId, string html, string plain, string sessionId, string toolCallId, CancellationToken ct)
     {
         var markup = BuildApprovalMarkup(channel.Id, externalId, sessionId, toolCallId);
@@ -345,11 +275,9 @@ public class TelegramChannelAdapter : IAiChannelAdapter
         {
             sent = await Bot(channel).SendMessage(externalId, plain, replyMarkup: markup, cancellationToken: ct);
         }
-        // 记录审批消息：决策完成后据此删除。
         _pendingApprovalMessages[$"{sessionId}:{toolCallId}"] = (externalId, sent.Id);
     }
 
-    /// <summary>审批决策完成：删除审批消息（用户已批准/拒绝，无需保留）。</summary>
     public async Task DeleteApprovalMessageAsync(AiChannel channel, string sessionId, string toolCallId, CancellationToken ct)
     {
         var key = $"{sessionId}:{toolCallId}";
@@ -364,20 +292,17 @@ public class TelegramChannelAdapter : IAiChannelAdapter
         }
     }
 
-    /// <summary>流式输出：发送首条消息，返回 message id 供后续编辑。</summary>
     public async Task<long> StartStreamAsync(AiChannel channel, string externalId, string text, CancellationToken ct)
     {
         var sent = await Bot(channel).SendMessage(externalId, text, cancellationToken: ct);
         return sent.Id;
     }
 
-    /// <summary>流式输出：编辑消息为最新文本。</summary>
     public async Task UpdateStreamAsync(AiChannel channel, string externalId, long messageId, string text, CancellationToken ct)
     {
         await Bot(channel).EditMessageText(externalId, (int)messageId, text, cancellationToken: ct);
     }
 
-    /// <summary>发送内联菜单消息（模型/档位选择；rows 行结构，同行按钮并排）。</summary>
     public async Task<long> SendMenuAsync(AiChannel channel, string externalId, string html, string plain, IReadOnlyList<IReadOnlyList<(string Text, string Data)>> rows, CancellationToken ct)
     {
         var markup = BuildMenuMarkup(rows);
@@ -393,7 +318,6 @@ public class TelegramChannelAdapter : IAiChannelAdapter
         return sent.Id;
     }
 
-    /// <summary>编辑内联菜单消息（翻页/搜索/选择后更新；rows 为 null 清空按钮）。</summary>
     public async Task<bool> EditMenuAsync(AiChannel channel, string chatId, long messageId, string html, string plain, IReadOnlyList<IReadOnlyList<(string Text, string Data)>>? rows, CancellationToken ct)
     {
         var markup = rows == null ? null : BuildMenuMarkup(rows);
@@ -417,13 +341,10 @@ public class TelegramChannelAdapter : IAiChannelAdapter
         }
     }
 
-    /// <summary>行结构 → InlineKeyboardMarkup（同一行的按钮并排显示）。</summary>
     private static InlineKeyboardMarkup BuildMenuMarkup(IReadOnlyList<IReadOnlyList<(string Text, string Data)>> rows) =>
         new(rows.Select(row => row.Select(b => InlineKeyboardButton.WithCallbackData(b.Text, b.Data)).ToArray()));
 
     /// <summary>
-    /// 构造审批内联键盘。按钮 callback data 使用短令牌（Telegram 上限 64 字节）：
-    ///   ap:&lt;token&gt;[:ot|5m|20m] 批准；rj:&lt;token&gt; 拒绝。
     /// </summary>
     public InlineKeyboardMarkup BuildApprovalMarkup(string channelId, string externalId, string sessionId, string toolCallId)
     {
@@ -443,7 +364,6 @@ public class TelegramChannelAdapter : IAiChannelAdapter
         });
     }
 
-    /// <summary>生成审批令牌并登记（TTL 10 分钟）。</summary>
     public string CreateApprovalToken(string channelId, string externalId, string sessionId, string toolCallId)
     {
         var token = Convert.ToHexString(RandomNumberGenerator.GetBytes(8)).ToLowerInvariant();
@@ -459,8 +379,6 @@ public class TelegramChannelAdapter : IAiChannelAdapter
     }
 
     /// <summary>
-    /// 解析按钮回调：校验令牌存在、未过期、归属（externalId = 消息 chat_id）。
-    /// 返回 null 表示按钮无效（已过期/不属于该用户）。
     /// </summary>
     public CallbackAction? ResolveCallback(AiChannel channel, CallbackQuery cq)
     {
@@ -480,7 +398,6 @@ public class TelegramChannelAdapter : IAiChannelAdapter
             _approvalButtons.TryRemove(token, out _);
             return null;
         }
-        // 归属校验：按钮只能被发起对话的外部用户点击（群组按 from.id，私聊 chat_id == from id）。
         var identityId = cq.From?.Id.ToString() ?? msg.Chat.Id.ToString();
         if (btn.ChannelId != channel.Id || btn.ExternalId != identityId) return null;
 
@@ -524,9 +441,6 @@ public class TelegramChannelAdapter : IAiChannelAdapter
     }
 
     /// <summary>
-    /// 启动库驱动的长轮询接收（每频道一次，由 TelegramBotHostedService 调用）。
-    /// onInbound：文本消息入站；onCallback：审批按钮回调（返回回执结果）；
-    /// onMenuCallback：菜单按钮回调（模型/档位）。启动时同步 bot 指令列表（setMyCommands）。
     /// </summary>
     public async Task StartReceivingAsync(
         AiChannel channel,
@@ -536,7 +450,6 @@ public class TelegramChannelAdapter : IAiChannelAdapter
         CancellationToken ct)
     {
         var bot = Bot(channel);
-        // 每次连接都同步指令列表（聊天输入框 "/" 菜单）。
         try
         {
             await bot.SetMyCommands(BotCommands, cancellationToken: ct);
@@ -550,7 +463,6 @@ public class TelegramChannelAdapter : IAiChannelAdapter
         bot.StartReceiving(
             async (b, update, c) =>
             {
-                // 诊断：每个到达的更新先记类型（排查用；正常运行时保持 Debug）。
                 _logger.LogDebug("Telegram update {UpdateId} type={Type}", update.Id,
                     update.CallbackQuery != null ? "callback_query"
                     : update.Message != null ? "message"
@@ -572,13 +484,11 @@ public class TelegramChannelAdapter : IAiChannelAdapter
             },
             new ReceiverOptions
             {
-                // null = 接收全部更新类型（handler 只处理 Message/CallbackQuery，其余忽略）。
                 AllowedUpdates = null,
             },
             ct);
     }
 
-    /// <summary>Bot 菜单指令（聊天输入框 "/" 可见，每次连接同步）。</summary>
     private static readonly BotCommand[] BotCommands =
     {
         new() { Command = "start", Description = "开始使用" },
@@ -589,7 +499,6 @@ public class TelegramChannelAdapter : IAiChannelAdapter
         new() { Command = "tier", Description = "切换档位" },
     };
 
-    /// <summary>channelId → bot username（群组 @提及 判断用，惰性获取并缓存）。</summary>
     private readonly ConcurrentDictionary<string, string> _botUsernames = new();
 
     private async Task<string> EnsureBotUsernameAsync(AiChannel channel, CancellationToken ct)
@@ -609,7 +518,6 @@ public class TelegramChannelAdapter : IAiChannelAdapter
         return u;
     }
 
-    /// <summary>获取 bot 用户名（深链绑定链接用；惰性获取并缓存）。</summary>
     public Task<string> GetBotUsernameAsync(AiChannel channel, CancellationToken ct) =>
         EnsureBotUsernameAsync(channel, ct);
 
@@ -626,9 +534,6 @@ public class TelegramChannelAdapter : IAiChannelAdapter
             var inbound = TryParseMessage(channel, msg, botUsername);
             if (inbound != null)
             {
-                // 关键：消息处理（RunChatAsync 可能因审批挂起阻塞很久）绝不能阻塞
-                // Telegram 接收循环——否则后续更新（含按钮回调）全部积压无响应。
-                // per-user 并发闸 + 限流在 AiChannelService 内保证串行与安全。
                 _ = Task.Run(async () =>
                 {
                     try
@@ -645,18 +550,15 @@ public class TelegramChannelAdapter : IAiChannelAdapter
         }
         if (update.CallbackQuery is { } cq)
         {
-            // 审批按钮优先。
             var action = ResolveCallback(channel, cq);
             if (action != null)
             {
                 HandleApprovalCallbackAsync(channel, bot, action, onCallback, ct);
                 return;
             }
-            // 菜单按钮（模型/档位/帮助快捷）。
             var menu = TryResolveMenu(channel, cq);
             if (menu != null)
             {
-                // 先回执（避免按钮转圈），再异步处理。
                 _ = bot.AnswerCallbackQuery(cq.Id, cancellationToken: ct);
                 _ = Task.Run(async () =>
                 {
@@ -680,7 +582,6 @@ public class TelegramChannelAdapter : IAiChannelAdapter
         AiChannel channel, ITelegramBotClient bot, CallbackAction action,
         Func<CallbackAction, CancellationToken, Task<CallbackResult>> onCallback, CancellationToken ct)
     {
-        // 异步处理：审批续跑（工具执行）可能耗时，同样不阻塞接收循环。
         _ = Task.Run(async () =>
         {
             try
@@ -693,7 +594,6 @@ public class TelegramChannelAdapter : IAiChannelAdapter
                     showAlert: !result.Ok, cancellationToken: ct);
                 if (result.Ok)
                 {
-                    // 决策完成：删除审批消息（用户已批准/拒绝，无需保留）。
                     try
                     {
                         await bot.DeleteMessage(action.ChatId, action.MessageId, ct);
@@ -713,10 +613,6 @@ public class TelegramChannelAdapter : IAiChannelAdapter
     }
 
     /// <summary>
-    /// 解析菜单按钮回调（模型供应商/分页/选择/搜索、档位切换、帮助快捷与返回）。
-    /// 返回 null 表示不是菜单按钮。
-    /// 前缀：mdl:prov:idx / mdl:provs / mdl:nav:页 / mdl:sel:idx / mdl:sea / mdl:back /
-    ///       tier:sel:档位 / help:model|tier|status|back。
     /// </summary>
     public ChannelMenuAction? TryResolveMenu(AiChannel channel, CallbackQuery cq)
     {
@@ -776,7 +672,6 @@ public class TelegramChannelAdapter : IAiChannelAdapter
         {
             Kind = kind,
             ChannelId = channel.Id,
-            // 群组按点击者身份（from.id）走绑定/会话/权限，ChatId 仅作发送目标。
             ExternalId = cq.From?.Id.ToString() ?? chatId,
             ChatId = chatId,
             CallbackQueryId = cq.Id,
@@ -786,20 +681,13 @@ public class TelegramChannelAdapter : IAiChannelAdapter
     }
 
     /// <summary>
-    /// 把 Telegram 文本消息规范化为入站消息（纯函数，可测试）。
-    /// 身份模型：私聊 ExternalId = chat id；群组 ExternalId = 发送者 from id
-    /// （绑定/会话/权限按用户走），ReplyTo = 群 chat id（回复目标）。
-    /// 群组过滤：AllowInGroups=false 时全部丢弃；开启时仅处理 @提及 bot 的
-    /// 消息与 /bind 命令（未绑定用户的绑定引导），其余群组消息忽略。
     /// </summary>
     public static ChannelInboundMessage? TryParseMessage(AiChannel channel, Message msg, string? botUsername = null)
     {
         if (string.IsNullOrWhiteSpace(msg.Text) || msg.Chat?.Id == null) return null;
-        // 忽略机器人自己的消息（防御性）。
         if (msg.From?.IsBot == true) return null;
         var chatId = msg.Chat.Id.ToString()!;
 
-        // 群组权限：仅 @提及 bot 或 /bind 命令被处理。
         var isGroup = msg.Chat.Type is ChatType.Group or ChatType.Supergroup;
         if (isGroup)
         {
@@ -814,19 +702,16 @@ public class TelegramChannelAdapter : IAiChannelAdapter
         return new ChannelInboundMessage
         {
             ChannelId = channel.Id,
-            // 群组：身份 = 发送者用户 ID；回复目标 = 群 ID。
             ExternalId = isGroup ? (msg.From?.Id.ToString() ?? chatId) : chatId,
             ReplyTo = isGroup ? chatId : null,
             ExternalName = name,
             Text = msg.Text,
-            // 幂等去重键：message_id 在单个 chat 内唯一，配合入站去重防御重放。
             DedupeKey = msg.Id.ToString(),
             OriginMessageId = msg.Id,
             IsGroup = isGroup,
         };
     }
 
-    /// <summary>消息是否 @提及了本 bot（entities 优先，文本包含兜底）。</summary>
     private static bool MentionsBot(Message msg, string? botUsername)
     {
         if (string.IsNullOrEmpty(botUsername)) return false;
@@ -847,7 +732,6 @@ public class TelegramChannelAdapter : IAiChannelAdapter
     }
 }
 
-/// <summary>审批按钮令牌上下文（Telegram callback data 短令牌映射）。</summary>
 public sealed class ApprovalButton
 {
     public required string ChannelId { get; init; }
@@ -858,13 +742,6 @@ public sealed class ApprovalButton
 }
 
 /// <summary>
-/// 飞书 Lark 适配器。
-/// 入站两种形态（按频道配置 transport 选择，内网默认 websocket）：
-///   - websocket：官方长连接（免公网回调），由 LarkWsChannelService 驱动，
-///     本类负责 endpoint 引导与事件信封解析；
-///   - webhook：事件订阅回调（challenge + Encrypt Key 验签/AES 解密），由
-///     AiChannelWebhookController 转交 ParseWebhookAsync。
-/// 出站：tenant_access_token → POST /open-apis/im/v1/messages?receive_id_type=open_id。
 /// </summary>
 public class LarkChannelAdapter : IAiChannelAdapter
 {
@@ -892,7 +769,6 @@ public class LarkChannelAdapter : IAiChannelAdapter
     private static string? Get(AiChannel ch, string key) =>
         ch.Config.TryGetValue(key, out var v) && v.Length > 0 ? v : null;
 
-    /// <summary>获取（并缓存）租户访问令牌。</summary>
     public async Task<string> GetTenantTokenAsync(AiChannel channel, CancellationToken ct)
     {
         var appId = Get(channel, "appId");
@@ -913,8 +789,6 @@ public class LarkChannelAdapter : IAiChannelAdapter
     }
 
     /// <summary>
-    /// 长连接引导：POST /callback/ws/endpoint（AppID/AppSecret 直接鉴权）。
-    /// 返回 (wss 端点, 心跳间隔秒)。
     /// </summary>
     public async Task<(string Url, int PingIntervalSeconds)> FetchWsEndpointAsync(AiChannel channel, CancellationToken ct)
     {
@@ -966,8 +840,6 @@ public class LarkChannelAdapter : IAiChannelAdapter
     }
 
     /// <summary>
-    /// 解析飞书事件回调（Webhook 模式，v2.0）：验签/解密 → 事件信封 → 入站消息。
-    /// 返回 null 表示事件不需要处理（如机器人自身消息/URL 校验）。
     /// </summary>
     public async Task<ChannelInboundMessage?> ParseWebhookAsync(
         AiChannel channel, string rawBody, string? larkTimestamp, string? larkNonce, string? larkSignature, CancellationToken ct)
@@ -975,7 +847,6 @@ public class LarkChannelAdapter : IAiChannelAdapter
         var encryptKey = Get(channel, "encryptKey");
         var bodyText = rawBody;
 
-        // 加密载荷：{"encrypt": "base64"}，AES-256-CBC（key=SHA256(encryptKey)，iv=前16字节）。
         if (encryptKey != null && rawBody.TrimStart().StartsWith("{\"encrypt\"", StringComparison.Ordinal))
         {
             if (larkTimestamp == null || larkNonce == null || larkSignature == null)
@@ -992,7 +863,6 @@ public class LarkChannelAdapter : IAiChannelAdapter
 
         var root = JsonNode.Parse(bodyText) as JsonObject;
         if (root == null) return null;
-        // 回调 URL 校验（订阅时飞书会发 challenge 请求）——由控制器处理，这里直接返回 null。
         if (root["challenge"] != null) return null;
 
         var verificationToken = Get(channel, "verificationToken");
@@ -1007,8 +877,6 @@ public class LarkChannelAdapter : IAiChannelAdapter
     }
 
     /// <summary>
-    /// 事件信封（{"schema":"2.0","header":{...},"event":{...}}）→ 入站消息。
-    /// Webhook 与长连接共用。
     /// </summary>
     public ChannelInboundMessage? ParseEventEnvelope(AiChannel channel, JsonObject root)
     {
@@ -1018,11 +886,11 @@ public class LarkChannelAdapter : IAiChannelAdapter
         if (evt == null) return null;
 
         var senderType = evt["sender"]?["sender_type"]?.GetValue<string>() ?? "";
-        if (senderType != "user") return null; // 忽略机器人/系统消息
+        if (senderType != "user") return null;
         var openId = evt["sender"]?["sender_id"]?["open_id"]?.GetValue<string>() ?? "";
         if (openId.Length == 0) return null;
         var msgType = evt["message"]?["message_type"]?.GetValue<string>() ?? "";
-        if (msgType != "text") return null; // v1 只处理文本
+        if (msgType != "text") return null;
         var content = evt["message"]?["content"]?.GetValue<string>() ?? "{}";
         var text = JsonNode.Parse(content)?["text"]?.GetValue<string>() ?? "";
         if (text.Length == 0) return null;
@@ -1033,11 +901,9 @@ public class LarkChannelAdapter : IAiChannelAdapter
         return new ChannelInboundMessage
         {
             ChannelId = channel.Id,
-            // 群聊回 chat_id，私聊回 open_id（SendTextAsync 按前缀选择 receive_id_type）。
             ExternalId = chatType == "p2p" ? openId : chatId,
             ExternalName = name,
             Text = text,
-            // 飞书事件唯一 ID（WS 模式下事件未 ack 会被服务端重推，用它在入口去重）。
             DedupeKey = root["header"]?["event_id"]?.GetValue<string>(),
         };
     }
@@ -1065,23 +931,12 @@ public class LarkChannelAdapter : IAiChannelAdapter
 }
 
 /// <summary>
-/// 微信 ClawBot 适配器——微信官方 iLink Bot API（HTTP/JSON）。
-/// 参考 https://www.wechatbot.dev/zh/protocol （微信 ClawBot 背后协议，基座 https://ilinkai.weixin.qq.com）：
-///   - 登录：GET /ilink/bot/get_bot_qrcode?bot_type=3 → GET /get_qrcode_status 轮询（wait/scaned/confirmed/expired）；
-///   - 入站：POST /ilink/bot/getupdates 长轮询（~35s 挂起），get_updates_buf 为不透明游标；
-///   - 出站：POST /ilink/bot/sendmessage，必须回传入站消息的 context_token（按用户缓存）；
-///   - 输入指示：POST /getconfig 取 typing_ticket（按用户缓存）→ POST /sendtyping status=1/2；
-///   - 鉴权：AuthorizationType: ilink_bot_token + Bearer bot_token + X-WECHAT-UIN + iLink-App-Id/ClientVersion；
-///   - 会话过期：ret/errcode -14 → 需重新扫码登录（换 bot_token）。
-/// 基座地址固定为官方地址（设置页无需填写）；微信不支持流式输出（iLink 无消息编辑能力）。
 /// </summary>
 public class WeChatClawAdapter : IAiChannelAdapter
 {
-    /// <summary>微信 iLink 官方业务基座（固定，无需用户填写）。</summary>
     public const string DefaultBase = "https://ilinkai.weixin.qq.com";
     private readonly IHttpClientFactory _httpFactory;
     private readonly ILogger<WeChatClawAdapter> _logger;
-    /// <summary>每用户 context_token 缓存（键 = channelId|externalId；会话过期时清除）。</summary>
     private readonly ConcurrentDictionary<string, string> _contextTokens = new();
 
     public WeChatClawAdapter(IHttpClientFactory httpFactory, ILogger<WeChatClawAdapter> logger)
@@ -1101,13 +956,12 @@ public class WeChatClawAdapter : IAiChannelAdapter
     private HttpClient Client()
     {
         var c = _httpFactory.CreateClient("ai-channel");
-        c.Timeout = TimeSpan.FromSeconds(50); // getupdates 挂起 ~35s
+        c.Timeout = TimeSpan.FromSeconds(50);
         return c;
     }
 
     private static string RandomWechatUin()
     {
-        // 随机 4 字节 → 大端 uint32 → 十进制字符串 → base64（与官方 SDK readUInt32BE 一致）。
         var b = RandomNumberGenerator.GetBytes(4);
         var value = BinaryPrimitives.ReadUInt32BigEndian(b);
         return Convert.ToBase64String(Encoding.UTF8.GetBytes(value.ToString()));
@@ -1117,8 +971,6 @@ public class WeChatClawAdapter : IAiChannelAdapter
     {
         var token = BotToken(ch) ?? throw new InvalidOperationException("iLink botToken 未配置（需先完成扫码登录）");
         var req = new HttpRequestMessage(HttpMethod.Post, BaseUrl(ch) + path);
-        // 与官方 @weixin-claw/core 一致：仅 AuthorizationType / Bearer / X-WECHAT-UIN / Content-Type。
-        // （Content-Length 由 StringContent 自动设置；SKRouteTag 仅配置了路由标签时才发送。）
         req.Headers.Add("AuthorizationType", "ilink_bot_token");
         req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
         req.Headers.Add("X-WECHAT-UIN", RandomWechatUin());
@@ -1131,12 +983,9 @@ public class WeChatClawAdapter : IAiChannelAdapter
 
     private static string Clip(string s) => s.Length > 300 ? s[..300] : s;
 
-    /// <summary>按用户缓存的 typing_ticket（键 = channelId|externalId；有效期约 24h，失败时自动重取）。</summary>
     private readonly ConcurrentDictionary<string, string> _typingTickets = new();
 
     /// <summary>
-    /// 微信输入指示：getconfig 获取 typing_ticket（首次/失效时）→ sendtyping。
-    /// start=true 显示"对方正在输入中"，false 取消。无 context_token 也能调用（按用户缓存）。
     /// </summary>
     public async Task<bool> SendTypingAsync(AiChannel channel, string externalId, bool start, CancellationToken ct)
     {
@@ -1167,7 +1016,6 @@ public class WeChatClawAdapter : IAiChannelAdapter
             }
             if (ret != 0)
             {
-                // ticket 可能失效：清掉缓存，下次重取。
                 _typingTickets.TryRemove($"{channel.Id}|{externalId}", out _);
                 return false;
             }
@@ -1223,7 +1071,6 @@ public class WeChatClawAdapter : IAiChannelAdapter
         if (string.IsNullOrEmpty(ctx))
             throw new InvalidOperationException("iLink context_token 缺失（尚未收到该用户消息或会话已过期）");
 
-        // 与官方 SDK 一致：client_id = {前缀}:{时间戳}-{8位hex}（协议要求全局唯一，幂等/链路跟踪用）。
         var msg = new JsonObject
         {
             ["from_user_id"] = "",
@@ -1246,7 +1093,7 @@ public class WeChatClawAdapter : IAiChannelAdapter
         var ret = JsonNode.Parse(respBody)?["ret"]?.GetValue<int>() ?? 0;
         if (ret == -14)
         {
-            _contextTokens.Clear(); // 会话过期：所有用户缓存 token 一并失效
+            _contextTokens.Clear();
             throw new SessionExpiredException("iLink 会话已过期，需要重新扫码登录");
         }
         if (ret != 0)
@@ -1286,7 +1133,7 @@ public class WeChatClawAdapter : IAiChannelAdapter
         var ret = doc["ret"]?.GetValue<int>() ?? 0;
         if (ret == -14)
         {
-            _contextTokens.Clear(); // 会话过期：所有用户缓存 token 一并失效
+            _contextTokens.Clear();
             throw new SessionExpiredException("iLink 会话已过期，需要重新扫码登录");
         }
         if (ret != 0)
@@ -1298,8 +1145,8 @@ public class WeChatClawAdapter : IAiChannelAdapter
         {
             foreach (var m in msgs.OfType<JsonObject>())
             {
-                if ((m["message_type"]?.GetValue<int>() ?? 0) != 1) continue; // 仅 USER 消息
-                if ((m["message_state"]?.GetValue<int>() ?? 0) != 2) continue; // 仅 FINISH
+                if ((m["message_type"]?.GetValue<int>() ?? 0) != 1) continue;
+                if ((m["message_state"]?.GetValue<int>() ?? 0) != 2) continue;
                 var from = m["from_user_id"]?.GetValue<string>() ?? "";
                 if (from.Length == 0) continue;
                 var ctx = m["context_token"]?.GetValue<string>() ?? "";
@@ -1319,11 +1166,9 @@ public class WeChatClawAdapter : IAiChannelAdapter
         return new ChannelPollBatch { NewCursor = newCursor, Messages = messages };
     }
 
-    /// <summary>获取 iLink 登录二维码（GET /ilink/bot/get_bot_qrcode?bot_type=3）。登录接口匿名，无需 bot_token。</summary>
     public async Task<(string Qrcode, string ImageUrl)> CreateQrCodeAsync(CancellationToken ct)
         => await CreateQrCodeAsync(DefaultBase, ct);
 
-    /// <summary>获取 iLink 登录二维码（按频道基座地址；登录接口匿名，无需 bot_token）。</summary>
     public async Task<(string Qrcode, string ImageUrl)> CreateQrCodeAsync(AiChannel channel, CancellationToken ct)
         => await CreateQrCodeAsync(BaseUrl(channel), ct);
 
@@ -1332,8 +1177,6 @@ public class WeChatClawAdapter : IAiChannelAdapter
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         cts.CancelAfter(TimeSpan.FromSeconds(15));
         var req = new HttpRequestMessage(HttpMethod.Get, $"{baseUrl}/ilink/bot/get_bot_qrcode?bot_type=3");
-        // 与官方 SDK 一致：get_bot_qrcode 只带可选的 SKRouteTag（未配置路由标签时不发送），
-        // 不要求 X-WECHAT-UIN / Authorization。
         var resp = await Client().SendAsync(req, cts.Token);
         var respBody = await resp.Content.ReadAsStringAsync(ct);
         if (!resp.IsSuccessStatusCode)
@@ -1347,23 +1190,19 @@ public class WeChatClawAdapter : IAiChannelAdapter
     }
 
     /// <summary>
-    /// 轮询 iLink 扫码状态（GET /ilink/bot/get_qrcode_status?qrcode=…）。登录接口匿名，无需 bot_token。
-    /// 返回 (status, botToken?, ilinkBotId?, baseUrl?)；status ∈ wait | scaned | confirmed | expired。
-    /// 与官方 SDK 一致：长轮询 ~35s，客户端超时视为 wait（继续轮询），不报错。
     /// </summary>
     public async Task<WeChatQrStatusResult> GetQrCodeStatusAsync(string qrcode, CancellationToken ct)
         => await GetQrCodeStatusAsync(DefaultBase, qrcode, ct);
 
-    /// <summary>轮询 iLink 扫码状态（按频道基座地址）。</summary>
     public async Task<WeChatQrStatusResult> GetQrCodeStatusAsync(AiChannel channel, string qrcode, CancellationToken ct)
         => await GetQrCodeStatusAsync(BaseUrl(channel), qrcode, ct);
 
     private async Task<WeChatQrStatusResult> GetQrCodeStatusAsync(string baseUrl, string qrcode, CancellationToken ct)
     {
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        cts.CancelAfter(TimeSpan.FromSeconds(35)); // 官方 SDK QR_LONG_POLL_TIMEOUT_MS = 35s
+        cts.CancelAfter(TimeSpan.FromSeconds(35));
         var req = new HttpRequestMessage(HttpMethod.Get, $"{baseUrl}/ilink/bot/get_qrcode_status?qrcode={Uri.EscapeDataString(qrcode)}");
-        req.Headers.Add("iLink-App-ClientVersion", "1"); // 官方 SDK 固定传 "1"
+        req.Headers.Add("iLink-App-ClientVersion", "1");
         try
         {
             var resp = await Client().SendAsync(req, cts.Token);
@@ -1382,7 +1221,6 @@ public class WeChatClawAdapter : IAiChannelAdapter
         }
         catch (OperationCanceledException)
         {
-            // 客户端超时 = 空轮询，等价于继续等待（官方 SDK 返回 { status: "wait" }）。
             return new WeChatQrStatusResult { Status = "wait" };
         }
     }

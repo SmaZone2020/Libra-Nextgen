@@ -78,7 +78,6 @@ public class PluginActionController : ControllerBase
             var script = LoadScriptSource(plugin.PluginId, def.Module.Name);
             if (script == null)
                 return NotFound(new { error = $"script module '{def.Module.Name}.js' not found" });
-            // 任务化 relay：script 模块（QuickJS 沙箱，JS 源码随包分发）
             result = await _relay.RelayAndWaitAsync(agentId, "script", new
             {
                 script,
@@ -89,7 +88,6 @@ public class PluginActionController : ControllerBase
         }
         else
         {
-            // 任务化 relay：native 模块（files/recon/creds/proxy/token/…）
             result = await _relay.RelayAndWaitAsync(agentId, def.Module.Name, input, ct,
                 createdBy: User.Identity?.Name ?? "system-relay");
         }

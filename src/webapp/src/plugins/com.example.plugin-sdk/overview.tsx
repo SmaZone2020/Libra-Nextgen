@@ -4,7 +4,6 @@ import { Alert, Card, Chip } from '@heroui/react';
 import { FileTree } from '../../components/file-tree';
 import { STEPS } from './shared';
 
-// ── 1. 总览 ────────────────────────────────────────────────────────────
 
 interface PackageTreeEntry {
   name: string;
@@ -13,7 +12,6 @@ interface PackageTreeEntry {
   children?: PackageTreeEntry[];
 }
 
-/** 插件包目录结构（与 shared.tsx 的 DIR_TREE 同源，结构化为 FileTree 数据）。 */
 const PACKAGE_TREE: PackageTreeEntry = {
   name: 'com.example.plugin-sdk/',
   kind: 'folder',
@@ -72,7 +70,6 @@ function packageTreeNodes(entries: PackageTreeEntry[], parentPath = ''): ReactNo
   });
 }
 
-/** 默认全部展开，还原 DIR_TREE 的完整可见结构。 */
 const PACKAGE_EXPANDED_KEYS = [
   'com.example.plugin-sdk/',
   'com.example.plugin-sdk/module/',

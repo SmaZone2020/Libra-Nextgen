@@ -58,7 +58,6 @@ const emptyForm = (): AiChannelInput => ({
 
 export interface ChannelFormModalProps {
   open: boolean;
-  /** 编辑中的频道；null 表示新建。 */
   editing: AiChannel | null;
   onClose: () => void;
   onSaved: () => void;
@@ -111,7 +110,6 @@ export function ChannelFormModal({ open, editing, onClose, onSaved }: ChannelFor
   );
   const activeModels = useMemo(() => activeProvider?.models ?? [], [activeProvider]);
 
-  // 切换供应商时重置模型选择。
   useEffect(() => {
     if (form.defaultProviderId !== activeProvider?.id) {
       patch({ defaultProviderId: activeProvider?.id ?? '' });
@@ -444,9 +442,6 @@ export function ChannelFormModal({ open, editing, onClose, onSaved }: ChannelFor
   );
 }
 
-/** 微信 iLink 扫码授权弹窗：申请二维码 → 展示 → 前端轮询状态 → confirmed 自动回填 bot_token。
- * 支持新建（channel 为 null）与编辑（channel 已保存）两种形态：新建时先扫码拿 token，
- * 随频道一起保存；编辑时确认后直接写入频道配置。 */
 function WechatAuthModal({
   channel,
   open,
@@ -466,13 +461,10 @@ function WechatAuthModal({
   const [error, setError] = useState<string | null>(null);
   const [polling, setPolling] = useState(false);
 
-  // iLink 返回的 qrcode_img_content 是微信 liteapp 网页（JS 渲染），不能当图片直接显示；
-  // 把该 URL 本身编码成二维码（与参考项目一致，用 qrcode 包 toDataURL；静态导入避免 Vite 动态依赖缓存问题）。
   const buildQrFromUrl = useCallback(async (url: string) => {
     return QRCode.toDataURL(url, { width: 280, margin: 2 });
   }, []);
 
-  // 打开时申请二维码（登录接口匿名，不依赖频道是否已保存）；关闭时停止轮询并复位。
   useEffect(() => {
     if (!open) return;
     let cancelled = false;
@@ -504,8 +496,6 @@ function WechatAuthModal({
     };
   }, [open, buildQrFromUrl]);
 
-  // 扫描阶段：前端轮询扫码状态；confirmed → 写入 token（编辑态直接存频道，新建态回填表单待保存）。
-  // 与参考实现一致：轮询请求失败/超时视为 wait，继续轮询（后端对 iLink 长轮询超时也返回 wait）。
   useEffect(() => {
     if (!open || phase !== 'scanning' || qrcode.length === 0) return;
     let stopped = false;
@@ -521,7 +511,6 @@ function WechatAuthModal({
             try {
               await setAiChannelWechatToken(channel.id, r.botToken, r.baseUrl, r.ilinkBotId);
             } catch {
-              /* 写频道失败不阻断回填：表单保存时仍会带上 token */
             }
           }
           if (!stopped) onTokenSet(r.botToken);
@@ -535,7 +524,6 @@ function WechatAuthModal({
         }
         timer = setTimeout(() => void poll(), 2000);
       } catch {
-        // 轮询错误（网络抖动/超时）→ 继续轮询，不中断授权流程。
         if (stopped) return;
         timer = setTimeout(() => void poll(), 2000);
       }

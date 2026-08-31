@@ -16,11 +16,6 @@ interface DialogResult {
   value?: string;
 }
 
-/**
- * HeroUI 模态框版 alert / confirm / prompt（替代 window.alert / window.confirm / window.prompt）。
- * 返回 Promise<DialogResult>；调用方在 JSX 中渲染 DialogComponent（通常包在 <>...</> 里）。
- * confirm(message, title?) / alert(message, title?) / prompt(message, defaultValue?, title?)。
- */
 export function useDialog() {
   const { t } = useTranslation();
   const [state, setState] = useState<DialogState | null>(null);

@@ -21,9 +21,16 @@ export interface AiSidebarProps {
   refreshKey?: number;
   onSelectSession: (id: string) => void;
   onNewSession: () => void;
+  onSessionCountChange?: (regularCount: number, channelCount: number) => void;
 }
 
-export function AiSidebar({ activeSessionId, refreshKey = 0, onSelectSession, onNewSession }: AiSidebarProps) {
+export function AiSidebar({
+  activeSessionId,
+  refreshKey = 0,
+  onSelectSession,
+  onNewSession,
+  onSessionCountChange,
+}: AiSidebarProps) {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { confirm, alert, DialogComponent } = useDialog();
@@ -44,12 +51,13 @@ export function AiSidebar({ activeSessionId, refreshKey = 0, onSelectSession, on
       setSessions(ss);
       setChannelSessions(cs);
       setProviders(ps);
+      onSessionCountChange?.(ss.length, cs.length);
     } catch {
       /* ignore */
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [onSessionCountChange]);
 
   useEffect(() => {
     void load();
@@ -177,7 +185,7 @@ export function AiSidebar({ activeSessionId, refreshKey = 0, onSelectSession, on
         </Button>
       </div>
 
-      {/* 会话列表 */}
+      {}
       <div className={`min-h-0 flex-1 overflow-y-auto pb-3 sm:px-3 px-0`}>
         {loading ? (
           <div className="flex justify-center py-8">

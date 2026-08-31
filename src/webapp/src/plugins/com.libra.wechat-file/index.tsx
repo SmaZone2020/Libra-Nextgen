@@ -5,18 +5,6 @@ import { File, FileCode, FileLetterP, FileLetterW, FileLetterX, FileText, FileZi
 import { usePluginHost } from '../../hooks/usePluginHost';
 import { listFiles, downloadFile, type FileEntry } from '../../api/files';
 
-/**
- * 微信文件插件页面（page/index.tsx）—— com.libra.wechat-file。
- *
- * 数据流：
- *   1. dispatchTask('com.libra.wechat-file', 'collect') → Agent 端 native 模块
- *      （wechat_file）扫描 Documents\Tencent Files\xwechat_files\wxid_*，
- *      返回 { accounts: [{ wxid, path, fileDirs: ["2025-01", ...] }] }。
- *   2. 目录展开：listFiles(agentId, dirPath)（宿主 files 模块）按月份拉取文件。
- *   3. 点击文件：详情弹窗 + downloadFile 下载。
- *
- * 保持原「软件数据 → 微信」标签页的 UI 与操作不变。
- */
 const PLUGIN_ID = 'com.libra.wechat-file';
 
 interface WeChatAccount {
@@ -30,14 +18,13 @@ interface WeChatResult {
   error?: string;
 }
 
-/** 插件结果可能是 JSON 字符串（服务端透传）或已是对象，统一解析。 */
 function parseResult(raw: unknown): WeChatResult | null {
   if (raw && typeof raw === 'object' && !Array.isArray(raw)) return raw as WeChatResult;
   if (typeof raw === 'string') {
     try {
       const p: unknown = JSON.parse(raw);
       if (p && typeof p === 'object' && !Array.isArray(p)) return p as WeChatResult;
-    } catch { /* 非 JSON */ }
+    } catch {  }
   }
   return null;
 }

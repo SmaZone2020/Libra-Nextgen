@@ -20,7 +20,6 @@ import type { BuildPreset } from '../../utils/buildPresets';
 interface BuilderConfigCardProps {
   config: BuildConfigRequest;
   set: <K extends keyof BuildConfigRequest>(key: K, value: BuildConfigRequest[K]) => void;
-  /** 整体替换配置（选中历史预设时快速填充所有字段）。 */
   applyConfig: (config: BuildConfigRequest) => void;
 }
 
@@ -37,7 +36,6 @@ export function BuilderConfigCard({ config, set, applyConfig }: BuilderConfigCar
     setPresets(loadBuildPresets());
   }, []);
 
-  /** 下拉项按 IP 过滤（仅过滤主机地址）。 */
   const filteredPresets = useMemo(() => {
     const q = config.serverHost.trim().toLowerCase();
     if (!q) return presets;

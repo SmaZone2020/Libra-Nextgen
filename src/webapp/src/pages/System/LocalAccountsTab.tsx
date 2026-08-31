@@ -60,7 +60,6 @@ export function LocalAccountsTab({ agentId }: Props) {
     setLoading(true);
     setError(null);
     try {
-      // 账户枚举在 Windows 上可能较慢（NetUserEnum 全量），任务超时放宽到 90s。
       const task = await createTask({
         agentId,
         commandType: 'LocalAccounts',

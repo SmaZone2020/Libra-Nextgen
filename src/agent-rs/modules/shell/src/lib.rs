@@ -87,11 +87,6 @@ fn execute(command: &str, timeout_secs: u64) -> (bool, String) {
         Err(e) => return (false, format!("spawn failed: {}", e)),
     };
 
-    // 立即排空两个管道（读线程），再轮询退出状态：
-    //  - 子进程输出超过管道缓冲（64KB/Windows 更小）时会写满阻塞、永不退出，
-    //    若等退出后才读必然死锁到超时；先读则数据边写边收。
-    //  - 按字节读 + 平台解码：Windows 中文系统 cmd 输出 GBK（OEM 代码页），
-    //    严格 UTF-8 解码（read_to_string）会失败导致输出全空。
     let stdout = child
         .stdout
         .take()
@@ -113,7 +108,6 @@ fn execute(command: &str, timeout_secs: u64) -> (bool, String) {
                 if std::time::Instant::now() >= deadline {
                     let _ = child.kill();
                     let _ = child.wait();
-                    // kill 后管道 EOF，读线程自然结束。
                     return (false, "command timed out".to_string());
                 }
                 std::thread::sleep(std::time::Duration::from_millis(20));
@@ -173,8 +167,6 @@ mod tests {
         assert_eq!(parsed["success"], false);
     }
 
-    /// 大输出（> 管道缓冲 64KB）必须完整回显、不能死锁到超时。
-    /// 回归：旧实现等子进程退出后才读管道，写满缓冲即卡死。
     #[test]
     fn run_large_output_does_not_deadlock() {
         #[cfg(target_os = "windows")]
@@ -201,12 +193,6 @@ mod tests {
         );
     }
 
-    /// Windows 中文系统：cmd 管道输出是 GBK（OEM 代码页 936），必须经
-    /// decode_shell_bytes 转码，否则严格 UTF-8 解码失败 → 输出全空。
-    /// 回归：ipconfig / dir 等中文输出命令零回显。
-    /// Windows 中文系统：cmd 管道输出可能是 GBK（OEM 936）也可能是 UTF-8
-    /// （取决于父进程 console/代码页环境）——两者都必须正确回显。
-    /// 回归：ipconfig / dir 等中文输出命令零回显。
     #[cfg(target_os = "windows")]
     #[test]
     fn run_chinese_output_is_decoded() {

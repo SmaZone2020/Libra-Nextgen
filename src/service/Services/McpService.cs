@@ -33,8 +33,6 @@ public class McpService
         }
         catch
         {
-            // Fail closed: 开关状态读不到（如 Mongo 不可用）时禁用 MCP，
-            // 而不是默认开启这个高风险的攻击面。
             _enabled = false;
             throw;
         }

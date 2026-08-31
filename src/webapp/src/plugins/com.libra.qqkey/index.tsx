@@ -27,19 +27,17 @@ interface BizResult {
 type TabKey = 'list' | 'biz';
 type ResultKind = 'friends' | 'groups' | 'files' | 'notices' | 'text';
 
-/** 插件结果可能是 JSON 字符串（服务端透传）或已是对象，统一解析。 */
 function parseResult(raw: unknown): QQKeyResult | null {
   if (raw && typeof raw === 'object' && !Array.isArray(raw)) return raw as QQKeyResult;
   if (typeof raw === 'string') {
     try {
       const p: unknown = JSON.parse(raw);
       if (p && typeof p === 'object' && !Array.isArray(p)) return p as QQKeyResult;
-    } catch { /* 非 JSON */ }
+    } catch {  }
   }
   return null;
 }
 
-/** QQ 头像（qlogo 支持 https，避免 https 页面出现 mixed-content 拦截）。 */
 function avatarUrl(uin: string): string {
   return `https://q2.qlogo.cn/headimg_dl?dst_uin=${uin}&spec=100`;
 }
@@ -57,7 +55,6 @@ async function copyText(text: string) {
   }
 }
 
-/** 按 uin 合并账号（探测到的账号 + 抓取的 clientkey/ptsigx）。 */
 function mergeAccounts(scan: QQAccount[], ck: QQAccount[]): QQAccount[] {
   const map = new Map<string, QQAccount>();
   for (const a of ck) map.set(a.uin, { ...a });
@@ -68,9 +65,7 @@ function mergeAccounts(scan: QQAccount[], ck: QQAccount[]): QQAccount[] {
   return Array.from(map.values()).sort((a, b) => a.uin.localeCompare(b.uin));
 }
 
-// ── QQ 业务结果解析 ───────────────────────────────────────────────────
 
-/** 剥掉 JSONP 外壳（_Callback(...) / xxx(...)）。 */
 function stripJsonp(raw: string): string {
   const t = raw.trim();
   const m = t.match(/^[\w$]+\s*\((.*)\)\s*;?\s*$/s);
@@ -81,7 +76,6 @@ function tryParse(raw: string): unknown | null {
   try { return JSON.parse(stripJsonp(raw)); } catch { return null; }
 }
 
-/** 从任意嵌套响应里取第一个"像列表"的数组（items_list/gnamelist/file_list/feeds…）。 */
 function firstList(obj: unknown): unknown[] | null {
   if (Array.isArray(obj)) return obj;
   if (obj && typeof obj === 'object') {
@@ -107,7 +101,6 @@ function fmtBytes(n: unknown): string {
   return b + ' B';
 }
 
-/** 探测本机 QQ / 抓取 ClientKey / QQ 业务。 */
 export default function QQKeyPage() {
   const { selectedAgent, dispatchTask } = usePluginHost();
   const [tab, setTab] = useState<TabKey>('list');
@@ -117,7 +110,6 @@ export default function QQKeyPage() {
   const [err, setErr] = useState<string | null>(null);
   const autoRef = useRef<string | null>(null);
 
-  /** 探测本机 QQ 列表（不自动抓 clientkey，保留已抓到的 CK）。 */
   const rescanAccounts = useCallback(async () => {
     if (!selectedAgent) return;
     setScanRunning(true);
@@ -125,7 +117,7 @@ export default function QQKeyPage() {
     try {
       const s = await dispatchTask('com.libra.qqkey', 'scan_accounts', {});
       const scan = parseResult(s.result)?.accounts ?? [];
-      setRows((prev) => mergeAccounts(scan, prev)); // prev 作为 ck 源，保留已有 CK
+      setRows((prev) => mergeAccounts(scan, prev));
     } catch (e) {
       setErr(e instanceof Error ? e.message : '探测失败');
     } finally {
@@ -133,7 +125,6 @@ export default function QQKeyPage() {
     }
   }, [selectedAgent, dispatchTask]);
 
-  /** 手动抓取 ClientKey（用户点击「获取 CK」后执行）。 */
   const fetchClientKeys = useCallback(async () => {
     if (!selectedAgent) return;
     setCkRunning(true);
@@ -141,7 +132,7 @@ export default function QQKeyPage() {
     try {
       const c = await dispatchTask('com.libra.qqkey', 'collect', {});
       const ck = parseResult(c.result)?.accounts ?? [];
-      setRows((prev) => mergeAccounts(prev, ck)); // ck 优先合并回填
+      setRows((prev) => mergeAccounts(prev, ck));
       if (ck.length === 0) setErr('未抓到 ClientKey，请确认 Agent 上的 QQ 已登录');
     } catch (e) {
       setErr(e instanceof Error ? e.message : '抓取失败');
@@ -150,7 +141,6 @@ export default function QQKeyPage() {
     }
   }, [selectedAgent, dispatchTask]);
 
-  // 选中 Agent 自动探测列表；ClientKey 需手动点「获取 CK」
   useEffect(() => {
     if (!selectedAgent) return;
     if (autoRef.current === selectedAgent.id) return;
@@ -197,7 +187,6 @@ export default function QQKeyPage() {
   );
 }
 
-// ── 列表：搜索 + 导出 CSV + 头像（size-6）/ QQNumber / 昵称 / ClientKey / 操作 ──
 function ListPanel({ rows, onCopy }: {
   rows: QQAccount[]; onCopy: (a: QQAccount) => void;
 }) {
@@ -296,7 +285,6 @@ function ListPanel({ rows, onCopy }: {
   );
 }
 
-// ────────────────────────── QQ 业务（服务端脚本驱动） ──────────────────────────
 
 const BIZ_JUMP: Record<string, string> = {
   'QQ 空间': 'https://user.qzone.qq.com/{uin}/infocenter',
@@ -325,7 +313,6 @@ function BizPanel({ rows }: { rows: QQAccount[] }) {
   const [busId, setBusId] = useState('');
   const [fileId, setFileId] = useState('');
   const [favorite, setFavorite] = useState('');
-  // 结果模态框
   const [modal, setModal] = useState<{ title: string; kind: ResultKind; data: unknown; raw: string } | null>(null);
 
   const withKey = rows.find((r) => r.uin === uin)?.clientkey ?? '';
@@ -500,7 +487,6 @@ function BizPanel({ rows }: { rows: QQAccount[] }) {
   );
 }
 
-// ── 结果模态框：按类型渲染 ────────────────────────────────────────────
 
 function ResultModal({ modal, onClose, onAction }: {
   modal: { title: string; kind: ResultKind; data: unknown; raw: string } | null;
@@ -629,7 +615,6 @@ function renderResult(kind: ResultKind, data: unknown, raw: string, onAction: (a
     );
   }
 
-  // 其余（说说/资料/删除/亲密/特别关心/手机号）：格式化 JSON
   const obj = tryParse(raw);
   return (
     <pre className="font-mono text-xs whitespace-pre-wrap break-all bg-default-50 dark:bg-default-900 p-3 rounded max-h-[60vh] overflow-auto">
@@ -638,7 +623,6 @@ function renderResult(kind: ResultKind, data: unknown, raw: string, onAction: (a
   );
 }
 
-/** 一个可展开的业务工具（Accordion 项）。 */
 function Tool({ title, desc, fields, run }: {
   title: string; desc: string; fields: ReactNode | null; run: () => void | Promise<void>;
 }) {

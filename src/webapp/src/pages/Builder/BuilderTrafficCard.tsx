@@ -30,7 +30,6 @@ const GROUPS: GroupDef[] = [
   { list: 'pathSuffixes', titleKey: 'builder.trafficSuffixes', placeholder: 'user/info', inputLabelKey: 'builder.trafficSuffixesLabel' },
 ];
 
-/** 流量伪装配置：持久化列表（服务端存储），ListView 多选=启用，右侧删除按钮。 */
 export function BuilderTrafficCard({ lists, onAddItem, onToggleItem, onDeleteItem }: BuilderTrafficCardProps) {
   const { t } = useTranslation();
   const [activeGroup, setActiveGroup] = useState<GroupDef | null>(null);

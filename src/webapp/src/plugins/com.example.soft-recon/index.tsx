@@ -4,14 +4,6 @@ import { Button, Card, Chip, Input, Label, Spinner, TextField } from '@heroui/re
 import { usePluginHost } from '../../hooks/usePluginHost';
 import type { PluginOutput } from '../../hooks/usePluginHost';
 
-/**
- * Example plugin page: "某软件信息探测" (soft Recon).
- *
- * Demonstrates the plugin shell contract:
- *  - usePluginHost() reuses the console's selected agent (shared state).
- *  - dispatchTask() invokes the backend plugin action gateway → agent module.
- *  - subscribeOutput() streams live results pushed back over the console WS.
- */
 export default function SoftReconPage() {
   const { t } = useTranslation();
   const { selectedAgent, dispatchTask, subscribeOutput } = usePluginHost();

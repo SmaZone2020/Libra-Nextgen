@@ -5,7 +5,6 @@ pub struct LoaderConfig {
     pub core_download_path: String,
     pub core_key_path: String,
     pub beacon_secret: String,
-    /// 服务端 RSA 公钥（SPKI DER b64，构建注入）：core-key 混合加密。
     pub server_public_key: String,
     pub require_admin: bool,
     pub copy_to_path: Option<String>,

@@ -26,15 +26,12 @@ import type { ToolPartState } from '../../vendor/ui-pro';
 
 export interface AiThreadMessageProps {
   message: AiMessage;
-  /** 流式进行中的临时助手消息（delta 累积） */
   streamingText?: string;
   isStreaming?: boolean;
   pendingApproval?: AiToolCall | null;
   onCopy: (text: string) => void;
   onRegenerate: () => void;
-  /** 编辑用户消息：messageId + 新内容。 */
   onEdit: (messageId: string, content: string) => void;
-  /** 删除消息（用户消息或 AI 消息）：messageId。 */
   onDelete: (messageId: string) => void;
   onFeedback: (good: boolean) => void;
   onApprove: (toolCallId: string) => void;
@@ -49,7 +46,6 @@ const ToolStateMap: Record<string, ToolPartState> = {
   'input-streaming': 'input-streaming',
 };
 
-/** 系统事件消息体（服务端 AiEventNotifier 以 JSON 注入，前端检测后渲染为事件卡片）。 */
 interface SystemEventPayload {
   type: 'system_event';
   event?: string;
@@ -150,8 +146,6 @@ export function AiThreadMessage({
   const toolCalls = message.toolCalls;
   const sources = message.sources;
 
-  // 防御性合并：历史消息里可能存了逐词拆分的推理步骤（旧数据），
-  // 渲染前把连续同 label 的步骤拼接成单个 step。
   const mergedReasoning = useMemo(() => {
     if (!reasoning || reasoning.length === 0) return reasoning;
     const out: { label: string; content: string }[] = [];
@@ -163,7 +157,6 @@ export function AiThreadMessage({
     return out;
   }, [reasoning]);
 
-  // 用户消息原地编辑态。
   const [isEditing, setIsEditing] = useState(false);
   const [draft, setDraft] = useState('');
   const editRef = useRef<HTMLTextAreaElement | null>(null);
@@ -172,8 +165,6 @@ export function AiThreadMessage({
     if (isEditing) editRef.current?.focus();
   }, [isEditing]);
 
-  // 流式进行中：工具调用逐个渲染（真实 tool_call 事件已实时到位，无需假占位）。
-  // pendingApproval 去重：审批挂起时它已随 tool_call 进入 streamingTools，避免同工具渲染两次。
   const streamingTools =
     isStreaming && pendingApproval
       ? [...(toolCalls ?? []).filter((x) => x.id !== pendingApproval.id), pendingApproval]
@@ -278,7 +269,6 @@ export function AiThreadMessage({
     );
   }
 
-  // 把文本与工具调用按 TextBefore 位置穿插成有序片段：
   // [ {type:'text', text}, {type:'tool', tool}, {type:'text', text}, ... ]
   const interleaved = useMemo(() => {
     const tools = [...(toolCalls ?? [])].sort((a, b) =>
@@ -300,7 +290,6 @@ export function AiThreadMessage({
     return segments;
   }, [message.content, toolCalls]);
 
-  // 流式进行中的临时工具（待审批 / 正在运行）追加到末尾。
   const tailTools = streamingTools ?? [];
   const hasTailTools = tailTools.length > 0;
 

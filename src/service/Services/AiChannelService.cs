@@ -11,12 +11,6 @@ using MongoDB.Driver;
 namespace LibraNextgen.Service.Services;
 
 /// <summary>
-/// AI 频道网关：IM 接入（Telegram / 飞书 / 微信 Claw）的统一入口。
-/// 职责：频道配置 CRUD、微信扫码授权（bot_token 写入）、一次性绑定码、入站消息管线
-/// （限流 → 命令 → 身份解析 → 会话路由 → 复用 AiService.RunChatAsync 的聊天/工具/审批管线，
-/// 事件出口换成 ChannelSink 回发 IM）。
-/// 权限：频道会话的 Justitia 档位由服务端强制（频道默认档位 + 用户覆盖），不信任客户端；
-/// 审批永远发生在控制台（复用现有 /api/ai/chat/action 门闩），频道只是展示端。
 /// </summary>
 public class AiChannelService
 {
@@ -27,7 +21,6 @@ public class AiChannelService
     private const string SecretSentinel = "********";
     private const string GuestPrefix = "ch:guest:";
 
-    /// <summary>Telegram 思考状态文案（轮换显示，AI 开始输出时编辑覆盖）。</summary>
     private static readonly string[] ThinkingPhrases =
     {
         "Thinking…",
@@ -51,11 +44,8 @@ public class AiChannelService
     private readonly WeChatClawAdapter _claw;
     private readonly ILogger<AiChannelService> _logger;
 
-    /// <summary>限流桶：(channelId|externalId) → 时间戳队列。</summary>
     private readonly ConcurrentDictionary<string, Queue<DateTime>> _rateBuckets = new();
-    /// <summary>每用户运行闸：(channelId|externalId) → 同时只允许一个运行。</summary>
     private readonly ConcurrentDictionary<string, SemaphoreSlim> _gates = new();
-    /// <summary>微信输入指示续期停止回调（键 = channelId|externalId）。</summary>
     private readonly ConcurrentDictionary<string, Action> _typingKeepalives = new();
 
     public AiChannelService(
@@ -85,27 +75,21 @@ public class AiChannelService
     private IMongoCollection<AiChannelBindCode> BindCodes => _db.GetCollection<AiChannelBindCode>("ai_channel_bind_codes");
     private IMongoCollection<AiChannelCursor> Cursors => _db.GetCollection<AiChannelCursor>("ai_channel_cursors");
 
-    /// <summary>幂等去重表：channelId|dedupeKey → 首次看到时间（防并发循环/重启重放）。</summary>
     private readonly ConcurrentDictionary<string, DateTime> _seenInbound = new();
     private const int SeenInboundMax = 2000;
     private static readonly TimeSpan SeenInboundTtl = TimeSpan.FromMinutes(30);
 
-    /// <summary>模型菜单状态（供应商 → 模型 两级、分页/搜索）：channelId|externalId → 状态。</summary>
     private readonly ConcurrentDictionary<string, ModelMenuState> _modelMenus = new();
     private const int ModelMenuPageSize = 5;
 
     private sealed class ModelMenuState
     {
-        /// <summary>可用供应商（id, name）。</summary>
         public List<(string Id, string Name)> Providers { get; set; } = new();
-        /// <summary>当前选中的供应商索引；-1 = 显示供应商选择页。</summary>
         public int ProviderIndex { get; set; } = -1;
-        /// <summary>当前供应商的模型列表。</summary>
         public List<string> Models { get; set; } = new();
         public string CurrentModel { get; set; } = "";
         public int Page { get; set; }
         public string? Query { get; set; }
-        /// <summary>等待用户发送搜索关键词（下一条文本消息被拦截为搜索词）。</summary>
         public bool Searching { get; set; }
         public long MessageId { get; set; }
         public DateTime ExpiresAt { get; set; } = DateTime.UtcNow.AddMinutes(10);
@@ -119,9 +103,7 @@ public class AiChannelService
         _ => throw new ArgumentException($"unsupported channel type '{type}'"),
     };
 
-    // ── 配置加解密 / 打码 ────────────────────────────────────────────────
 
-    /// <summary>API 出参打码：敏感键值替换为哨兵。</summary>
     public static void MaskConfig(AiChannel ch)
     {
         foreach (var key in AiChannelTypes.SensitiveKeys)
@@ -152,9 +134,6 @@ public class AiChannelService
         {
             AiChannelTypes.Telegram => new[] { "botToken" },
             AiChannelTypes.Lark => new[] { "appId", "appSecret" },
-            // 微信 iLink：基座地址固定为官方地址（无需填写）；bot_token 允许留空，
-            // 留空时频道可保存但不可用，管理员随后用"授权"扫码填入。bot_token 为空
-            // 与哨兵值在创建/更新时都会被视为"未配置"（不覆盖已存密钥）。
             AiChannelTypes.WechatClaw => Array.Empty<string>(),
             _ => throw new ArgumentException($"unsupported channel type '{ch.ChannelType}'"),
         };
@@ -164,7 +143,6 @@ public class AiChannelService
         if (ch.DefaultTier is < 0 or > 3) ch.DefaultTier = 0;
     }
 
-    // ── 频道 CRUD ───────────────────────────────────────────────────────
 
     public async Task<List<AiChannel>> ListChannelsAsync(bool includeSecrets, CancellationToken ct = default)
     {
@@ -196,8 +174,6 @@ public class AiChannelService
         var result = await Channels.Find(filter).ToListAsync(ct);
         foreach (var ch in result)
         {
-            // 配置持久化时为静态加密；解密失败（历史明文/旧格式）直接跳过敏感项，
-            // 后台轮询仍可运行，不因配置异常拖垮整个 reconcile。
             try { DecryptSensitive(ch); }
             catch (Exception ex) { _logger.LogWarning(ex, "Failed to decrypt channel config ({Channel}) — sensitive fields skipped", ch.Id); }
         }
@@ -220,7 +196,6 @@ public class AiChannelService
             StreamOutput = input.StreamOutput,
             AllowInGroups = input.AllowInGroups,
         };
-        // 微信 iLink：基座地址固定为官方地址（用户无需填写）；微信不支持流式输出（iLink 无消息编辑能力）。
         if (ch.ChannelType == AiChannelTypes.WechatClaw)
         {
             ch.Config["baseUrl"] = WeChatClawAdapter.DefaultBase;
@@ -238,7 +213,6 @@ public class AiChannelService
         var existing = await GetChannelAsync(id, includeSecrets: true, ct);
         if (existing == null) return false;
 
-        // 敏感键为哨兵/空 → 保留原值。
         foreach (var key in AiChannelTypes.SensitiveKeys)
             if (input.Config.TryGetValue(key, out var v) && (v == SecretSentinel || v.Length == 0))
                 input.Config[key] = existing.Config.GetValueOrDefault(key, "");
@@ -260,10 +234,8 @@ public class AiChannelService
             CreatedAt = existing.CreatedAt,
             UpdatedAt = DateTime.UtcNow,
         };
-        // 更新后渠道类型若变为微信：补默认基座地址（历史数据可能没有 baseUrl）。
         if (ch.ChannelType == AiChannelTypes.WechatClaw && !ch.Config.ContainsKey("baseUrl"))
             ch.Config["baseUrl"] = WeChatClawAdapter.DefaultBase;
-        // 微信不支持流式输出（iLink 无消息编辑能力）：强制关闭，避免误开启后静默回退。
         if (ch.ChannelType == AiChannelTypes.WechatClaw) ch.StreamOutput = false;
         Validate(ch);
         EncryptSensitive(ch);
@@ -282,7 +254,6 @@ public class AiChannelService
         return true;
     }
 
-    /// <summary>连通性自检（设置页"测试连接"）。</summary>
     public async Task<(bool Ok, string? Error)> TestChannelAsync(AiChannel input, CancellationToken ct = default)
     {
         var probe = new AiChannel
@@ -293,7 +264,6 @@ public class AiChannelService
         };
         try
         {
-            // 哨兵值（编辑态未改动的密钥）无法测试——由控制器在调用前用已解密配置补齐。
             EncryptSensitive(probe);
             DecryptSensitive(probe);
             var (ok, msg) = await AdapterFor(probe.ChannelType).TestAsync(probe, ct);
@@ -305,22 +275,18 @@ public class AiChannelService
         }
     }
 
-    /// <summary>绑定用户自己的频道会话（委托 AiService，控制台 AI 页"频道会话"分区）。</summary>
     public Task<List<AiSession>> MyChannelSessionsAsync(string userId, CancellationToken ct = default)
         => _ai.GetChannelSessionsAsync(userId, ct);
 
-    /// <summary>轮询型频道拉取增量（由 ChannelPollingHostedService 驱动，按类型分发到适配器）。</summary>
     public Task<ChannelPollBatch> PollChannelAsync(AiChannel channel, string? cursor, CancellationToken ct = default)
         => AdapterFor(channel.ChannelType).PollAsync(channel, cursor, ct);
 
-    /// <summary>读取频道轮询游标（服务重启后恢复，避免重放 24h 内消息）。</summary>
     public async Task<string> GetPollCursorAsync(string channelId, CancellationToken ct = default)
     {
         var c = await Cursors.Find(x => x.ChannelId == channelId).FirstOrDefaultAsync(ct);
         return c?.Cursor ?? "";
     }
 
-    /// <summary>持久化频道轮询游标（upsert）。</summary>
     public async Task SetPollCursorAsync(string channelId, string cursor, CancellationToken ct = default)
     {
         if (string.IsNullOrEmpty(cursor)) return;
@@ -340,17 +306,12 @@ public class AiChannelService
         }
     }
 
-    /// <summary>删除频道的轮询游标（频道删除时清理）。</summary>
     public async Task DeletePollCursorAsync(string channelId, CancellationToken ct = default)
     {
         await Cursors.DeleteManyAsync(x => x.ChannelId == channelId, ct);
     }
 
     /// <summary>
-    /// 设置频道的 bot_token（iLink 扫码登录确认后的令牌）。
-    /// 按官方协议：confirmed 响应里的 baseurl 可能与默认基座不同，必须持久化并用于后续所有调用；
-    /// ilink_bot_id 一并保存（多账号区分用）。
-    /// 仅当令牌为哨兵或空时按"未配置"处理（不覆盖已存密钥）。
     /// </summary>
     public async Task<bool> SetChannelTokenAsync(
         string id, string token, string? baseUrl = null, string? ilinkBotId = null, CancellationToken ct = default)
@@ -361,13 +322,11 @@ public class AiChannelService
         if (value.Length == 0 || value == SecretSentinel)
         {
             ch.Config["botToken"] = "";
-            // 会话失效后旧游标已无意义：清掉，避免 -14 后带着旧游标重放。
             await DeletePollCursorAsync(id, ct);
         }
         else
         {
             ch.Config["botToken"] = value;
-            // 官方协议：始终使用 confirmed 返回的 baseurl（与默认不同时以后端返回值为准）。
             if (!string.IsNullOrWhiteSpace(baseUrl))
                 ch.Config["baseUrl"] = baseUrl.Trim().TrimEnd('/');
             if (!string.IsNullOrWhiteSpace(ilinkBotId))
@@ -378,10 +337,9 @@ public class AiChannelService
         return true;
     }
 
-    // ── 绑定码 / 绑定用户 ────────────────────────────────────────────────
 
     private static readonly char[] CodeAlphabet =
-        "ABCDEFGHJKLMNPQRSTUVWXYZ23456789".ToCharArray(); // 去除 0/O/1/I
+        "ABCDEFGHJKLMNPQRSTUVWXYZ23456789".ToCharArray();
 
     public static string GenerateBindCode()
     {
@@ -395,8 +353,6 @@ public class AiChannelService
         Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(code.Trim().ToUpperInvariant())));
 
     /// <summary>
-    /// 管理员为指定控制台账号生成一次性绑定码（15 分钟有效，只存哈希）。
-    /// bindUrl：Telegram 频道的深链绑定链接（t.me/{bot}?start=CODE），点击即触发 /start CODE。
     /// </summary>
     public async Task<(string Code, DateTime ExpiresAt, string? BindUrl)> CreateBindCodeAsync(
         string channelId, string boundUserId, CancellationToken ct = default)
@@ -433,14 +389,12 @@ public class AiChannelService
             .Sort(Builders<AiChannelUser>.Sort.Descending(u => u.BoundAt)).ToListAsync(ct);
     }
 
-    /// <summary>列出频道的全部绑定码（新→旧）。</summary>
     public async Task<List<AiChannelBindCode>> ListBindCodesAsync(string channelId, CancellationToken ct = default)
     {
         return await BindCodes.Find(x => x.ChannelId == channelId)
             .Sort(Builders<AiChannelBindCode>.Sort.Descending(b => b.CreatedAt)).ToListAsync(ct);
     }
 
-    /// <summary>作废一个未使用的绑定码（已使用的不可作废）。返回 false 表示不存在或已使用。</summary>
     public async Task<bool> RevokeBindCodeAsync(string channelId, string codeId, CancellationToken ct = default)
     {
         var r = await BindCodes.UpdateOneAsync(
@@ -478,13 +432,9 @@ public class AiChannelService
         return r.DeletedCount > 0;
     }
 
-    // ── 入站管线 ────────────────────────────────────────────────────────
 
-    /// <summary>IM 入站消息统一入口（适配器轮询 / Webhook / 长连接均汇入此处）。</summary>
     public async Task HandleInboundAsync(ChannelInboundMessage msg, CancellationToken ct = default)
     {
-        // 幂等去重：Telegram update_id / 飞书 event_id / iLink message_id。
-        // 防御：并发轮询循环、重启后 Telegram 24h 重放、飞书未 ack 重推。
         if (!string.IsNullOrEmpty(msg.DedupeKey))
         {
             var seenKey = $"{msg.ChannelId}|{msg.DedupeKey}";
@@ -502,14 +452,12 @@ public class AiChannelService
         }
 
         var ch = await GetChannelAsync(msg.ChannelId, includeSecrets: true, ct);
-        if (ch == null || !ch.Enabled) return; // 未找到/停用频道：静默丢弃。
+        if (ch == null || !ch.Enabled) return;
 
         var text = msg.Text.Trim();
         if (text.Length == 0) return;
         if (text.Length > MaxMessageLength) text = text[..MaxMessageLength] + "…";
 
-        // 模型菜单搜索拦截：菜单处于"等待关键词"状态时，本条文本作为搜索词，
-        // 不进入 AI 对话。删除用户发送的搜索词消息，并把提示消息编辑为搜索结果。
         var menuKey = $"{ch.Id}|{msg.ExternalId}";
         if (_modelMenus.TryGetValue(menuKey, out var menuState) && menuState.Searching)
         {
@@ -528,8 +476,6 @@ public class AiChannelService
             return;
         }
 
-        // 群组权限：仅已绑定账户可对话；未绑定账户仅响应 /bind（绑定引导），
-        // 其余群组消息静默忽略（不刷屏）。
         if (msg.IsGroup)
         {
             var bound = await ChannelUsers.Find(x => x.ChannelId == ch.Id && x.ExternalId == msg.ExternalId)
@@ -547,7 +493,6 @@ public class AiChannelService
             await HandleCommandAsync(ch, msg, text, ct);
             return;
         }
-        // 自定义键盘按钮别名（/start 的常驻键盘：点击发送纯文本按钮词）。
         var alias = text.Trim().ToLowerInvariant();
         if (alias is "help" or "start")
         {
@@ -565,13 +510,10 @@ public class AiChannelService
                 await TrySendRichAsync(ch, Target(msg), h, p, ct);
                 return;
             }
-            // 访客模式（RequireBind=false）：会话归属合成用户，档位强制 Cognitio，
-            // 超出档位的工具调用自动拒绝（控制台无人可审批）。
             await RunChatAsync(ch, msg, GuestUserId(ch.Id, msg.ExternalId), "guest", tier: 0, guest: true, ct);
             return;
         }
 
-        // 已绑定：更新最后活跃与昵称（异步，不阻塞主流程）。
         _ = ChannelUsers.UpdateOneAsync(
             x => x.Id == user.Id,
             Builders<AiChannelUser>.Update
@@ -587,7 +529,6 @@ public class AiChannelService
     private static string GuestUserId(string channelId, string externalId) => $"{GuestPrefix}{channelId}:{externalId}";
     private static bool IsGuestUserId(string userId) => userId.StartsWith(GuestPrefix, StringComparison.Ordinal);
 
-    /// <summary>消息的回复目标（发送地址）：群组 = 群 chat id；私聊 = 身份 id。</summary>
     private static string Target(ChannelInboundMessage msg) => msg.ReplyTo ?? msg.ExternalId;
 
     private bool IsRateLimited(string key)
@@ -607,20 +548,17 @@ public class AiChannelService
     {
         var parts = text.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         var cmd = parts.Length > 0 ? parts[0].ToLowerInvariant() : "";
-        // 群组命令常带 @bot 后缀（/help@LibraNT_Bot）：剥离后匹配。
         var atIdx = cmd.IndexOf('@');
         if (atIdx > 0) cmd = cmd[..atIdx];
         switch (cmd)
         {
             case "/start":
                 {
-                    // 深链绑定：https://t.me/{bot}?start=CODE → Telegram 自动发送 /start CODE。
                     if (parts.Length > 1)
                     {
                         await TryBindAsync(ch, msg, parts[1], ct);
                         break;
                     }
-                    // /start 只做简单介绍：Telegram 附带常驻键盘（Help），完整指令见 /help。
                     if (ch.ChannelType == AiChannelTypes.Telegram)
                     {
                         await AdapterFor(ch.ChannelType).SendKeyboardAsync(ch, Target(msg),
@@ -640,7 +578,6 @@ public class AiChannelService
                     var (h, p) = BuildHelp(ch);
                     if (ch.ChannelType == AiChannelTypes.Telegram)
                     {
-                        // 帮助消息附带快捷菜单（模型/档位/状态，一行三个）。
                         var helpRows = new List<List<(string Text, string Data)>>
                     {
                         new()
@@ -683,7 +620,6 @@ public class AiChannelService
                 break;
             case "/tier":
                 {
-                    // /tier：新发档位选择菜单（含返回）。
                     if (ch.ChannelType != AiChannelTypes.Telegram)
                     {
                         await TrySendAsync(ch, Target(msg), "该功能需要 Telegram 内联菜单支持。", ct);
@@ -704,7 +640,6 @@ public class AiChannelService
             case "/approve":
             case "/reject":
                 {
-                    // 保留文本审批命令（按钮失效时的兜底；非 Telegram 频道的主路径）。
                     var permit = "one-time";
                     if (cmd == "/approve" && parts.Length > 1)
                     {
@@ -723,9 +658,7 @@ public class AiChannelService
         }
     }
 
-    // ── 模型/档位菜单 ────────────────────────────────────────────────────
 
-    /// <summary>/model：发送供应商选择菜单（点击供应商 → 选择模型）。</summary>
     private async Task HandleModelCommandAsync(AiChannel ch, string externalId, string? replyTo, CancellationToken ct)
     {
         if (ch.ChannelType != AiChannelTypes.Telegram)
@@ -754,7 +687,6 @@ public class AiChannelService
         }
     }
 
-    /// <summary>创建模型菜单状态（供应商列表 + 默认供应商的模型）。返回 null 表示无可用供应商。</summary>
     private async Task<ModelMenuState?> CreateModelMenuStateAsync(AiChannel ch, CancellationToken ct)
     {
         var providers = await _ai.GetProvidersAsync(ct);
@@ -774,7 +706,6 @@ public class AiChannelService
         };
     }
 
-    /// <summary>供应商选择页：每行两个供应商按钮，最后一行返回。</summary>
     private static (string Html, string Plain, List<List<(string Text, string Data)>> Buttons) BuildProviderMenu(ModelMenuState state)
     {
         var html = new StringBuilder("<b>选择供应商</b>\n当前模型：<code>" + HtmlEncode(state.CurrentModel) + "</code>\n");
@@ -797,7 +728,6 @@ public class AiChannelService
         return (html.ToString(), plain.ToString(), rows);
     }
 
-    /// <summary>模型选择页：模型每行一个；导航行（上一页/搜索/下一页 同行）；返回行。</summary>
     private static (string Html, string Plain, List<List<(string Text, string Data)>> Buttons) BuildModelMenu(ModelMenuState state)
     {
         var filtered = string.IsNullOrEmpty(state.Query)
@@ -826,19 +756,16 @@ public class AiChannelService
             rows.Add(new List<(string Text, string Data)> { (mark + m, $"mdl:sel:{idx}") });
         }
 
-        // 导航行：上一页 / 搜索（常驻）/ 下一页，同一行并排。
         var nav = new List<(string Text, string Data)>();
         if (state.Page > 0) nav.Add(("◀️", $"mdl:nav:{state.Page - 1}"));
         nav.Add(("🔍 搜索", "mdl:sea"));
         if (state.Page < pages - 1) nav.Add(("▶️", $"mdl:nav:{state.Page + 1}"));
         rows.Add(nav);
-        // 返回行。
         rows.Add(new List<(string Text, string Data)> { ("🔙 返回", "mdl:provs") });
 
         return (html.ToString(), plain.ToString(), rows);
     }
 
-    /// <summary>搜索提示页（等待用户发送模型关键词）。</summary>
     private static (string Html, string Plain, List<List<(string Text, string Data)>> Buttons) BuildSearchPrompt()
     {
         return (
@@ -847,7 +774,6 @@ public class AiChannelService
             new List<List<(string Text, string Data)>> { new() { ("🔙 返回", "mdl:back") } });
     }
 
-    /// <summary>档位选择页：档位每行一个，最后一行返回。</summary>
     private static (string Html, string Plain, List<List<(string Text, string Data)>> Buttons) BuildTierMenu(AiChannel ch, int current)
     {
         var maxTier = Math.Clamp(ch.DefaultTier, 0, 3);
@@ -863,7 +789,6 @@ public class AiChannelService
         return (html, plain, rows);
     }
 
-    /// <summary>帮助页（快捷按钮一行三个）。</summary>
     private (string Html, string Plain, List<List<(string Text, string Data)>> Buttons) BuildHelpMenu(AiChannel ch)
     {
         var (h, p) = BuildHelp(ch);
@@ -879,14 +804,12 @@ public class AiChannelService
         return (h, p, rows);
     }
 
-    /// <summary>刷新/编辑模型菜单（翻页、搜索后；编辑的是菜单消息本身）。</summary>
     private async Task RefreshModelMenuAsync(AiChannel ch, string externalId, ModelMenuState state, CancellationToken ct)
     {
         var (html, plain, buttons) = BuildModelMenu(state);
         await AdapterFor(ch.ChannelType).EditMenuAsync(ch, externalId, state.MessageId, html, plain, buttons, ct);
     }
 
-    /// <summary>菜单按钮回调（供应商/模型分页/选择/搜索、档位、帮助快捷与返回）。</summary>
     public async Task HandleMenuCallbackAsync(ChannelMenuAction action, CancellationToken ct = default)
     {
         try
@@ -899,14 +822,12 @@ public class AiChannelService
             switch (action.Kind)
             {
                 case "help-back":
-                    // 返回帮助页：编辑当前消息为帮助菜单。
                     {
                         var (hh, hp, hb) = BuildHelpMenu(ch);
                         await adapter.EditMenuAsync(ch, action.ChatId, action.MessageId, hh, hp, hb, ct);
                         break;
                     }
                 case "help-model":
-                    // 编辑 help 消息 → 供应商选择页。
                     {
                         var state = await CreateModelMenuStateAsync(ch, ct);
                         if (state == null)
@@ -922,7 +843,6 @@ public class AiChannelService
                         break;
                     }
                 case "help-tier":
-                    // 编辑 help 消息 → 档位选择页。
                     {
                         var user = await ChannelUsers.Find(x => x.ChannelId == ch.Id && x.ExternalId == action.ExternalId)
                             .FirstOrDefaultAsync(ct);
@@ -938,7 +858,6 @@ public class AiChannelService
                         break;
                     }
                 case "help-status":
-                    // 编辑 help 消息 → 状态页（含返回）。
                     {
                         var user = await ChannelUsers.Find(x => x.ChannelId == ch.Id && x.ExternalId == action.ExternalId)
                             .FirstOrDefaultAsync(ct);
@@ -999,7 +918,6 @@ public class AiChannelService
                         break;
                     }
                 case "model-back":
-                    // 搜索提示页返回：清空搜索词，回到模型页。
                     {
                         if (_modelMenus.TryGetValue(key, out var st) && st.ExpiresAt > DateTime.UtcNow)
                         {
@@ -1027,7 +945,6 @@ public class AiChannelService
                             return;
                         }
                         var model = filtered[idx];
-                        // 更新会话模型（当前对话生效）。
                         var session = await _ai.GetChannelSessionByExternalAsync(ch.Id, action.ExternalId, ct);
                         if (session != null) await _ai.UpdateSessionModelAsync(session.Id, model, ct);
                         _modelMenus.TryRemove(key, out _);
@@ -1041,7 +958,6 @@ public class AiChannelService
                         if (!int.TryParse(action.Data, out var tier)) return;
                         if (tier < 0 || tier > Math.Clamp(ch.DefaultTier, 0, 3))
                         {
-                            // 服务端兜底：不允许高于频道档位。
                             await adapter.EditMenuAsync(ch, action.ChatId, action.MessageId,
                                 "❌ 不能高于频道档位。", "❌ 不能高于频道档位。", null, ct);
                             return;
@@ -1070,7 +986,6 @@ public class AiChannelService
             "菜单已过期，请重新发送 /model 打开。", "菜单已过期，请重新发送 /model 打开。", null, ct);
     }
 
-    /// <summary>IM 用户自行切换档位：仅允许 ≤ 频道默认档位（防自行提权）。</summary>
     public async Task<bool> SetUserTierByExternalAsync(string channelId, string externalId, int tier, CancellationToken ct = default)
     {
         var ch = await GetChannelAsync(channelId, includeSecrets: false, ct);
@@ -1085,8 +1000,6 @@ public class AiChannelService
     }
 
     /// <summary>
-    /// IM 端审批决策：定位该外部用户自己的频道会话 → 取挂起调用 → 写入门闩。
-    /// 批准后原运行经 ChannelSink 续跑并把最终结果推回 IM（与控制台审批同一条路径）。
     /// </summary>
     private async Task TryResolveApprovalAsync(AiChannel ch, ChannelInboundMessage msg, bool approved, string permit, CancellationToken ct)
     {
@@ -1111,7 +1024,6 @@ public class AiChannelService
         var ok = await _ai.ResolveApprovalAsync(session.Id, callId, approved, ct, permit);
         if (ok)
         {
-            // 决策完成：删除审批消息（用户已批准/拒绝，无需保留；仅原生按钮频道生效）。
             await AdapterFor(ch.ChannelType).DeleteApprovalMessageAsync(ch, session.Id, callId, ct);
         }
         await TrySendAsync(ch, Target(msg), ok
@@ -1127,7 +1039,6 @@ public class AiChannelService
             .FirstOrDefaultAsync(ct);
         if (existing != null)
         {
-            // 已绑定：明确提示，避免误读为"绑定成功"。
             await TrySendRichAsync(ch, Target(msg),
                 $"你已经绑定到账号 <b>{HtmlEncode(existing.BoundUserName)}</b>，无需重复绑定。",
                 $"你已经绑定到账号「{existing.BoundUserName}」，无需重复绑定。", ct);
@@ -1149,7 +1060,6 @@ public class AiChannelService
             return;
         }
 
-        // 一次性：CAS 标记已用，防止并发抢码。
         var mark = await BindCodes.UpdateOneAsync(
             x => x.Id == bc.Id && x.UsedAt == null,
             Builders<AiChannelBindCode>.Update
@@ -1200,8 +1110,6 @@ public class AiChannelService
         await gate.WaitAsync(ct);
         try
         {
-            // Telegram：入站立即发一条"思考中"状态消息（轮换文案），
-            // AI 开始输出时通过编辑覆盖它；无输出/出错时删除。
             long thinkingMessageId = 0;
             if (ch.ChannelType == AiChannelTypes.Telegram)
             {
@@ -1215,8 +1123,6 @@ public class AiChannelService
                     thinkingMessageId = 0;
                 }
             }
-            // 微信 iLink：先显示"对方正在输入中"（getconfig → sendtyping），
-            // AI 生成期间每 5 秒续一次；完成后发 sendtyping status=2 收尾。
             var typing = ch.ChannelType == AiChannelTypes.WechatClaw
                 ? StartWeChatTypingAsync(ch, msg, ct)
                 : Task.CompletedTask;
@@ -1229,7 +1135,7 @@ public class AiChannelService
             {
                 if (ch.ChannelType == AiChannelTypes.WechatClaw)
                 {
-                    try { await typing; } catch { /* 静默：输入指示失败不影响回复 */ }
+                    try { await typing; } catch { }
                     await StopWeChatTypingAsync(ch, msg, ct);
                 }
             }
@@ -1240,7 +1146,6 @@ public class AiChannelService
         }
     }
 
-    /// <summary>微信输入指示：getconfig 取 typing_ticket（按用户缓存，24h 内复用）→ sendtyping status=1 开始；生成期间每 5 秒续一次。</summary>
     private async Task StartWeChatTypingAsync(AiChannel ch, ChannelInboundMessage msg, CancellationToken ct)
     {
         var adapter = (WeChatClawAdapter)AdapterFor(ch.ChannelType);
@@ -1257,14 +1162,12 @@ public class AiChannelService
                     await adapter.SendTypingAsync(ch, msg.ExternalId, start: true, ct);
                 }
             }
-            catch (OperationCanceledException) { /* 会话结束 */ }
-            catch { /* 网络抖动：忽略，下一轮再续 */ }
+            catch (OperationCanceledException) { }
+            catch { }
         }, ct);
-        // 注册结束回调：RunChatAsync 完成/异常后停止续期。
         _typingKeepalives[ch.Id + "|" + msg.ExternalId] = new Action(() => { running = false; });
     }
 
-    /// <summary>微信输入指示收尾：停止续期并 sendtyping status=2（无 context_token 也能发）。</summary>
     private async Task StopWeChatTypingAsync(AiChannel ch, ChannelInboundMessage msg, CancellationToken ct)
     {
         if (_typingKeepalives.TryRemove(ch.Id + "|" + msg.ExternalId, out var stop)) stop();
@@ -1285,26 +1188,17 @@ public class AiChannelService
         return (p.Id, model, p.Models);
     }
 
-    // ── 事件出口：ChannelSink（SSE 事件 → IM 消息）────────────────────────
 
     /// <summary>
-    /// 把 RunChatAsync 的 SSE 事件流翻译成 IM 回复：
-    /// - 文本增量累积；工具调用/失败以独立段落插入（\n\n 分隔，不粘连）；
-    /// - ShowToolCalls=false 时省略工具标记段；
-    /// - StreamOutput=true 或 Telegram（编辑消息天然支持）时，增量实时编辑
-    ///   （Telegram 用入站时发的"思考中"消息作为编辑目标，AI 输出覆盖它）；
-    /// - 审批转通知（控制台/IM 按钮决策后同流续跑），done 收尾。
     /// </summary>
     private Func<string, Task> BuildSink(AiChannel ch, ChannelInboundMessage msg, string sessionId, bool guest, long initialStreamMessageId, CancellationToken ct)
     {
         var sb = new StringBuilder();
         var showToolCalls = ch.ShowToolCalls;
-        // 流式输出：显式开启，或 Telegram（以"思考中"消息为编辑目标，体验等价于流式）。
         var stream = ch.StreamOutput || ch.ChannelType == AiChannelTypes.Telegram;
         long streamMessageId = initialStreamMessageId;
         var streamLock = new object();
         var lastFlush = DateTime.MinValue;
-        // Telegram 编辑限流：增量合并到 ≥600ms 一次才真正编辑。
         var minFlushInterval = TimeSpan.FromMilliseconds(600);
 
         async Task FlushStreamAsync(bool force = false)
@@ -1321,7 +1215,6 @@ public class AiChannelService
             {
                 if (streamMessageId == 0)
                 {
-                    // 首条：发送。超长（Telegram 4096 上限）按块发新消息，放弃编辑。
                     if (text.Length > ChunkSize)
                     {
                         await TrySendAsync(ch, Target(msg), text, ct);
@@ -1331,7 +1224,6 @@ public class AiChannelService
                     streamMessageId = await AdapterFor(ch.ChannelType).StartStreamAsync(ch, Target(msg), text, ct);
                     if (streamMessageId == 0)
                     {
-                        // 频道不支持流式：回退一次性（done 时统一发送），清空缓冲防重复。
                         lock (streamLock) sb.Clear();
                     }
                 }
@@ -1339,7 +1231,6 @@ public class AiChannelService
                 {
                     if (text.Length > ChunkSize)
                     {
-                        // 超出单条编辑上限：发新消息段，重置编辑目标。
                         await TrySendAsync(ch, Target(msg), text, ct);
                         streamMessageId = 0;
                         lock (streamLock) sb.Clear();
@@ -1351,12 +1242,10 @@ public class AiChannelService
             catch (Exception ex)
             {
                 _logger.LogWarning(ex, "Channel stream send failed ({Channel} → {External})", ch.Id, msg.ExternalId);
-                // 编辑失败（消息被删/限流）：降级为一次性输出。
                 streamMessageId = 0;
             }
         }
 
-        // 删除"思考中"状态消息（无输出 / 出错时清理，避免残留）。
         async Task DeleteThinkingMessageAsync()
         {
             if (streamMessageId == 0) return;
@@ -1390,12 +1279,11 @@ public class AiChannelService
                         break;
                     }
                 case "reasoning":
-                    break; // IM 不展示思维链
+                    break;
                 case "tool_call":
                     {
                         if (!showToolCalls) break;
                         var toolName = evt["toolCall"]?["toolName"]?.GetValue<string>() ?? "";
-                        // 独立段落：标记与前后内容之间空行分隔，避免粘连。
                         lock (sb) sb.Append("\n\n🔧 调用工具：").Append(toolName);
                         if (stream) await FlushStreamAsync(force: true);
                         break;
@@ -1410,25 +1298,21 @@ public class AiChannelService
                     break;
                 case "approval":
                     {
-                        // 流式模式下审批挂起：先收尾当前流（发掉已生成内容），审批卡独立消息。
                         if (stream) await FlushStreamAsync(force: true);
                         var toolName = evt["toolCall"]?["toolName"]?.GetValue<string>() ?? "";
                         var callId = evt["toolCall"]?["id"]?.GetValue<string>() ?? "";
                         var args = evt["toolCall"]?["argsText"]?.GetValue<string>() ?? "";
-                        // 美化：工具名 execute_shell → Execute Shell；参数剔除 agentId、键名美化。
                         var toolPretty = PrettyName(toolName);
                         var (argsHtml, argsPlain) = FormatApprovalArgs(args);
                         var approvalHtml = $"⏳ <b>审批请求</b>：\n工具：<b>{HtmlEncode(toolPretty)}</b>{argsHtml}";
                         var approvalPlain = $"⏳ 审批请求：\n工具：{toolPretty}{argsPlain}";
                         if (guest || callId.Length == 0)
                         {
-                            // 访客/异常：纯文本（无按钮），并附命令指引。
                             var guide = "\n\n回复 /approve 批准（或 /approve 5min 临时许可 5 分钟），/reject 拒绝。";
                             await TrySendRichAsync(ch, Target(msg), approvalHtml + guide, approvalPlain + guide, ct);
                         }
                         else
                         {
-                            // 已绑定用户：内联按钮（Telegram 原生键盘；其余频道回退纯文本）。
                             await TrySendApprovalAsync(ch, Target(msg), approvalHtml, approvalPlain, sessionId, callId, ct);
                         }
                         await NotifyConsoleAsync(new
@@ -1442,7 +1326,6 @@ public class AiChannelService
                         }, ct);
                         if (guest && callId.Length > 0)
                         {
-                            // 访客会话控制台无人可审批：3 秒后自动拒绝，让 AI 继续回话。
                             var cid = callId;
                             var sid = sessionId;
                             _ = Task.Run(async () =>
@@ -1451,7 +1334,6 @@ public class AiChannelService
                                 {
                                     await Task.Delay(3000, ct);
                                     await _ai.ResolveApprovalAsync(sid, cid, false, ct);
-                                    // 自动拒绝后同样清理审批消息（访客为纯文本消息，通常无记录，no-op）。
                                     await AdapterFor(ch.ChannelType).DeleteApprovalMessageAsync(ch, sid, cid, ct);
                                 }
                                 catch { /* run may have been cancelled */ }
@@ -1463,7 +1345,6 @@ public class AiChannelService
                     {
                         if (stream && streamMessageId != 0)
                         {
-                            // 无实际输出（空回复）：删除"思考中"状态消息，避免残留。
                             bool hasText;
                             lock (sb) { hasText = sb.ToString().Trim().Length > 0; }
                             if (!hasText)
@@ -1471,7 +1352,6 @@ public class AiChannelService
                                 await DeleteThinkingMessageAsync();
                                 break;
                             }
-                            // 流式：最终文本已在编辑的消息里，强制 flush 一次收尾。
                             await FlushStreamAsync(force: true);
                             break;
                         }
@@ -1487,7 +1367,7 @@ public class AiChannelService
                         lock (sb) { partial = sb.ToString().Trim(); sb.Clear(); }
                         var err = evt["message"]?.GetValue<string>() ?? "未知错误";
                         if (stream && streamMessageId != 0)
-                            await DeleteThinkingMessageAsync(); // 出错：删掉状态消息，再发错误（避免两条消息）。
+                            await DeleteThinkingMessageAsync();
                         var reply = partial.Length > 0 ? $"{partial}\n\n❌ {err}" : $"❌ {err}";
                         await TrySendAsync(ch, Target(msg), reply, ct);
                         break;
@@ -1508,7 +1388,6 @@ public class AiChannelService
         }
     }
 
-    /// <summary>发送审批请求：Telegram 带 HTML 富文本 + 内联按钮，其余频道回退纯文本。</summary>
     private async Task TrySendApprovalAsync(AiChannel ch, string externalId, string html, string plain, string sessionId, string callId, CancellationToken ct)
     {
         try
@@ -1521,7 +1400,6 @@ public class AiChannelService
         }
     }
 
-    /// <summary>向频道用户发送媒体（供 MCP 工具 send_channel_media 调用）。</summary>
     public async Task SendMediaToChannelAsync(
         string channelId, string externalId, string type, string url, string? fileName, string? caption, CancellationToken ct = default)
     {
@@ -1538,7 +1416,6 @@ public class AiChannelService
         await AdapterFor(ch.ChannelType).SendMediaAsync(ch, externalId, media, ct);
     }
 
-    /// <summary>向频道用户发送纯文本（服务端主动通知场景，如 AI 事件订阅提醒）。</summary>
     public async Task SendChannelTextAsync(string channelId, string externalId, string text, CancellationToken ct = default)
     {
         var ch = await GetChannelAsync(channelId, includeSecrets: true, ct)
@@ -1547,7 +1424,6 @@ public class AiChannelService
         await AdapterFor(ch.ChannelType).SendTextAsync(ch, externalId, text, ct);
     }
 
-    /// <summary>频道的最近活跃绑定用户（事件订阅"频道目标"的默认送达对象）。</summary>
     public async Task<AiChannelUser?> GetLatestBoundUserAsync(string channelId, CancellationToken ct = default)
     {
         return await ChannelUsers.Find(x => x.ChannelId == channelId)
@@ -1555,7 +1431,6 @@ public class AiChannelService
             .FirstOrDefaultAsync(ct);
     }
 
-    /// <summary>审批按钮回调（Telegram 内联键盘）：写入门闩，原运行经 Sink 续跑回推 IM。</summary>
     public async Task<CallbackResult> HandleCallbackAsync(CallbackAction action, CancellationToken ct = default)
     {
         try
@@ -1593,7 +1468,6 @@ public class AiChannelService
             await adapter.SendTextAsync(ch, externalId, buf.ToString().TrimEnd(), ct);
     }
 
-    /// <summary>控制台 WebSocket 广播（频道事件：审批挂起等）。</summary>
     private async Task NotifyConsoleAsync(object data, CancellationToken ct)
     {
         try
@@ -1612,13 +1486,10 @@ public class AiChannelService
         }
     }
 
-    // ── 文案（HTML 富文本 + 纯文本双版本；Telegram 用 HTML，其余回退纯文本）────
 
-    /// <summary>HTML 转义（所有用户输入/工具输出进富文本前必须经过）。</summary>
     private static string HtmlEncode(string s) =>
         System.Net.WebUtility.HtmlEncode(s);
 
-    /// <summary>snake_case → 空格分隔 + 单词首字母大写：execute_shell → Execute Shell。</summary>
     private static string PrettyName(string raw) =>
         string.Join(' ', (raw ?? "").Split('_', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
             .Select(w => w.Length > 0 ? char.ToUpperInvariant(w[0]) + w[1..] : w));
@@ -1632,7 +1503,6 @@ public class AiChannelService
         _ => "Cognitio 审理",
     };
 
-    /// <summary>富文本发送：频道支持 HTML 时渲染 html，否则发 plain。</summary>
     private async Task TrySendRichAsync(AiChannel ch, string externalId, string html, string plain, CancellationToken ct)
     {
         try
@@ -1649,8 +1519,6 @@ public class AiChannelService
     {
         var tier = TierName(Math.Clamp(ch.DefaultTier, 0, 3));
         var isTelegram = ch.ChannelType == AiChannelTypes.Telegram;
-        // Telegram：菜单指令（/model /tier），按钮审批，无需文本审批命令。
-        // 其他频道：保留文本审批命令（无按钮审批），菜单指令不支持。
         var commands = new List<(string Cmd, string Desc)>
         {
             ("/start", "开始使用"),
@@ -1699,8 +1567,6 @@ public class AiChannelService
     }
 
     /// <summary>
-    /// 审批请求参数美化：解析 JSON，剔除 agentId，其余键名美化（command → Command），
-    /// 值做 HTML 转义。返回 (html 行, plain 行) 或空。
     /// </summary>
     private static (string Html, string Plain) FormatApprovalArgs(string argsText)
     {

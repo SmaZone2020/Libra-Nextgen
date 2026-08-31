@@ -6,7 +6,6 @@ import { api } from '../../api/client';
 import { callScript, tryParse, pretty } from './shared';
 import { Tool } from './components';
 
-// ── 4. 服务端脚本：全函数目录 + 实时调用 ──────────────────────────────
 
 interface SdkManifest {
   pluginId: string;
@@ -24,7 +23,6 @@ export function ServiceTab() {
   const [list, setList] = useState<{ pluginId: string; functions: string[] }[] | null>(null);
   const [listErr, setListErr] = useState<string | null>(null);
 
-  // 表单状态（每个函数的可选项）
   const [echoText, setEchoText] = useState('hello sdk');
   const [echoCount, setEchoCount] = useState('3');
   const [nowFormat, setNowFormat] = useState('yyyy-MM-dd HH:mm:ss');
@@ -42,7 +40,6 @@ export function ServiceTab() {
   const [tablePrefix, setTablePrefix] = useState('sdk');
   const [failMsg, setFailMsg] = useState('demo failure');
 
-  // 进入页面自动拉取 manifest（服务端脚本自描述）
   useEffect(() => {
     callScript<SdkManifest>('manifest').then((res) => {
       if (res.ok) {

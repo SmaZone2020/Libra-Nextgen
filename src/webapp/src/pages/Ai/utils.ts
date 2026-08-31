@@ -1,7 +1,5 @@
 'use client';
 
-/** 解析模型名显示信息：`deepseek-ai/deepseek-v4-flash:free` → 厂商/名称/是否免费/最新版/批量。
- *  仅影响显示；选中值仍使用原始模型 id（含 /、~、:free、:batch 后缀）。 */
 export function parseModelLabel(raw: string): {
   vendor?: string;
   name: string;
@@ -41,7 +39,6 @@ export function titleCaseWords(s: string): string {
     .replaceAll("Latest","");
 }
 
-/** 触发器中展示的模型名：隐藏厂商前缀与 :free/:batch 后缀，并按单词美化。 */
 export function formatModelDisplay(raw: string): string {
   const { name } = parseModelLabel(raw);
   return name ? titleCaseWords(name) : raw;

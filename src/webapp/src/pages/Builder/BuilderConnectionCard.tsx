@@ -16,7 +16,6 @@ interface BuilderConnectionCardProps {
   set: <K extends keyof BuildConfigRequest>(key: K, value: BuildConfigRequest[K]) => void;
 }
 
-/** 高级路径默认值占位符（与服务端 Stage4 默认一致）。 */
 const DEFAULT_PATHS: { key: keyof BuildConfigRequest; placeholder: string }[] = [
   { key: 'registerPath', placeholder: '/api/beacon/register' },
   { key: 'heartbeatPath', placeholder: '/api/beacon/heartbeat' },
@@ -26,7 +25,6 @@ const DEFAULT_PATHS: { key: keyof BuildConfigRequest; placeholder: string }[] = 
   { key: 'coreKeyPath', placeholder: '/api/v1/auth/token' },
 ];
 
-/** 连接参数（流量伪装）：协议 / 心跳 / 抖动 / 高级路径，留空 = 服务端默认。 */
 export function BuilderConnectionCard({ config, set }: BuilderConnectionCardProps) {
   const { t } = useTranslation();
 

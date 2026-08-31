@@ -37,7 +37,6 @@ function BrandIcon({ name, className = 'size-5' }: { name: string; className?: s
   );
 }
 
-/** 供应商/模型选择弹层内容（桌面 Popover / 移动 Drawer 共用）。 */
 function ProviderModelMenu({
   providers,
   activeProvider,
@@ -180,7 +179,6 @@ export interface AiComposerProps {
   activeModel: string;
   isGenerating: boolean;
   canSend: boolean;
-  /** Justitia 档位 key（浏览器持久化，随 SSE 请求提交）。 */
   justitiaTier: JustitiaTierKey;
   onTierChange: (tier: JustitiaTierKey) => void;
   onSend: (text: string) => void;
@@ -209,11 +207,9 @@ export function AiComposer({
   const [tierMenuOpen, setTierMenuOpen] = useState(false);
   const mobileDrawer = useOverlayState();
   const permission = JUSTITIA_TIERS.find((x) => x.key === justitiaTier)?.index ?? 0;
-  // 自由拖动时的临时 0–100 位置；null 表示未在拖动，吸附到档位位置。
   const [draftValue, setDraftValue] = useState<number | null>(null);
   const isDragging = draftValue !== null;
   const sliderValue = draftValue ?? JUSTITIA_TIER_VALUES[permission] ?? 0;
-  // 拖动中实时显示最近档位名，松开后才真正提交。
   const activeTierIndex =
     draftValue !== null
       ? JUSTITIA_TIER_VALUES.indexOf(snapJustitiaValue(draftValue))
@@ -370,12 +366,10 @@ export function AiComposer({
                         className="group"
                         onChange={(v) => {
                           const val = Array.isArray(v) ? v[0] ?? 0 : v;
-                          // 拖动中自由跟手，不提交档位
                           setDraftValue(Math.round(val));
                         }}
                         onChangeEnd={(v) => {
                           const val = Array.isArray(v) ? v[0] ?? 0 : v;
-                          // 松开后吸附到最近档位并提交
                           const snapped = snapJustitiaValue(val);
                           const tier = JUSTITIA_TIERS[JUSTITIA_TIER_VALUES.indexOf(snapped)];
                           if (tier) onTierChange(tier.key);

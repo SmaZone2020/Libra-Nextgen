@@ -8,8 +8,6 @@ using Microsoft.AspNetCore.Mvc;
 namespace LibraNextgen.Service.Controllers;
 
 /// <summary>
-/// 内置 AI 助手：供应商管理、MCP 连接配置、会话持久化与流式聊天（SSE）。
-/// 会话按用户隔离；聊天支持工具调用（复用 MCP 工具注册表）与人工审批。
 /// </summary>
 [ApiController]
 [Route("api/ai")]
@@ -31,7 +29,6 @@ public class AiController : ControllerBase
     private string UserName => User.Identity?.Name ?? "";
     private bool IsAdmin => User.IsInRole("Admin");
 
-    // ── 供应商 ────────────────────────────────────────────────────────────
 
     [HttpGet("providers")]
     public async Task<IActionResult> GetProviders(CancellationToken ct)
@@ -71,7 +68,6 @@ public class AiController : ControllerBase
         return ok ? Ok(new { ok = true, models }) : Ok(new { ok = false, error });
     }
 
-    // ── 会话 ──────────────────────────────────────────────────────────────
 
     [HttpGet("sessions")]
     public async Task<IActionResult> GetSessions(CancellationToken ct)
@@ -84,7 +80,6 @@ public class AiController : ControllerBase
         return s == null ? NotFound(new { error = "session not found" }) : Ok(s);
     }
 
-    /// <summary>会话当前是否有挂起的审批（控制台打开会话时恢复审批模态框，含频道会话）。</summary>
     [HttpGet("sessions/{id}/pending-approval")]
     public async Task<IActionResult> GetPendingApproval(string id, CancellationToken ct)
     {
@@ -115,7 +110,6 @@ public class AiController : ControllerBase
         return ok ? Ok(new { renamed = true }) : NotFound(new { error = "session not found" });
     }
 
-    /// <summary>编辑会话中的一条用户消息内容（仅限 user 消息）。</summary>
     [HttpPut("sessions/{id}/messages/{messageId}")]
     public async Task<IActionResult> EditMessage(string id, string messageId, [FromBody] AiEditMessageReq req, CancellationToken ct)
     {
@@ -125,7 +119,6 @@ public class AiController : ControllerBase
         return ok ? Ok(new { edited = true }) : BadRequest(new { error = "message not found or not editable" });
     }
 
-    /// <summary>删除会话中的一条消息（用户消息或 AI 消息）。</summary>
     [HttpDelete("sessions/{id}/messages/{messageId}")]
     public async Task<IActionResult> DeleteMessage(string id, string messageId, CancellationToken ct)
     {
@@ -133,7 +126,6 @@ public class AiController : ControllerBase
         return ok ? Ok(new { deleted = true }) : NotFound(new { error = "message not found" });
     }
 
-    /// <summary>截断会话：保留到指定消息（含）为止，删除其后的全部消息。</summary>
     [HttpDelete("sessions/{id}/messages/{messageId}/after")]
     public async Task<IActionResult> TruncateMessagesAfter(string id, string messageId, CancellationToken ct)
     {
@@ -141,7 +133,6 @@ public class AiController : ControllerBase
         return ok ? Ok(new { truncated = true }) : NotFound(new { error = "message not found" });
     }
 
-    /// <summary>分支会话：复制为带 -fork 后缀的新会话（含完整消息历史）。</summary>
     [HttpPost("sessions/{id}/fork")]
     public async Task<IActionResult> ForkSession(string id, CancellationToken ct)
     {
@@ -149,7 +140,6 @@ public class AiController : ControllerBase
         return fork == null ? NotFound(new { error = "session not found" }) : Ok(fork);
     }
 
-    // ── MCP 连接 ──────────────────────────────────────────────────────────
 
     [HttpGet("mcp")]
     public async Task<IActionResult> GetMcp(CancellationToken ct)
@@ -175,10 +165,8 @@ public class AiController : ControllerBase
         return Ok(new { saved = true });
     }
 
-    // ── 聊天（SSE）────────────────────────────────────────────────────────
 
     /// <summary>
-    /// 发送一条消息并流式接收回复。SSE 事件：
     ///   reasoning {label,content} | message {delta} | tool_call {toolCall} |
     ///   tool_result {toolCallId,toolName,output,state} | approval {toolCall} |
     ///   done {sessionId,messageId} | error {message}
@@ -203,7 +191,6 @@ public class AiController : ControllerBase
 
         Response.Headers.CacheControl = "no-cache";
         Response.Headers.ContentType = "text/event-stream";
-        // 审批等待可能很长（无限时）：禁用响应缓冲，让 SSE 帧即时刷出。
         HttpContext.Features.Get<Microsoft.AspNetCore.Http.Features.IHttpResponseBodyFeature>()?.DisableBuffering();
         await Response.Body.FlushAsync(ct);
 
@@ -217,9 +204,6 @@ public class AiController : ControllerBase
     }
 
     /// <summary>
-    /// 审批/拒绝/临时批准挂起的工具调用。纯 POST：把决策写入后端门闩，
-    /// 唤醒原 SSE 流继续推送 tool_result/后续消息（AI 在同一流内续跑）。
-    /// 本接口不返回 SSE，仅返回接受确认。
     /// </summary>
     [HttpPost("chat/action")]
     public async Task<IActionResult> ChatAction([FromBody] AiChatActionReq req, CancellationToken ct)
@@ -227,7 +211,6 @@ public class AiController : ControllerBase
         if (string.IsNullOrWhiteSpace(req.SessionId) || string.IsNullOrWhiteSpace(req.ToolCallId))
             return BadRequest(new { error = "sessionId and toolCallId are required" });
 
-        // 仅会话所有者可审批自己的工具调用。
         var session = await _ai.GetSessionAsync(req.SessionId, UserId, ct);
         if (session == null) return NotFound(new { error = "session not found" });
 
@@ -244,7 +227,6 @@ public class AiController : ControllerBase
         return Ok(new { stopped = true });
     }
 
-    // ── 请求模型 ──────────────────────────────────────────────────────────
 
     private static AiProvider ToModel(AiProviderReq req) => new()
     {
@@ -297,7 +279,6 @@ public class AiChatReq
 {
     public string? SessionId { get; set; }
     public string? Content { get; set; }
-    /// <summary>Justitia 档位 key（cognitio/arbitrium/imperium/dictatura），浏览器持久化随请求提交。</summary>
     public string? Tier { get; set; }
 }
 
@@ -306,7 +287,6 @@ public class AiChatActionReq
     public string? SessionId { get; set; }
     public string? ToolCallId { get; set; }
     public bool Approved { get; set; }
-    /// <summary>档位提升许可时长：one-time（仅本次）/ 5min / 20min。默认 one-time。</summary>
     public string Permit { get; set; } = "one-time";
 }
 

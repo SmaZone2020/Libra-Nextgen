@@ -7,9 +7,6 @@ using Microsoft.AspNetCore.Mvc;
 namespace LibraNextgen.Service.Controllers;
 
 /// <summary>
-/// AI 频道（IM 接入）管理 API：
-/// 频道 CRUD / 测试连接 / 微信扫码授权（Admin）；一次性绑定码 / 绑定用户管理（Admin）；
-/// 绑定用户查询自己的频道会话（登录用户）。
 /// </summary>
 [ApiController]
 [Route("api/ai/channels")]
@@ -29,7 +26,6 @@ public class AiChannelController : ControllerBase
         ?? User.FindFirst("sub")?.Value
         ?? throw new UnauthorizedAccessException("No user identity.");
 
-    // ── 频道 CRUD（Admin）───────────────────────────────────────────────
 
     [HttpGet]
     public async Task<IActionResult> List(CancellationToken ct)
@@ -72,7 +68,6 @@ public class AiChannelController : ControllerBase
         return ok ? Ok(new { deleted = true }) : NotFound(new { error = "channel not found" });
     }
 
-    /// <summary>测试连接（新建草稿，无频道 id；哨兵密钥自动用已存配置补齐）。</summary>
     [HttpPost("test")]
     [Authorize(Roles = "Admin")]
     public async Task<IActionResult> Test([FromBody] AiChannelTestReq req, CancellationToken ct)
@@ -90,7 +85,6 @@ public class AiChannelController : ControllerBase
         return ok ? Ok(new { ok = true }) : Ok(new { ok = false, error });
     }
 
-    /// <summary>测试连接（编辑态，按已有频道 id 补齐哨兵密钥）。</summary>
     [HttpPost("{id}/test")]
     [Authorize(Roles = "Admin")]
     public async Task<IActionResult> TestById(string id, [FromBody] AiChannelReq req, CancellationToken ct)
@@ -106,7 +100,6 @@ public class AiChannelController : ControllerBase
         return ok ? Ok(new { ok = true }) : Ok(new { ok = false, error });
     }
 
-    /// <summary>设置微信频道的 bot_token（iLink 扫码授权确认后由"授权"流程写入；同时持久化返回的 baseurl / ilink_bot_id）。</summary>
     [HttpPost("{id}/token")]
     [Authorize(Roles = "Admin")]
     public async Task<IActionResult> SetToken(string id, [FromBody] AiChannelTokenReq req, CancellationToken ct)
@@ -117,7 +110,6 @@ public class AiChannelController : ControllerBase
         return ok ? Ok(new { saved = true }) : NotFound(new { error = "channel not found" });
     }
 
-    /// <summary>微信 iLink 扫码登录：申请授权二维码。返回 qrcode 令牌与二维码图片 URL。</summary>
     [HttpPost("{id}/wechat/qrcode")]
     [Authorize(Roles = "Admin")]
     public async Task<IActionResult> WeChatQrCode(string id, CancellationToken ct)
@@ -137,7 +129,6 @@ public class AiChannelController : ControllerBase
         }
     }
 
-    /// <summary>微信 iLink 扫码登录：轮询扫码状态。confirmed 时返回 bot_token（本次响应仅此一次）。</summary>
     [HttpPost("{id}/wechat/qrcode/status")]
     [Authorize(Roles = "Admin")]
     public async Task<IActionResult> WeChatQrStatus(string id, [FromBody] AiChannelQrStatusReq req, CancellationToken ct)
@@ -160,8 +151,6 @@ public class AiChannelController : ControllerBase
     }
 
     /// <summary>
-    /// 微信 iLink 扫码登录：申请授权二维码（无需频道已存在，新建频道也能先扫码拿 token）。
-    /// 登录接口本身匿名，仅需管理员权限（返回 qrcode 令牌 + 二维码图片 URL）。
     /// </summary>
     [HttpPost("wechat/qrcode")]
     [Authorize(Roles = "Admin")]
@@ -178,7 +167,6 @@ public class AiChannelController : ControllerBase
         }
     }
 
-    /// <summary>微信 iLink 扫码登录：轮询扫码状态（草稿模式，不依赖频道）。confirmed 时返回 bot_token（仅此一次）。</summary>
     [HttpPost("wechat/qrcode/status")]
     [Authorize(Roles = "Admin")]
     public async Task<IActionResult> WeChatQrStatusDraft([FromBody] AiChannelQrStatusReq req, CancellationToken ct)
@@ -196,9 +184,7 @@ public class AiChannelController : ControllerBase
         }
     }
 
-    // ── 绑定码 / 绑定用户（Admin）─────────────────────────────────────────
 
-    /// <summary>为指定控制台账号生成一次性绑定码（15 分钟有效，返回后仅在本次响应中可见）。</summary>
     [HttpPost("{id}/bind-codes")]
     [Authorize(Roles = "Admin")]
     public async Task<IActionResult> CreateBindCode(string id, [FromBody] AiBindCodeReq req, CancellationToken ct)
@@ -221,13 +207,11 @@ public class AiChannelController : ControllerBase
     public async Task<IActionResult> ListUsers(string id, CancellationToken ct)
         => Ok(await _channels.ListUsersAsync(id, ct));
 
-    /// <summary>列出频道的全部绑定码（含已用/作废/过期状态，仅展示尾号）。</summary>
     [HttpGet("{id}/bind-codes")]
     [Authorize(Roles = "Admin")]
     public async Task<IActionResult> ListBindCodes(string id, CancellationToken ct)
         => Ok(await _channels.ListBindCodesAsync(id, ct));
 
-    /// <summary>作废一个未使用的绑定码（已使用/已作废返回错误）。</summary>
     [HttpDelete("{id}/bind-codes/{codeId}")]
     [Authorize(Roles = "Admin")]
     public async Task<IActionResult> RevokeBindCode(string id, string codeId, CancellationToken ct)
@@ -236,7 +220,6 @@ public class AiChannelController : ControllerBase
         return ok ? Ok(new { revoked = true }) : BadRequest(new { error = "绑定码不存在、已使用或已作废" });
     }
 
-    /// <summary>调整绑定用户的档位覆盖（body.tier 为 null 时清除覆盖，回落频道默认档位）。</summary>
     [HttpPut("users/{channelUserId}/tier")]
     [Authorize(Roles = "Admin")]
     public async Task<IActionResult> SetUserTier(string channelUserId, [FromBody] AiUserTierReq req, CancellationToken ct)
@@ -260,14 +243,11 @@ public class AiChannelController : ControllerBase
         return ok ? Ok(new { deleted = true }) : NotFound(new { error = "user binding not found" });
     }
 
-    // ── 用户侧 ───────────────────────────────────────────────────────────
 
-    /// <summary>绑定用户自己的频道会话（控制台 AI 页"频道会话"分区）。</summary>
     [HttpGet("sessions")]
     public async Task<IActionResult> MyChannelSessions(CancellationToken ct)
         => Ok(await _channels.MyChannelSessionsAsync(UserId, ct));
 
-    // ── 请求模型 ─────────────────────────────────────────────────────────
 
     private static AiChannel ToModel(AiChannelReq req) => new()
     {
@@ -300,7 +280,6 @@ public class AiChannelReq
     public bool AllowInGroups { get; set; }
 }
 
-/// <summary>写入频道 bot_token（iLink 扫码授权确认后由"授权"流程调用；baseUrl/ilinkBotId 来自 confirmed 响应，按官方协议一并持久化）。</summary>
 public class AiChannelTokenReq
 {
     public string? Token { get; set; }
@@ -308,13 +287,11 @@ public class AiChannelTokenReq
     public string? ILinkBotId { get; set; }
 }
 
-/// <summary>微信 iLink 扫码状态轮询请求（携带 get_bot_qrcode 返回的 qrcode 令牌）。</summary>
 public class AiChannelQrStatusReq
 {
     public string? Qrcode { get; set; }
 }
 
-/// <summary>新建草稿测试连接：可带已有频道 id 以复用已存密钥。</summary>
 public class AiChannelTestReq : AiChannelReq
 {
     public string? Id { get; set; }
@@ -327,6 +304,5 @@ public class AiBindCodeReq
 
 public class AiUserTierReq
 {
-    /// <summary>0-3；null = 清除覆盖，回落频道默认档位。</summary>
     public int? Tier { get; set; }
 }

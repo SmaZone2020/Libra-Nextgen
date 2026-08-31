@@ -70,16 +70,6 @@ export function getNetworkProxy(agentId: string): Promise<Pick<NetworkResult, 'p
   return api.post(`/system/${agentId}/network/proxy`);
 }
 
-/**
- * 发起局域网扫描（异步任务化）。
- *
- * 扫描一个 /24 网段需要数秒到数十秒，旧的同步 relay 会占用服务端请求
- * 线程并容易撞上 30s 网关/浏览器超时。这里改为标准的任务下发：
- *   1. POST /api/tasks 创建 Generic 任务（recon + lanscan）；
- *   2. 前端轮询 GET /api/tasks/{id}，直到 Completed/Failed/Cancelled；
- *   3. 完成后解析 output JSON（{"devices":[...],"subnets":[...]}）。
- * 返回 { taskId }，由调用方决定轮询节奏（LAN 扫描建议 2s 间隔）。
- */
 export async function startLanScan(agentId: string): Promise<{ taskId: string }> {
   const task = await api.post<AgentTask>('/tasks', {
     agentId,
@@ -95,7 +85,6 @@ export function getLanScanTask(taskId: string): Promise<AgentTask> {
   return api.get<AgentTask>(`/tasks/${taskId}`);
 }
 
-/** 将 AgentTask.output（JSON 字符串）解析为局域网扫描结果；未完成/解析失败返回 null。 */
 export function parseLanScanResult(task: AgentTask): LanScanResult | null {
   if (task.status !== 'Completed' || !task.output) return null;
   try {
@@ -115,7 +104,6 @@ export function getDocker(agentId: string): Promise<DockerResult> {
   return api.post<DockerResult>(`/system/${agentId}/docker`);
 }
 
-// ── 服务端设置（监听/安全） ──────────────────────────────────────────────
 
 export interface ListenerInfo {
   host: string;

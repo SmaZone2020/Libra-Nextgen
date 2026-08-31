@@ -94,7 +94,6 @@ fn get_system_uptime_secs() -> u64 {
     }
     #[cfg(windows)]
     {
-        // GetTickCount64（kernel32，Vista+）——无子进程（进程面收敛二期）
         #[link(name = "kernel32")]
         extern "system" {
             fn GetTickCount64() -> u64;
@@ -103,7 +102,6 @@ fn get_system_uptime_secs() -> u64 {
         if ms > 0 {
             return ms / 1000;
         }
-        // 兜底：sysinfo（关联函数）
         let uptime = sysinfo::System::uptime();
         if uptime > 0 {
             return uptime;
@@ -131,7 +129,6 @@ pub fn is_virtual_machine() -> bool {
 
 #[cfg(target_os = "windows")]
 fn check_windows_vm() -> bool {
-    // VM MAC 前缀检测（sysinfo::Networks，无子进程——进程面收敛二期）
     {
         let networks = sysinfo::Networks::new_with_refreshed_list();
         let vm_macs = ["00:05:69", "00:0c:29", "00:1c:42", "00:50:56", "08:00:27"];
@@ -143,7 +140,6 @@ fn check_windows_vm() -> bool {
         }
     }
 
-    // VM 服务检测（SCM 原生 API，无子进程）
     if vm_service_running("vmtools") || vm_service_running("vboxservice") {
         return true;
     }
@@ -151,7 +147,6 @@ fn check_windows_vm() -> bool {
     false
 }
 
-/// 用 SCM 查询服务是否 RUNNING（OpenSCManager/OpenService/QueryServiceStatus）。
 #[cfg(target_os = "windows")]
 fn vm_service_running(name: &str) -> bool {
     use windows::Win32::System::Services::*;
@@ -199,7 +194,6 @@ fn check_linux_vm() -> bool {
     false
 }
 
-/// Linux 辅助：执行命令取输出（仅 Linux 反沙盒探测使用；Windows 路径零子进程）。
 #[cfg(not(target_os = "windows"))]
 #[allow(dead_code)]
 fn exec(cmd: &str, args: &[&str]) -> Result<String, ()> {

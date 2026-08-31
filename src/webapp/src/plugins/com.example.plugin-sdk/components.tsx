@@ -1,7 +1,6 @@
 import type { ReactNode } from 'react';
 import { Accordion, Button, Card } from '@heroui/react';
 
-// ── 通用小组件 ─────────────────────────────────────────────────────────
 
 export function ApiTable({ title, rows }: { title: string; rows: string[][] }) {
   return (
@@ -19,7 +18,6 @@ export function ApiTable({ title, rows }: { title: string; rows: string[][] }) {
   );
 }
 
-/** 一个可展开的演练工具（Accordion 项）。 */
 export function Tool({ title, desc, fields, run }: {
   title: string; desc: string; fields: ReactNode | null; run: () => void | Promise<void>;
 }) {

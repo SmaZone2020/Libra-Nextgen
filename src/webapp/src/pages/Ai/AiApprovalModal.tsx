@@ -8,7 +8,6 @@ import type { AiToolCall } from '../../api/ai';
 export type AiPermit = 'one-time' | '5min' | '20min';
 
 export interface AiApprovalModalProps {
-  /** 待审批的工具调用（null 时不显示）。 */
   tool: AiToolCall | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -16,10 +15,6 @@ export interface AiApprovalModalProps {
   onReject: () => void;
 }
 
-/**
- * 档位提升审批模态框：一次性 / 5分钟 / 20分钟 临时许可。
- * 可关闭（不决策）→ 工具调用保留在对话流中，稍后可再次批准/拒绝。
- */
 export function AiApprovalModal({
   tool,
   open,
@@ -63,9 +58,9 @@ export function AiApprovalModal({
                     </span>
                     {requiredTier !== undefined && currentTier !== undefined && (
                       <Chip color="warning" variant="soft" size="sm">
-                        {t('ai.approvalTierUp', { 
-                          from: ['Cognitio', 'Arbitrium', 'Imperium', 'Dictatura'][currentTier], 
-                          to: ['Cognitio', 'Arbitrium', 'Imperium', 'Dictatura'][requiredTier] 
+                        {t('ai.approvalTierUp', {
+                          from: ['Cognitio', 'Arbitrium', 'Imperium', 'Dictatura'][currentTier],
+                          to: ['Cognitio', 'Arbitrium', 'Imperium', 'Dictatura'][requiredTier]
                         })}
                       </Chip>
                     )}

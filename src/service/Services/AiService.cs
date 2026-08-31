@@ -17,25 +17,18 @@ using MongoDB.Driver;
 
 namespace LibraNextgen.Service.Services;
 
-/// <summary>AI 供应商与 MCP 工具的注册表（供 AiService 与控制器共享）。</summary>
 public sealed record AiToolDescriptor(string Name, string Description, JsonObject? Schema);
 
-/// <summary>AI 聊天运行状态（内存态，按会话单并发）。</summary>
 public sealed class AiRunState
 {
     public required string SessionId { get; init; }
     public required string ProviderId { get; init; }
     public required string Model { get; init; }
     public required string UserId { get; init; }
-    /// <summary>操作员显示名（审计用）。</summary>
     public string UserName { get; set; } = "";
-    /// <summary>本次运行携带的 Justitia 档位（浏览器持久化 → SSE 请求参数）。</summary>
     public JustitiaTier JustitiaTier { get; set; } = JustitiaTier.Cognitio;
-    /// <summary>审批授予的临时提升档位（5/20 分钟许可窗口），到期自动回落。</summary>
     public int? BoostTier { get; set; }
-    /// <summary>临时提升到期时间（UTC）。</summary>
     public DateTime? BoostExpiresAt { get; set; }
-    /// <summary>有效档位 = 未过期的临时提升档位，否则当前档位。</summary>
     public JustitiaTier EffectiveTier =>
         BoostTier is { } b && BoostExpiresAt is { } exp && exp > DateTime.UtcNow
             ? (JustitiaTier)b
@@ -44,17 +37,13 @@ public sealed class AiRunState
     public List<AiToolCall> ToolCalls { get; } = new();
     public List<AiReasoningStep> Reasoning { get; } = new();
     public JsonObject? PendingToolCall { get; set; }
-    /// <summary>跨轮累计的助手文本（流式发出并最终落库）。</summary>
     public string AssistantText { get; set; } = "";
-    /// <summary>当前轮内累计的文本（用于 LLM 消息组装）。</summary>
     public string TurnText { get; set; } = "";
     public bool Finished { get; set; }
     public CancellationTokenSource? Cts { get; set; }
     public DateTime StartedAt { get; set; } = DateTime.UtcNow;
-    /// <summary>频道会话的上下文（审批续跑时 AsyncLocal 不流动，工具调用前从此恢复注入）。</summary>
     public AiRunContextState? ChannelContext { get; set; }
 
-    /// <summary>向当前 SSE 连接推送事件（approval 挂起后前端仍保持同一连接）。</summary>
     public Func<string, Task>? Notify { get; set; }
     public Task NotifyAsync(string payload) => Notify?.Invoke(payload) ?? Task.CompletedTask;
 }
@@ -74,7 +63,6 @@ public class AiService
     private readonly IHttpContextAccessor _http;
     private readonly ConnectionManager _ws;
     private readonly ConcurrentDictionary<string, AiRunState> _runs = new();
-    /// <summary>审批决策门闩：callId → 等待中的 TaskCompletionSource（普通 MCP 等待语义）。</summary>
     private readonly ConcurrentDictionary<string, TaskCompletionSource<string>> _approvalGates = new();
 
     private static readonly Dictionary<string, string> DefaultBaseUrls = new(StringComparer.OrdinalIgnoreCase)
@@ -103,7 +91,6 @@ public class AiService
         _ws = ws;
     }
 
-    /// <summary>在请求作用域内解析 Scoped 服务（工具反射注入用；单例下不可直接 GetService）。</summary>
     private T? ResolveScoped<T>() where T : class
     {
         if (_services is IServiceScopeFactory scopeFactory)
@@ -114,7 +101,6 @@ public class AiService
         return _services.GetService(typeof(T)) as T;
     }
 
-    /// <summary>按类型解析 DI 服务（单例直接取，Scoped 走作用域工厂）。</summary>
     private object? ResolveScopedFor(Type type)
     {
         if (_services is IServiceScopeFactory scopeFactory)
@@ -125,22 +111,19 @@ public class AiService
         return _services.GetService(type);
     }
 
-    /// <summary>Justitia 四档 → 审计风险等级（档位即风险边界）。</summary>
     private static RiskLevel RiskForTier(JustitiaTier tier) => tier switch
     {
-        JustitiaTier.Cognitio => RiskLevel.Safe,      // 审理：只读侦查
-        JustitiaTier.Arbitrium => RiskLevel.Normal,   // 裁量：常规可逆
-        JustitiaTier.Imperium => RiskLevel.Dangerous, // 治权：高危需批准
-        _ => RiskLevel.Malicious,                     // 独裁：全权/恶意
+        JustitiaTier.Cognitio => RiskLevel.Safe,
+        JustitiaTier.Arbitrium => RiskLevel.Normal,
+        JustitiaTier.Imperium => RiskLevel.Dangerous,
+        _ => RiskLevel.Malicious,
     };
 
-    /// <summary>从工具参数提取目标 agentId（审计用）。</summary>
     private static string? ExtractAgentId(JsonObject args) =>
         args.TryGetPropertyValue("agentId", out var node) && node is JsonValue v && v.TryGetValue<string>(out var id)
             ? id
             : null;
 
-    /// <summary>AI 工具调用审计（档位决定风险等级）。</summary>
     private async Task AuditAiToolAsync(
         AiRunState state, string toolName, JsonObject args,
         string? output = null, bool success = true, string? permit = null)
@@ -176,8 +159,6 @@ public class AiService
     }
 
     /// <summary>
-    /// 组装 Justitia 系统提示词：本地提示词文件全文 + 运行时注入的当前档位上下文。
-    /// 文件缺失/为空时返回空（不注入 system prompt）。
     /// </summary>
     private string BuildSystemPrompt(JustitiaTier tier)
     {
@@ -206,7 +187,6 @@ public class AiService
     private IMongoCollection<AiSession> Sessions => _db.GetCollection<AiSession>("ai_sessions");
     private IMongoCollection<AiMcpConfig> McpConfigs => _db.GetCollection<AiMcpConfig>("ai_mcp_config");
 
-    // ── 供应商 ────────────────────────────────────────────────────────────
 
     public async Task<List<AiProvider>> GetProvidersAsync(CancellationToken ct = default)
     {
@@ -271,7 +251,6 @@ public class AiService
         return r.DeletedCount > 0;
     }
 
-    /// <summary>验证供应商连通性（拉取 /models）。</summary>
     public async Task<(bool Ok, string? Error, List<string>? Models)> TestProviderAsync(AiProvider input, CancellationToken ct = default)
     {
         try
@@ -301,7 +280,6 @@ public class AiService
             }
             catch (JsonException)
             {
-                // 端点不存在 / 返回非 JSON（如 HTML 404 页）时给出可读错误。
                 return (false, $"模型列表响应不是有效 JSON（{url} 可能不支持 /models 路由）", null);
             }
             if (doc is not JsonObject obj || obj["data"] is not JsonArray dataArr)
@@ -319,16 +297,13 @@ public class AiService
         }
     }
 
-    // ── 会话 ──────────────────────────────────────────────────────────────
 
-    /// <summary>控制台会话列表（ChannelId == null，频道会话不混入）。</summary>
     public async Task<List<AiSession>> GetSessionsAsync(string userId, CancellationToken ct = default)
     {
         return await Sessions.Find(x => x.UserId == userId && x.ChannelId == null)
             .Sort(Builders<AiSession>.Sort.Descending(s => s.UpdatedAt)).ToListAsync(ct);
     }
 
-    /// <summary>频道会话列表（绑定用户自己的 IM 会话，带频道标记）。</summary>
     public async Task<List<AiSession>> GetChannelSessionsAsync(string userId, CancellationToken ct = default)
     {
         return await Sessions.Find(x => x.UserId == userId && x.ChannelId != null)
@@ -336,8 +311,6 @@ public class AiService
     }
 
     /// <summary>
-    /// 按 (channelId, externalId) 取或建频道会话（唯一索引防并发重复）。
-    /// UserId 写绑定用户，控制台所有权/审批校验原样生效。
     /// </summary>
     public async Task<AiSession> GetOrCreateChannelSessionAsync(
         string channelId, string channelType, string externalId, string externalName,
@@ -365,14 +338,12 @@ public class AiService
         }
         catch (MongoDB.Driver.MongoWriteException) when (existing == null)
         {
-            // 并发创建撞唯一索引：回读胜出者。
             return await Sessions.Find(x => x.ChannelId == channelId && x.ChannelExternalId == externalId)
                 .FirstOrDefaultAsync(ct) ?? s;
         }
         return s;
     }
 
-    /// <summary>刷新频道会话的外部昵称/审计名。</summary>
     public async Task UpdateChannelSessionIdentityAsync(
         string sessionId, string externalName, string userName, CancellationToken ct = default)
     {
@@ -384,7 +355,6 @@ public class AiService
             cancellationToken: ct);
     }
 
-    /// <summary>更新会话模型（IM 菜单切换模型用）。</summary>
     public async Task UpdateSessionModelAsync(string sessionId, string model, CancellationToken ct = default)
     {
         await Sessions.UpdateOneAsync(
@@ -393,13 +363,11 @@ public class AiService
             cancellationToken: ct);
     }
 
-    /// <summary>删除频道下的全部会话（频道删除时清理）。</summary>
     public async Task DeleteChannelSessionsAsync(string channelId, CancellationToken ct = default)
     {
         await Sessions.DeleteManyAsync(x => x.ChannelId == channelId, ct);
     }
 
-    /// <summary>按 (channelId, externalId) 定位频道会话（IM 审批用，身份即外部用户）。</summary>
     public async Task<AiSession?> GetChannelSessionByExternalAsync(
         string channelId, string externalId, CancellationToken ct = default)
     {
@@ -407,7 +375,6 @@ public class AiService
             .FirstOrDefaultAsync(ct);
     }
 
-    /// <summary>会话是否存在挂起的审批（控制台打开会话时用于恢复审批模态框）。</summary>
     public async Task<JsonObject?> GetPendingApprovalAsync(string sessionId, string userId, CancellationToken ct = default)
     {
         var session = await Sessions.Find(x => x.Id == sessionId && x.UserId == userId).FirstOrDefaultAsync(ct);
@@ -462,7 +429,6 @@ public class AiService
         return r.ModifiedCount > 0 || r.MatchedCount > 0;
     }
 
-    /// <summary>编辑会话中的一条用户消息内容（原地更新，保留消息 ID 与时间戳）。</summary>
     public async Task<bool> EditMessageAsync(
         string sessionId, string userId, string messageId, string content, CancellationToken ct = default)
     {
@@ -473,7 +439,6 @@ public class AiService
 
         var msg = session.Messages.FirstOrDefault(m => m.Id == messageId);
         if (msg == null) return false;
-        // 仅允许编辑用户消息（AI 消息不可直接改写）。
         if (msg.Role != "user") return false;
 
         msg.Content = content.Trim();
@@ -482,7 +447,6 @@ public class AiService
         return true;
     }
 
-    /// <summary>删除会话中的一条消息（用户消息或 AI 消息均可）。</summary>
     public async Task<bool> DeleteMessageAsync(
         string sessionId, string userId, string messageId, CancellationToken ct = default)
     {
@@ -499,8 +463,6 @@ public class AiService
     }
 
     /// <summary>
-    /// 截断会话：保留到指定消息（含）为止，删除其后的全部消息。
-    /// 用于编辑消息后自动重发、重新生成时清理后续上下文。
     /// </summary>
     public async Task<bool> TruncateMessagesAfterAsync(
         string sessionId, string userId, string messageId, CancellationToken ct = default)
@@ -520,7 +482,6 @@ public class AiService
         return true;
     }
 
-    /// <summary>复制会话为分支：深拷贝消息，标题追加 -fork。</summary>
     public async Task<AiSession?> ForkSessionAsync(string id, string userId, string userName, CancellationToken ct = default)
     {
         var src = await Sessions.Find(x => x.Id == id && x.UserId == userId).FirstOrDefaultAsync(ct);
@@ -533,7 +494,6 @@ public class AiService
             Title = $"{src.Title}-fork",
             ProviderId = src.ProviderId,
             Model = src.Model,
-            // 深拷贝消息（含 reasoning/toolCalls/sources），避免引用共享。
             Messages = src.Messages.Select(m => new AiMessage
             {
                 Id = Guid.NewGuid().ToString("N"),
@@ -557,7 +517,6 @@ public class AiService
         return fork;
     }
 
-    // ── MCP 工具注册表 ────────────────────────────────────────────────────
 
     public async Task<AiMcpConfig> GetMcpConfigAsync(CancellationToken ct = default)
     {
@@ -584,8 +543,6 @@ public class AiService
     }
 
     /// <summary>
-    /// 枚举 MCP 工具并生成 OpenAI 风格 JSON Schema（单一事实来源：McpServerTool 特性）。
-    /// 可通过 AiMcpConfig 白名单过滤。
     /// </summary>
     public async Task<List<AiToolDescriptor>> GetToolsAsync(CancellationToken ct = default)
     {
@@ -650,14 +607,10 @@ public class AiService
     }
 
     private static bool IsDiService(Type t) =>
-        // 注：IHttpContextAccessor 是接口（IsClass=false），但确实是 DI 服务——
-        // 必须在此识别，否则会被当成 JSON 参数，LLM 传入 "http": {...} 时
-        // Deserialize 到接口会抛异常并炸掉整个 SSE 流。
         t == typeof(IHttpContextAccessor) ||
         (t.IsClass && !t.IsPrimitive && t != typeof(string) && t != typeof(Uri) &&
         (t.Namespace?.StartsWith("LibraNextgen") == true || t.Namespace == "Microsoft.AspNetCore.Http"));
 
-    /// <summary>反射调用一个 [McpServerTool] 静态方法。</summary>
     public async Task<string> InvokeToolAsync(string toolName, JsonObject args, CancellationToken ct = default)
     {
         foreach (var type in typeof(McpService).Assembly.GetTypes())
@@ -681,8 +634,6 @@ public class AiService
                         }
                         else if (IsDiService(p.ParameterType))
                         {
-                            // 单例 AiService：请求上下文用注入的单例 _http；
-                            // 其余 DI 服务用作用域工厂按需解析（工具可能注入 Scoped 服务）。
                             callArgs[i] = p.ParameterType == typeof(IHttpContextAccessor)
                                 ? _http
                                 : ResolveScopedFor(p.ParameterType);
@@ -703,8 +654,6 @@ public class AiService
                 }
                 catch (Exception ex)
                 {
-                    // 参数构建/反序列化失败（如 LLM 传入多余参数、类型不匹配）：
-                    // 转成结构化工具错误，绝不能炸掉 SSE 流。
                     return McpUtils.Error($"invalid arguments for tool '{toolName}': {ex.Message}");
                 }
 
@@ -733,13 +682,11 @@ public class AiService
         return McpUtils.Error($"unknown tool '{toolName}'");
     }
 
-    // ── 聊天编排 ──────────────────────────────────────────────────────────
 
     public AiRunState? GetRun(string sessionId) => _runs.TryGetValue(sessionId, out var r) ? r : null;
     public void RemoveRun(string sessionId) => _runs.TryRemove(sessionId, out _);
 
     /// <summary>
-    /// 启动一次流式聊天。SSE 事件经 onEvent 回调：
     ///   reasoning {label, content} / message {delta} / tool_call {toolCall} /
     ///   tool_result {toolCallId, toolName, output} / approval {toolCall} /
     ///   done {sessionId, messageId} / error {message}
@@ -758,7 +705,6 @@ public class AiService
             return;
         }
 
-        // 用户消息先落库。
         var userMsg = new AiMessage { Role = "user", Content = content };
         session.Messages.Add(userMsg);
         await SaveSessionAsync(session, ct);
@@ -771,16 +717,12 @@ public class AiService
             UserId = session.UserId,
             UserName = session.UserName,
             JustitiaTier = justitiaTier,
-            // 审批挂起时前端仍保持同一 SSE 连接：把 onEvent 挂到 state 上，
-            // ResolveApprovalAsync 无需新建流即可向原连接推送 tool_result。
             Notify = onEvent,
         };
         _runs[session.Id] = state;
         _logger.LogInformation("RunChatAsync started for session {Session} (tier {Tier})", session.Id, justitiaTier);
         state.Cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
 
-        // 频道会话：注入运行上下文（AsyncLocal），供 MCP 工具（send_channel_media 等）
-        // 读取"当前对话者"，工具无需用户显式传目标，天然防越权。
         var hadContext = false;
         if (session.ChannelId != null)
         {
@@ -794,36 +736,7 @@ public class AiService
             hadContext = true;
         }
 
-        // 历史消息（含刚追加的用户消息）→ OpenAI 格式。
-        foreach (var m in session.Messages)
-        {
-            if (m.Role == "user")
-            {
-                state.LlmMessages.Add(new JsonObject { ["role"] = "user", ["content"] = m.Content });
-            }
-            else if (m.Role == "assistant")
-            {
-                var obj = new JsonObject { ["role"] = "assistant", ["content"] = m.Content };
-                if (m.ToolCalls is { Count: > 0 })
-                {
-                    var arr = new JsonArray();
-                    foreach (var tc in m.ToolCalls)
-                        arr.Add(new JsonObject { ["id"] = tc.Id, ["type"] = "function", ["function"] = new JsonObject { ["name"] = tc.ToolName, ["arguments"] = tc.ArgsText } });
-                    obj["tool_calls"] = arr;
-                }
-                state.LlmMessages.Add(obj);
-            }
-            else if (m.Role == "tool" && m.ToolCalls is { Count: > 0 })
-            {
-                var tc = m.ToolCalls[0];
-                state.LlmMessages.Add(new JsonObject
-                {
-                    ["role"] = "tool",
-                    ["tool_call_id"] = tc.Id,
-                    ["content"] = tc.State == "error" ? (tc.Error ?? "") : (tc.Output ?? ""),
-                });
-            }
-        }
+        state.LlmMessages.AddRange(BuildHistoryMessages(session.Messages));
 
         try
         {
@@ -837,13 +750,9 @@ public class AiService
         {
             if (hadContext) AiRunContext.Clear();
             state.Finished = true;
-            // 挂起审批时保留运行态：ResolveApprovalAsync 需要从 _runs 恢复续跑，
-            // 只有真正结束（无待审批调用）才移除，避免 /chat/action 找不到 state 而静默失败。
             if (state.PendingToolCall == null)
             {
                 state.Cts.Dispose();
-                // 竞态防御：同一 session 可能已被新运行覆盖（RunChatAsync 被再次触发），
-                // 只有 _runs 里仍指向当前 state 才移除，避免误删新运行的挂起状态。
                 if (_runs.TryGetValue(session.Id, out var current) && ReferenceEquals(current, state))
                     _runs.TryRemove(session.Id, out _);
                 _logger.LogWarning("RunChatAsync finally removed run state for session {Session} (no pending tool call)", session.Id);
@@ -885,7 +794,6 @@ public class AiService
                 return;
             }
 
-            // 有工具调用 → 逐个执行（或请求审批）。
             if (toolCallsThisTurn.Count > 0)
             {
                 var asstMsg = new JsonObject { ["role"] = "assistant", ["content"] = state.TurnText };
@@ -899,24 +807,18 @@ public class AiService
                 {
                     var callId = id.Length > 0 ? id : Guid.NewGuid().ToString("N");
                     var argsText = args.Length == 0 ? "{}" : args;
-                    // 记录该工具调用发生时已输出的助手文本，供前端把工具调用穿插在文本流中。
                     var toolCall = new AiToolCall { Id = callId, ToolName = name, ArgsText = argsText, TextBefore = state.AssistantText };
                     state.ToolCalls.Add(toolCall);
 
-                    // request_tier_elevation：正式的权限提升请求（§6 Writ 通道）。
-                    // 不执行任何动作，直接把请求转成审批挂起（kind=escalation），
-                    // 由 Operator 通过审批模态框批准（一次性/5min/20min 临时提升）或拒绝。
                     if (name == "request_tier_elevation")
                     {
                         var reqArgs = JsonNode.Parse(argsText) as JsonObject ?? new JsonObject();
-                        // 兼容 LLM 传参：requiredTier 或 tier 键均可。
                         var requestedTierKey = reqArgs["requiredTier"]?.GetValue<string>()
                             ?? reqArgs["tier"]?.GetValue<string>()
                             ?? "";
                         var requested = JustitiaPolicy.Parse(requestedTierKey);
                         if (requested <= state.EffectiveTier)
                         {
-                            // 目标档位不高于当前有效档位：无需提升，直接说明。
                             var note = McpUtils.Ok(new { status = "no-elevation-needed", currentTier = state.EffectiveTier.ToString().ToLowerInvariant(), requested = requestedTierKey });
                             toolCall.State = "output-available";
                             toolCall.Output = note;
@@ -938,18 +840,12 @@ public class AiService
                             ["currentTier"] = (int)state.EffectiveTier,
                         };
                         await onEvent(JsonSerializer.Serialize(new { type = "approval", toolCall = new { id = callId, toolName = name, argsText, reason = $"tier elevation requested: {state.EffectiveTier} → {requested}", kind = "escalation", requiredTier = (int)requested, currentTier = (int)state.EffectiveTier } }, JsonOpts));
-                        // 提权请求本身留痕（风险按请求的目标档位计）。
                         await AuditAiToolAsync(state, name, reqArgs,
                             $"elevation requested: {state.EffectiveTier} → {requested}", success: false);
-                        // 挂起等待 Operator 决策：把控制权交给内部等待循环。
-                        // 工具调用始终保留在 LlmMessages（assistant tool_calls 已预置），
-                        // 批准/拒绝后由 ResolveApprovalAsync 以普通 MCP 工具结果的方式恢复。
                         await WaitForApprovalAsync(state, name, callId, ct);
-                        continue; // 继续处理本轮的其余/后续工具调用。
+                        continue;
                     }
 
-                    // Justitia 档位门槛：有效档位（含审批临时提升）不足 → 挂起等审批。
-                    // 档位内工具直接执行，不再逐调用弹审批。
                     var required = JustitiaPolicy.RequiredTier(name);
                     if (state.EffectiveTier < required)
                     {
@@ -966,11 +862,9 @@ public class AiService
                             ["currentTier"] = (int)state.EffectiveTier,
                         };
                         await onEvent(JsonSerializer.Serialize(new { type = "approval", toolCall = new { id = callId, toolName = name, argsText, reason = $"tool requires tier {required} (current {state.EffectiveTier})", kind = "escalation", requiredTier = (int)required, currentTier = (int)state.EffectiveTier } }, JsonOpts));
-                        // 超档工具请求本身留痕（风险按所需档位计）。
                         await AuditAiToolAsync(state, name,
                             JsonNode.Parse(argsText) as JsonObject ?? new JsonObject(),
                             $"approval requested: needs tier {required} (current {state.EffectiveTier})", success: false);
-                        // 挂起等待 Operator 决策（同 request_tier_elevation）。
                         await WaitForApprovalAsync(state, name, callId, ct);
                         continue;
                     }
@@ -983,7 +877,6 @@ public class AiService
                     }
                     catch (Exception ex)
                     {
-                        // 兜底：任何工具执行异常都转成结构化错误，绝不炸掉 SSE 流。
                         _logger.LogWarning(ex, "AI tool {Tool} threw unhandled exception", name);
                         output = McpUtils.Error($"tool '{name}' failed: {ex.Message}");
                     }
@@ -991,7 +884,6 @@ public class AiService
                     toolCall.State = isError ? "error" : "output-available";
                     toolCall.Output = output;
                     if (isError) toolCall.Error = output;
-                    // AI 工具调用审计：风险等级由当前档位决定。
                     await AuditAiToolAsync(state, name, JsonNode.Parse(argsText) as JsonObject ?? new JsonObject(), output, !isError);
                     await onEvent(JsonSerializer.Serialize(new { type = "tool_result", toolCallId = callId, toolName = name, output, state = toolCall.State }, JsonOpts));
                     state.LlmMessages.Add(new JsonObject
@@ -1001,13 +893,12 @@ public class AiService
                         ["content"] = output,
                     });
                 }
-                continue; // 进入下一轮。
+                continue;
             }
 
-            break; // 无工具调用 → 结束。
+            break;
         }
 
-        // 落库 & 结束事件。
         var finalMsg = new AiMessage
         {
             Role = "assistant",
@@ -1031,7 +922,67 @@ public class AiService
         await onEvent(JsonSerializer.Serialize(new { type = "done", sessionId = state.SessionId, messageId = finalMsg.Id }, JsonOpts));
     }
 
-    // ── 协议适配：消息历史转换 ────────────────────────────────────────────────
+
+    /// <summary>
+    /// </summary>
+    public static List<JsonObject> BuildHistoryMessages(IEnumerable<AiMessage> messages)
+    {
+        var llmMessages = new List<JsonObject>();
+        foreach (var m in messages)
+        {
+            if (m.Role == "user")
+            {
+                llmMessages.Add(new JsonObject { ["role"] = "user", ["content"] = m.Content });
+            }
+            else if (m.Role == "assistant")
+            {
+                var obj = new JsonObject { ["role"] = "assistant", ["content"] = m.Content };
+                var toolResults = new List<AiToolCall>();
+                if (m.ToolCalls is { Count: > 0 })
+                {
+                    var arr = new JsonArray();
+                    foreach (var tc in m.ToolCalls)
+                    {
+                        if (tc.State is "output-available" or "error")
+                        {
+                            arr.Add(new JsonObject
+                            {
+                                ["id"] = tc.Id,
+                                ["type"] = "function",
+                                ["function"] = new JsonObject { ["name"] = tc.ToolName, ["arguments"] = tc.ArgsText },
+                            });
+                            toolResults.Add(tc);
+                        }
+                    }
+                    if (arr.Count > 0)
+                    {
+                        obj["tool_calls"] = arr;
+                        llmMessages.Add(obj);
+                        foreach (var tc in toolResults)
+                            llmMessages.Add(new JsonObject
+                            {
+                                ["role"] = "tool",
+                                ["tool_call_id"] = tc.Id,
+                                ["content"] = tc.State == "error" ? (tc.Error ?? tc.Output ?? "") : (tc.Output ?? ""),
+                            });
+                        continue;
+                    }
+                }
+                llmMessages.Add(obj);
+            }
+            else if (m.Role == "tool" && m.ToolCalls is { Count: > 0 })
+            {
+                var tc = m.ToolCalls[0];
+                llmMessages.Add(new JsonObject
+                {
+                    ["role"] = "tool",
+                    ["tool_call_id"] = tc.Id,
+                    ["content"] = tc.State == "error" ? (tc.Error ?? tc.Output ?? "") : (tc.Output ?? ""),
+                });
+            }
+        }
+        return llmMessages;
+    }
 
     private static JsonArray BuildOpenAiChatMessages(List<JsonObject> llmMessages) =>
         new(llmMessages.Select(m => (JsonNode)m.DeepClone()).ToArray());
@@ -1116,7 +1067,6 @@ public class AiService
                 }
             }
 
-            // Claude 要求 user/assistant 交替：合并连续 user 消息。
             if (role == "user" && result.Count > 0 && result[^1]["role"]?.GetValue<string>() == "user")
             {
                 var prevContent = result[^1]["content"] as JsonArray;
@@ -1138,7 +1088,6 @@ public class AiService
         body["tool_choice"] = "auto";
     }
 
-    // ── 协议适配：[OI] Chat（chat/completions，默认）────────────────────────
 
     private async Task<Dictionary<int, (string Id, string Name, string Args)>> ChatTurnOpenAiChatAsync(
         AiRunState state, AiProvider provider, List<AiToolDescriptor> tools, Func<string, Task> onEvent, CancellationToken ct)
@@ -1233,7 +1182,6 @@ public class AiService
         return toolCalls;
     }
 
-    // ── 协议适配：[OI] Response（/responses）───────────────────────────────
 
     private async Task<Dictionary<int, (string Id, string Name, string Args)>> ChatTurnOpenAiResponseAsync(
         AiRunState state, AiProvider provider, List<AiToolDescriptor> tools, Func<string, Task> onEvent, CancellationToken ct)
@@ -1340,7 +1288,6 @@ public class AiService
         return toolCalls;
     }
 
-    // ── 协议适配：Claude（/v1/messages）────────────────────────────────────
 
     private async Task<Dictionary<int, (string Id, string Name, string Args)>> ChatTurnAnthropicAsync(
         AiRunState state, AiProvider provider, List<AiToolDescriptor> tools, Func<string, Task> onEvent, CancellationToken ct)
@@ -1389,7 +1336,7 @@ public class AiService
             var line = await reader.ReadLineAsync(ct);
             if (line == null) break;
             if (!line.StartsWith("event:", StringComparison.Ordinal) && !line.StartsWith("data:", StringComparison.Ordinal)) continue;
-            if (line.StartsWith("event:", StringComparison.Ordinal)) continue; // 事件类型行仅作提示，实际字段在 data 中。
+            if (line.StartsWith("event:", StringComparison.Ordinal)) continue;
             var data = line["data:".Length..].Trim();
             if (data == "[DONE]") break;
             JsonNode? chunk;
@@ -1464,10 +1411,6 @@ public class AiService
     }
 
     /// <summary>
-    /// 挂起等待 Operator 对当前工具调用的决策（无限时）。
-    /// RunChatAsync 的 SSE 保持打开（心跳保活由 Kestrel 处理），前端收到
-    /// approval 事件后弹模态框；用户批准/拒绝时通过 /chat/action 调用
-    /// ResolveApprovalAsync 完成工具执行并写入 tool 结果，本循环随即继续。
     /// </summary>
     private async Task WaitForApprovalAsync(AiRunState state, string toolName, string callId, CancellationToken ct)
     {
@@ -1478,7 +1421,6 @@ public class AiService
 
         try
         {
-            // 无限等待；仅取消/会话切换时退出（SSE 断开由控制器层处理）。
             var output = await gate.Task.WaitAsync(ct);
             _logger.LogInformation("WaitForApproval: gate resolved for call {Call} (session {Session})", callId, state.SessionId);
             var pending = state.ToolCalls.FirstOrDefault(t => t.Id == callId);
@@ -1493,7 +1435,6 @@ public class AiService
         }
         catch (OperationCanceledException)
         {
-            // 运行被取消：工具保持挂起状态，不执行。
             var pending = state.ToolCalls.FirstOrDefault(t => t.Id == callId);
             if (pending != null) pending.State = "requires-action";
             _logger.LogWarning("WaitForApproval: gate wait cancelled for call {Call} (session {Session})", callId, state.SessionId);
@@ -1508,14 +1449,11 @@ public class AiService
         }
     }
 
-    /// <summary>统一发送 tool_result SSE 事件。</summary>
     private static async Task EmitToolResultAsync(
         AiRunState state, string callId, string toolName, string output, string toolState)
         => await state.NotifyAsync(JsonSerializer.Serialize(new { type = "tool_result", toolCallId = callId, toolName, output, state = toolState }, JsonOpts));
 
     /// <summary>
-    /// 合并推理步骤：LLM 推理增量是按词推送的（每词一个 step），落库前把
-    /// 连续同 label 的步骤拼接成单个 step，避免前端显示成逐词"推理"块。
     /// </summary>
     private static List<AiReasoningStep> MergeReasoningSteps(List<AiReasoningStep> steps)
     {
@@ -1539,9 +1477,6 @@ public class AiService
     }
 
     /// <summary>
-    /// 审批/拒绝/临时批准挂起的工具调用（纯决策接口，不返回 SSE）。
-    /// 执行工具（或授予提权）后通过门闩唤醒原 SSE 流的等待循环继续推送。
-    /// 返回 false 表示没有匹配的挂起调用。
     /// </summary>
     public async Task<bool> ResolveApprovalAsync(
         string sessionId, string toolCallId, bool approved,
@@ -1569,8 +1504,6 @@ public class AiService
         _logger.LogInformation("ResolveApproval: matched pending call {Call} (session {Session}), approved={Approved}, permit={Permit}",
             toolCallId, sessionId, approved, permit);
 
-        // 先取出挂起元数据（kind/requiredTier），再清空 PendingToolCall，
-        // 否则下方 escalation 分支永远读不到 kind。
         var pendingKind = state.PendingToolCall["kind"]?.GetValue<string>() ?? "";
         var requiredTier = state.PendingToolCall["requiredTier"]?.GetValue<int>() ?? (int)JustitiaTier.Imperium;
         state.PendingToolCall = null;
@@ -1582,10 +1515,8 @@ public class AiService
             return false;
         }
 
-        // 已预置 assistant tool_calls 消息，补 tool 结果。
         if (state.LlmMessages.LastOrDefault(m => m["role"]?.GetValue<string>() == "assistant" && m["tool_calls"] != null) is JsonObject asst)
         {
-            // 已存在（RunChatAsync 挂起时已添加），无需重复添加。
         }
         else
         {
@@ -1600,18 +1531,13 @@ public class AiService
         string output;
         if (!approved)
         {
-            // 拒绝：以普通工具结果返回给 LLM，AI 基于"被拒绝"继续回话。
             output = McpUtils.Error("rejected by operator");
-            // 审批拒绝留痕（风险等级按所需档位计）。
             await AuditAiToolAsync(state, pending.ToolName,
                 JsonNode.Parse(pending.ArgsText) as JsonObject ?? new JsonObject(),
                 "rejected by operator", success: false, permit: permit);
         }
         else
         {
-            // 批准 → 若是档位提升请求（escalation），按许可时长授予临时提升：
-            //   one-time：仅本次调用执行（不改变已有许可窗口，后续同档工具仍需审批）；
-            //   5min/20min：提升 EffectiveTier，窗口内同档工具直接执行，到期回落。
             if (pendingKind == "escalation")
             {
                 switch (permit)
@@ -1624,12 +1550,11 @@ public class AiService
                         state.BoostTier = requiredTier;
                         state.BoostExpiresAt = DateTime.UtcNow.AddMinutes(20);
                         break;
-                    default: // "one-time"：不动已有许可窗口，仅本次执行。
+                    default:
                         break;
                 }
             }
 
-            // request_tier_elevation：提升本身即结果，无真实工具可执行。
             if (pending.ToolName == "request_tier_elevation")
             {
                 output = McpUtils.Ok(new
@@ -1639,15 +1564,12 @@ public class AiService
                     permit,
                     expiresAt = state.BoostExpiresAt?.ToUniversalTime().ToString("o"),
                 });
-                // 档位提升留痕（风险按提升后的档位计）。
                 await AuditAiToolAsync(state, pending.ToolName,
                     JsonNode.Parse(pending.ArgsText) as JsonObject ?? new JsonObject(),
                     output, success: true, permit: permit);
             }
             else
             {
-                // 普通工具：执行并把结果交给 LLM（与 ChatLoopAsync 直接执行路径一致）。
-                // 审批由控制台/IM 回调触发，AsyncLocal 上下文不流动——从运行态恢复频道上下文。
                 var prevCtx = AiRunContext.Current;
                 if (state.ChannelContext != null) AiRunContext.Set(state.ChannelContext);
                 try
@@ -1663,7 +1585,6 @@ public class AiService
                 {
                     if (prevCtx != null) AiRunContext.Set(prevCtx); else AiRunContext.Clear();
                 }
-                // 审批后执行的工具审计（风险按提升后的档位计）。
                 var isErr = output.Contains("\"error\"", StringComparison.Ordinal);
                 await AuditAiToolAsync(state, pending.ToolName,
                     JsonNode.Parse(pending.ArgsText) as JsonObject ?? new JsonObject(),
@@ -1671,28 +1592,23 @@ public class AiService
             }
         }
 
-        // 把决策结果作为该工具调用的结果写入 LlmMessages，
-        // 并唤醒 WaitForApprovalAsync 的等待循环继续跑（普通 MCP 等待语义）。
         state.LlmMessages.Add(new JsonObject { ["role"] = "tool", ["tool_call_id"] = toolCallId, ["content"] = output });
         if (_approvalGates.TryGetValue(toolCallId, out var gate))
             gate.TrySetResult(output);
         return true;
     }
 
-    /// <summary>续跑结束后若没有新的待审批调用，释放 CTS 并从运行表移除。</summary>
     private void CleanupRunIfFinished(AiRunState state, string sessionId)
     {
         if (state.PendingToolCall == null)
         {
             state.Cts?.Dispose();
             state.Finished = true;
-            // 竞态防御：仅当 _runs 仍指向当前 state 才移除（防误删新运行）。
             if (_runs.TryGetValue(sessionId, out var current) && ReferenceEquals(current, state))
                 _runs.TryRemove(sessionId, out _);
         }
     }
 
-    /// <summary>停止当前运行。</summary>
     public void StopRun(string sessionId)
     {
         if (_runs.TryGetValue(sessionId, out var state))
@@ -1707,11 +1623,9 @@ public class AiService
             session,
             new ReplaceOptions { IsUpsert = false },
             ct);
-        // 实时同步：广播会话变更，控制台 AI 页（含频道会话、事件触发运行、多操作员）实时刷新。
         NotifySessionUpdated(session);
     }
 
-    /// <summary>广播 ai.session.updated（fire-and-forget，失败仅记日志不影响主流程）。</summary>
     private void NotifySessionUpdated(AiSession session)
     {
         try
@@ -1735,7 +1649,6 @@ public class AiService
         }
     }
 
-    // ── 密钥保护（与 JwtSettings 一致：Windows DPAPI CurrentUser）─────────
 
     public static string EncryptKey(string plain)
     {

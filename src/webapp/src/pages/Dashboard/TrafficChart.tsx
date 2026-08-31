@@ -38,7 +38,6 @@ export function TrafficChart({ trafficData, agentIds, agentHosts, range, onRange
   const { t } = useTranslation();
   const [hidden, setHidden] = useState<Set<string>>(new Set());
 
-  // 当前区间内每个 agent 的总流量（用于过滤 0 流量设备）
   const agentTotals = useMemo(() => {
     const totals: Record<string, number> = {};
     for (const point of trafficData) {
@@ -50,7 +49,6 @@ export function TrafficChart({ trafficData, agentIds, agentHosts, range, onRange
     return totals;
   }, [trafficData, agentIds]);
 
-  // 区间内流量为 0 的设备：底部图例不显示（Hover Tooltip 同样不出现）
   const visibleAgentIds = useMemo(
     () => agentIds.filter(id => (agentTotals[id] ?? 0) > 0),
     [agentIds, agentTotals],
@@ -113,7 +111,6 @@ export function TrafficChart({ trafficData, agentIds, agentHosts, range, onRange
               content={({ active, label, payload }) => {
                 if (!active || !payload?.length) return null;
 
-                // Hover 时只显示该时间点流量 > 0 的设备
                 const nonzero = payload.filter((p) => Number(p.value) > 0);
                 if (!nonzero.length) return null;
 

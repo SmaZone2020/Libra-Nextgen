@@ -4,14 +4,6 @@ import {
 } from '@heroui/react';
 import { usePluginHost } from '../../hooks/usePluginHost';
 
-/**
- * 杀软检测插件页面（page/index.tsx）—— com.libra.av-list。
- *
- * 数据流：
- *   1. dispatchTask 调 Agent 端 module/main.js（QuickJS），proc.list() 枚举进程，
- *      按内置杀软进程库匹配，返回按产品分组的 { av: [{product, processes:[{name,pid}]}] }。
- *   2. dispatchTask 返回值已做 JSON 反序列化，直接渲染。
- */
 const PLUGIN_ID = 'com.libra.av-list';
 
 interface AvProcess {
@@ -32,10 +24,6 @@ interface DetectResult {
   unmatched: string[];
 }
 
-/**
- * 插件结果可能是 JSON 字符串（服务端透传）或已是对象，统一解析。
- * 宿主网关会把 Agent 输出再包一层 { ok, result }，需解包取 result。
- */
 function parseResult(raw: unknown): DetectResult | null {
   let obj: unknown = raw;
   if (typeof obj === 'string') {
@@ -55,7 +43,6 @@ function parseResult(raw: unknown): DetectResult | null {
   return null;
 }
 
-/** 按平台归类的识别阈值展示（统计用）。 */
 function productName(platform: string): string {
   return platform === 'windows' ? 'Windows' : 'Linux/macOS';
 }

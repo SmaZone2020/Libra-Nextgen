@@ -6,7 +6,6 @@ import { usePluginHost, type PluginOutput } from '../../hooks/usePluginHost';
 import { AGENT_CAPS, COMMON_API, LINUX_API, SDK_ID, WINDOWS_API, pretty } from './shared';
 import { ApiTable } from './components';
 
-// ── 3. Agent 端：能力目录 + 实时执行 ───────────────────────────────────
 
 export function AgentTab() {
   const { selectedAgent, dispatchTask, subscribeOutput } = usePluginHost();
@@ -17,7 +16,6 @@ export function AgentTab() {
   const [err, setErr] = useState<string | null>(null);
   const [events, setEvents] = useState<PluginOutput[]>([]);
 
-  // WS 实时推送演示：subscribeOutput(回调, action?) —— 不传 action 收全部 plugin.result
   useEffect(
     () =>
       subscribeOutput((out) => setEvents((prev) => [out, ...prev].slice(0, 12))),
@@ -48,7 +46,7 @@ export function AgentTab() {
 
   return (
     <div className="space-y-4">
-      {/* 能力目录 */}
+      {}
       <Card className="p-4">
         <h3 className="font-semibold mb-2">能力与可选项（capability）</h3>
         <div className="divide-y divide-default-100">
@@ -61,7 +59,7 @@ export function AgentTab() {
         </div>
       </Card>
 
-      {/* 实时执行 */}
+      {}
       <Card className="p-4">
         <h3 className="font-semibold mb-1">实时执行（dispatchTask → Agent 内存执行 JS → WS 推送）</h3>
         <p className="text-sm text-default-500 mb-3">
@@ -142,7 +140,7 @@ export function AgentTab() {
         </div>
       </Card>
 
-      {/* 平台 API 静态清单 */}
+      {}
       <ApiTable title="通用 API（所有平台）" rows={COMMON_API} />
       <div className="grid gap-4 md:grid-cols-2">
         <ApiTable title="Windows 专属" rows={WINDOWS_API} />

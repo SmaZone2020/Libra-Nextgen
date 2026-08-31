@@ -2,8 +2,6 @@ use libra_common::models::{CpuInfo, DiskInfo, DisplayInfo, GpuInfo, HardwareInfo
 use sha2::{Digest, Sha256};
 
 /// Collect hardware information from the current machine.
-/// 全部走进程内 API（sysinfo / 注册表 / Win32），无任何子进程调用
-/// （进程面收敛二期：wmic/powershell 已全部移除）。
 pub fn collect() -> HardwareInfo {
     let cpu = collect_cpu();
     let gpus = collect_gpus();
@@ -56,8 +54,6 @@ pub fn serialize(info: &HardwareInfo) -> String {
 fn collect_cpu() -> CpuInfo {
     let info = sysinfo_cpu();
 
-    // sysinfo 在部分 Windows 构建上返回空型号/0 核心，用注册表兜底
-    // （HKLM\HARDWARE\DESCRIPTION\System\CentralProcessor\0，Win2000+ 稳定存在）。
     if info.name.is_empty() || info.logical_cores == 0 {
         #[cfg(windows)]
         {
@@ -99,7 +95,6 @@ fn sysinfo_cpu() -> CpuInfo {
     }
 }
 
-/// 注册表读取 CPU 型号与核心数（HKLM\HARDWARE\DESCRIPTION\System\CentralProcessor\0）。
 #[cfg(windows)]
 fn registry_cpu() -> Option<CpuInfo> {
     use windows::Win32::System::Registry::*;
@@ -152,7 +147,6 @@ fn registry_cpu() -> Option<CpuInfo> {
         if name.is_empty() {
             return None;
         }
-        // 核心数用 sysinfo/available_parallelism 兜底
         let logical = std::thread::available_parallelism()
             .map(|n| n.get())
             .unwrap_or(1);
@@ -242,7 +236,6 @@ fn dxgi_gpus() -> Result<Vec<GpuInfo>, String> {
         }
 
         // If DXGI returned GPUs but all VRAM is 0, leave VRAM unknown —
-        // 不再用 wmic 补 VRAM（进程面收敛二期，缺失可接受）。
 
         Ok(gpus)
     }
@@ -251,7 +244,6 @@ fn dxgi_gpus() -> Result<Vec<GpuInfo>, String> {
 // ── Disks ────────────────────────────────────────────────────────────────
 
 fn collect_disks() -> Vec<DiskInfo> {
-    // sysinfo（跨平台；Windows 上无子进程）
     sysinfo_disks()
 }
 
@@ -291,7 +283,6 @@ fn collect_ram() -> RamInfo {
     }
 }
 
-/// GlobalMemoryStatusEx（kernel32，Vista+ 通用，无子进程）。
 #[cfg(windows)]
 fn native_ram() -> Option<RamInfo> {
     use windows::Win32::System::SystemInformation::*;
@@ -395,11 +386,6 @@ fn gdi_displays() -> Result<Vec<DisplayInfo>, ()> {
     }
 }
 
-// ── 主板 / BIOS（注册表，Win2000+ 稳定存在）───────────────────────────
-
-/// 读取主板厂商与 BIOS 版本。
-/// - Win32_BaseBoard.Manufacturer ≈ HKLM\HARDWARE\DESCRIPTION\System\BIOS 的
-///   BaseBoardManufacturer（部分系统缺失），缺失时回退 SystemManufacturer（整机厂商）
 /// - Win32_BIOS.SMBIOSBIOSVersion ≈ BIOSVersion
 #[cfg(windows)]
 fn board_info() -> (Option<String>, Option<String>) {
@@ -467,7 +453,6 @@ mod tests {
     #[test]
     fn collect_returns_sane_hardware() {
         let info = collect();
-        // CPU 名称不应为空（sysinfo 或注册表兜底）
         assert!(
             info.cpu
                 .as_ref()
@@ -476,27 +461,20 @@ mod tests {
             "cpu name empty: {:?}",
             info.cpu
         );
-        // 内存必须 > 0（GlobalMemoryStatusEx 或 sysinfo）
         assert!(info
             .ram
             .as_ref()
             .map(|r| r.total_bytes > 0)
             .unwrap_or(false));
-        // 主板/BIOS 至少一个可读（注册表）
         assert!(
             info.motherboard_vendor.is_some() || info.bios_version.is_some(),
             "board info missing"
         );
-        // HWID 可计算
         assert!(info.hwid.as_deref().map(|h| h.len() == 64).unwrap_or(false));
     }
 
     #[test]
     fn registry_cpu_fallback_works() {
-        // 注册表路径（HKLM\HARDWARE\DESCRIPTION\System\CentralProcessor\0）在
-        // 标准 Windows 上应可读；受限环境/杀软实时扫描等可能短暂不可读——
-        // 读不到时 collect() 会走 sysinfo 兜底（collect_returns_sane_hardware 已
-        // 覆盖整体链路），因此这里只验证"不 panic"并记录结果，避免 CI 偶发红。
         let cpu = registry_cpu();
         if cpu.is_none() {
             eprintln!("warning: registry CPU read returned None (environment-dependent; sysinfo fallback covers it)");

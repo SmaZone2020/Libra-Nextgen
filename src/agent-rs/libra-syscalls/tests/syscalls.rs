@@ -1,6 +1,4 @@
-//! 集成测试：真实解析本机 ntdll，验证 SSN 提取、表枚举与一次真实间接 syscall。
 //!
-//! 仅在 Windows host 上运行（依赖 ntdll 导出形态）。
 
 #![cfg(windows)]
 
@@ -53,7 +51,6 @@ fn probe_extracts_ssn_and_trampoline() {
         "trampoline lies after the stub head"
     );
 
-    // trampoline 指向的必须是 `syscall` 指令。
     let bytes = unsafe { core::slice::from_raw_parts(p.trampoline as *const u8, 2) };
     assert_eq!(
         bytes,
@@ -82,7 +79,6 @@ fn resolve_ssn_matches_direct_probe() {
 fn init_then_invoke_real_syscall() {
     init().expect("init libra-syscalls");
 
-    // 10ms 相对延迟（负值，单位 100ns）。
     let mut interval: i64 = -10_000;
     let status = unsafe { nt_delay_execution(0, &mut interval) };
     assert_eq!(
@@ -100,7 +96,6 @@ fn spoof_call_real_api() {
         let getpid = GetProcAddress(kernel32, b"GetCurrentProcessId\0".as_ptr()) as usize;
         assert!(getpid != 0, "GetCurrentProcessId must resolve");
 
-        // 经 stack spoof 调用 GetCurrentProcessId（0 参数）。
         let pid = spoof_call(getpid, 0, 0, 0, 0, 0, 0, 0, 0);
         assert_eq!(
             pid as u32,

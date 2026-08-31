@@ -107,8 +107,6 @@ public class MongoIndexBuilder
                 .Descending(s => s.UpdatedAt)),
             cancellationToken: ct);
 
-        // 频道会话：按 (ChannelId, ChannelExternalId) 唯一（partial filter 避免
-        // 控制台会话的 null ChannelId 互撞——Mongo 唯一索引把 null 视为相等）。
         await sessions.Indexes.CreateOneAsync(
             new CreateIndexModel<AiSession>(
                 Builders<AiSession>.IndexKeys
@@ -140,7 +138,6 @@ public class MongoIndexBuilder
                     .Ascending(b => b.ChannelId)
                     .Ascending(b => b.ExpiresAt)),
             cancellationToken: ct);
-        // TTL：过期绑定码自动清理（防未使用码堆积）。
         await codes.Indexes.CreateOneAsync(
             new CreateIndexModel<AiChannelBindCode>(
                 Builders<AiChannelBindCode>.IndexKeys.Ascending(b => b.ExpiresAt),

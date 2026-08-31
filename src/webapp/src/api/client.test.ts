@@ -60,7 +60,6 @@ describe('resolveApiOrigin (deterministic, explicit window)', () => {
 
   it('no longer honors a stored custom api_origin', () => {
     localStorage.setItem('api_origin', 'https://c2.example.com:8443');
-    // 前端不允许更改请求地址：即使旧版本残留 localStorage 也被忽略。
     expect(resolveApiOrigin(CONSOLE_WINDOW)).toBe('http://console.local:5270');
   });
 });

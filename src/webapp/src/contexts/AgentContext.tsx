@@ -39,9 +39,7 @@ const AgentContext = createContext<AgentContextValue>({
 export function AgentProvider({ children }: { children: React.ReactNode }) {
   const { t } = useTranslation();
   const [agents, setAgents] = useState<AgentListItem[]>([]);
-  // 从浏览器恢复上次选择的 Agent
   const [agentId, setAgentId] = useState<string>(readStoredAgentId);
-  // 自动选择只执行一次（首次拿到非空 agent 列表时）
   const autoSelectedRef = useRef(false);
 
   useEffect(() => {
@@ -51,19 +49,16 @@ export function AgentProvider({ children }: { children: React.ReactNode }) {
         // Fetch all agents (not just online) to keep full list
         const res = await getAgents(1, 100);
         if (cancelled) return;
-        // 信息没变则不更新状态（避免下游组件（拓扑图等）无谓重渲染）
         setAgents((prev) => {
           if (JSON.stringify(prev) === JSON.stringify(res.agents)) return prev;
           return res.agents;
         });
 
         if (!autoSelectedRef.current) {
-          // 首次列表为空（后端未就绪）时先不决策，等下次轮询
           if (res.agents.length === 0) return;
           autoSelectedRef.current = true;
 
           const stored = readStoredAgentId();
-          // 1. 上次选择的 Agent 在线 → 自动恢复连接
           if (stored) {
             const storedAgent = res.agents.find((a) => a.id === stored);
             if (storedAgent?.status === 'Online') {
@@ -71,17 +66,14 @@ export function AgentProvider({ children }: { children: React.ReactNode }) {
               return;
             }
           }
-          // 2. 只有一个 Agent → 自动连接
           if (res.agents.length === 1) {
             const only = res.agents[0]!.id;
             setAgentId(only);
             try { localStorage.setItem(SELECTED_AGENT_KEY, only); } catch { /* ignore */ }
             return;
           }
-          // 3. 其余情况：不自动选择
           setAgentId('');
         } else {
-          // 后续轮询：当前选中的 Agent 从列表消失则清空
           setAgentId((prev) => {
             if (prev && !res.agents.some((a) => a.id === prev)) return '';
             return prev;
@@ -115,7 +107,6 @@ export function AgentProvider({ children }: { children: React.ReactNode }) {
       if (data.status === 'Offline') {
         const wasOnline = onlineIdsRef.current.has(data.agentId);
         setAgents((prev) => {
-          // 状态没变（已离线）或 agent 不在列表 → 不建新数组，避免下游重渲染
           const target = prev.find((a) => a.id === data.agentId);
           if (!target || target.status === 'Offline') return prev;
           return prev.map((a) =>
@@ -141,7 +132,6 @@ export function AgentProvider({ children }: { children: React.ReactNode }) {
         const isNew = !onlineIdsRef.current.has(data.agentId);
         onlineIdsRef.current.add(data.agentId);
         setAgents((prev) => {
-          // 已在线 → 不建新数组，避免下游重渲染
           if (prev.some((a) => a.id === data.agentId && a.status === 'Online')) return prev;
           return prev.some((a) => a.id === data.agentId)
             ? prev.map((a) => a.id === data.agentId ? { ...a, status: 'Online' as const } : a)

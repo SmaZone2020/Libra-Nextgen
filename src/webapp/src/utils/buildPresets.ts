@@ -29,12 +29,10 @@ function writePresets(presets: BuildPreset[]): void {
   }
 }
 
-/** 当前配置是否与某预设的配置完全一致（用于去重）。 */
 function sameConfig(a: BuildConfigRequest, b: BuildConfigRequest): boolean {
   return JSON.stringify(a) === JSON.stringify(b);
 }
 
-/** 构建成功时记录当前配置为预设（最近 5 个，精确去重）。 */
 export function saveBuildPreset(config: BuildConfigRequest): BuildPreset[] {
   const presets = readPresets();
   const entry: BuildPreset = {
@@ -49,7 +47,6 @@ export function saveBuildPreset(config: BuildConfigRequest): BuildPreset[] {
   return next;
 }
 
-/** 读取已保存的构建预设（新的在前）。 */
 export function loadBuildPresets(): BuildPreset[] {
   return readPresets();
 }

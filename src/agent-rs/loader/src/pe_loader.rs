@@ -9,8 +9,6 @@
 use std::ptr;
 
 // ── Win32/NT API ──────────────────────────────────────────────────────
-// 手动映射 fallback 路径暂未启用：FFI 声明与常量保留，统一 allow 避免噪音。
-// GetCurrentProcess/CloseHandle 签名与 elevation.rs 对齐（c_void）消除 clashing。
 
 #[cfg(target_os = "windows")]
 #[allow(dead_code)]

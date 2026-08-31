@@ -208,8 +208,6 @@ impl PersistenceManager {
 
 #[cfg(target_os = "windows")]
 fn is_windows_admin() -> bool {
-    // TokenElevation（advapi32，Vista+）——无子进程（进程面收敛二期，
-    // 原 net session 子进程已移除）
     #[repr(C)]
     struct TokenElevation {
         token_is_elevated: u32,
@@ -260,8 +258,6 @@ fn is_windows_admin() -> bool {
 
 #[cfg(target_os = "windows")]
 fn wide(s: &str) -> *const u16 {
-    // thread_local：避免 static mut 的共享引用 UB；同线程内指针在下次
-    // 调用前有效（调用方紧随其后使用，不再并发调用 wide）。
     thread_local! {
         static BUF: std::cell::RefCell<Vec<u16>> = std::cell::RefCell::new(Vec::new());
     }

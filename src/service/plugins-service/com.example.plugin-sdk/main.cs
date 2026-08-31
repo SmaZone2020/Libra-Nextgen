@@ -1,43 +1,8 @@
 ﻿// ═══════════════════════════════════════════════════════════════════════
-//  com.example.plugin-sdk — 服务端脚本全能力演示（service/main.cs）
 // ═══════════════════════════════════════════════════════════════════════
-//  执行宿主：ServerScriptService（Roslyn C# Scripting，编译结果按插件缓存）
-//  统一入口：POST /api/plugin/com.example.plugin-sdk/<函数名>
-//            body 任意 JSON → 脚本函数参数 p（dynamic，body 为空时为 null）
 //
-//  【多文件组织】
-//  宿主把 service/ 下所有 *.cs 按文件名排序拼接为单个脚本再编译：
-//    sdk_utils.cs —— using / DemoState（跨调用状态）/ MakeClient / Str / Int /
-//                     PluginRootCandidates（工具类，先拼接）
-//    main.cs      —— 本文件（最后拼接），导出函数 + 末尾 return Dictionary
 //
-//  【脚本约定】
-//   1. 文件末尾必须 return new Dictionary<string, Func<object, object>>，
-//      键 = 函数名，值 = 处理函数；处理函数返回任意可 JSON 序列化对象。
-//   2. 可直接使用引用库：System / System.Net.Http / System.Text.Json /
-//      System.Collections.Generic / System.Dynamic / System.Linq 等，
-//      可自己 new HttpClient 发网络请求（服务端发起，无 CORS）。
-//   3. 函数是同步签名，但内部可用 .GetAwaiter().GetResult() 阻塞等待异步
-//      （如 HttpClient），宿主不限制内部耗时（有整体超时保护）。
-//   4. 抛异常 → 宿主统一返回 { ok:false, error:<消息> }（错误契约）。
-//   5. 可用类型声明（class）保存跨调用状态：脚本程序集只编译一次并被缓存，
-//      静态字段在多次调用之间保持不变。
-//   6. 可用 AppContext.BaseDirectory 定位插件包目录，读取随包分发的数据文件。
-//   7. 注意：把 dynamic 值传给普通方法（如 Str/Int）时，调用会变成动态调度
-//      且返回值类型变为 dynamic；请先做静态转换 (object?)p?.字段 再传参。
 //
-//  【本文件演示的能力矩阵】（前端"服务端脚本"页会调用 manifest 实时拉取）
-//   echo    动态参数访问（任意嵌套 JSON）
-//   now     DateTime 格式化（format/utc 可选项）
-//   bkn     纯计算/签名算法（服务端算 bkn/g_tk）
-//   state   跨调用内存状态（静态字段）
-//   ip      服务端 GET 网络请求（无 CORS）
-//   http    通用 HTTP 请求（method/headers/body/timeoutSec 可选项）
-//   file    读取插件包内随包分发的文件
-//   list    返回数组（count/prefix 可选项）
-//   table   返回对象数组（给前端 Table 用）
-//   fail    抛异常 → 演示错误契约 {ok:false,error}
-//   manifest 自描述：返回本脚本全部函数目录（名称/说明/可选项/返回）
 // ═══════════════════════════════════════════════════════════════════════
 
 using System;
@@ -47,20 +12,17 @@ using System.Text.Json;
 using System.Collections.Generic;
 using System.Linq;
 
-// ── 函数实现（每个函数 = 一个能力点） ───────────────────────────────────
 
-// 1) echo —— 动态参数访问：body 的任意字段都能以 SafeGet(p,"字段") 读取（含嵌套对象）。
 string Echo(object? p)
 {
     return JsonSerializer.Serialize(new
     {
-        // 原样回显参数（演示任意嵌套结构访问）
         received = new
         {
             text = Str(SafeGet(p, "text")),
             count = Int(SafeGet(p, "count"), -1),
-            nested = SafeGet(p, "nested"),   // 嵌套对象直接透传
-            anyExtra = SafeGet(p, "extra"),  // 未约定字段也能读
+            nested = SafeGet(p, "nested"),
+            anyExtra = SafeGet(p, "extra"),
         },
         paramTypes = new
         {
@@ -71,7 +33,6 @@ string Echo(object? p)
     });
 }
 
-// 2) now —— DateTime 格式化。可选项：format（默认 yyyy-MM-dd HH:mm:ss）、utc（默认 0）。
 string Now(object? p)
 {
     var format = Str(SafeGet(p, "format"), "yyyy-MM-dd HH:mm:ss");
@@ -85,8 +46,6 @@ string Now(object? p)
     });
 }
 
-// 3) bkn —— 纯计算/签名（与 qqkeytool 一致的 bkn/g_tk 算法）。
-//    可选项：skey（必填，签名输入）。
 long Bkn(object? p)
 {
     var skey = Str(SafeGet(p, "skey"));
@@ -95,7 +54,6 @@ long Bkn(object? p)
     return h & 0x7fffffff;
 }
 
-// 4) state —— 跨调用内存状态：每次调用 Calls+1（脚本程序集缓存，静态字段保留）。
 string State(object? p)
 {
     DemoState.Calls++;
@@ -108,7 +66,6 @@ string State(object? p)
     });
 }
 
-// 5) ip —— 服务端网络请求（无 CORS）：取本机外网 IP。
 string Ip(object? p)
 {
     using var c = MakeClient();
@@ -121,14 +78,6 @@ string Ip(object? p)
     });
 }
 
-// 6) http —— 通用 HTTP 请求。
-//    可选项：
-//      url        必填，目标地址
-//      method     GET/POST/PUT/DELETE…（默认 GET）
-//      headers    对象 { "X-A": "1", ... }（默认空；User-Agent 单独处理）
-//      body       对象（自动 JSON）或字符串（原样发送）；POST/PUT/PATCH 生效
-//      timeoutSec 超时秒数（默认 15，上限 120）
-//    返回：{ ok, status, reason, elapsedMs, headers, body, bodyLength, truncated }
 string Http(object? p)
 {
     var url = Str(SafeGet(p, "url"));
@@ -142,7 +91,6 @@ string Http(object? p)
     c.Timeout = TimeSpan.FromSeconds(timeoutSec);
     using var req = new HttpRequestMessage(new HttpMethod(method), url);
 
-    // 请求头可选项
     if (SafeGet(p, "headers") is IDictionary<string, object> hdrs)
     {
         foreach (var kv in hdrs)
@@ -156,9 +104,6 @@ string Http(object? p)
         }
     }
 
-    // body 可选项（对象自动 JSON 序列化）。body 到达形态：
-    //   - 对象（ExpandoObject）→ 自动 JSON 序列化
-    //   - 字符串 → 原样发送（若看起来是 JSON 文本也原样发，不二次转义）
     var body = SafeGet(p, "body");
     if (body is not null && method is "POST" or "PUT" or "PATCH")
     {
@@ -205,8 +150,6 @@ string Http(object? p)
     }
 }
 
-// 7) file —— 读取插件包内随包分发的文件（数据/配置随 zip 分发）。
-//    可选项：name（默认 meta.json）。
 string ReadFile(object? p)
 {
     var name = Str(SafeGet(p, "name"), "meta.json");
@@ -234,7 +177,6 @@ string ReadFile(object? p)
     });
 }
 
-// 8) list —— 返回数组。可选项：count（默认 5）、prefix（默认 item）。
 string List(object? p)
 {
     var count = Math.Clamp(Int(SafeGet(p, "count"), 5), 1, 100);
@@ -245,8 +187,6 @@ string List(object? p)
     return JsonSerializer.Serialize(items);
 }
 
-// 9) table —— 返回对象数组（前端直接渲染 Table）。
-//    可选项：rows（默认 3）、prefix（默认 sdk）。
 string Table(object? p)
 {
     var rows = Math.Clamp(Int(SafeGet(p, "rows"), 3), 1, 20);
@@ -265,15 +205,11 @@ string Table(object? p)
     return JsonSerializer.Serialize(items);
 }
 
-// 10) fail —— 抛异常：宿主统一转成 { ok:false, error }（错误契约）。
-//     可选项：message（默认 "demo failure"）。
 string Fail(object? p)
 {
     throw new InvalidOperationException(Str(SafeGet(p, "message"), "demo failure"));
 }
 
-// 11) manifest —— 自描述：返回本脚本全部函数目录。
-//     前端"服务端脚本"页调用它，即可实时渲染"有哪些能力、有什么可选项"。
 string Manifest(object? p)
 {
     var funcs = new object[]
@@ -317,7 +253,6 @@ string Manifest(object? p)
     });
 }
 
-// ═══════════════ 导出（宿主要求的契约：Dictionary<string, Func<object, object>>）═══════════════
 
 return new Dictionary<string, Func<object, object>>
 {

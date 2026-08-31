@@ -21,7 +21,6 @@ public class ConfigurableProfile : IMalleableProfile
     public int HeartbeatIntervalSeconds => _config.HeartbeatIntervalSeconds;
     public double JitterPercent => _config.JitterPercent;
 
-    /// <summary>底层持久化配置（含流量伪装 transform 字段）。</summary>
     public MalleableProfileConfig Config => _config;
 
     public string GetRegisterUrl(string baseUrl) => _config.RegisterPath;

@@ -14,7 +14,6 @@ impl EnvInfo {
         }
     }
 
-    // 环境变量 set/delete 为后续版本保留（当前入口未启用）
     #[allow(dead_code)]
     pub fn set(name: &str, value: &str, _scope: &str) -> bool {
         #[cfg(target_os = "windows")]

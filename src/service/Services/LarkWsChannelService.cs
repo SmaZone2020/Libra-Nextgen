@@ -8,14 +8,10 @@ using LibraNextgen.Service.Data;
 namespace LibraNextgen.Service.Services;
 
 /// <summary>
-/// 飞书 WebSocket 长连接帧（官方协议：protobuf 二进制帧）。
-/// 字段编号依据 larksuite 官方 SDK / 生态实现（frame.proto）：
 ///   Header { key:1 string, value:2 string }
 ///   Frame { seq_id:1 uint64, log_id:2 uint64, service:3 int32, method:4 int32,
 ///           headers:5 repeated Header, payload_encoding:6 string, payload_type:7 string,
 ///           payload:8 bytes, log_id_new:9 string }
-/// method: 0=CONTROL（ping/pong），1=DATA（event）。
-/// 事件帧需回 ACK（原帧 + biz_rt 头 + payload {"code":200}），否则服务端重推。
 /// </summary>
 public sealed class FeishuFrame
 {
@@ -96,7 +92,6 @@ public sealed class FeishuFrame
                     }
                 case 9: frame.LogIdNew = ReadString(span, ref pos); break;
                 default:
-                    // 跳过未知字段（wire 2 = length-delimited，0 = varint）。
                     if (wire == 0) ReadVarint(span, ref pos);
                     else if (wire == 2) { var l = (int)ReadVarint(span, ref pos); pos += l; }
                     break;
@@ -147,10 +142,6 @@ public sealed class FeishuFrame
 }
 
 /// <summary>
-/// 飞书长连接后台服务（免公网回调，适配内网部署）：
-/// 为每个启用且 transport=websocket 的 Lark 频道建立官方长连接——
-/// 引导 endpoint（POST /callback/ws/endpoint，AppID/AppSecret 鉴权）→
-/// 连接 wss → 心跳 ping → 事件帧 ACK → 事件入站管线。
 /// </summary>
 public class LarkWsChannelService : BackgroundService
 {
@@ -197,7 +188,6 @@ public class LarkWsChannelService : BackgroundService
 
         foreach (var ch in channels)
         {
-            // transport=webhook 的频道不走长连接（走公网回调控制器）。
             if (!ch.Config.TryGetValue("transport", out var t) || t != "websocket") continue;
             active.Add(ch.Id);
             if (_conns.ContainsKey(ch.Id)) continue;
@@ -252,7 +242,6 @@ public class LarkWsChannelService : BackgroundService
         _logger.LogInformation("Lark WS connected (channel {Channel})", channel.Id);
 
         var buffer = new byte[128 * 1024];
-        // 分片重组缓存：message_id → (seq → data)
         var fragments = new Dictionary<string, SortedDictionary<int, byte[]>>();
         var lastPing = DateTime.UtcNow;
 
@@ -273,7 +262,6 @@ public class LarkWsChannelService : BackgroundService
             }
             catch (OperationCanceledException) when (!ct.IsCancellationRequested)
             {
-                // 心跳窗口内无任何帧 → 判定连接死亡，走外层重连。
                 _logger.LogWarning("Lark WS receive timeout (channel {Channel}), reconnecting", channel.Id);
                 return;
             }
@@ -305,7 +293,6 @@ public class LarkWsChannelService : BackgroundService
         }
         if (frame.Method != 1 || type != "event") return;
 
-        // 分片重组（sum>1 时按 message_id + seq 拼装）。
         var payload = frame.Payload;
         var sum = headers.TryGetValue("sum", out var s) && int.TryParse(s, out var sv) ? sv : 1;
         if (sum > 1)
@@ -316,7 +303,7 @@ public class LarkWsChannelService : BackgroundService
             if (!fragments.TryGetValue(mid, out var parts))
                 fragments[mid] = parts = new SortedDictionary<int, byte[]>();
             parts[seq] = frame.Payload ?? Array.Empty<byte>();
-            if (parts.Count < sum) return; // 未收齐
+            if (parts.Count < sum) return;
             using var ms = new MemoryStream();
             foreach (var p in parts.Values) ms.Write(p);
             payload = ms.ToArray();
@@ -333,8 +320,6 @@ public class LarkWsChannelService : BackgroundService
                     var msg = lark.ParseEventEnvelope(channel, root);
                     if (msg != null)
                     {
-                        // 事件处理（审批挂起可能阻塞）不阻塞 WS 读取循环：
-                        // 立即 ACK 并异步处理，避免事件堆积导致重推风暴。
                         var m = msg;
                         _ = Task.Run(async () =>
                         {
@@ -356,7 +341,6 @@ public class LarkWsChannelService : BackgroundService
             }
         }
 
-        // ACK：原帧回传 + biz_rt 头 + {"code":200}。
         var ack = new FeishuFrame
         {
             SeqId = frame.SeqId,

@@ -46,7 +46,6 @@ export type {
   WidgetTitleProps,
 } from './widget';
 
-/** 复合类型：经 `Widget.Props` 等引用各子组件的 props（与 ui-pro 源对齐）。 */
 export type Widget = {
   ContentProps: ComponentProps<typeof WidgetContent>;
   DescriptionProps: ComponentProps<typeof WidgetDescription>;

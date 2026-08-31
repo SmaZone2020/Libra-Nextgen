@@ -7,9 +7,6 @@ using Xunit;
 namespace LibraNextgen.Tests;
 
 /// <summary>
-/// SessionKeyStore 内存缓存行为测试。
-/// 用独立的测试库名构造 MongoDbContext（Set/Remove 的持久化写入是 fire-and-forget，
-/// 失败被吞掉，不影响内存缓存断言；本机有 MongoDB 时则走真实写入）。
 /// </summary>
 public class SessionKeyStoreTests
 {

@@ -66,7 +66,6 @@ export const APP_TYPE_LABEL: Record<string, string> = {
   Desktop: 'builder.desktopApp',
 };
 
-/** 云模块（与服务端 CloudModules 一致）：启用状态作为构建选项的子开关。 */
 export const MODULE_OPTIONS: { id: string; labelKey: string }[] = [
   { id: 'shell', labelKey: 'builder.moduleShell' },
   { id: 'recon', labelKey: 'builder.moduleRecon' },

@@ -56,9 +56,6 @@ public class SessionKeyStore
     {
         _cache[agentId] = key;
 
-        // 同步持久化：fire-and-forget 在进程被杀/快速重启时会丢写，导致
-        // 服务端重启后 key 失配（agent 用新 key、服务端加载旧 key）→
-        // 心跳/SSE 永久解密失败死循环。注册路径可接受一次同步等待。
         var doc = new SessionKey { AgentId = agentId, Key = Convert.ToBase64String(key) };
         try
         {
@@ -69,15 +66,11 @@ public class SessionKeyStore
         }
         catch
         {
-            // 持久化失败不阻断注册（内存 key 仍是权威），但下个服务端
-            // 重启会失配并触发 agent 自愈重注册。
         }
     }
 
     public bool TryGet(string agentId, out byte[]? key) => _cache.TryGetValue(agentId, out key);
 
-    /// <summary>Issue a fresh opaque channel token for an agent session（持久化，重启不丢）。
-    /// 每次轮换时清理该 agent 的旧 token，防止 token 映射无限累积。</summary>
     public string IssueToken(string agentId)
     {
         var token = Convert.ToHexString(RandomNumberGenerator.GetBytes(16)).ToLowerInvariant();
@@ -88,7 +81,6 @@ public class SessionKeyStore
                 Builders<SessionTokenDoc>.Filter.Eq(t => t.Token, token),
                 new SessionTokenDoc { Token = token, AgentId = agentId },
                 new ReplaceOptions { IsUpsert = true }).GetAwaiter().GetResult();
-            // 清理该 agent 的旧 token（含内存 + Mongo），避免每次重注册无限累积
             foreach (var (oldToken, mapped) in _tokens.ToList())
             {
                 if (mapped == agentId && oldToken != token)
@@ -101,7 +93,6 @@ public class SessionKeyStore
         }
         catch
         {
-            // 同上：持久化失败不阻断，重启后 agent 自愈重注册。
         }
         return token;
     }
@@ -122,7 +113,6 @@ public class SessionKeyStore
     }
 }
 
-/// <summary>持久化的会话 token → agent 映射（服务重启后 agent 无需重注册）。</summary>
 public class SessionTokenDoc
 {
     public string Id { get; set; } = Guid.NewGuid().ToString("N");

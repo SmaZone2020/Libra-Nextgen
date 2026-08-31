@@ -5,10 +5,6 @@ using LibraNextgen.Service.Data;
 namespace LibraNextgen.Service.Services;
 
 /// <summary>
-/// Telegram 长轮询后台服务：为每个启用的 Telegram 频道启动 Telegram.Bot 库自带的
-/// StartReceiving（库内部管理 getUpdates offset，无需公网回调）。
-/// 频道停用/删除时自动停止；接收循环意外终止后由 Reconcile 自动拉起。
-/// 入站消息 → AiChannelService 统一管线；审批按钮回调 → AiChannelService.HandleCallbackAsync。
 /// </summary>
 public class TelegramBotHostedService : BackgroundService
 {
@@ -85,12 +81,9 @@ public class TelegramBotHostedService : BackgroundService
         }
         catch (OperationCanceledException)
         {
-            // 正常停止。
         }
         catch (Exception ex)
         {
-            // StartReceiving 内部异常不会让 Task 退出（库会持续重连），
-            // 这里兜底记录；循环意外退出时由 Reconcile 重启。
             _logger.LogWarning(ex, "Telegram receiver stopped unexpectedly (channel {Channel})", channel.Id);
         }
         _logger.LogInformation("Telegram receiver ended (channel {Channel})", channel.Id);

@@ -5,16 +5,11 @@ using ModelContextProtocol.Server;
 namespace LibraNextgen.Service.Mcp;
 
 /// <summary>
-/// AI 频道工具：让 Justitia 在 IM 频道会话中向"当前对话者"发送媒体。
-/// 目标用户取自 AiRunContext（RunChatAsync 注入），AI 无需也不允许指定接收者——
-/// 只能发给正在对话的用户，天然防越权。
 /// </summary>
 [McpServerToolType]
 public static class ChannelTools
 {
     /// <summary>
-    /// 向当前 IM 频道会话的用户发送媒体（图片/视频/文件等，Telegram 原生发送）。
-    /// 仅当 AI 会话来自 IM 频道（Telegram/飞书/微信）时可用；控制台会话调用会报错。
     /// </summary>
     [McpServerTool]
     [Description("向当前 IM 频道会话（Telegram/飞书/微信）的用户发送媒体消息。目标用户固定为当前对话者，不可指定他人。")]

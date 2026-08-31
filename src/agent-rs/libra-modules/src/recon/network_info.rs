@@ -114,7 +114,6 @@ impl NetworkInfo {
     fn get_default_gateway() -> Option<String> {
         #[cfg(target_os = "windows")]
         {
-            // GetAdaptersAddresses（iphlpapi，Vista+）——无子进程（进程面收敛二期）
             return windows_default_gateway();
         }
         #[cfg(not(target_os = "windows"))]
@@ -169,7 +168,6 @@ pub(super) fn escape(s: &str) -> String {
         .replace('\r', "\\r")
 }
 
-/// GetAdaptersAddresses 拿第一个可用的默认网关（iphlpapi，Vista+）。
 #[cfg(target_os = "windows")]
 fn windows_default_gateway() -> Option<String> {
     use windows::Win32::NetworkManagement::IpHelper::*;
@@ -179,7 +177,6 @@ fn windows_default_gateway() -> Option<String> {
     unsafe {
         let mut size: u32 = 16 * 1024;
         let mut buf = vec![0u8; size as usize];
-        // family: u32（0 = AF_UNSPEC）
         let status = GetAdaptersAddresses(
             0,
             GET_ADAPTERS_ADDRESSES_FLAGS(0),
@@ -201,7 +198,6 @@ fn windows_default_gateway() -> Option<String> {
                     if !addr.Address.lpSockaddr.is_null() {
                         let sa = addr.Address.lpSockaddr as *const SOCKADDR_IN;
                         if (*sa).sin_family == AF_INET {
-                            // IN_ADDR 布局为 4 字节 IPv4 地址
                             let raw = &(*sa).sin_addr as *const _ as *const u32;
                             let bytes = (*raw).to_ne_bytes();
                             let ip = format!("{}.{}.{}.{}", bytes[0], bytes[1], bytes[2], bytes[3]);

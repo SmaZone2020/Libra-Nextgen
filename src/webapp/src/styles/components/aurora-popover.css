@@ -1,4 +1,3 @@
-/* Aurora 提示词输入框：最高档（dictatura）时四周线条环绕流动 + 光影 */
 
 @property --aurora-angle {
   syntax: '<angle>';
@@ -17,11 +16,9 @@
   isolation: isolate;
   border-radius: calc(var(--radius, 0.5rem) * 2);
   transition: box-shadow 500ms var(--ease-out, ease-out);
-  /* 静态细环（激活后由 aurora-pulse 接管） */
   box-shadow: 0 0 0 1px color-mix(in oklab, var(--color-accent, #6366f1) 18%, transparent);
 }
 
-/* 环绕流动的 conic 光带：贴着输入框四周的线条 */
 .aurora-input::before {
   content: '';
   position: absolute;
@@ -52,7 +49,6 @@
   transition: opacity 500ms var(--ease-smooth, ease-out);
 }
 
-/* 外圈光晕（光影） */
 .aurora-input::after {
   content: '';
   position: absolute;
@@ -76,7 +72,6 @@
 }
 
 .aurora-input--active {
-  /* 只保留光影脉动，不再改变边框宽度（固定 1px 细环 + 恒定 1.5px 轨道光）。 */
   animation: aurora-glow var(--aurora-pulse-duration) ease-in-out infinite alternate;
 }
 
@@ -96,7 +91,6 @@
   }
 }
 
-/* 光影呼吸：外圈光晕明暗变化，边框宽度恒定不变 */
 @keyframes aurora-glow {
   0% {
     box-shadow:

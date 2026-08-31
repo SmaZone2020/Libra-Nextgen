@@ -3,14 +3,13 @@
 #![allow(non_snake_case)]
 #![allow(clippy::upper_case_acronyms)]
 
-mod rdp_creds;
-mod ssh_keys;
-// lsass/kerberos 依赖 Windows 专属 FFI（lsass_ffi/LSA），非 Windows 不编译。
 #[cfg(target_os = "windows")]
 mod kerberos;
 #[cfg(target_os = "windows")]
 mod lsass;
+mod rdp_creds;
 mod sam;
+mod ssh_keys;
 
 use serde_json::Value;
 

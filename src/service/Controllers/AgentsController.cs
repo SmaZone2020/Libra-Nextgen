@@ -69,8 +69,6 @@ public class AgentsController : ControllerBase
     }
 
     /// <summary>
-    /// 设置实时通道需求（WS 按需）：操作员打开 shell/屏幕/摄像头时置 true，
-    /// agent 在下一次心跳后建立 WS；关闭会话后置 false，agent 断开。
     /// </summary>
     [HttpPost("{id}/ws-needed")]
     [Authorize(Roles = "Admin")]

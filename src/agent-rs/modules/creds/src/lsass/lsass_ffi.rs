@@ -1,8 +1,6 @@
 #![cfg(target_os = "windows")]
 //! Windows kernel32/advapi32 FFI helpers for LSASS dump (SeDebug + snapshot).
 
-// ── 进程/权限 API ─────────────────────────────────────────────────────
-
 #[cfg(target_os = "windows")]
 #[repr(C)]
 pub(crate) struct TOKEN_PRIVILEGES {

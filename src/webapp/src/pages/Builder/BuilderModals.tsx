@@ -41,11 +41,9 @@ const formatDate = (iso: string): string => {
   return d.toLocaleString();
 };
 
-// ── 构建阶段定义（按服务端 job.Log 的 "=== Stage N: ... ===" 标记识别）─────────
 
 interface BuildStageDef {
   id: string;
-  /** 服务端日志里该阶段的标记；命中即推进。 */
   marker: string;
   labelKey: string;
 }
@@ -59,7 +57,6 @@ const BUILD_STAGES: BuildStageDef[] = [
   { id: 'inject', marker: 'Stage 4:', labelKey: 'builder.stageInject' },
 ];
 
-/** 从原始日志行提取阶段序号（0-based）；无标记返回 -1。 */
 function stageIndexForLine(line: string): number {
   for (let i = 0; i < BUILD_STAGES.length; i++) {
     if (line.includes(BUILD_STAGES[i]!.marker)) return i;
@@ -67,7 +64,6 @@ function stageIndexForLine(line: string): number {
   return -1;
 }
 
-/** 阶段状态：done / active / pending / failed。 */
 type StageState = 'done' | 'active' | 'pending' | 'failed';
 
 export function BuilderModals({
@@ -93,9 +89,7 @@ export function BuilderModals({
     logEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [logs]);
 
-  // ── 从日志推导阶段状态 ─────────────────────────────────────────────
 
-  /** 日志中按出现顺序见过的阶段序号（去重）。 */
   const stageOrder = useMemo(() => {
     const seen = new Set<number>();
     const order: number[] = [];
@@ -112,8 +106,6 @@ export function BuilderModals({
   const failed = !building && !buildSucceeded && logs.length > 0;
   const currentStage = building ? (stageOrder.length > 0 ? stageOrder[stageOrder.length - 1]! : -1) : -1;
 
-  // 受控 currentStep：构建中 = 当前阶段；失败 = 最后出现的阶段（指示器/分隔线终止于此）；
-  // 成功 = 全部完成。
   const stepperStep = useMemo(() => {
     if (failed) return stageOrder.length > 0 ? stageOrder[stageOrder.length - 1]! : 0;
     if (building) return currentStage >= 0 ? currentStage : 0;
@@ -122,16 +114,13 @@ export function BuilderModals({
 
   const stageStates = useMemo<StageState[]>(() => {
     const states: StageState[] = BUILD_STAGES.map(() => 'pending');
-    // 已出现 = done（失败时最后一个出现 = failed）
     stageOrder.forEach((idx, pos) => {
       states[idx] = failed && pos === stageOrder.length - 1 ? 'failed' : 'done';
     });
-    // 构建中：当前阶段 = active（spinner）
     if (building && currentStage >= 0) states[currentStage] = 'active';
     return states;
   }, [stageOrder, failed, building, currentStage]);
 
-  /** 失败原因（stderr / WARN / error 行，取最后一条）。 */
   const lastError = useMemo(() => {
     if (!failed) return null;
     for (let i = logs.length - 1; i >= 0; i--) {

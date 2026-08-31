@@ -52,7 +52,6 @@ public class BuildJob
     }
 }
 
-/// <summary>模块构建结果：失败列表（构建成功但未部署/禁用）与硬失败（编译失败）。</summary>
 public class ModuleBuildResult
 {
     public bool Compiled { get; set; }
@@ -69,7 +68,6 @@ public static class BuildPlatforms
     public const string LinuxX64 = "linux-x64";
 }
 
-// ── 流量伪装持久化列表（服务端存储，构建时取启用项）─────────────────────
 
 public class BuildListItem
 {
@@ -78,7 +76,6 @@ public class BuildListItem
     public bool Enabled { get; set; } = true;
 }
 
-/// <summary>流量伪装三组列表（单文档持久化，Id 固定 "traffic"）。</summary>
 public class BuildTrafficLists
 {
     public string Id { get; set; } = "traffic";
@@ -87,13 +84,10 @@ public class BuildTrafficLists
     public List<BuildListItem> PathSuffixes { get; set; } = new();
 }
 
-/// <summary>增加流量伪装项请求体。</summary>
 public record AddBuildListItemRequest(string List, string Value);
 
-/// <summary>切换流量伪装项启用状态请求体。</summary>
 public record ToggleBuildListItemRequest(string List, string Id, bool Enabled);
 
-/// <summary>删除流量伪装项请求体。</summary>
 public record DeleteBuildListItemRequest(string List, string Id);
 
 internal record struct ProcessResult(int ExitCode, string Stdout, string Stderr);

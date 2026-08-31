@@ -15,12 +15,9 @@ const AES_NONCE_SIZE: usize = 12;
 /// Negotiate the core AES key with the server.
 ///
 /// Generates an ephemeral RSA-2048 keypair, sends its public key + BeaconSecret
-/// to the server via OAuth 风格的混合加密信封（服务端 RSA 公钥加密临时 AES key），
 /// and decrypts the returned AES key with the private key. No private key is
 /// ever embedded in the binary.
 ///
-/// 返回 (AES key, 一次性下载凭证 downloadToken)：凭证随 core.bin 下载携带
-/// （服务端防枚举，5 分钟有效）。
 pub async fn handshake_core_key(
     server_url: &str,
     core_key_path: &str,
@@ -47,7 +44,6 @@ pub async fn handshake_core_key(
     .to_string();
 
     let body = if server_public_key.is_empty() {
-        // 无公钥（dev 直连/旧构建）：明文兼容
         plain
     } else {
         let (enc_key, cipher_body) =
@@ -98,7 +94,6 @@ pub async fn handshake_core_key(
     let mut key = [0u8; AES_KEY_SIZE];
     key.copy_from_slice(&decrypted);
 
-    // 一次性下载凭证（服务端签发；旧服务端无该字段时为空 = 不带参下载）
     let download_token = v
         .get("downloadToken")
         .and_then(|x| x.as_str())

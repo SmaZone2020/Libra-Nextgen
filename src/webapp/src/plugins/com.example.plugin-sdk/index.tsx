@@ -5,20 +5,6 @@ import { AgentTab } from './agent';
 import { ServiceTab } from './service';
 import { FrontendApiTab } from './frontend';
 
-/**
- * 插件 SDK 全能力演示（活文档）—— 主入口。
- *
- * 本页同时是【示例】和【文档】：把插件作者能用的所有宿主 API、组件与
- * 可选项都真实渲染出来，作者照着抄即可。分五个页签：
- *   1. 总览        —— 三层架构 / 包目录结构 / 接入流程（简版，详见文档页签）
- *   2. 文档        —— 活文档：在线拉取 assets/docs/*.md 渲染（随 zip 分发）
- *   3. Agent 端    —— JS 能力目录 + 实时执行（dispatchTask + WS 推送）
- *   4. 服务端脚本  —— service/*.cs 全函数目录 + 实时调用（/api/plugin/*）
- *   5. 前端 API    —— usePluginHost / api client / 插件管理
- *
- * 拆分说明：每个页签一个文件（overview/docs/agent/service/frontend.tsx），
- * 共享常量与工具在 shared.tsx，通用小组件在 components.tsx。
- */
 
 export default function PluginSdkPage() {
   return (

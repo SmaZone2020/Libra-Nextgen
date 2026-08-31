@@ -5,9 +5,7 @@ import { PieChart } from '../../components/pie-chart';
 import { ChartTooltip } from '../../components/chart-tooltip';
 import type { AgentListItem } from '../../types/models';
 
-// ── OS 分类（正则匹配）───────────────────────────────────────────────
 
-/** Linux 发行版匹配表（按优先级排序，命中即归类）。 */
 const LINUX_DISTROS: [string, RegExp][] = [
   ['Ubuntu', /\bubuntu\b/i],
   ['Debian', /\bdebian\b/i],
@@ -25,18 +23,10 @@ const LINUX_DISTROS: [string, RegExp][] = [
   ['Pop!_OS', /\bpop[! _]*os\b/i],
 ];
 
-/**
- * 将 osVersion 归类为展示用的系统名：
- * - Windows 按大版本区分 7 / 10 / 11（agent 上报的 ProductName+DisplayVersion，
- *   Win11 的 ProductName 常为 "Windows 10 Pro"，需按版本号 10.0.22000+ 兜底）
- * - Linux 按发行版名匹配（PRETTY_NAME，如 "Ubuntu 22.04.3 LTS"）
- * - 其余归入 Windows/Linux/其他/未知
- */
 export function classifyOs(osVersion: string): string {
   const v = (osVersion ?? '').toLowerCase();
 
   if (v.includes('windows')) {
-    // Windows 11：显式 "Windows 11"，或内核版本 10.0.22000+（22H2/23H2/24H2）
     if (
       /\bwindows\s*11\b/.test(v) ||
       /\b11\s+(?:pro|home|enterprise|education|iot)\b/.test(v) ||
@@ -73,7 +63,6 @@ export function classifyOs(osVersion: string): string {
   return v ? '其他' : '未知';
 }
 
-// ── 饼图卡片 ─────────────────────────────────────────────────────────
 
 const PIE_COLORS = [
   '#60a5fa', '#67e8f9', '#4ade80', '#fbbf24',
@@ -85,7 +74,6 @@ interface SystemDistributionChartProps {
   agents: AgentListItem[];
 }
 
-/** 展示所有 Agent 的操作系统分布（饼图）。 */
 export function SystemDistributionChart({ agents }: SystemDistributionChartProps) {
   const { t } = useTranslation();
 
@@ -162,7 +150,7 @@ export function SystemDistributionChart({ agents }: SystemDistributionChartProps
               />
             </PieChart>
 
-            {/* 分类图例：色点 + 名称 + 数量（占比） */}
+            {}
             <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 mt-3 mx-auto">
               {data.map((d, i) => {
                 const pct = total > 0 ? Math.round((d.count / total) * 100) : 0;

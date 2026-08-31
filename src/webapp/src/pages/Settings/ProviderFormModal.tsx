@@ -49,7 +49,6 @@ const emptyForm = (): AiProviderInput => ({
 
 export interface ProviderFormModalProps {
   open: boolean;
-  /** 编辑中的供应商；null 表示新建。 */
   editing: AiProvider | null;
   onClose: () => void;
   onSaved: () => void;
@@ -64,7 +63,6 @@ export function ProviderFormModal({ open, editing, onClose, onSaved }: ProviderF
   const [testResult, setTestResult] = useState<{ ok: boolean; message?: string; models?: string[] } | null>(null);
   const [modelsText, setModelsText] = useState('');
 
-  // 打开/切换编辑目标时初始化表单。
   useEffect(() => {
     if (!open) return;
     if (editing) {

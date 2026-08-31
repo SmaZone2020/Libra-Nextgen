@@ -1,4 +1,3 @@
-// E2E 04：构建产物下载格式 — 匿名 artifact 端点 + ISO/IMG/VHD/LNK 打包下载
 import { signJwt } from './lib/e2e-common.mjs';
 
 const BASE = process.env.E2E_BASE || 'http://127.0.0.1:5270';
@@ -10,7 +9,6 @@ const check = (name, ok, detail = '') => {
   console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${detail ? ' — ' + detail : ''}`);
 };
 
-// 0) 取最新一条 completed 构建
 const listRes = await fetch(`${BASE}/api/builder/list`, { headers: H });
 const list = await listRes.json();
 const record = (list ?? []).find(r => r.status === 'completed' && !r.fileName.startsWith('modules-'));
@@ -23,17 +21,14 @@ if (!record) {
 
 const buildId = record.id;
 
-// 1) 匿名 artifact 下载（无鉴权头）→ 200 且字节与历史文件一致
 const art = await fetch(`${BASE}/api/beacon/artifact/${buildId}`);
 const artBuf = Buffer.from(await art.arrayBuffer());
 check('匿名 artifact 下载（无鉴权）', art.status === 200 && artBuf.length === record.fileSize,
   `${art.status}, ${artBuf.length}B vs ${record.fileSize}B`);
 
-// 2) artifact 校验 buildId（非法 id → 400）
 const bad = await fetch(`${BASE}/api/beacon/artifact/..%2F..%2Fetc`);
 check('artifact 非法 id 拒绝', bad.status === 400);
 
-// 3) 四类打包格式（需鉴权）
 const fmtChecks = {
   iso: b => b.length > artBuf.length && b.slice(16 * 2048 + 1, 16 * 2048 + 6).toString() === 'CD001',
   img: b => b[510] === 0x55 && b[511] === 0xAA,
@@ -48,7 +43,6 @@ for (const [fmt, verify] of Object.entries(fmtChecks)) {
     `${cd.split('filename=')[1]?.split(';')[0] ?? ''}, ${buf.length}B`);
 }
 
-// 4) 无鉴权访问打包端点 → 401
 const anon = await fetch(`${BASE}/api/builder/download/${buildId}?format=iso`);
 check('打包下载需鉴权', anon.status === 401);
 

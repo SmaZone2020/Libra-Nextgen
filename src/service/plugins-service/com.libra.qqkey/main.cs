@@ -1,6 +1,3 @@
-// qqbiz.csx — QQ 业务服务端脚本（.NET 自带 C# Scripting 解析执行）
-// 调用：POST /api/plugin/qqbiz/函数  body: {"uin":"…","clientkey":"…", ...}（p 为 dynamic）
-// 依赖注入说明：本脚本使用 .NET 原生 HttpClient/CookieContainer，未引用专用宿主。
 
 using System;
 using System.Net;
@@ -9,7 +6,6 @@ using System.Text;
 using System.Text.Json;
 using System.Collections.Generic;
 
-// ── 工具 ────────────────────────────────────────────────────────────────
 static long Bkn(string skey) { long h = 5381; foreach (var c in skey) h += (h << 5) + c; return h & 0x7fffffff; }
 static int Gtk(string skey) { int h = 5381; foreach (var c in skey) h += (h << 5) + c; return h & 0x7fffffff; }
 
@@ -82,7 +78,6 @@ static string Need(HttpClient client, CookieContainer jar, string uin, string ke
     return skey != "" ? skey : CookieValue(jar, "p_skey");
 }
 
-// ── 1. 发 QQ 空间说说 ────────────────────────────────────────────────
 static string Shuoshuo(dynamic p)
 {
     var (c, jar) = NewClient();
@@ -97,7 +92,6 @@ static string Shuoshuo(dynamic p)
         form, "application/x-www-form-urlencoded", UA_FF);
 }
 
-// ── 2. 修改空间资料 ──────────────────────────────────────────────────
 static string Profile(dynamic p)
 {
     var (c, jar) = NewClient();
@@ -112,7 +106,6 @@ static string Profile(dynamic p)
         form, "application/x-www-form-urlencoded", UA_FF);
 }
 
-// ── 3. 好友列表 ──────────────────────────────────────────────────────
 static string Friends(dynamic p)
 {
     var (c, jar) = NewClient();
@@ -123,7 +116,6 @@ static string Friends(dynamic p)
         null, null, "Mozilla/5.0");
 }
 
-// ── 4. 群组列表 ──────────────────────────────────────────────────────
 static string Groups(dynamic p)
 {
     var (c, jar) = NewClient();
@@ -131,7 +123,6 @@ static string Groups(dynamic p)
     return Send(c, jar, HttpMethod.Get, "http://qun.qq.com/cgi-bin/qun_mgr/get_group_list?bkn=" + Bkn(skey), null, null, "Mozilla/5.0");
 }
 
-// ── 5. 群公告列表 ────────────────────────────────────────────────────
 static string GroupNotice(dynamic p)
 {
     var (c, jar) = NewClient();
@@ -141,7 +132,6 @@ static string GroupNotice(dynamic p)
         "application/x-www-form-urlencoded", UA_FF);
 }
 
-// ── 6. 群文件列表 ────────────────────────────────────────────────────
 static string GroupFiles(dynamic p)
 {
     var (c, jar) = NewClient();
@@ -151,7 +141,6 @@ static string GroupFiles(dynamic p)
         "application/x-www-form-urlencoded", UA_FF);
 }
 
-// ── 7. 删除群文件 ────────────────────────────────────────────────────
 static string DeleteFile(dynamic p)
 {
     var (c, jar) = NewClient();
@@ -163,7 +152,6 @@ static string DeleteFile(dynamic p)
         "application/x-www-form-urlencoded", "Mozilla/5.0");
 }
 
-// ── 8. 查看好友亲密度 ────────────────────────────────────────────────
 static string Friendship(dynamic p)
 {
     var (c, jar) = NewClient();
@@ -172,7 +160,6 @@ static string Friendship(dynamic p)
         null, null, UA_MOBILE);
 }
 
-// ── 9. 设置/移除特别关心 ─────────────────────────────────────────────
 static string Care(dynamic p)
 {
     var (c, jar) = NewClient();
@@ -184,7 +171,6 @@ static string Care(dynamic p)
         json, "application/json", UA_MOBILE);
 }
 
-// ── 10. 获取绑定手机号 ───────────────────────────────────────────────
 static string Phone(dynamic p)
 {
     var (c, jar) = NewClient();
@@ -198,7 +184,6 @@ static string Phone(dynamic p)
     return j >= 0 ? cut.Substring(0, j) : cut;
 }
 
-// ── 导出函数表 ───────────────────────────────────────────────────────
 return new Dictionary<string, Func<object, object>>
 {
     ["shuoshuo"] = p => Shuoshuo((dynamic)p),

@@ -1,27 +1,14 @@
 import { api, getApiOrigin } from '../../api/client';
 
-/**
- * 插件 SDK 全能力演示（活文档）—— 共享常量与工具。
- *
- * 本页同时是【示例】和【文档】：把插件作者能用的所有宿主 API、组件与
- * 可选项都真实渲染出来，作者照着抄即可。分五个页签：
- *   1. 总览        —— 三层架构 / 包目录结构 / 接入流程（简版，详见文档页签）
- *   2. 文档        —— 活文档：在线拉取 assets/docs/*.md 渲染（随 zip 分发）
- *   3. Agent 端    —— JS 能力目录 + 实时执行（dispatchTask + WS 推送）
- *   4. 服务端脚本  —— service/*.cs 全函数目录 + 实时调用（/api/plugin/*）
- *   5. 前端 API    —— usePluginHost / api client / 插件管理
- */
 
 export const SDK_ID = 'com.example.plugin-sdk';
 const SERVICE_BASE = `/plugin/${SDK_ID}`;
 
-// ── 服务端脚本调用封装（POST /api/plugin/<pluginId>/<fn>）───────────────
 export interface ScriptResult { ok: boolean; data?: unknown; error?: string; plugin?: string; fn?: string; }
 export async function callScript<T = unknown>(fn: string, params?: Record<string, unknown>): Promise<ScriptResult> {
   return api.post<ScriptResult>(`${SERVICE_BASE}/${fn}`, params ?? {});
 }
 
-/** 剥掉可能的 JSONP 外壳 / 解析 JSON 字符串。 */
 export function tryParse(raw: unknown): unknown {
   if (typeof raw !== 'string') return raw;
   try { return JSON.parse(raw); } catch { return raw; }
@@ -32,12 +19,10 @@ export function pretty(data: unknown): string {
   return typeof parsed === 'string' ? parsed : JSON.stringify(parsed ?? '(empty)', null, 2);
 }
 
-/** 插件包内静态资源端点（与 com.libra.aitoken 的 assets 用法一致，匿名可访问）。 */
 export function assetUrl(file: string): string {
   return `${getApiOrigin()}/api/plugins/${SDK_ID}/assets/${file}`;
 }
 
-/** 在包内 assets/docs/ 下按文件名顺序加载六篇文档。 */
 export const DOC_FILES: { id: string; label: string; file: string }[] = [
   { id: '01', label: '总览', file: 'docs/01-overview.md' },
   { id: '02', label: '插件契约', file: 'docs/02-plugin-contract.md' },
@@ -71,7 +56,6 @@ export const STEPS: [string, string][] = [
   ['发布', '把 zip 提交到 Libra-Plugins 仓库 plugins/<pluginId>/，CI 生成 index.json 即上架市场'],
 ];
 
-// ── Agent 能力清单（与 module/plugin_sdk.js 的 capability 分支一致）──
 export const AGENT_CAPS: { value: string; label: string; desc: string; needsCommand?: boolean }[] = [
   { value: 'whoami', label: 'whoami', desc: '当前用户' },
   { value: 'fs', label: 'fs', desc: '文件系统：写 /tmp/libra_sdk_probe.txt → 读 → 列目录 → 存在性' },

@@ -1,10 +1,4 @@
-// PsInline.Stub — 在宿主进程（agent）内执行的极小托管转发器。
-// 编译目标：.NET Framework 4.x（本机 csc v4.0.30319，C# 5）。
-// 职责：连接命名管道 → 执行 PowerShell 脚本 → 把 JSON 结果写回管道。
-// 本文件本身无任何恶意内容，仅做 runspace 执行与结果转发。
 //
-// 入口：Run(string pipeName, string scriptB64, int timeoutMs)
-// 由原生宿主通过 ICLRRuntimeHost::ExecuteInDefaultAppDomain 调用。
 
 using System;
 using System.IO.Pipes;
@@ -16,8 +10,6 @@ namespace PsInline
 {
     public class Stub
     {
-        // 由宿主通过 IDispatch 在实例上调用（COM 视图只暴露实例方法）。
-        // args 格式：pipeName|scriptB64|timeoutMs（管道名与 base64 均不含 '|'）
         public int Run(string args)
         {
             string pipeName = "";
@@ -32,14 +24,12 @@ namespace PsInline
             }
             catch
             {
-                // 参数解析失败时按空脚本执行，让宿主拿到错误 JSON
             }
             return RunCore(pipeName, scriptB64, timeoutMs);
         }
 
         private static int RunCore(string pipeName, string scriptB64, int timeoutMs)
         {
-            // 调试模式：PS_INLINE_DEBUG=1 时逐步写 %TEMP%\ps_inline_dbg.txt
             bool dbg = Environment.GetEnvironmentVariable("PS_INLINE_DEBUG") == "1";
             Action<string> trace = (string step) =>
             {
@@ -50,7 +40,7 @@ namespace PsInline
                         System.IO.Path.Combine(System.IO.Path.GetTempPath(), "ps_inline_dbg.txt"),
                         DateTime.UtcNow.ToString("HH:mm:ss.fff") + " " + step + Environment.NewLine);
                 }
-                catch { }
+                catch {}
             };
             trace("enter");
             try
@@ -62,7 +52,7 @@ namespace PsInline
                 }
                 catch
                 {
-                    script = scriptB64; // 非 base64 时按明文脚本处理
+                    script = scriptB64;
                 }
 
                 if (timeoutMs < 1000) timeoutMs = 60000;
@@ -91,7 +81,7 @@ namespace PsInline
                         if (!task.Wait(timeoutMs))
                         {
                             trace("Task timeout, stopping");
-                            try { ps.Stop(); } catch { }
+                            try { ps.Stop(); } catch {}
                             result = "{\"success\":false,\"error\":\"timeout after " + timeoutMs + "ms\"}";
                             WriteResult(pipeName, result);
                             return 1;
@@ -151,7 +141,6 @@ namespace PsInline
             }
             catch
             {
-                // 管道不可用时静默失败（宿主进程可能已退出）
             }
         }
 

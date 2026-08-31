@@ -18,11 +18,6 @@ export interface CellSliderRootProps extends Omit<
 > {
   /** Visual variant. @default "default" */
   variant?: CellSliderVariants['variant'];
-  /**
-   * 拖拽状态标记：`"true"` 拖动中 / `"false"` 静止。
-   * 透传到根元素，可配合 `group-data-[dragging=true]:*` 等 Tailwind 变体
-   * 在拖动时禁用过渡动画，松开后再平滑吸附。
-   */
   'data-dragging'?: 'true' | 'false';
 }
 

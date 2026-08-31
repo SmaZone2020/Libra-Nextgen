@@ -74,7 +74,6 @@ public class HeartbeatMonitor : BackgroundService
                 await wsManager.BroadcastToConsoleAsync(msg, ct);
                 wsManager.AppendEvent("agent", $"Agent {agent.Hostname} ({agent.IpAddress}) 离线");
 
-                // AI 事件订阅：Agent 离线 → Justitia 生成提醒并送达订阅目标。
                 var notifier = scope.ServiceProvider.GetRequiredService<AiEventNotifier>();
                 _ = notifier.NotifyAsync(agent.Id, agent.Hostname, agent.IpAddress, AiEventNotifier.EvtAgentOffline, ct);
             }

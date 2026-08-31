@@ -49,8 +49,6 @@ public class AgentCommsService
         if (string.IsNullOrWhiteSpace(publicKeyBase64))
             return null;
 
-        // Agent 已持有会话密钥（重连，进程未重启）——直接复用，不下发新 key。
-        // 新进程（Restart 后）会带 hasSessionKey=false，这里会重新协商下发。
         if (hasSessionKey && _sessionKeys.TryGet(agentId, out var existing) && existing is not null)
             return null;
 
@@ -194,7 +192,6 @@ public class RegisterRequest
     public string? PublicKey { get; set; }
     public string? BeaconSecret { get; set; }
     public HardwareInfo? Hardware { get; set; }
-    /// <summary>Agent 进程内是否已持有会话密钥（重连 vs 新进程）。</summary>
     public bool HasSessionKey { get; set; }
 }
 

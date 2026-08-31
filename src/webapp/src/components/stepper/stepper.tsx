@@ -6,18 +6,14 @@ import { composeSlotClassName } from '../../utils/compose';
 import type { StepperVariants } from './stepper.styles';
 import { stepperVariants } from './stepper.styles';
 
-/** 步骤状态：inactive / active / complete（与 stepper.css 的 data-status 对齐）。 */
 export type StepperStepStatus = 'inactive' | 'active' | 'complete';
 
 interface StepperContextValue {
   slots?: ReturnType<typeof stepperVariants>;
   orientation?: StepperVariants['orientation'];
   size?: StepperVariants['size'];
-  /** 当前受控/非受控步索引（0-based）。 */
   step: number;
-  /** 更新步索引（非受控时更新内部 state，受控时只触发 onStepChange）。 */
   setStep: (next: number) => void;
-  /** 步骤总数（用于 isLast 判定）。 */
   count: number;
 }
 
@@ -28,20 +24,13 @@ const StepperContext = createContext<StepperContextValue>({
 });
 
 interface StepperStepContextValue {
-  /** 零基步索引。 */
   index: number;
-  /** 由 currentStep 推导的状态。 */
   status: StepperStepStatus;
-  /** 是否最后一步。 */
   isLast: boolean;
 }
 
 const StepperStepContext = createContext<StepperStepContextValue | null>(null);
 
-/**
- * 从任意 Stepper.Step 后代访问该步的上下文（index / status / isLast）。
- * 在 Step 外部调用返回默认值（index 0 / inactive / isLast false）。
- */
 export function useStepperStep(): StepperStepContextValue {
   const ctx = useContext(StepperStepContext);
   return ctx ?? { index: 0, status: 'inactive', isLast: false };
@@ -72,15 +61,11 @@ interface StepperRootProps extends ComponentPropsWithRef<'ol'> {
   orientation?: StepperVariants['orientation'];
   /** Indicator size. @default "md" */
   size?: StepperVariants['size'];
-  /** 当前激活步索引（受控）。 */
   currentStep?: number;
-  /** 初始步索引（非受控）。@default 0 */
   defaultStep?: number;
-  /** 点击步骤时回调；提供后步骤变为可交互。 */
   onStepChange?: (step: number) => void;
 }
 
-/** 注入给 Stepper.Step 的内部索引 prop（cloneElement 时写入，不透传到 DOM）。 */
 interface StepperStepInternalProps {
   __index?: number;
 }
@@ -104,7 +89,6 @@ const StepperRoot = ({
     onStepChange?.(next);
   };
 
-  // 把步索引注入每个 Stepper.Step，使 Step 上下文（index/status/isLast）可用。
   const count = Children.count(children);
   const steps = Children.map(children, (child, index) =>
     isValidElement<StepperStepInternalProps>(child)
@@ -155,13 +139,9 @@ const StepperStep = ({ children, className, __index = 0, ...props }: StepperStep
   );
 };
 
-/* -------------------------------------------------------------------------------------------------
- * Stepper StepButton（可选包装：可点击步骤的交互/悬停目标）
- * -----------------------------------------------------------------------------------------------*/
 
 interface StepperStepButtonProps extends ComponentPropsWithRef<'div'> {
   children: ReactNode;
-  /** 点击该步骤时调用（使用 Root 的 setStep）。 */
   onStepPress?: () => void;
 }
 
@@ -194,7 +174,6 @@ const StepperStepButton = ({
  * -----------------------------------------------------------------------------------------------*/
 
 interface StepperIndicatorProps extends ComponentPropsWithRef<'div'> {
-  /** 自定义内容（覆盖默认的序号 / 完成对勾）。 */
   children?: ReactNode;
 }
 
@@ -305,9 +284,7 @@ const StepperDescription = ({ children, className, ...props }: StepperDescriptio
  * -----------------------------------------------------------------------------------------------*/
 
 interface StepperSeparatorProps extends ComponentPropsWithRef<'div'> {
-  /** 显式进度 0..1；省略时按 currentStep 自动计算。 */
   progress?: number;
-  /** 即使位于最后一步也强制渲染。@default false */
   force?: boolean;
 }
 
@@ -315,10 +292,8 @@ const StepperSeparator = ({ className, progress, force = false, ...props }: Step
   const { slots, step } = useContext(StepperContext);
   const { index, isLast } = useStepperStep();
 
-  // 最后一步自动隐藏（除非 force）。
   if (isLast && !force) return null;
 
-  // 自动进度：已完成步 1，当前步 0.5，未到 0。
   const p = progress ?? (index < step ? 1 : index === step ? 0.5 : 0);
 
   return (

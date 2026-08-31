@@ -1,6 +1,3 @@
-// E2E 01：agent 协议链路
-//   a) 模拟注册 → SSE 连接 → 创建任务 → 验证 SSE 推送到达（推送链路）
-//   b) 若 E2E_AGENT_ID 提供：给真实 agent 下发 Sleep 任务 → 轮询验证执行+上报
 import { registerAgent, signJwt, aesGcmDecrypt } from './lib/e2e-common.mjs';
 
 const BASE = process.env.E2E_BASE || 'http://127.0.0.1:5270';
@@ -14,7 +11,6 @@ const check = (name, ok, detail = '') => {
 const token = signJwt();
 const H = { 'content-type': 'application/json', authorization: `Bearer ${token}` };
 
-// a) 模拟注册 + SSE 推送验证
 const { agentId, sessionToken, aesKey } = await registerAgent(BASE);
 check('注册（/api/v1/session）', !!agentId, agentId.slice(0, 8));
 
@@ -48,7 +44,6 @@ const sseTask = (async () => {
 await new Promise(r => setTimeout(r, 1500));
 check('SSE 初始事件到达（连接即同步）', sseEvents.length > 0, `events=${sseEvents.length}`);
 
-// 创建任务 → 验证 SSE 推送（op=task）即时到达
 const taskRes = await fetch(`${BASE}/api/tasks`, {
   method: 'POST', headers: H,
   body: JSON.stringify({ agentId, commandType: 'Sleep', command: '1', arguments: [], timeoutSeconds: 10 }),
@@ -65,7 +60,6 @@ const pushArrived = await (async () => {
 })();
 check('任务经 SSE 即时推送到达', pushArrived, `t=${Date.now()}ms`);
 
-// b) 真实 agent 执行验证（run-all 传入 E2E_AGENT_ID）
 if (REAL_AGENT) {
   const realTaskRes = await fetch(`${BASE}/api/tasks`, {
     method: 'POST', headers: H,

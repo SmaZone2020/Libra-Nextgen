@@ -58,7 +58,6 @@ const MODEL_ICONS: Record<string, string> = {
   microsoft: '/icon/microsoft.png',
   anthracite: '/icon/anthracite.png',
 
-  // 聚合/代理平台
   openrouter: '/icon/openrouter.svg',
   siliconflow: '/icon/siliconflow.svg',
   modelscope: '/icon/modelscope-color.svg',
@@ -88,7 +87,6 @@ const MODEL_ICONS: Record<string, string> = {
   packycode: '/icon/packycode.svg',
   zenmux: '/icon/amuxapi-icon.svg',
 
-  // 图片/URL 图标平台
   a6api: '/icon/a6-icon.png',
   apikeyfun: '/icon/apikeyfun.png',
   apinebula: '/icon/apinebula_icon.png',
@@ -118,15 +116,12 @@ const MODEL_ICONS: Record<string, string> = {
   zetaapi: '/icon/zetaapi-icon.png',
 };
 
-/** 图标 key 按长度降序，模糊匹配时优先取更精确（更长）的 key。 */
 const ICON_KEYS = Object.keys(MODEL_ICONS).sort((a, b) => b.length - a.length);
 
-/** 规范化：小写 + 去 非字母数字。 */
 function normalize(name: string): string {
   return name.toLowerCase().replace(/[^a-z0-9]+/g, '');
 }
 
-/** 模糊匹配图标：精确 → 子串（最长 key 优先）→ null。 */
 export function resolveModelIcon(name: string): string | null {
   if (!name) return null;
   const norm = normalize(name);
@@ -136,7 +131,7 @@ export function resolveModelIcon(name: string): string | null {
   if (direct) return direct;
 
   for (const key of ICON_KEYS) {
-    if (key.length < 3) continue; // 2 字符短 key（yi/pi/rc）仅精确匹配
+    if (key.length < 3) continue;
     const icon = MODEL_ICONS[key];
     if (icon && norm.includes(key)) return icon;
   }

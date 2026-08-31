@@ -28,7 +28,6 @@ pub fn register_windows_api(ctx: &Ctx, features: &[String]) {
     let _ = globals.set(
         "wmic",
         Function::new(ctx.clone(), |query: String| -> String {
-            // Win11 24H2 已移除 wmic，脚本需自行处理空返回。
             run("wmic", &[query.as_str()])
         }),
     );
@@ -52,8 +51,6 @@ fn run_cmd(cmdline: String) -> String {
 }
 
 fn powershell(script: String) -> String {
-    // in-process CLR 执行（无 powershell.exe 进程）——与 powershell 模块
-    // 共用 libra-psinline（PowerShell 进程清零专项）。
     libra_psinline::execute_inline(&script, 60)
 }
 

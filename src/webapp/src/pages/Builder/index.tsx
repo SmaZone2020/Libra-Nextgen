@@ -43,7 +43,6 @@ export default function BuilderPage() {
   const [elapsed, setElapsed] = useState(0);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const lastBuildResultRef = useRef<string | null>(null);
-  /** 最近一次成功构建的最终配置（SSE done 时用于保存预设）。 */
   const finalConfigRef = useRef<BuildConfigRequest | null>(null);
   const esRef = useRef<EventSource | null>(null);
 
@@ -52,7 +51,6 @@ export default function BuilderPage() {
   const [historyLoading, setHistoryLoading] = useState(false);
   const [selectedRecord, setSelectedRecord] = useState<BuildRecordDetail | null>(null);
   const [infoLoading, setInfoLoading] = useState(false);
-  // 下载/一键命令模态框
   const [downloadRecord, setDownloadRecord] = useState<BuildRecordDetail | null>(null);
 
   // Templates
@@ -60,7 +58,6 @@ export default function BuilderPage() {
   const [templateUploading, setTemplateUploading] = useState(false);
   const [templateToDelete, setTemplateToDelete] = useState<string | null>(null);
 
-  // Modules（文件名驱动，含插件 dll；启用状态 = 文件名后缀状态）
   const [modules, setModules] = useState<ModuleEntry[]>([]);
   const [modulesLoading, setModulesLoading] = useState(false);
   const [modulesBuilding, setModulesBuilding] = useState(false);
@@ -80,7 +77,6 @@ export default function BuilderPage() {
   useEffect(() => { loadModules(); }, [loadModules]);
 
   const handleToggleModule = async (name: string, enabled: boolean) => {
-    // 乐观更新，失败回滚
     const prev = modules;
     setModules(prev.map(m => (m.name === name ? { ...m, enabled } : m)));
     try {
@@ -90,7 +86,6 @@ export default function BuilderPage() {
     }
   };
 
-  // 流量伪装持久化列表（服务端存储，构建时取启用项）
   const [trafficLists, setTrafficLists] = useState<BuildTrafficLists | null>(null);
 
   const loadTrafficLists = useCallback(async () => {
@@ -108,7 +103,6 @@ export default function BuilderPage() {
   };
 
   const handleToggleTrafficItem = async (list: TrafficListName, id: string, enabled: boolean) => {
-    // 乐观更新
     setTrafficLists(prev => prev ? ({
       ...prev,
       [list]: prev[list].map(i => (i.id === id ? { ...i, enabled } : i)),
@@ -116,7 +110,7 @@ export default function BuilderPage() {
     try {
       const updated = await toggleBuildListItem(list, id, enabled);
       setTrafficLists(updated);
-    } catch { /* 回滚由服务端返回为准，忽略 */ }
+    } catch {  }
   };
 
   const handleDeleteTrafficItem = async (list: TrafficListName, id: string) => {
@@ -143,7 +137,6 @@ export default function BuilderPage() {
   const set = <K extends keyof BuildConfigRequest>(key: K, value: BuildConfigRequest[K]) =>
     setConfig((c) => ({ ...c, [key]: value }));
 
-  /** 选中历史预设时整体替换配置（不丢失其他页面状态）。 */
   const applyConfig = (next: BuildConfigRequest) => setConfig(next);
 
   const handleBuild = async () => {
@@ -163,7 +156,6 @@ export default function BuilderPage() {
     }, 200);
 
     try {
-      // 流量伪装：构建时取启用的持久化项合成配置
       const finalConfig: BuildConfigRequest = {
         ...config,
         userAgents: (trafficLists?.userAgents ?? []).filter(i => i.enabled).map(i => i.value),
@@ -181,7 +173,6 @@ export default function BuilderPage() {
     }
   };
 
-  /** 订阅构建日志流（agent 构建与"构建模块"共用）。 */
   const streamBuild = (id: string) => {
     setBuildId(id);
     setBuildStatus('builder.buildingStatus');
@@ -243,7 +234,6 @@ export default function BuilderPage() {
     };
   };
 
-  /** 仅构建启用的云模块（不构建 agent）。 */
   const handleBuildModules = async () => {
     setModulesBuilding(true);
     setBuilding(true);
@@ -288,7 +278,6 @@ export default function BuilderPage() {
     }
   };
 
-  /** 下载按钮统一走模态框：一键命令（PowerShell/Cmd/Bash）+ 格式打包（ISO/IMG/VHD/LNK）+ exe 下载。 */
   const handleDownload = async (id: string) => {
     try {
       const detail = await getBuildInfo(id);
@@ -336,10 +325,10 @@ export default function BuilderPage() {
       {/* Left: Build Config */}
       <div className="flex-1 space-y-4">
         <BuilderConfigCard config={config} set={set} applyConfig={applyConfig} />
-        {/* 连接参数（流量伪装）：独立卡片，置于目标平台上方 */}
+        {}
         <BuilderConnectionCard config={config} set={set} />
         <BuilderOptionsCard config={config} set={set} />
-        {/* 流量伪装：独立卡片，置于最底部 */}
+        {}
         <BuilderTrafficCard
           lists={trafficLists}
           onAddItem={handleAddTrafficItem}
@@ -390,7 +379,7 @@ export default function BuilderPage() {
         onCloseInfo={() => setSelectedRecord(null)}
       />
 
-      {/* 下载/一键命令模态框（构建成功弹窗与历史列表共用） */}
+      {}
       <BuilderDownloadModal
         record={downloadRecord}
         onClose={() => setDownloadRecord(null)}

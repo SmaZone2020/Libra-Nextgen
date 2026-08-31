@@ -34,7 +34,6 @@ public class McpUtilsTests
     [Fact]
     public void Limit_NeverSplitsUtf8Sequence()
     {
-        // "汉" = 3 UTF-8 bytes; budget lands exactly mid-rune on the first one.
         var s = new string('x', McpUtils.MaxOutputBytes - 1) + "汉汉汉";
         var limited = McpUtils.Limit(s);
         // Round-trip re-encode must be lossless: no split rune, no U+FFFD.

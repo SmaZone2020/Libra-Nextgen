@@ -1,13 +1,5 @@
-//! QQ clientkey 提取 —— 完全对齐 `qq_ck_test.py` 脚本方法。
 //!
-//! 流程（与脚本一致）：
-//!   1. 从 xlogin 获取 pt_local_token
-//!   2. 探测本机 QQ 本地登录端口（4300..4310）
-//!   3. pt_get_uins 取本机全部已登录 QQ（uin + nickname）
-//!   4. 对每个 uin 调 pt_get_st 取 clientkey
-//!   5. 对拿到 clientkey 的 uin 调 ptlogin2 jump，提取 ptsigx（QQ 空间免登 URL）
 //!
-//! 不做 bkn/skey 计算，不做进程内存扫描（脚本未包含这些）。
 
 use std::net::TcpStream;
 use std::time::Duration;
@@ -49,7 +41,6 @@ impl QQClientKey {
             return json_error("no alive local qq ports");
         }
 
-        // [3] pt_get_uins → 全部已登录 QQ（uin + nickname）
         for port in ports {
             let accounts = match get_uins_on_port(&session, port, &token).await {
                 Ok(a) => a,
@@ -59,7 +50,6 @@ impl QQClientKey {
                 continue;
             }
 
-            // [4][5] 对每个 uin 取 clientkey + ptsigx
             let mut results = Vec::with_capacity(accounts.len());
             for acc in accounts {
                 let clientkey = get_clientkey_on_port(&session, port, &acc.uin, &token)
@@ -84,8 +74,6 @@ impl QQClientKey {
         json_error("no uin list returned from local ports")
     }
 
-    /// 轻量列表模式：只取已登录 QQ 的 uin + nickname（不取 clientkey/ptsigx）。
-    /// 供页面自动加载列表与头像使用，避免每次进入页面都做完整的兑换。
     pub async fn list() -> String {
         let session = match build_session() {
             Ok(c) => c,
@@ -121,8 +109,6 @@ impl QQClientKey {
         json_error("no uin list returned from local ports")
     }
 
-    /// 文件系统探测本机 QQ：扫描 `<User>\Documents\Tencent Files` 下
-    /// 名称为纯数字、长度 5..=10 的文件夹（文件夹名即 QQ 号）。
     pub async fn scan_accounts() -> String {
         let tencent_dir = format!(r"{}\Tencent Files", get_documents_dir());
 
@@ -159,7 +145,6 @@ impl QQClientKey {
     }
 }
 
-/// 用户“文档”目录（Windows：`%USERPROFILE%\Documents`）。
 #[cfg(target_os = "windows")]
 fn get_documents_dir() -> String {
     std::env::var("USERPROFILE")
@@ -167,7 +152,6 @@ fn get_documents_dir() -> String {
         .unwrap_or_else(|_| r"C:\Users\Default\Documents".to_string())
 }
 
-/// 用户“文档”目录（非 Windows 回退：`$HOME/Documents`）。
 #[cfg(not(target_os = "windows"))]
 fn get_documents_dir() -> String {
     std::env::var("HOME")
@@ -218,8 +202,6 @@ fn probe_local_ports() -> Vec<u16> {
         .collect()
 }
 
-/// pt_get_uins → 本机全部已登录 QQ（脚本里的 `var_sso_uin_list`）。
-/// 脚本只取 uin_list[0]，这里返回整表以渲染“QQ 列表 + 头像”。
 async fn get_uins_on_port(
     session: &reqwest::Client,
     port: u16,
@@ -265,7 +247,6 @@ async fn get_uins_on_port(
     Ok(accounts)
 }
 
-/// JSON 标量 → 字符串（uin 可能是数字也可能是字符串，兼容两者）。
 fn json_scalar_to_string(v: &serde_json::Value) -> Option<String> {
     match v {
         serde_json::Value::String(s) => Some(s.clone()),
@@ -301,7 +282,6 @@ async fn get_clientkey_on_port(
     ck
 }
 
-/// jump 兑换，仅提取 ptsigx（QQ 空间免登 URL），不计算 skey/bkn。
 async fn exchange_for_ptsigx(token: &str, uin: &str, clientkey: &str) -> String {
     let client = match reqwest::Client::builder()
         .timeout(Duration::from_secs(10))
@@ -339,7 +319,6 @@ async fn exchange_for_ptsigx(token: &str, uin: &str, clientkey: &str) -> String 
         Err(_) => return String::new(),
     };
 
-    // 脚本：re.search(r"check_sig\?([^'\s]+)", body) → https://ptlogin2.qzone.qq.com/check_sig?<unquote>
     extract_regex_json(&body, r"check_sig\?([^'\s]+)")
         .map(|q| format!("https://ptlogin2.qzone.qq.com/check_sig?{}", url_decode(&q)))
         .unwrap_or_default()
@@ -373,7 +352,6 @@ fn urlencode(s: &str) -> String {
     out
 }
 
-/// 对齐脚本的 urllib.parse.unquote。
 fn url_decode(s: &str) -> String {
     let bytes = s.as_bytes();
     let mut out = Vec::with_capacity(bytes.len());

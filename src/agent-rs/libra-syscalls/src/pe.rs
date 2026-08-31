@@ -1,6 +1,4 @@
-//! 内存内 PE 头解析（只读）。
 //!
-//! 只解析导出表所需的最小字段，不依赖任何外部 crate。偏移量针对 PE32+（x64）。
 
 #![allow(dead_code)]
 
@@ -22,16 +20,13 @@ unsafe fn rd_i32(p: usize) -> i32 {
     (p as *const i32).read_unaligned()
 }
 
-/// 已加载模块的内存视图。
 pub struct PeImage {
     pub base: usize,
 }
 
 impl PeImage {
-    /// 校验 DOS/NT 头并返回一个视图。
     ///
     /// # Safety
-    /// `base` 必须是可读的模块基址。
     pub unsafe fn parse(base: usize) -> Option<PeImage> {
         if base == 0 {
             return None;
@@ -50,10 +45,8 @@ impl PeImage {
         Some(PeImage { base })
     }
 
-    /// 按名字定位某个 section 的 `(VA, 大小)`。
     ///
     /// # Safety
-    /// 模块必须仍映射在当前进程中。
     pub unsafe fn section_range(&self, name: &[u8; 8]) -> Option<(usize, usize)> {
         let nt = self.base + rd_i32(self.base + 0x3C) as usize;
         let file_header = nt + 4;
@@ -76,20 +69,16 @@ impl PeImage {
         None
     }
 
-    /// 读 PE `SizeOfImage`（镜像整体映射大小）。
     ///
     /// # Safety
-    /// 模块必须仍映射在当前进程中。
     pub unsafe fn size_of_image(&self) -> usize {
         let nt = self.base + rd_i32(self.base + 0x3C) as usize;
         let opt = nt + 24;
         rd_u32(opt + 0x38) as usize
     }
 
-    /// 在模块的可执行 section 内扫描字节模式，返回第一个命中地址。
     ///
     /// # Safety
-    /// 模块必须仍映射在当前进程中。
     pub unsafe fn scan_executable(&self, pattern: &[u8]) -> Option<usize> {
         const IMAGE_SCN_MEM_EXECUTE: u32 = 0x2000_0000;
 
@@ -125,15 +114,12 @@ impl PeImage {
         None
     }
 
-    /// 解析导出表。返回 `None` 表示该模块没有导出目录。
     ///
     /// # Safety
-    /// 模块必须仍映射在当前进程中。
     pub unsafe fn export_table(&self) -> Option<ExportTable> {
         let nt = self.base + rd_i32(self.base + 0x3C) as usize;
         // OptionalHeader = NT + 4(signature) + 20(FileHeader)
         let opt = nt + 24;
-        // DataDirectory[0] = 导出目录 { VirtualAddress, Size }
         let dir_rva = rd_u32(opt + 112);
         let dir_size = rd_u32(opt + 116);
         if dir_rva == 0 || dir_size == 0 {
@@ -152,24 +138,19 @@ impl PeImage {
     }
 }
 
-/// 导出目录的字段快照。
 pub struct ExportTable {
     pub number_of_functions: u32,
     pub number_of_names: u32,
     pub address_of_functions: u32,
     pub address_of_names: u32,
     pub address_of_name_ordinals: u32,
-    /// 导出目录在内存中的起止（用于识别 forwarder RVA）。
     pub dir_start: usize,
     pub dir_end: usize,
 }
 
 impl ExportTable {
-    /// 遍历 `(name, address)` 对。
-    /// 跳过 forwarder（其函数 RVA 落在导出目录区间内）。
     ///
     /// # Safety
-    /// 模块必须仍映射在当前进程中。
     pub unsafe fn each_export<F: FnMut(&str, usize)>(&self, base: usize, mut f: F) {
         for i in 0..self.number_of_names as usize {
             let name_rva = rd_u32(base + self.address_of_names as usize + i * 4) as usize;
@@ -177,7 +158,6 @@ impl ExportTable {
             let func_rva = rd_u32(base + self.address_of_functions as usize + ordinal * 4) as usize;
 
             let func_addr = base + func_rva;
-            // forwarder：函数 RVA 指向导出目录内的字符串，不是代码。
             if func_rva >= self.dir_start.saturating_sub(base)
                 && func_rva < self.dir_end.saturating_sub(base)
             {
@@ -190,7 +170,6 @@ impl ExportTable {
     }
 }
 
-/// 读 NUL 结尾的 ASCII 名字。
 unsafe fn read_cstr(mut p: usize) -> &'static str {
     let start = p;
     while *(p as *const u8) != 0 {

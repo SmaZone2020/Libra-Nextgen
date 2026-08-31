@@ -1,4 +1,3 @@
-// E2E 02：模块管理 — 枚举（文件名驱动）→ 禁用（.disable 重命名）→ 恢复
 import fs from 'node:fs';
 import { signJwt } from './lib/e2e-common.mjs';
 
@@ -12,7 +11,6 @@ const check = (name, ok, detail = '') => {
   console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${detail ? ' — ' + detail : ''}`);
 };
 
-// 1) 枚举
 const listRes = await fetch(`${BASE}/api/builder/modules?platform=x64`, { headers: H });
 const list = await listRes.json();
 const mods = list.modules ?? [];
@@ -21,14 +19,12 @@ check('模块枚举（文件名驱动）', listRes.status === 200 && mods.length
 const target = mods.find(m => m.name === 'shell');
 if (!target) { console.log('FAIL shell module missing'); process.exit(1); }
 
-// 2) 禁用 → 文件重命名为 .dll.disable
 const off = await fetch(`${BASE}/api/builder/modules/toggle`, {
   method: 'POST', headers: H, body: JSON.stringify({ platform: 'x64', name: 'shell', enabled: false }),
 });
 const filesOff = fs.readdirSync(MOD_DIR).filter(f => f.startsWith('shell'));
 check('禁用模块 → .dll.disable 重命名', off.status === 200 && filesOff.includes('shell.dll.disable') && !filesOff.includes('shell.dll'), filesOff.join(','));
 
-// 3) 恢复 → 还原文件名
 const on = await fetch(`${BASE}/api/builder/modules/toggle`, {
   method: 'POST', headers: H, body: JSON.stringify({ platform: 'x64', name: 'shell', enabled: true }),
 });

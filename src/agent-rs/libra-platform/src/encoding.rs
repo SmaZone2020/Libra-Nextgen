@@ -84,16 +84,12 @@ mod tests {
 
     #[test]
     fn gbk_bytes_decode_via_fallback() {
-        // "中文输出测试" in GBK (CP936) — not valid UTF-8.
         let gbk = [
             0xD6u8, 0xD0, 0xCE, 0xC4, 0xCA, 0xE4, 0xB3, 0xF6, 0xB2, 0xE2, 0xCA, 0xD4,
         ];
         let decoded = decode_shell_bytes(&gbk);
         #[cfg(windows)]
         {
-            // 回退解码使用系统 OEM 代码页：中文系统 OEM=936(GBK) 可精确还原；
-            // 其他语言系统（如 CI 英文 runner OEM=437）按各自代码页解码，
-            // 结果与系统相关——只验证回退路径不 panic 且产生非空输出。
             let oem = unsafe { GetOEMCP() };
             if oem == 936 {
                 assert_eq!(decoded, "中文输出测试", "decoded: {decoded}");

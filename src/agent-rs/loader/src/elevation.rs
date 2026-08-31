@@ -44,8 +44,6 @@ fn runas_elevate(exe_path: &str) -> bool {
 
 #[cfg(target_os = "windows")]
 pub fn is_admin() -> bool {
-    // TokenElevation（advapi32，Vista+）——无子进程（进程面收敛二期，
-    // 原 net session 子进程已移除）
     #[repr(C)]
     struct TokenElevation {
         token_is_elevated: u32,
@@ -69,7 +67,6 @@ pub fn is_admin() -> bool {
     }
     #[link(name = "kernel32")]
     extern "system" {
-        // 签名与 pe_loader.rs 保持一致（*mut u8），避免 clashing extern 声明
         fn GetCurrentProcess() -> *mut u8;
         fn CloseHandle(h: *mut u8) -> i32;
     }
@@ -348,7 +345,6 @@ extern "system" {
         nShowCmd: i32,
     ) -> usize;
 
-    // 签名与 pe_loader.rs/main.rs 对齐（*mut u8），避免 clashing extern 声明
     fn CloseHandle(hObject: *mut u8) -> i32;
     fn CreateToolhelp32Snapshot(dwFlags: u32, th32ProcessID: u32) -> *mut std::ffi::c_void;
     fn Process32First(hSnapshot: *mut std::ffi::c_void, lppe: *mut PROCESSENTRY32) -> i32;

@@ -90,16 +90,12 @@ export function usePluginHost(): PluginHost {
       const target = agentId || selectedAgent?.id;
       if (!target) throw new Error('No agent selected');
       const res = await invokePluginAction(pluginId, action, target, args);
-      // 服务端把 agent 的插件输出（plugin.result）序列化为 JSON 字符串透传，
-      // 这里统一反序列化：result 为对象/数组/标量时原样保留，字符串按 JSON 尝试解析，
-      // 解析失败（普通文本输出）则保留原字符串——页面无需区分字符串与对象两种形态。
       const raw = res.result;
       let result: unknown = raw;
       if (typeof raw === 'string' && raw.trim().length > 0) {
         try {
           result = JSON.parse(raw);
         } catch {
-          /* 非 JSON 文本输出，原样透传 */
         }
       }
       return { ...res, result };

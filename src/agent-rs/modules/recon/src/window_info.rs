@@ -1,4 +1,3 @@
-// 窗口操作函数（close/minimize/maximize 等）为后续版本保留，当前入口未启用
 #![allow(dead_code)]
 
 pub struct WindowInfo;
@@ -162,7 +161,6 @@ unsafe extern "system" fn enum_windows_callback(hwnd: isize, lparam: isize) -> i
 
 #[cfg(target_os = "windows")]
 fn get_process_name(pid: u32) -> String {
-    // sysinfo 原生进程枚举——无子进程（进程面收敛二期，原 wmic 已移除）
     use sysinfo::{Pid, System};
     let sys = System::new_all();
     if let Some(proc) = sys.process(Pid::from_u32(pid)) {

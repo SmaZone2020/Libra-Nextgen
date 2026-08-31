@@ -7,13 +7,9 @@ export interface PluginCardProps {
   description?: string;
   version?: string;
   author?: string;
-  /** 插件前端路由（/plugins/<route>），提供时展示「有页面」徽标与「打开」按钮。 */
   route?: string;
-  /** 是否展示「有页面」徽标（插件市场条目没有 entry 元数据，可显式关闭）。 */
   hasRoute?: boolean;
-  /** 卡片底部操作区（按钮、状态、统计等）。 */
   footer?: React.ReactNode;
-  /** 覆盖默认的标题行右侧区域（如启用开关/操作按钮）。 */
   actions?: React.ReactNode;
 }
 

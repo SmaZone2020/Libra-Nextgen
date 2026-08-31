@@ -56,8 +56,6 @@ impl AgentCrypto {
         self.session_key
     }
 
-    /// 清除会话密钥：SESSION_LOST 重注册时调用，强制服务端协商下发新 key
-    /// （hasSessionKey=false），避免服务端重启后 key 失配导致重注册死循环。
     pub fn clear_session_key(&mut self) {
         self.session_key = None;
     }
@@ -228,9 +226,6 @@ pub fn rsa_decrypt(data: &[u8], private_key_b64: &str) -> Result<Vec<u8>, String
         .map_err(|e| e.to_string())
 }
 
-/// 混合加密：随机 AES-256 key → RSA-OAEP 加密；明文 → AES-GCM。
-/// 返回 (RSA 加密的 AES key b64, AES 密文 b64)。
-/// 服务端用部署 RSA 私钥解出 AES key 再解密（注册/密钥协商 bootstrap 用）。
 pub fn hybrid_encrypt(plaintext: &str, public_key_b64: &str) -> Result<(String, String), String> {
     let aes_key = generate_aes_key();
     let enc_key = rsa_encrypt(&aes_key, public_key_b64)?;

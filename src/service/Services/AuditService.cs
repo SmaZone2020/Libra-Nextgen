@@ -34,9 +34,6 @@ public class AuditService
     }
 
     /// <summary>
-    /// 显式指定风险等级的审计（AI 工具调用使用：风险由 Justitia 档位决定，
-    /// 不经过管理员 RiskPolicy 覆盖——Cognitio→Safe / Arbitrium→Normal /
-    /// Imperium→Dangerous / Dictatura→Malicious）。
     /// </summary>
     public async Task LogAsync(
         string userId, string userName, string action, string? actionKey,

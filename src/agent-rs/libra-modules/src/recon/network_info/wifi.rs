@@ -84,8 +84,6 @@ pub(super) fn collect_wifi() -> String {
                 let mut password = String::new();
                 for line in detail.lines() {
                     let t = line.trim();
-                    // Match both English "Key Content" and Chinese "密钥内容"
-                    // Also match by position: it's the field containing "key" (case-insensitive) or "密钥"
                     let lower = t.to_lowercase();
                     if (lower.contains("key content") || t.contains("密钥内容")) && t.contains(':')
                     {
@@ -478,7 +476,6 @@ pub(super) fn get_dns_suffix() -> String {
         {
             let text = String::from_utf8_lossy(&output.stdout);
             for line in text.lines() {
-                // Match both "DNS Suffix" (EN) and "DNS 后缀" (CN)
                 let lower = line.to_lowercase();
                 if (lower.contains("dns suffix") || lower.contains("dns 后缀"))
                     && line.contains(':')

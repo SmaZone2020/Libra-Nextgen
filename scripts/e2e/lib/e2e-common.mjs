@@ -1,4 +1,3 @@
-// E2E 公共库：JWT 签发 + agent 注册 + AES-GCM 加解密
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -40,10 +39,6 @@ export function aesGcmDecrypt(b64, key) {
   return Buffer.concat([d.update(ct), d.final()]).toString('utf8');
 }
 
-/**
- * 注册一个测试 agent（明文注册分支），返回 { agentId, sessionToken, aesKey }。
- * session_key 为服务端用 agent RSA 公钥加密的 AES key，此处生成临时 RSA 对解密。
- */
 export async function registerAgent(base) {
   const { publicKey, privateKey } = crypto.generateKeyPairSync('rsa', { modulusLength: 2048 });
   const pubB64 = publicKey.export({ type: 'spki', format: 'der' }).toString('base64');

@@ -67,7 +67,6 @@ export default function AgentsPage() {
     await deleteAgent(id);
   };
 
-  /** 下发"重启"任务：Agent 拉起自身副本后退出，自动重新上线。 */
   const handleRestart = async () => {
     const id = contextAgentRef.current;
     if (!id) return;
@@ -80,7 +79,6 @@ export default function AgentsPage() {
     }
   };
 
-  /** 下发"销毁"任务：Agent 清理持久化后退出进程（kill_and_clean）。 */
   const handleDestroy = async () => {
     const id = contextAgentRef.current;
     if (!id) return;

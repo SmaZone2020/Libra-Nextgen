@@ -34,7 +34,6 @@ const EVENT_OPTIONS = [
   { id: 'agent.offline', titleKey: 'ai.eventOffline', descKey: 'ai.eventOfflineDesc', icon: ArrowRightFromSquare },
 ] as const;
 
-/** 频道平台图标（与设置页 ChannelsTab 一致）。 */
 const CHANNEL_ICONS: Record<string, string> = {
   telegram: '/icon/app/tg.png',
   lark: '/icon/app/lark.png',
@@ -156,7 +155,7 @@ export function EventSubscriptionModal({
                 <div className="flex justify-center py-10"><Spinner size="sm" /></div>
               ) : (
                 <div className="space-y-5">
-                  {/* 事件选择（卡片式 CheckboxGroup） */}
+                  {}
                   <CheckboxGroup
                     name="events"
                     value={events}
@@ -189,10 +188,10 @@ export function EventSubscriptionModal({
                     </div>
                   </CheckboxGroup>
 
-                  {/* 送达目标 */}
+                  {}
                   <div>
                     <Label className="mb-2 block text-sm">{t('ai.eventTarget')}</Label>
-                    
+
                     <Tabs className="w-full max-w-md">
                       <Tabs.ListContainer>
                         <Tabs.List aria-label="channel">
@@ -273,7 +272,7 @@ export function EventSubscriptionModal({
 
                   </div>
 
-                  {/* 已有订阅 */}
+                  {}
                   <div>
                     <Label className="mb-2 block text-sm">{t('ai.eventList')}</Label>
                     {subs.length === 0 ? (

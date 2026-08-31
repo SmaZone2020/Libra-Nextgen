@@ -21,7 +21,6 @@ export interface AiSidebarSessionRowProps {
   onCancelRename: () => void;
   onFork: () => void;
   onDelete: () => void;
-  /** 频道会话徽标：telegram | lark | wechat-claw。 */
   channelType?: string | null;
   channelExternalName?: string | null;
 }
@@ -32,7 +31,6 @@ const CHANNEL_ICONS: Record<string, string> = {
   'wechat-claw': '/icon/app/wechat.png',
 };
 
-/** 会话列表行：点击切换；右侧三点按钮弹出 Dropdown 菜单（重命名/分支/删除）。 */
 export function AiSidebarSessionRow({
   session,
   active,

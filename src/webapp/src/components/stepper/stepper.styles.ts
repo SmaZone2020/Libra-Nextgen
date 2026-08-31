@@ -1,10 +1,6 @@
 import type { VariantProps } from 'tailwind-variants';
 import { tv } from 'tailwind-variants';
 
-/**
- * HeroUI Pro Stepper 样式槽位。
- * 对应 src/styles/components/stepper.css 中的类名。
- */
 export const stepperVariants = tv({
   defaultVariants: {
     orientation: 'horizontal',

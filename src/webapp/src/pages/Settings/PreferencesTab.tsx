@@ -26,7 +26,6 @@ export default function PreferencesTab() {
   const [portError, setPortError] = useState<string | null>(null);
   const [listener, setListener] = useState<ListenerInfo | null>(null);
 
-  // 事件流事件类型选择
   const [eventModalOpen, setEventModalOpen] = useState(false);
   const [selectedEvents, setSelectedEvents] = useState<Selection>(new Set());
 

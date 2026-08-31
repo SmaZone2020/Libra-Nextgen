@@ -4,9 +4,6 @@ impl LocalAccountEnumerator {
     pub async fn enumerate() -> String {
         #[cfg(target_os = "windows")]
         {
-            // 原生 netapi32 枚举（无子进程）：NetUserEnum(level 2) 单次取回全部
-            // 账户 + last_logon/acct_expires 等字段，管理员组一次 NetLocalGroupGetMembers。
-            // 不再逐账户 NetUserGetInfo（旧实现每账户一次 RPC，账户多时极慢）。
             Self::enumerate_native()
         }
         #[cfg(not(target_os = "windows"))]
@@ -15,17 +12,14 @@ impl LocalAccountEnumerator {
         }
     }
 
-    /// NetUserEnum(level 2) + NetLocalGroupGetMembers（locale-independent，单次往返）。
     #[cfg(target_os = "windows")]
     fn enumerate_native() -> String {
         use windows::Win32::NetworkManagement::NetManagement::*;
 
-        // 1) 管理员组成员：well-known SID S-1-5-32-544 → 本地化组名 → 成员
         let mut admins = std::collections::HashSet::new();
         if let Some(group_name) = localized_group_name("S-1-5-32-544") {
             if let Some(members) = local_group_members(&group_name) {
                 for m in members {
-                    // domainandname 形如 "HOST\user" 或 "user"
                     let name = m.rsplit('\\').next().unwrap_or(&m).to_lowercase();
                     if !name.is_empty() {
                         admins.insert(name);
@@ -34,7 +28,6 @@ impl LocalAccountEnumerator {
             }
         }
 
-        // 2) NetUserEnum level 2 枚举本地用户（FILTER_NORMAL_ACCOUNT）
         let mut accounts = Vec::new();
         unsafe {
             let mut buf: *mut u8 = std::ptr::null_mut();
@@ -69,7 +62,6 @@ impl LocalAccountEnumerator {
                         "[]"
                     };
 
-                    // level 2 自带字段（DWORD 秒 → 兼容 /Date(ms)/ 的 ISO 字符串）
                     let last_logon = win_time(e.usri2_last_logon);
                     let acct_expires = if e.usri2_acct_expires == 0 {
                         "null".to_string()
@@ -107,7 +99,6 @@ impl LocalAccountEnumerator {
         let mut accounts = Vec::new();
         let mut admin_users = std::collections::HashSet::new();
 
-        // /etc/group：sudo/wheel/root 组成员 → 管理员
         if let Ok(content) = std::fs::read_to_string("/etc/group") {
             for line in content.lines() {
                 let parts: Vec<&str> = line.split(':').collect();
@@ -124,8 +115,6 @@ impl LocalAccountEnumerator {
             }
         }
 
-        // /etc/shadow（可选，需 root/可读）：判断锁定与密码状态。
-        // 能读到才使用，读不到降级为 passwd 判断（shell == nologin/false → 禁用）。
         let shadow = std::fs::read_to_string("/etc/shadow").ok();
         let mut shadow_map: std::collections::HashMap<String, (bool, bool, bool)> =
             std::collections::HashMap::new();
@@ -159,7 +148,6 @@ impl LocalAccountEnumerator {
 
                     let is_admin = uid == 0 || admin_users.contains(name);
 
-                    // shadow 优先；读不到时用 shell 判断
                     let (enabled, password_required) = match shadow_map.get(name) {
                         Some((locked, has_password, _)) => (!locked, *has_password),
                         None => (shell != "/usr/sbin/nologin" && shell != "/bin/false", true),
@@ -190,7 +178,6 @@ impl LocalAccountEnumerator {
     }
 }
 
-/// 把 JSON 账户数组按（管理员优先、名称升序）重排。
 fn sort_accounts(json: &mut String) {
     if let Ok(mut v) = serde_json::from_str::<serde_json::Value>(json) {
         if let Some(arr) = v.get_mut("accounts").and_then(|a| a.as_array_mut()) {
@@ -215,7 +202,6 @@ fn sort_accounts(json: &mut String) {
     }
 }
 
-/// DWORD 秒（自 1970-01-01）→ 兼容 /Date(ms)/ 的 JSON 字符串；0 → null。
 #[cfg(target_os = "windows")]
 fn win_time(secs: u32) -> String {
     if secs == 0 || secs == u32::MAX {
@@ -241,7 +227,6 @@ mod tests {
         let rt = tokio::runtime::Runtime::new().unwrap();
         let out = rt.block_on(LocalAccountEnumerator::enumerate());
         assert!(out.contains("\"accounts\""), "bad output: {out}");
-        // 至少应包含当前用户
         let user = std::env::var("USERNAME").unwrap_or_default().to_lowercase();
         if !user.is_empty() {
             assert!(
@@ -259,9 +244,6 @@ mod tests {
     }
 }
 
-// ── netapi32 原生辅助（无子进程）───────────────────────────────────────
-
-/// 把 well-known SID 字符串解析为 PSID。
 #[cfg(target_os = "windows")]
 fn parse_sid(sid_str: &str) -> Option<windows::Win32::Security::PSID> {
     use windows::Win32::Security::Authorization::ConvertStringSidToSidW;
@@ -279,7 +261,6 @@ fn parse_sid(sid_str: &str) -> Option<windows::Win32::Security::PSID> {
     }
 }
 
-/// 通过 LookupAccountSidW 获取本地化组名（"Administrators" / "管理员" 等）。
 #[cfg(target_os = "windows")]
 fn localized_group_name(sid_str: &str) -> Option<String> {
     use windows::Win32::Security::{LookupAccountSidW, SID_NAME_USE};
@@ -290,7 +271,6 @@ fn localized_group_name(sid_str: &str) -> Option<String> {
         let mut domain_len: u32 = 0;
         let mut use_type = SID_NAME_USE(0);
 
-        // 第一次调用获取所需长度
         let _ = LookupAccountSidW(
             None,
             sid,
@@ -329,7 +309,6 @@ fn localized_group_name(sid_str: &str) -> Option<String> {
     }
 }
 
-/// NetLocalGroupGetMembers 枚举本地组成员（level 2，domainandname）。
 #[cfg(target_os = "windows")]
 fn local_group_members(group_name: &str) -> Option<Vec<String>> {
     use windows::Win32::NetworkManagement::NetManagement::*;

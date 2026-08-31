@@ -142,8 +142,6 @@ fn run(v: &Value) -> String {
         Err(e) => return err(&format!("wait failed: {e}")),
     };
 
-    // 先 join 读线程（管道 EOF 已到达）再 wait：与 libra-platform::output 的
-    // 顺序一致，避免子进程退出但管道未读空时 IO Safety 误报。
     let stdout = stdout.and_then(|h| h.join().ok()).unwrap_or_default();
     let stderr = stderr.and_then(|h| h.join().ok()).unwrap_or_default();
 

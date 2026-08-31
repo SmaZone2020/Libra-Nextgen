@@ -7,10 +7,6 @@ import { useAgent } from '../../contexts/AgentContext';
 import { AgentRequired } from '../../components/AgentRequired';
 import { unwrapTaskOutput } from './taskOutput';
 
-/**
- * 命令式 Shell（零 WS 架构）：输入命令 → 创建 Shell 任务（SSE 推送执行）→
- * 轮询任务状态 → 结果输出到终端。无交互式 PTY。
- */
 export default function ShellPage() {
   const { t } = useTranslation();
   const { agentId } = useAgent();
@@ -34,15 +30,12 @@ export default function ShellPage() {
         arguments: [],
         timeoutSeconds: 60,
       });
-      // 轮询结果（SSE 推送执行，结果经 HTTP 上报后任务进入终态）
       let done = false;
       for (let i = 0; i < 240 && !done; i++) {
         await new Promise((r) => setTimeout(r, 500));
         const cur = await getTask(task.id);
         if (cur.status === 'Completed' || cur.status === 'Failed' || cur.status === 'Cancelled') {
           done = true;
-          // task.output 是嵌套 JSON（agent wrap_result 原样存储模块输出），
-          // 先解包出内层文本再上终端。
           const text = unwrapTaskOutput(cur.output ?? cur.error ?? '');
           if (text.trim()) print(text);
           print('\r\n');
@@ -74,12 +67,10 @@ export default function ShellPage() {
       return;
     }
     if (data === '\x03') {
-      // Ctrl+C: 清空当前输入
       inputBufRef.current = '';
       print('^C');
       return;
     }
-    // 忽略控制字符
     if (data.length !== 1 || data.charCodeAt(0) < 0x20) return;
     inputBufRef.current += data;
     termRef.current?.write(data);

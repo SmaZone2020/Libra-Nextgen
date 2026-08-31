@@ -277,7 +277,6 @@ public class McpIntegrationTests : IAsyncLifetime
         var text = ResultText(rpc);
         Assert.NotNull(text);
         Assert.DoesNotContain("requires an Admin", text);
-        // McpUtils.JsonOpts 为 Web 默认 camelCase：任务载荷序列化为 {"id": ...}。
         Assert.Contains("\"id\"", text); // created task payload
     }
 

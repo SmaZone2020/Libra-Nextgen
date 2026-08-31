@@ -59,7 +59,6 @@ html {
   background: #2563eb;
 }
 
-/* ── 弹出层列表滚动条：细滚动条（隐藏 track，窄 thumb），保留滚动功能 ── */
 .scrollbar-thin {
   scrollbar-width: thin; /* Firefox */
   scrollbar-color: color-mix(in oklab, var(--color-muted, #737373) 35%, transparent) transparent;
@@ -107,4 +106,9 @@ html {
 [data-slot="modal-container"] ::-webkit-scrollbar-track,
 [data-slot="listbox"] ::-webkit-scrollbar-track {
   background: transparent;
+}
+
+
+.tabs__list-container__scroll-prev,.tabs__list-container__scroll-next{
+  display: none;
 }

@@ -19,7 +19,6 @@ function osType(os?: string): string | null {
   return null;
 }
 
-// 缓存：os -> SVG path（避免每次重建都 fetch）
 const logoPathCache = new Map<string, Promise<string>>();
 
 async function logoPathFromPublic(os: string): Promise<string> {
@@ -108,7 +107,7 @@ export function TopologyGraph({ agents }: { agents: AgentListItem[] }) {
           try {
             symbol = `path://${await logoPathFromPublic(os)}`;
           } catch {
-            
+
           }
         }
         return {

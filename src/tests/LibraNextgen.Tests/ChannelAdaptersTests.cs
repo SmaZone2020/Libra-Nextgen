@@ -10,9 +10,6 @@ using Xunit;
 namespace LibraNextgen.Tests;
 
 /// <summary>
-/// AI 频道适配器回归测试（Telegram 基于 Telegram.Bot 库的纯逻辑层）。
-/// 覆盖：消息规范化（TryParseMessage）、审批内联按钮令牌（BuildApprovalMarkup /
-/// ResolveCallback：解析/过期/归属校验/临时批准时长）。
 /// </summary>
 public class ChannelAdaptersTests
 {
@@ -36,7 +33,6 @@ public class ChannelAdaptersTests
             Chat = new Chat { Id = chatId, Type = ChatType.Private },
         };
 
-    /// <summary>从审批键盘中提取第一个批准按钮的令牌（测试辅助）。</summary>
     private static string TokenFromMarkup(InlineKeyboardMarkup markup)
     {
         foreach (var row in markup.InlineKeyboard)
@@ -60,7 +56,6 @@ public class ChannelAdaptersTests
             Message = TextMessage(chatId, chatId, "⏳ 审批"),
         };
 
-    // ── 消息规范化 ────────────────────────────────────────────────────────
 
     [Fact]
     public void ParseMessage_TextFromUser_YieldsInbound()
@@ -82,7 +77,6 @@ public class ChannelAdaptersTests
         Assert.Null(TelegramChannelAdapter.TryParseMessage(TelegramChannel(), TextMessage(1, 1, "   ", 3)));
     }
 
-    // ── 审批内联按钮令牌 ──────────────────────────────────────────────────
 
     [Fact]
     public void ApprovalMarkup_HasApproveAndRejectButtons_WithShortData()
@@ -92,10 +86,9 @@ public class ChannelAdaptersTests
 
         var rows = markup.InlineKeyboard.ToList();
         Assert.Collection(rows,
-            r => Assert.Equal(3, r.Count()), // 批准 / 5min / 20min
-            r => Assert.Single(r));          // 拒绝
+            r => Assert.Equal(3, r.Count()),
+            r => Assert.Single(r));
 
-        // callback data 远小于 Telegram 64 字节上限。
         var data = rows[0].First().CallbackData!;
         Assert.True(data.Length <= 64, $"callback data {data.Length} bytes > 64");
         var token = TokenFromMarkup(markup);
@@ -151,7 +144,6 @@ public class ChannelAdaptersTests
         var adapter = NewAdapter();
         var ch = TelegramChannel();
         var token = TokenFromMarkup(adapter.BuildApprovalMarkup(ch.Id, "42", "s", "c"));
-        // 另一个 chat 点击同一按钮（归属校验失败）。
         Assert.Null(adapter.ResolveCallback(ch, ApprovalCallback(adapter, $"ap:{token}:ot", 999, 999)));
     }
 
@@ -187,24 +179,19 @@ public class ChannelAdaptersTests
                 : null,
         };
 
-        // 开关关闭：群组消息全部忽略（即使提及 bot）。
         Assert.Null(TelegramChannelAdapter.TryParseMessage(chOff, GroupMsg("hello @LibraNT_Bot", true), "LibraNT_Bot"));
-        // 开关开启：未提及 → 忽略。
         Assert.Null(TelegramChannelAdapter.TryParseMessage(chOn, GroupMsg("hello", false), "LibraNT_Bot"));
-        // 提及 bot → 处理，标记 IsGroup；身份 = 发送者 from.id，回复目标 = 群 chat id。
         var m = TelegramChannelAdapter.TryParseMessage(chOn, GroupMsg("hello @LibraNT_Bot", true), "LibraNT_Bot");
         Assert.NotNull(m);
         Assert.True(m!.IsGroup);
         Assert.Equal("42", m.ExternalId);
         Assert.Equal("-100123", m.ReplyTo);
-        // /bind 命令无需提及（未绑定用户绑定引导），身份同样按用户走。
         var b = TelegramChannelAdapter.TryParseMessage(chOn, GroupMsg("/bind ABC12345", false), "LibraNT_Bot");
         Assert.NotNull(b);
         Assert.True(b!.IsGroup);
         Assert.Equal("42", b.ExternalId);
         Assert.Equal("-100123", b.ReplyTo);
         Assert.Equal("/bind ABC12345", b.Text);
-        // 私聊不受群组开关影响。
         var priv = TelegramChannelAdapter.TryParseMessage(chOff, TextMessage(1, 1, "hi", 5), "LibraNT_Bot");
         Assert.NotNull(priv);
         Assert.False(priv!.IsGroup);
@@ -212,7 +199,6 @@ public class ChannelAdaptersTests
         Assert.Null(priv.ReplyTo);
     }
 
-    // ── 菜单按钮回调解析 ──────────────────────────────────────────────────
 
     [Fact]
     public void MenuCallback_ParsesModelNavSelectSearchAndTier()
@@ -249,7 +235,6 @@ public class ChannelAdaptersTests
         Assert.Equal("tier-select", tier!.Kind);
         Assert.Equal("1", tier.Data);
 
-        // 帮助快捷菜单。
         cq.Data = "help:model";
         Assert.Equal("help-model", adapter.TryResolveMenu(ch, cq)!.Kind);
         cq.Data = "help:tier";
@@ -259,7 +244,6 @@ public class ChannelAdaptersTests
         cq.Data = "help:back";
         Assert.Equal("help-back", adapter.TryResolveMenu(ch, cq)!.Kind);
 
-        // 供应商/返回导航。
         cq.Data = "mdl:prov:2";
         var prov = adapter.TryResolveMenu(ch, cq);
         Assert.NotNull(prov);
@@ -270,14 +254,12 @@ public class ChannelAdaptersTests
         cq.Data = "mdl:back";
         Assert.Equal("model-back", adapter.TryResolveMenu(ch, cq)!.Kind);
 
-        // 审批/未知前缀不识别为菜单。
         cq.Data = "ap:abcdef1234567890:ot";
         Assert.Null(adapter.TryResolveMenu(ch, cq));
         cq.Data = "garbage";
         Assert.Null(adapter.TryResolveMenu(ch, cq));
     }
 
-    // ── 绑定码 ────────────────────────────────────────────────────────────
 
     [Fact]
     public void ChannelBindCode_IsDeterministicHash_AndDistinctCodesDiffer()

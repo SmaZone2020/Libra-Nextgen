@@ -27,7 +27,6 @@ export interface DownloadModalProps {
   onClose: () => void;
 }
 
-/** 文件下载进度模态框（下载中禁止 dismiss，完成后自动关闭）。 */
 export function DownloadModal({ state: dl, open, onOpenChange, onCancel, onClose }: DownloadModalProps) {
   const { t } = useTranslation();
   const modal = useOverlayState({ isOpen: open, onOpenChange });

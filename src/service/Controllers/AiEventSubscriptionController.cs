@@ -9,8 +9,6 @@ using MongoDB.Driver;
 namespace LibraNextgen.Service.Controllers;
 
 /// <summary>
-/// AI 事件订阅管理：Agent 上线/下线事件 → 由 Justitia 生成提醒并送达会话或频道。
-/// 触发侧在 AgentCommsController（上线）与 HeartbeatMonitor（离线）。
 /// </summary>
 [ApiController]
 [Route("api/ai/event-subscriptions")]
@@ -58,7 +56,6 @@ public class AiEventSubscriptionController : ControllerBase
         if (string.IsNullOrWhiteSpace(req.TargetId))
             return BadRequest(new { error = "targetId is required" });
 
-        // 目标存在性校验。
         if (req.TargetType == "session")
         {
             var session = await _ai.GetSessionAsync(req.TargetId.Trim(), req.TargetUserId ?? UserId, ct);

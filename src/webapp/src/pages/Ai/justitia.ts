@@ -1,6 +1,5 @@
 'use client';
 
-/** Justitia 四档权限定义（浏览器持久化，随 SSE 请求提交，后端强制校验）。 */
 
 export type JustitiaTierKey = 'cognitio' | 'arbitrium' | 'imperium' | 'dictatura';
 
@@ -31,13 +30,8 @@ export const JUSTITIA_TIERS: { key: JustitiaTierKey; name: string; desc: string;
   },
 ] as const;
 
-/**
- * 档位在 0–100 滑块上的吸附位置（四档：0 / 33 / 66 / 100）。
- * 与 JUSTITIA_TIERS 数组顺序一一对应。
- */
 export const JUSTITIA_TIER_VALUES = [0, 33, 66, 100] as const;
 
-/** 将任意 0–100 数值吸附到最近档位位置（自由拖动结束后调用）。 */
 export function snapJustitiaValue(value: number): (typeof JUSTITIA_TIER_VALUES)[number] {
   let best: (typeof JUSTITIA_TIER_VALUES)[number] = JUSTITIA_TIER_VALUES[0];
   for (const pos of JUSTITIA_TIER_VALUES) {

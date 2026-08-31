@@ -1,6 +1,3 @@
-//! Kerberos ticket cache 查询（klist）：通过 LSA 接口枚举当前会话的 TGT/服务票据。
-//! ptt/purge 后续补充。
-
 #![allow(non_snake_case)]
 
 const KERB_QUERY_TKT_CACHE_MESSAGE: u32 = 0x22;
@@ -52,7 +49,6 @@ fn wide(s: &str) -> Vec<u16> {
     s.encode_utf16().chain(std::iter::once(0)).collect()
 }
 
-/// 读 UNICODE_STRING。
 unsafe fn read_unicode(s: &UnicodeString) -> String {
     if s.buffer.is_null() || s.length == 0 {
         return String::new();
@@ -61,7 +57,6 @@ unsafe fn read_unicode(s: &UnicodeString) -> String {
     String::from_utf16_lossy(std::slice::from_raw_parts(s.buffer, len))
 }
 
-/// 查询 Kerberos ticket 缓存，返回 JSON 列表。
 pub fn klist() -> String {
     unsafe {
         let mut handle = 0usize;
@@ -98,7 +93,6 @@ pub fn klist() -> String {
                 .to_string();
         }
 
-        // 响应布局：{ message_type: u32, count: u32, tickets: [...] }
         let count = *(output.add(4) as *const u32) as usize;
         let tickets = output.add(8) as *const KerbTicketCacheInfo;
 

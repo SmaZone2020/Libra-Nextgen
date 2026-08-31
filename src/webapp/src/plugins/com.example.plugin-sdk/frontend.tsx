@@ -5,7 +5,6 @@ import { api, getApiOrigin } from '../../api/client';
 import { listPlugins, type PluginRecord } from '../../api/plugins';
 import { pretty } from './shared';
 
-// ── 5. 前端 API：宿主 / api client / 管理 ─────────────────────────────
 
 const HOST_API: { member: string; desc: string; sample: string }[] = [
   { member: 'selectedAgent', desc: '当前选中的设备（与控制台顶部选择器共享）', sample: 'selectedAgent?.hostname' },
@@ -39,7 +38,7 @@ export function FrontendApiTab() {
 
   return (
     <div className="space-y-4">
-      {/* 宿主 API */}
+      {}
       <Card className="p-4">
         <h3 className="font-semibold mb-2">usePluginHost() — 页面宿主 API</h3>
         <div className="divide-y divide-default-100">
@@ -77,7 +76,7 @@ export function FrontendApiTab() {
         <p className="text-xs text-default-400 mt-2">当前后端地址：<code className="font-mono">{getApiOrigin()}</code></p>
       </Card>
 
-      {/* 资源端点（活文档的加载方式） */}
+      {}
       <Card className="p-4">
         <h3 className="font-semibold mb-2">包内资源端点（assets 动态加载）</h3>
         <div className="divide-y divide-default-100">
@@ -95,7 +94,7 @@ export function FrontendApiTab() {
         </p>
       </Card>
 
-      {/* 插件管理 */}
+      {}
       <Card className="p-4">
         <div className="flex items-center gap-3 mb-2">
           <h3 className="font-semibold">插件管理 API（listPlugins / toggle / update / delete）</h3>

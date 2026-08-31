@@ -1,12 +1,9 @@
 import { api } from './client';
 
-/** AI 事件订阅（Agent 上线/下线 → Justitia 提醒用户）。 */
 
 export interface AiEventSubscription {
   id: string;
-  /** 订阅的事件：agent.online | agent.offline。 */
   events: string[];
-  /** session（控制台会话）| channel（IM 频道）。 */
   targetType: 'session' | 'channel';
   targetId: string;
   targetUserId?: string | null;

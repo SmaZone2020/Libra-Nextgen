@@ -29,11 +29,9 @@ builder.Services.AddSingleton<MongoIndexBuilder>();
 // Beacon authentication (shared secret injected at build time)
 builder.Services.Configure<BeaconSettings>(builder.Configuration.GetSection(BeaconSettings.SectionName));
 
-// AI 助手配置（Justitia 系统提示词，从本地文件加载，appsettings.json Ai:SystemPromptFile）
 builder.Services.Configure<AiSettings>(builder.Configuration.GetSection(AiSettings.SectionName));
 builder.Services.AddSingleton<AiPromptFileLoader>();
 
-// 监听端口设置（%APPDATA%\Libra-Nextgen\settings.json，可运行时修改）
 var listenerSettings = ListenerSettingsLoader.Load();
 builder.WebHost.ConfigureKestrel(options =>
 {
@@ -42,15 +40,12 @@ builder.WebHost.ConfigureKestrel(options =>
     else
         options.ListenAnyIP(listenerSettings.Port);
 
-    // AI 聊天 SSE 可能因审批等待挂起很久：放宽请求/响应超时，防止连接被掐断。
     options.Limits.RequestHeadersTimeout = TimeSpan.FromMinutes(5);
     options.Limits.KeepAliveTimeout = TimeSpan.FromMinutes(10);
 });
 
 builder.Services.AddHttpClient();
 
-// Typed repositories per collection — singleton 化（MongoDbContext 已是单例，
-// Repository 无状态，仅包一层集合引用；供单例 AuditService/AiService 后台执行使用）
 builder.Services.AddSingleton<Repository<Agent>>(sp =>
     new Repository<Agent>(sp.GetRequiredService<MongoDbContext>(), "agents"));
 builder.Services.AddSingleton<Repository<AgentTask>>(sp =>
@@ -70,13 +65,8 @@ builder.Services.AddSingleton<Repository<PluginRecord>>(sp =>
 builder.Services.AddSingleton<Repository<BuildTrafficLists>>(sp =>
     new Repository<BuildTrafficLists>(sp.GetRequiredService<MongoDbContext>(), "build_lists"));
 builder.Services.AddScoped<BuildListService>();
-// AiService 单例：运行表（_runs）与审批门闩跨请求共享——
-// /chat 挂起审批后，/chat/action 必须能命中同一个运行状态。
-// 请求上下文（IHttpContextAccessor）与工具 DI 均通过单例/作用域工厂按需解析。
 builder.Services.AddSingleton<AiService>();
 
-// AI 频道（IM 接入）：适配器 + 网关 + 后台任务
-// （Telegram 用 Telegram.Bot 库自带接收；iLink 手写长轮询；飞书长连接）。
 builder.Services.AddSingleton<TelegramChannelAdapter>();
 builder.Services.AddSingleton<LarkChannelAdapter>();
 builder.Services.AddSingleton<WeChatClawAdapter>();
@@ -114,8 +104,6 @@ builder.Services.AddSingleton<BuilderBuildService>();
 builder.Services.AddScoped<PluginService>();
 builder.Services.AddHostedService<HeartbeatMonitor>();
 
-// MCP Server — stateless: 每次请求独立鉴权（AccessKey），无需服务端会话状态；
-// 避免客户端必须先用 initialize 建会话才能调用工具。
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddMcpServer()
     .WithHttpTransport(options => options.Stateless = true)
@@ -185,7 +173,6 @@ builder.Services.AddOpenApi("v1", options =>
 
 // WebSocket middleware is enabled via app.UseWebSockets()
 
-// CORS — 内网/局域网/本机全域开放；仅本机回环监听时收窄到配置来源。
 var listenerSettings2 = ListenerSettingsLoader.Load();
 var securitySettings = SecuritySettingsLoader.Load();
 var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? [];
@@ -195,7 +182,6 @@ builder.Services.AddCors(options =>
     {
         if (listenerSettings2.BindLoopbackOnly)
         {
-            // 仅本机回环：只有配置的来源（开发机）允许跨域；未配置则默认全放。
             if (allowedOrigins.Length > 0)
                 policy.WithOrigins(allowedOrigins).AllowAnyHeader().AllowAnyMethod();
             else
@@ -203,12 +189,10 @@ builder.Services.AddCors(options =>
         }
         else if (securitySettings.OpenLan)
         {
-            // 局域网/内网开放：任意来源可访问（内网对抗控制台）。
             policy.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod();
         }
         else
         {
-            // 关闭局域网开放：仅配置的来源（开发机）允许跨域。
             if (allowedOrigins.Length > 0)
                 policy.WithOrigins(allowedOrigins).AllowAnyHeader().AllowAnyMethod();
             else
@@ -231,7 +215,6 @@ builder.Services.AddRateLimiter(options =>
             QueueLimit = 0,
         });
     });
-    // MCP 按访问 key 身份限流（未认证请求退回按 IP）：防失控 LLM 循环/泄露 key 刷任务。
     options.AddPolicy("mcp", context =>
     {
         var key = context.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
@@ -249,11 +232,6 @@ builder.Services.AddRateLimiter(options =>
 
 var app = builder.Build();
 
-// 端口修改后的重绑委托（由 SettingsController 触发）。
-// Kestrel 启动后 IServerAddressesFeature.Addresses 不可再改（会抛
-// "cannot be modified after the server has started"），因此改为自重启：
-// 后台任务先触发进程退出，再由外部守护（systemd 服务 / scripts 里的
-// start 脚本）重启加载新端口。设置已先持久化到 settings.json，重启后生效。
 SettingsController.RebindListeners = (listenUrl, ct) =>
 {
     _ = Task.Run(async () =>
@@ -274,8 +252,6 @@ SettingsController.RebindListeners = (listenUrl, ct) =>
     return Task.CompletedTask;
 };
 
-// 全局异常处理：生产环境统一 JSON 响应（不泄露堆栈/内部细节），dev 保留
-// DeveloperExceptionPage 便于排查。异常必须记录到日志（结构化，含 traceId）。
 if (app.Environment.IsDevelopment())
 {
     app.UseDeveloperExceptionPage();
@@ -307,20 +283,13 @@ if (app.Environment.IsDevelopment())
     });
 }
 
-// WebSocket：服务端每 30s 主动发一次 Ping 保活（默认 2min 太长，公网
-// nginx 等中间设备的空闲超时（proxy_read_timeout 通常 60s）会先掐断）。
-// agent 侧另有 15s 客户端 Ping 保活，双保险。
 app.UseWebSockets(new WebSocketOptions { KeepAliveInterval = TimeSpan.FromSeconds(30) });
-// 显式路由点：路径改写中间件必须在 UseRouting 之前执行，
-// 否则 EndpointRouting 已按原路径匹配，改写不会生效。
 app.UseMiddleware<BeaconEntryMiddleware>();
 app.UseMiddleware<ProfileFingerprintMiddleware>();
 app.UseRouting();
 app.UseCors("CorsSignalR");
 app.UseAuthentication();
 app.UseAuthorization();
-// 限流必须在认证之后：MCP 的 "mcp" 策略按 access-key 身份分区，
-// auth 策略按 IP 分区（不受顺序影响）。
 app.UseRateLimiter();
 app.UseMiddleware<PermissionMiddleware>();
 app.UseMiddleware<AuditMiddleware>();

@@ -1,22 +1,15 @@
-//! 微信文件插件 — 独立 native 插件（cdylib）。
 //!
-//! 扫描本机微信（xwechat_files）下所有已登录账号（wxid_*），列出每个账号
-//! 的消息文件月份目录（msg\file\<YYYY-MM>）。文件浏览/下载由前端走宿主
-//! files 模块完成，本模块只负责账号与月份目录枚举。
 //!
-//! ABI（libra-load）：
 //!   module_name() -> *const u8
 //!   module_main(input, input_len, output, output_cap) -> usize
 
 use serde_json::json;
 
-/// 自识别名（必须与插件 meta.json 的 module.name 一致）。
 #[no_mangle]
 pub extern "C" fn module_name() -> *const u8 {
     concat!("wechat_file", "\0").as_ptr() as *const u8
 }
 
-/// 入口：input 为 JSON（可空），忽略参数直接扫描微信账号。
 #[no_mangle]
 pub unsafe extern "system" fn module_main(
     input: *const u8,

@@ -20,10 +20,6 @@ public static class McpUtils
     public const int MaxOutputBytes = 1024 * 1024;
 
     /// <summary>
-    /// 统一序列化选项：camelCase + 枚举转字符串。
-    /// 与 REST API 的 JsonStringEnumConverter 对齐——否则 AgentStatus/TaskStatus
-    /// 会被序列化成数字（Online=0, Offline=1），LLM 会把 0 当成“离线”、1 当成
-    /// “在线”，导致在线/离线状态反转。
     /// </summary>
     public static readonly JsonSerializerOptions JsonOpts = new(JsonSerializerDefaults.Web)
     {
@@ -38,8 +34,6 @@ public static class McpUtils
 
     /// <summary>
     /// Identity of the access-key caller for the current MCP request.
-    /// 注意：SDK 1.4.0 不把 RequestContext&lt;T&gt; 绑定为工具参数（会被当成 schema
-    /// 参数），因此经 IHttpContextAccessor 取 HttpContext.User。
     /// </summary>
     public sealed record McpCaller(string UserId, string UserName, bool IsAdmin);
 
@@ -90,7 +84,6 @@ public static class McpUtils
     /// <summary>
     /// Relay a task to an agent with a sane default timeout, checking the
     /// agent is online up front and normalizing failures into structured JSON.
-    /// `module` 为云模块名（files/recon/creds/proxy/token/script），data 含 op。
     /// Timeouts cancel the still-pending task so a "failed" call cannot execute later.
     /// </summary>
     public static async Task<string> RelayOrError(
@@ -170,14 +163,12 @@ public static class McpUtils
 
         if (result.Status == TaskStatus.Pending)
         {
-            // 等待窗口耗尽仍未被 agent 领取：取消，避免稍后意外执行。
             await tasks.CancelPendingByIdAsync(result.Id, CancellationToken.None);
             return Error($"task '{task.Id}' timed out; pending task cancelled");
         }
 
         if (result.Status is not (TaskStatus.Completed or TaskStatus.Failed or TaskStatus.Cancelled))
         {
-            // 已下发但未在窗口内结束（Sent/Running）：如实告知，供 get_task 轮询。
             return Ok(new
             {
                 taskId = result.Id,

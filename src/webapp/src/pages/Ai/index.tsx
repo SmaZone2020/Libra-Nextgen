@@ -29,6 +29,7 @@ import { AiComposer } from './AiComposer';
 import { AiApprovalModal, type AiPermit } from './AiApprovalModal';
 import { EventSubscriptionModal } from './EventSubscriptionModal';
 import { loadJustitiaTier, saveJustitiaTier, type JustitiaTierKey } from './justitia';
+import { getMyChannelSessions } from '../../api/aiChannels';
 import { useDialog } from '../../hooks/useDialog';
 import { consoleWs } from '../../ws/consoleWs';
 
@@ -41,13 +42,16 @@ export default function AiPage() {
 
   const [providers, setProviders] = useState<AiProvider[]>([]);
   const [sessions, setSessions] = useState<AiSession[]>([]);
+  const [channelSessions, setChannelSessions] = useState<AiSession[]>([]);
   const [session, setSession] = useState<AiSession | null>(null);
   const [loading, setLoading] = useState(true);
+  const [sessionCounts, setSessionCounts] = useState({ regular: 0, channel: 0 });
+  const handleSessionCountChange = useCallback((regular: number, channel: number) => {
+    setSessionCounts((prev) => (prev.regular === regular && prev.channel === channel ? prev : { regular, channel }));
+  }, []);
 
   const [streaming, setStreaming] = useState<StreamingState>('idle');
-  // 移动端会话列表 Drawer 开关（由内容区左缘按钮打开）。
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
-  // 桌面端会话列表伸缩（收起后仅剩右缘按钮）。
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [justitiaTier, setJustitiaTier] = useState<JustitiaTierKey>(() => loadJustitiaTier());
   const [streamingText, setStreamingText] = useState('');
@@ -56,7 +60,6 @@ export default function AiPage() {
   const [pendingApproval, setPendingApproval] = useState<AiToolCall | null>(null);
   const [approvalModalOpen, setApprovalModalOpen] = useState(false);
   const [streamError, setStreamError] = useState<string | null>(null);
-  // 事件订阅模态框
   const [eventSubOpen, setEventSubOpen] = useState(false);
 
   const [prefProviderId, setPrefProviderId] = useState<string | null>(() =>
@@ -70,16 +73,17 @@ export default function AiPage() {
   const pendingSessionIdRef = useRef<string | null>(null);
   const sidebarRefreshKeyRef = useRef(0);
   const [sidebarRefreshKey, setSidebarRefreshKey] = useState(0);
-  // WS 回调闭包读取的流式状态镜像（避免重新订阅导致回调里拿到旧值）。
   const streamingRef = useRef<StreamingState>('idle');
   useEffect(() => { streamingRef.current = streaming; }, [streaming]);
 
   const activeId = sessionId ?? null;
 
   const loadMeta = useCallback(async () => {
-    const [ps, ss] = await Promise.all([getAiProviders(), getAiSessions()]);
+    const [ps, ss, cs] = await Promise.all([getAiProviders(), getAiSessions(), getMyChannelSessions()]);
     setProviders(ps);
     setSessions(ss);
+    setChannelSessions(cs);
+    setSessionCounts({ regular: ss.length, channel: cs.length });
   }, []);
 
   useEffect(() => {
@@ -113,14 +117,13 @@ export default function AiPage() {
     };
   }, []);
 
-  // 实时刷新：服务端广播 ai.session.updated（会话落库，含频道会话/事件触发/多操作员）与
-  // ai.notify（事件订阅提醒）→ 刷新侧边栏；若当前正打开该会话且非本地流式中，重新拉取会话。
   useEffect(() => {
     const refresh = (msg: { data?: unknown }) => {
       const data = msg?.data as { sessionId?: string } | null | undefined;
       if (data?.sessionId === activeId && streamingRef.current === 'idle') {
         void getAiSession(activeId).then(setSession).catch(() => undefined);
       }
+      void getMyChannelSessions().then(setChannelSessions).catch(() => undefined);
       sidebarRefreshKeyRef.current += 1;
       setSidebarRefreshKey(sidebarRefreshKeyRef.current);
     };
@@ -502,12 +505,14 @@ export default function AiPage() {
   const canSend = streaming === 'idle';
   const isGenerating = streaming === 'streaming';
   const approvalPending = streaming === 'approval';
+  const noSessions = !loading && sessionCounts.regular + sessionCounts.channel === 0;
+  const effectiveSidebarCollapsed = noSessions || sidebarCollapsed;
 
   return (
     <div className="relative flex h-full min-h-0 w-full flex-1">
       <aside
         className={`hidden shrink-0 overflow-hidden border-r border-default-200 transition-[width] duration-200 md:block dark:border-default-800 ${
-          sidebarCollapsed ? 'w-0 border-r-0' : 'w-64'
+          effectiveSidebarCollapsed ? 'w-0 border-r-0' : 'w-64'
         }`}
       >
         <AiSidebar
@@ -515,38 +520,43 @@ export default function AiPage() {
           refreshKey={sidebarRefreshKey}
           onSelectSession={selectSession}
           onNewSession={() => void handleNewSession()}
+          onSessionCountChange={handleSessionCountChange}
         />
       </aside>
 
-      <Button
-        isIconOnly
-        variant="secondary"
-        size="sm"
-        onPress={() => setSidebarCollapsed((v) => !v)}
-        className="absolute top-3/7 -translate-y-1/2 z-20 hidden size-5 h-14 rounded-l-none rounded-r-lg border border-default-200 shadow-md md:inline-flex dark:border-default-800"
-        style={{
-          left: sidebarCollapsed ? 0 : 256,
-          transition: 'left 200ms ease',
-        }}
-      >
-        {sidebarCollapsed ? (
-          <ChevronRight className="size-3.5" />
-        ) : (
-          <ChevronLeft className="size-3.5" />
-        )}
-      </Button>
-      
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+      {!noSessions && (
         <Button
           isIconOnly
           variant="secondary"
           size="sm"
-          aria-label={t('ai.sessions')}
-          onPress={() => setMobileSidebarOpen(true)}
-          className="absolute top-3/7 -translate-y-1/2 left-0 z-20 size-5 h-14 rounded-l-none rounded-r-lg border border-default-200 shadow-md md:hidden dark:border-default-800"
+          onPress={() => setSidebarCollapsed((v) => !v)}
+          className="absolute top-3/7 -translate-y-1/2 z-20 hidden size-5 h-14 rounded-l-none rounded-r-lg border border-default-200 shadow-md md:inline-flex dark:border-default-800"
+          style={{
+            left: effectiveSidebarCollapsed ? 0 : 256,
+            transition: 'left 200ms ease',
+          }}
         >
-          <ChevronRight className="size-3.5" />
+          {effectiveSidebarCollapsed ? (
+            <ChevronRight className="size-3.5" />
+          ) : (
+            <ChevronLeft className="size-3.5" />
+          )}
         </Button>
+      )}
+
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+        {!noSessions && (
+          <Button
+            isIconOnly
+            variant="secondary"
+            size="sm"
+            aria-label={t('ai.sessions')}
+            onPress={() => setMobileSidebarOpen(true)}
+            className="absolute top-3/7 -translate-y-1/2 left-0 z-20 size-5 h-14 rounded-l-none rounded-r-lg border border-default-200 shadow-md md:hidden dark:border-default-800"
+          >
+            <ChevronRight className="size-3.5" />
+          </Button>
+        )}
         <div className="w-full shrink-0 px-4 pt-4 flex" >
           <Button variant='secondary' className="ml-auto text-foreground" onPress={() => setEventSubOpen(true)}>
             <AntennaSignal/>
@@ -594,7 +604,6 @@ export default function AiPage() {
                     onDelete={(messageId) => void handleDeleteMessage(messageId)}
                     onFeedback={handleFeedback}
                     onApprove={(id) => {
-                      // 对话流中批准：先重新打开模态框选择许可时长。
                       setApprovalModalOpen(true);
                     }}
                     onReject={(id) => void handleReject(id)}

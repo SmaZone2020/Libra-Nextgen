@@ -49,7 +49,6 @@ export function AgentTable({ agents, loading, contextAgentId, connectedAgentId, 
   const isContextAgentConnected = contextAgentId === connectedAgentId && !!connectedAgentId;
   const contextAgent = agents.find(a => a.id === contextAgentId);
   const canConnect = contextAgent?.status === 'Online' && !isContextAgentConnected;
-  // 重启/销毁只对在线设备有意义（任务需由 Agent 心跳领取）
   const canOperate = contextAgent?.status === 'Online';
 
   return (

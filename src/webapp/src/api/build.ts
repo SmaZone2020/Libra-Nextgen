@@ -73,13 +73,11 @@ export function getBuildDownloadUrl(buildId: string): string {
   return `${apiBase()}/builder/download/${buildId}?token=${encodeURIComponent(getToken() || '')}`;
 }
 
-/** 按格式下载构建产物（iso/img/vhd/lnk；缺省 = 原始 exe）。*/
 export function getBuildDownloadUrlByFormat(buildId: string, format: string): string {
   const token = encodeURIComponent(getToken() || '');
   return `${apiBase()}/builder/download/${buildId}?token=${token}&format=${encodeURIComponent(format)}`;
 }
 
-/** 匿名下载 URL（无需鉴权，供一键命令 / LNK 内置使用；删除构建即失效）。*/
 export function getArtifactUrl(buildId: string): string {
   return `${getApiOrigin()}/api/beacon/artifact/${buildId}`;
 }
@@ -136,7 +134,6 @@ export async function deleteTemplate(platform: string): Promise<void> {
   }
 }
 
-/** 仅构建云模块（不构建 agent）。返回 buildId（历史/日志流用）。*/
 export async function buildModules(platform: string, enabledModules: string[]): Promise<string> {
   const response = await fetch(`${apiBase()}/builder/modules`, {
     method: 'POST',
@@ -161,7 +158,6 @@ export interface ModuleEntry {
   enabled: boolean;
 }
 
-/** 枚举平台模块（文件名驱动，含插件 dll）：{name, enabled}[]。*/
 export async function listModules(platform: string): Promise<ModuleEntry[]> {
   const response = await fetch(`${apiBase()}/builder/modules?platform=${encodeURIComponent(platform)}`, {
     headers: { Authorization: `Bearer ${getToken()}` },
@@ -171,7 +167,6 @@ export async function listModules(platform: string): Promise<ModuleEntry[]> {
   return data.modules ?? [];
 }
 
-/** 启用/禁用模块（重命名 .dll → .dll.disable）。*/
 export async function toggleModule(platform: string, name: string, enabled: boolean): Promise<void> {
   const response = await fetch(`${apiBase()}/builder/modules/toggle`, {
     method: 'POST',
@@ -187,7 +182,6 @@ export async function toggleModule(platform: string, name: string, enabled: bool
   }
 }
 
-// ── 流量伪装持久化列表 ────────────────────────────────────────────────
 
 export interface BuildListItem {
   id: string;

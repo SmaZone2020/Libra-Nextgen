@@ -1,10 +1,6 @@
 import type { VariantProps } from 'tailwind-variants';
 import { tv } from 'tailwind-variants';
 
-/**
- * HeroUI Pro FileTree 样式槽位。
- * 对应 src/styles/components/file-tree.css 中的类名。
- */
 export const fileTreeVariants = tv({
   defaultVariants: {
     size: 'md',

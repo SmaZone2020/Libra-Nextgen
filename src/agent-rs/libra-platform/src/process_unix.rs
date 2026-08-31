@@ -296,9 +296,6 @@ pub(crate) fn spawn(cfg: &SpawnConfig) -> Result<PlatformSpawn, ProcessError> {
         close_fd(err_fd);
     }
 
-    // 等子进程的 exec 判定，但注意：如果此时子进程已退出（exec 失败），
-    // 它可能已经写 errno；直接关闭读端后再 read 会丢数据。因此先 read
-    // 再关读端（见下）。
     let child_error = errno_pipe
         .as_ref()
         .map(|p| read_child_error(p[0]))
@@ -315,8 +312,6 @@ pub(crate) fn spawn(cfg: &SpawnConfig) -> Result<PlatformSpawn, ProcessError> {
             reaper: reaper(),
         }
         .wait();
-        // 释放管道读端（不创建 File，直接 close），避免 IO Safety 认为
-        // fd 所有权在父进程被重复关闭。
         if cfg.capture_stdout {
             close_fd(out_pipe[0]);
         }
@@ -339,10 +334,6 @@ pub(crate) fn spawn(cfg: &SpawnConfig) -> Result<PlatformSpawn, ProcessError> {
     } else {
         None
     };
-
-    // 重要：read_child_error 成功路径上，errno_pipe 的读端已在上方关闭。
-    // 这里把 stdout/stderr 管道读端转为 File 由调用方持有；父进程不再
-    // 触碰这些 fd，所有权唯一，IO Safety 不会误报。
 
     Ok(PlatformSpawn {
         pid: pid as u32,

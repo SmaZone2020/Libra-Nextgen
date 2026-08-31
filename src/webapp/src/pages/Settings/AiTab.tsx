@@ -32,7 +32,6 @@ export default function AiTab() {
   const [loading, setLoading] = useState(true);
   const [mcp, setMcp] = useState<AiMcpInfo | null>(null);
 
-  // 供应商编辑模态框
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<AiProvider | null>(null);
 
@@ -114,7 +113,7 @@ export default function AiTab() {
 
   return (
     <div className="space-y-6">
-      {/* ── 供应商列表 ── */}
+      {}
       <Card className="p-6">
         <div className="mb-4 flex items-center justify-between">
           <div>
@@ -174,7 +173,7 @@ export default function AiTab() {
         )}
       </Card>
 
-      {/* ── 供应商编辑模态框 ── */}
+      {}
       <ProviderFormModal
         open={modalOpen}
         editing={editing}
@@ -182,7 +181,7 @@ export default function AiTab() {
         onSaved={() => void reload()}
       />
 
-      {/* ── MCP 工具连接 ── */}
+      {}
       <Card className="p-6">
         <div className="mb-2 flex items-center justify-between">
           <div>

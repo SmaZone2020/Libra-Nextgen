@@ -3,12 +3,6 @@ using Microsoft.Extensions.Options;
 namespace LibraNextgen.Service.Configuration;
 
 /// <summary>
-/// 从本地文件加载 Justitia 系统提示词，带变更监听自动热更新。
-/// 文件路径解析优先级：
-///   1. 显式绝对路径；
-///   2. ContentRootPath 下相对路径（bin 运行目录）；
-///   3. 回退到源码目录（src/service/）下的同名相对路径（开发模式常用）。
-/// 找不到文件时返回空（不注入 system prompt），并记录警告。
 /// </summary>
 public class AiPromptFileLoader : IDisposable
 {
@@ -36,7 +30,6 @@ public class AiPromptFileLoader : IDisposable
         });
     }
 
-    /// <summary>当前提示词内容；内联配置优先，否则读文件（带缓存）。</summary>
     public string? Current
     {
         get
@@ -63,7 +56,6 @@ public class AiPromptFileLoader : IDisposable
         }
     }
 
-    /// <summary>解析提示词文件绝对路径；找不到返回 null。</summary>
     private string? ResolvePath()
     {
         if (_resolvedPath != null) return _resolvedPath;
@@ -71,14 +63,12 @@ public class AiPromptFileLoader : IDisposable
         var configured = _options.Value.SystemPromptFile;
         if (string.IsNullOrWhiteSpace(configured)) return null;
 
-        // 1. 绝对路径
         if (Path.IsPathRooted(configured) && File.Exists(configured))
         {
             _resolvedPath = configured;
             return _resolvedPath;
         }
 
-        // 2. ContentRootPath 下（bin 运行目录）
         var root = _env.ContentRootPath;
         if (!string.IsNullOrEmpty(root))
         {
@@ -90,7 +80,6 @@ public class AiPromptFileLoader : IDisposable
             }
         }
 
-        // 3. 回退源码目录（开发模式：bin/Debug/netX 上跳 3 级到 src/service 下）
         var baseDir = AppContext.BaseDirectory;
         var srcCandidate = Path.Combine(baseDir, "..", "..", "..", configured);
         if (File.Exists(srcCandidate))
@@ -103,7 +92,6 @@ public class AiPromptFileLoader : IDisposable
         return null;
     }
 
-    /// <summary>监听文件变更，自动失效缓存实现热更新。</summary>
     private void Watch(string path)
     {
         if (_watcher != null) return;

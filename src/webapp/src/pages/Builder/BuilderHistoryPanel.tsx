@@ -74,7 +74,6 @@ export function BuilderHistoryPanel({
     if (templateFileRef.current) templateFileRef.current.value = '';
   };
 
-  // 多选 ListView：选中 = 启用。比较前后集合，逐项切换（乐观更新由父组件处理）。
   const handleModuleSelectionChange = (keys: Selection) => {
     const selected = keys as Set<string>;
     for (const m of enabledModules) {

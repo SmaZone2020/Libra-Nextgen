@@ -1,7 +1,4 @@
-//! 40 个常用 `Nt*` 的间接 syscall 封装。
 //!
-//! 每个封装对应 `stub.rs` 里的一个汇编桥。参数统一以 `usize` 传递句柄/指针，
-//! 返回 `NtStatus`。调用前必须先 `crate::init()`，否则对应 SSN 槽为 0。
 
 #![allow(dead_code)]
 

@@ -8,9 +8,6 @@ using LibraNextgen.Service.Services;
 namespace LibraNextgen.Service.Hubs;
 
 /// <summary>
-/// Handles WebSocket upgrade for /ws/console only（管理端 UI 事件通道）。
-/// 零 WS 架构：agent 不再有任何 WebSocket 连接；一切 agent 交互走
-/// SSE 任务推送 + HTTP 结果上报。
 /// </summary>
 public static class WebSocketHandler
 {
@@ -39,7 +36,6 @@ public static class WebSocketHandler
         var connId = Guid.NewGuid().ToString("N");
         wsManager.AddConnection(connId, ws, userId, role, "console");
 
-        // 事件溯源：回放最近事件，让新连接补齐状态。
         try
         {
             foreach (var e in wsManager.GetRecentEvents(100))
@@ -99,8 +95,6 @@ public static class WebSocketHandler
                 var message = WebSocketMessage.FromJson(json);
                 if (message == null) continue;
 
-                // 零 WS 架构：agent 交互全部走任务制（REST + SSE）。
-                // 控制台消息仅做事件广播。
                 await wsManager.BroadcastToConsoleAsync(message);
             }
         }

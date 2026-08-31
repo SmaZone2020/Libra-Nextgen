@@ -5,8 +5,6 @@ using MongoDB.Driver;
 namespace LibraNextgen.Service.Services;
 
 /// <summary>
-/// 流量伪装持久化列表（UA/附加头/路径后缀）：Mongo 单文档存储，跨构建保留。
-/// 首次访问时以默认值种子；构建时前端只提交启用的项。
 /// </summary>
 public class BuildListService
 {
@@ -22,7 +20,6 @@ public class BuildListService
         var doc = await _lists.GetByIdAsync("traffic", ct);
         if (doc != null)
             return doc;
-        // 首次：以默认值种子
         doc = new BuildTrafficLists
         {
             UserAgents = Default("userAgents").Select(v => new BuildListItem { Value = v }).ToList(),
@@ -35,7 +32,6 @@ public class BuildListService
         }
         catch (MongoWriteException)
         {
-            // 并发种子：重读
             doc = await _lists.GetByIdAsync("traffic", ct) ?? doc;
         }
         return doc;
@@ -91,7 +87,6 @@ public class BuildListService
             ct);
     }
 
-    /// <summary>默认种子值（与前端 DEFAULT_CONFIG 一致）。</summary>
     private static List<string> Default(string list) => list switch
     {
         "userAgents" =>

@@ -19,7 +19,6 @@ public class FilesController : ControllerBase
 
     private async Task<IActionResult> RelayAndWaitAsync(string agentId, object data, CancellationToken ct, int timeoutSeconds = 60)
     {
-        // 任务化 relay：创建 Generic 任务（files 模块 + op）→ SSE 推送 → 结果上报。
         var response = await _relay.RelayAndWaitAsync(agentId, "files", data, ct,
             TimeSpan.FromSeconds(timeoutSeconds), createdBy: User.Identity?.Name ?? "system-relay");
         if (response == null)

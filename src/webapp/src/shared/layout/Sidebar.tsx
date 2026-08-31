@@ -31,10 +31,8 @@ interface SidebarProps {
   onMobileClose: () => void;
 }
 
-/** 叶子项激活判断：精确匹配，或 /ai 等“详情子路由”前缀匹配（/ai/xxx 保持高亮）。 */
 function isLeafActive(item: NavItem, pathname: string): boolean {
   if (pathname === item.to) return true;
-  // 导航项自身是父级路由（如 /ai），其下的详情子路由同样视为激活。
   return item.to.length > 1 && pathname.startsWith(item.to + '/');
 }
 
@@ -108,7 +106,7 @@ export function Sidebar({
                 onPress={() => onToggle(!collapsed)}
                 className="absolute right-4 top-4 z-10 rounded-[15px]"
               >
-                {collapsed ? (        
+                {collapsed ? (
                   <img
                     alt="icon"
                     className="w-8 h-8 object-cover dark:invert"
@@ -206,7 +204,6 @@ function DesktopNavItem({ item, collapsed }: { item: NavItem; collapsed: boolean
     const navigable = !!item.to;
     const handlePress = () => {
       if (collapsed) {
-        // 收缩态：点击由外层 Dropdown 接管，弹出子项菜单（不展开侧边栏）。
         return;
       }
       if (navigable) {
