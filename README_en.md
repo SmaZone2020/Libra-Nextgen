@@ -72,10 +72,13 @@ See the [platform support matrix](docs/platform-support.md).
 
 ## Docs
 
-- [Plugin Development](docs/zh/plugin-development.md) — meta.json contract, zip layout, JS / native channels
-- [Deployment Manual](docs/deployment.md) — MongoDB auth, nginx/TLS, Builder & cloud modules
-- [Operations](docs/zh/operations.md) — Agent onboarding, plugin installs, Shell / files / MCP, audit & risk policy
-- [LLM Plugin Guide](docs/llm-plugin-development.md)
+- [Documentation index](docs/en/README.md) — full navigation (EN / ZH)
+- [Plugin Development](docs/en/plugin-development.md) — meta.json contract, Agent channels, HTML pages
+- [HTML Plugin Page SDK](docs/plugins/en/html-plugin-sdk.md) — injected `window.Libra` contract
+- [Deployment Manual](docs/en/deployment.md) — MongoDB auth, nginx/TLS, Builder & cloud modules
+- [Operations](docs/en/operations.md) — Agent onboarding, plugin installs, Shell / files / MCP, audit & risk policy
+- [AI Channels (IM)](docs/en/ai-channels.md) — Telegram / WeChat iLink / Feishu
+- [Platform support matrix](docs/en/platform-support.md)
 
 ## Related Repositories
 

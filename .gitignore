@@ -6,6 +6,8 @@ CLAUDE.md
 # plugin runtime/install directory is runtime state and must NEVER be committed.
 /docs/plugins/*
 !/docs/plugins/*.md
+!/docs/plugins/en/
+!/docs/plugins/en/*.md
 /src/plugins/
 /src/service/plugins-service/
 # Logs

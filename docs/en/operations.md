@@ -1,70 +1,81 @@
-# Operations
+# Operations Manual
+
+> **Correspondence**: English version of [`../zh/operations.md`](../zh/operations.md) (Chinese operations manual). Content follows the real production implementation.
 
 ## First Login
 
-1. Start Server + Console (see [README Quick Start](../../README_en.md) or the [Deployment Manual](../../deployment.md)):
-   - Server: `cd src/service && dotnet run` (port 5270; MongoDB must be running first)
+1. Start Server and Console (see [README Quick Start](../../README_en.md) or the [Deployment Manual](../deployment.md)):
+   - Server: `cd src/service && dotnet run` (port 5270; MongoDB must be started first)
    - Console: `cd src/webapp && npm install && npm run dev` (port 5173)
-2. Open <http://localhost:5173> → `/setup` and create the admin account
-3. Sign in
+2. Open <http://localhost:5173> in a browser → `/setup` to create the admin account
+3. After signing in you land on the main dashboard
 
 ## Agent Onboarding
 
-1. Console → **Builder** page: build a payload for the target platform (Win/Linux)
-2. Run the artifact on the target; the Agent registers and establishes an encrypted session
-3. The top agent picker shows the Agent (online only)
+1. Console → **Builder** page: build a payload for the target platform online (Win/Linux)
+2. Run the artifact (exe / binary) on the target machine; the Agent auto-registers and establishes an encrypted session
+3. The Agent appears in the top device picker (online devices only)
 
-Note: modules are downloaded per need — first execution of a task family (shell/files/recon) may be slightly slower.
+Note: Agent-side modules are downloaded from the Server on demand; the first execution of a task family (Shell/file/recon) may be slightly slower — this is expected.
 
 ## Interactive Shell
 
-1. Select an online Agent → **Terminal** page
-2. Type commands; Tab completion, arrow keys and history work (xterm.js + PTY)
-3. Switching Agents rebinds a new session
+1. Select an online Agent at the top → **Terminal** page
+2. Type a command and press Enter; Tab completion, arrow keys and history are supported (xterm.js + PTY)
+3. Switching Agents rebinds to a new session
 
-> Known limitation: CJK/Latin mixed content may misalign columns (CJK is rendered double-width and depends on font fallback).
+> Known limitation: mixed CJK/Latin content may misalign character columns slightly (CJK double-width rendering depends on the font).
 
-## Files
+## File Management
 
-- paged browsing, upload/download (streaming, live progress + speed), in-archive browsing, timestomping
-- large downloads use 2MB chunked relay with server-side write-through; cancellable
+- Paged browsing, upload/download (streaming, live progress & speed), in-archive browsing, timestomping
+- Large downloads use a 2MB chunked relay with server-side write-through; cancellable
 
 ## Software Data
 
-The 「Software Data」 page shows tabs by Agent platform:
+The 「Software Data」 page shows tabs by Agent platform (SSH cross-platform; RDP/Token Windows only):
 
-| Tab | What | Platform |
+| Tab | Description | Platform |
 | --- | --- | --- |
-| WeChat | WeChat account dirs & month file dirs | Windows |
-| Browser | password/history search & export | Windows |
-| SSH | ~/.ssh key scan | cross-platform |
+| SSH | ~/.ssh key scan | Cross-platform |
 | RDP | Credential Manager + .rdp files | Windows |
+| Token | Local token collection | Windows |
 
-> QQ functionality moved to the `com.libra.qqkey` plugin (ClientKey probe + QQ Zone link).
+> WeChat / browser data have moved to plugins: `com.libra.wechat-file` (WeChat account dirs & monthly file dirs),
+> `com.libra.browser-stealer` (passwords/history search & export), `com.libra.qqkey` (QQ ClientKey +
+> QQ Zone jump). Install the matching plugin and enter from **Plugin Management**.
 
 ## Installing Plugins
 
 Three ways (plugin management page):
 
-1. **Upload**: pick a zip → import & enable
-2. **Import from Git**: paste a Git URL → the server clones it (repo name = pluginId; meta.json at root)
-3. **Plugin Market**: one-click from the Libra-Plugins index (1h browser cache)
+1. **Upload plugin**: pick a zip → import and enable
+2. **Import from Git**: paste a Git link → the server clones it (repo name becomes pluginId; meta.json required at repo root)
+3. **Plugin Market**: one-click install from the Libra-Plugins index (browser cache 1 hour)
 
-After enabling: the Agent downloads the module on first action; frontend pages become visible after rebuilding the frontend repo (`src/webapp/src/plugins/<pluginId>/index.tsx`) and refreshing.
+After enabling: Agent-side modules are downloaded on first trigger; **plugin pages do NOT require rebuilding the frontend** — pages are served by the server at runtime (HTML+JS+CSS, interacting with the host through the injected `window.Libra` SDK). After import, **refresh the Console page** and the plugin appears under the 「Plugin Management」 group in the sidebar.
 
-## MCP
+## MCP Access
 
 - Endpoint: `http://localhost:5270/mcp` (Streamable HTTP)
-- Auth: AccessKey (`Authorization: Bearer lnk_xxx`) created in Console settings or via API
+- Auth: AccessKey (`Authorization: Bearer lnk_xxx`), created in the Console settings page or via API
 - Tool inventory: `GET /api/mcp/info`
-- AI clients can drive tasks, files, credentials, plugin actions, etc.
+- AI clients can call directly: task execution, files, credentials, plugin actions, etc.
+- Security boundaries:
+  - All MCP tool calls are written to `AuditLogs` (same risk grading as REST; identity is the access-key owner)
+  - Destructive / credential tools (`delete_agent`, `delete_file`, `get_browser_data`, `get_rdp_credentials`, `get_ssh_keys`, `get_wechat_data`, `scan_ai_tokens`, `kill_process`, `spawn_process`) require an **Admin**-role key
+  - `/mcp` is rate-limited per key (default 120 req/min), adjustable via the `mcp` policy in `Program.cs`
+  - Browser data tools have been merged into `get_browser_data`: the agent side returns a mixed list of passwords and history (no standalone op)
+- fork-and-run (`forkexec` cloud module): `execute_process` runs a program in an independent child process and waits for the result (supports args/env/cwd/timeout; a child crash does not affect the Agent); `spawn_process` starts a detached background process and returns the PID (requires Admin)
+- Sensitive module isolation: `creds` (browser passwords/history, RDP/SSH/WeChat credentials, lsass, kerberos) executes in an Agent child process (Linux fork isolation — a crash only loses the child; Windows falls back to in-process execution)
+- Plugin scripts can call `exec.run(program, args, {env, cwd, timeoutSeconds})` / `exec.spawn(program, args, {env, cwd})` to run programs in a child process
 
 ## Audit & Risk Policy
 
-- All commands go to `AuditLogs` (append-only; no delete path in the UI)
-- Settings → Risk policy: per-action-category risk levels (system/file/screen/credentials…) with overrides
-- Accounts: RBAC roles (Operator/Admin), capabilities keyed by permission
+- All commands go to `AuditLogs` (append-only; no delete entry in the UI)
+- Settings → Risk policy: per action category (system/file/screen/credentials…) default risk levels with overrides
+- Account management: RBAC roles (Operator/Admin), capabilities keyed by permission keys
 
-## Cleanup
+## One-Click Cleanup
 
-The Server can issue `kill_and_clean` to all online Agents: the Agent removes its own persistence (registry/Cron/systemd) and exits.
+The Server provides the "competition end / cleanup" capability: it sends `kill_and_clean` to all online Agents; the Agent undoes its own persistence (registry/Cron/systemd) and exits.

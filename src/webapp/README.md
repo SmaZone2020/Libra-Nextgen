@@ -1,156 +1,57 @@
-# HeroUI Pro React — Vite Template
+# Libra-Console(前端控制台)
 
-基于 **HeroUI Pro v3** + **React 19** + **TypeScript** + **Tailwind CSS v4** 的生产级前端脚手架，内置 60+ 企业级组件与示例页面。
+Libra-Nextgen 的 Web 控制台:React 19 + Vite + HeroUI3Pro + Tailwind CSS v4 + TypeScript。
+多人协同、实时审计的 C2 操作界面。
 
 ## 快速启动
 
 ```bash
-# 安装依赖
-npm install
-
-# 启动开发服务器
-npm run dev
-
-# 生产构建
-npm run build
-
-# 预览构建产物
-npm run preview
-
-# TypeScript 类型检查
-npm run typecheck
+npm install          # 安装依赖
+npm run dev          # 开发服务器(http://localhost:5173)
+npm run build        # 生产构建(tsc -b && vite build)
+npm run preview      # 预览构建产物(http://localhost:4173)
+npm run typecheck    # TypeScript 类型检查
+npm test             # 单元测试(vitest)
 ```
 
-浏览器访问 `http://localhost:5173`。
+后端(端口 5270)需先启动,见 [部署手册](../docs/deployment.md)。
 
-## 项目结构
+## 目录结构(真实)
 
 ```
-heroui3pro-vite-template/
-├── index.html                  # Vite 入口 HTML
-├── package.json
-├── vite.config.ts              # Vite + Tailwind + React 插件
-├── tsconfig.json               # TypeScript 配置（含路径别名）
-├── README.md
-└── src/
-    ├── main.tsx                # 应用入口
-    ├── app/
-    │   └── App.tsx             # 根组件：侧边栏 + 页面路由 + 过渡动画
-    ├── config/
-    │   └── site.ts             # 站点配置：页面列表、标题、图标
-    ├── pages/                  # 页面目录
-    │   ├── Home/
-    │   │   └── index.tsx       # 首页：KPI 卡片 + 折线图 Widget
-    │   └── About/
-    │       └── index.tsx       # 关于页：项目介绍 + 技术栈
-    ├── shared/                 # 共享模块
-    │   ├── layout/
-    │   │   └── Sidebar.tsx     # 侧边栏组件（折叠/展开/移动端）
-    │   └── lib/
-    │       └── animations.ts   # 复用动画预设
-    ├── components/             # HeroUI Pro 组件库（60+ 组件）
-    ├── styles/                 # 样式文件
-    │   ├── app.css             # 全局样式（Tailwind + 组件样式入口）
-    │   ├── index.css           # 组件样式 + 主题聚合
-    │   ├── components/         # 各组件独立 CSS
-    │   └── themes/             # 可选主题（Brutalism / Glass / Mouve）
-    └── utils/                  # 工具函数
+src/
+├── main.tsx                 # 应用入口(ErrorBoundary + Toast.Provider + App)
+├── app/App.tsx              # 根组件:侧边栏 + 路由 + 过渡动画 + 插件分组
+├── api/                     # 后端 API 客户端(client.ts 带 JWT + 插件/代理/文件等)
+├── pages/                   # 页面
+│   ├── Dashboard/           #   仪表盘
+│   ├── Agents/              #   Agent 列表
+│   ├── Shell/               #   交互式终端(xterm.js)
+│   ├── FileManager/         #   文件管理
+│   ├── SoftwareData/        #   软件数据(SSH/RDP/Token)
+│   ├── Proxy/               #   代理/内网浏览
+│   ├── Builder/             #   在线载荷构建
+│   ├── Ai/                  #   AI 助手 Justitia
+│   ├── Settings/            #   系统设置/风险策略
+│   ├── Plugins/             #   插件管理/市场
+│   └── ...                  #   审计/系统/关于
+├── components/              # HeroUI3Pro 组件与业务组件
+├── contexts/                # 全局状态(Agent 选择等)
+├── hooks/                   # usePluginHost 等业务 hooks
+├── ws/consoleWs.ts          # 控制台 WebSocket(/ws/console,实时推送)
+├── plugins/                 # 插件页面运行时加载器(见下)
+└── styles/                  # Tailwind v4 + 主题
 ```
-
-## 路径别名
-
-| 别名 | 路径 | 用途 |
-|---|---|---|
-| `@components/*` | `src/components/*` | HeroUI Pro 组件 |
-| `@css/*` | `src/styles/*` | 样式文件 |
-| `@utils/*` | `src/utils/*` | 工具函数 |
-
-## 添加新页面
-
-### 1. 创建页面文件
-
-在 `src/pages/` 下新建目录和文件，导出页面组件：
-
-```tsx
-// src/pages/Contact/index.tsx
-import { motion } from 'motion/react';
-import { Widget } from '@components/widget';
-import { staggerContainer } from '../../shared/lib/animations';
-
-export function ContactPage() {
-  return (
-    <motion.div
-      animate="show"
-      initial="hidden"
-      variants={staggerContainer}
-      className="space-y-6"
-    >
-      <Widget>
-        <Widget.Header>
-          <Widget.Title>Contact</Widget.Title>
-        </Widget.Header>
-        <Widget.Content>
-          <p className="text-sm text-neutral-600">
-            Get in touch with us.
-          </p>
-        </Widget.Content>
-      </Widget>
-    </motion.div>
-  );
-}
-```
-
-### 2. 注册页面
-
-编辑 `src/config/site.ts`，在 `pages` 数组中添加条目：
-
-```ts
-import { Envelope } from '@gravity-ui/icons';
-
-// 在 pages 数组中追加：
-{
-  icon: Envelope,
-  id: 'Contact',
-  label: 'Contact',
-  subtitle: 'Get in touch',
-},
-```
-
-### 3. 注册路由
-
-编辑 `src/app/App.tsx`，导入页面并在 `AnimatePresence` 内添加分支：
-
-```tsx
-import { ContactPage } from '../pages/Contact';
-
-// 在 AnimatePresence > motion.div 内部添加：
-{page === 'Contact' && <ContactPage />}
-```
-
-保存后页面会自动出现在侧边栏导航中，并带有页面切换动画。
-
-## 组件库
-
-项目内置 HeroUI Pro v3 全部 60+ 组件，按分类：
-
-| 分类 | 组件 |
-|---|---|
-| **Data Display** | AreaChart、BarChart、DataGrid、KPI、LineChart、PieChart、TrendChip 等 |
-| **AI & Messaging** | ChatMessage、PromptInput、Markdown、CodeBlock、ChainOfThought 等 |
-| **Inputs** | CellSelect、DropZone、Rating、NumberStepper、Segment 等 |
-| **Layout** | AppLayout、Sidebar、Navbar、Sheet、ActionBar、Resizable |
-| **Surfaces** | Widget、Command、Kanban、FileTree、Carousel、EmptyState 等 |
-
-完整列表参见 `src/components/` 目录。
 
 ## 插件页面(运行时加载,无需重建)
 
-本仓库**不包含任何插件页面源码**。插件页面是纯 HTML+JS+CSS,由服务器在运行时提供(已安装插件走后端 API):
+本仓库**不包含任何插件页面源码**。插件页面是纯 HTML+JS+CSS,由服务器在运行时提供
+(已安装插件走后端 API):
 
 - 清单:`GET /api/plugins/manager/manifests`(后端)
 - 页面:`GET /api/plugins/{id}/page/manifest.json` → `kind: html`,控制台拉取
-  `page/index.html` 后向 `<head>` 注入 SDK,以 sandbox iframe(srcdoc)渲染;
-  插件直接使用注入的 `window.Libra`(usePluginHost / api / getApiOrigin),
+  `page/index.html` 后向 `<head>` 注入 `<base>` + SDK,以 sandbox iframe(srcdoc)
+  渲染;插件直接使用注入的 `window.Libra`(usePluginHost / api / getApiOrigin),
   无需引用任何 SDK 文件
 - 资源:`GET /api/plugins/{id}/assets/**`(后端)
 
@@ -162,22 +63,13 @@ import { ContactPage } from '../pages/Contact';
 | `loader.tsx` | fetch 插件 HTML → 注入 `<base>`+SDK → sandbox srcdoc iframe;postMessage 桥(选中设备/任务下发/WS 推送/带 JWT 的 API 转发) |
 | `icons.ts` | 图标白名单(侧边栏/路由图标,按 meta.json entry.icon 映射) |
 
-`npm run dev` 与 `npm run preview` 行为一致:插件导入到服务器运行时目录后,刷新页面即生效,控制台无需重新构建。详见 `docs/plugins/README.md` 与 `docs/plugins/html-plugin-sdk.md`。
+`npm run dev` 与 `npm run preview` 行为一致:插件导入到服务器运行时目录后,
+刷新页面即生效,控制台无需重新构建。详见 `docs/plugins/README.md` 与
+`docs/plugins/html-plugin-sdk.md`。
 
-## 技术栈
+## 与后端连接
 
-| 类别 | 技术 |
-|---|---|
-| 框架 | React 19 |
-| 语言 | TypeScript |
-| 构建 | Vite 6 |
-| 样式 | Tailwind CSS v4 + tailwind-variants |
-| 无障碍 | React Aria Components |
-| 动画 | Motion |
-| 图表 | Recharts |
-| 轮播 | Embla Carousel |
-| 图标 | @gravity-ui/icons |
-
-## 许可
-
-HeroUI Pro 为商业授权组件库。本模板仅包含脚手架代码。
+- API 基址解析优先级:`VITE_API_BASE`(构建时)→ 页面 Host 推导(5270)→ 默认
+  `http://127.0.0.1:5270`(见 `src/api/client.ts`)。
+- 鉴权:Bearer JWT(localStorage `token`),401 自动触发重新登录。
+- 实时:WebSocket `ws://<origin>/ws/console?token=…`。

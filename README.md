@@ -35,7 +35,7 @@ Agent 通过 HTTP(S) 与 WebSocket 与服务器通信，全链路 AES-256-GCM �
 - Socks 代理与内网 Web 浏览
 - 内存态 PowerShell（CLR Host）
 - 多维度持久化
-- 插件体系：上传 zip / Git 导入 / 插件市场
+- 插件体系：上传 zip / Git 导入 / 插件市场；页面为纯 HTML+JS+CSS（注入式 `window.Libra` SDK，运行时加载无需重建前端）
 - 在线载荷构建（Builder），Windows / Linux
 - 内置 AI 助手 Justitia（分级权限 + 工具调用审计）
 - AI 频道：通过 Telegram / 飞书 / 微信 iLink 在 IM 中指挥 Justitia
@@ -72,10 +72,13 @@ npm run dev
 
 ## 文档
 
-- [插件开发](docs/zh/plugin-development.md) — meta.json 契约、zip 结构、JS / native 双通道
+- [文档索引](docs/README.md) — 全部文档导航(中/英)
+- [插件开发教程](docs/zh/plugin-development.md) — meta.json 契约、Agent 双通道、HTML 页面
+- [HTML 插件页面 SDK](docs/plugins/html-plugin-sdk.md) — 注入式 `window.Libra` 契约
 - [部署手册](docs/deployment.md) — MongoDB 认证、nginx/TLS、Builder 与云载模块
 - [操作手册](docs/zh/operations.md) — Agent 上线、插件安装、Shell / 文件 / MCP、审计与风险策略
-- [LLM 插件开发指南](docs/llm-plugin-development.md)
+- [AI 频道(IM 接入)](docs/zh/ai-channels.md) — Telegram / 微信 iLink / 飞书
+- [平台支持矩阵](docs/platform-support.md)
 
 ## 相关仓库
 

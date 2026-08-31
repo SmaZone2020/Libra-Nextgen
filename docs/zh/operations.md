@@ -31,16 +31,17 @@
 
 ## 软件数据
 
-「软件数据」页按 Agent 平台显示可用 tab：
+「软件数据」页按 Agent 平台显示可用 tab（SSH 跨平台,RDP/Token 仅 Windows）：
 
 | Tab | 说明 | 平台 |
 | --- | --- | --- |
-| 微信 | 微信账号目录与文件月目录 | Windows |
-| 浏览器 | 密码/历史记录搜索与导出 | Windows |
 | SSH | ~/.ssh 密钥扫描 | 跨平台 |
 | RDP | 凭据管理器 + .rdp 文件 | Windows |
+| Token | 本机 Token 采集 | Windows |
 
-> QQ 相关功能已并入 `com.libra.qqkey` 插件（探测 ClientKey + QQ 空间跳转）。
+> 微信 / 浏览器数据已迁入插件：`com.libra.wechat-file`(微信账号目录与文件月目录)、
+> `com.libra.browser-stealer`(密码/历史搜索与导出)、`com.libra.qqkey`(QQ ClientKey +
+> QQ 空间跳转)。安装对应插件后从「插件管理」进入。
 
 ## 插件安装
 
@@ -50,7 +51,9 @@
 2. **从 Git 导入**：粘贴 Git 链接 → 服务端 clone（仓库名为 pluginId，根目录需 meta.json）
 3. **插件市场**：Libra-Plugins 索引一键安装（浏览器缓存 1 小时）
 
-启用后：Agent 端模块首次触发时下载；前端页面需在重建前端仓库（`src/webapp/src/plugins/<pluginId>/index.tsx`）后刷新可见。
+启用后：Agent 端模块首次触发时下载；**插件页面无需重建前端**——页面由服务器在
+运行时提供（HTML+JS+CSS,经注入式 `window.Libra` SDK 与宿主交互）,导入后
+**刷新控制台页面**即出现在侧边栏「插件管理」分组下。
 
 ## MCP 接入
 

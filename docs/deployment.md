@@ -27,13 +27,20 @@ cd src/webapp && npm install && npm run dev
    │ MongoDB            │                          │ build-output/     │
    │ libra_nextgen 库    │                          │ 模块/构建产物/密钥  │
    └────────────────────┘                          └───────────────────┘
-
-Agent 出站（全部伪装为正常 API 调用）：
-  POST /v1/chat/completions   — AI 通道：注册/心跳/结果/模块下载（密文）
-  GET  /api/v1/models/events  — SSE 任务事件流（长连接，30s keepalive）
-  GET  /api/v1/models/{id}    — loader 下载 core.bin（一次性凭证）
-  POST /api/v1/session        — agent 注册（OAuth 风格混合加密）
 ```
+
+**两条通道(不要混淆)**:
+
+- **Agent ↔ Server**(beacon,无 WebSocket):Agent 以固定间隔 HTTPS 轮询
+  (注册/心跳/结果上报),任务事件通过 SSE 长连接推送。全部伪装为正常 API 调用:
+  - `POST /v1/chat/completions` — AI 通道:注册/心跳/结果/模块下载(密文)
+  - `GET  /api/v1/models/events` — SSE 任务事件流(长连接,30s keepalive)
+  - `GET  /api/v1/models/{id}`    — loader 下载 core.bin(一次性凭证)
+  - `POST /api/v1/session`        — agent 注册(OAuth 风格混合加密)
+
+- **Console ↔ Server**(REST + WebSocket):控制台走 REST 管理 API,实时状态/推送
+  走 `WS /ws/console?token=…`。nginx 无需为 Agent 配置 WebSocket upgrade
+  (Agent 侧零 WS),但控制台的 `/ws/console` 需要 upgrade 支持(见 §4)。
 
 ## 2. 环境变量
 
@@ -69,11 +76,13 @@ server {
     location / {
         proxy_pass http://127.0.0.1:5270;
         proxy_http_version 1.1;
-        # SSE 长连接：read/send 超时必须 > keepalive 间隔（30s），建议 120s
+        # SSE 长连接（Agent 事件流）：read/send 超时必须 > keepalive 间隔（30s），建议 120s
         proxy_read_timeout 120s;
         proxy_send_timeout 120s;
         proxy_buffering off;               # SSE 必须关缓冲
-        # 不再需要 WebSocket upgrade 配置（零 WS 架构）
+        # 控制台实时推送 /ws/console 需要 WebSocket upgrade
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
     }
 }
 
@@ -100,11 +109,11 @@ server {
 2. 重新构建 agent：Builder 页面「生成」（core 走 prebuilt 秒级 + 模块按需编译）
 3. 模块变更：Builder 页面「模块管理」→ 勾选 → 「构建模块」
 4. 前端：构建 SPA 产物部署到静态目录（或同域反代）
+5. 插件页面：**无需重建前端**——插件以 zip 导入后由服务器运行时提供
+   （`/api/plugins/{id}/page/**`），刷新控制台即生效
 
-**升级清单（本次版本）**：
-- 服务端：新二进制（含 SSE/任务化/下载凭证/全局异常处理）
-- agent：重新构建（注册重试/任务并发/SSE 生命周期）
-- loader：重新构建（core 下载带一次性凭证——旧 loader 在无凭证时会被 401 拒绝）
+> 版本兼容提示：loader 下载带一次性凭证（downloadToken），旧 loader 在无凭证
+> 请求时会被 401 拒绝——升级后需重新构建 loader 与 agent。
 
 ## 6.1 云载模块与插件 stage
 
