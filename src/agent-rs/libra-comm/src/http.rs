@@ -324,11 +324,14 @@ impl HttpCommunicator {
         _key: &[u8; AES_KEY_SIZE],
     ) -> Result<reqwest::Response, String> {
         let token = self.session_token.clone().unwrap_or_default();
-        let url = format!(
-            "{}{}?channel={}",
-            self.server_url, "/api/v1/models/events", token
-        );
-        let mut req = self.client.get(&url).header("Accept", "text/event-stream");
+        // Token travels in a header, not the URL query string: query params end
+        // up in server/proxy access logs, a session-token leak.
+        let url = format!("{}{}", self.server_url, "/api/v1/models/events");
+        let mut req = self
+            .client
+            .get(&url)
+            .header("Accept", "text/event-stream")
+            .header("X-Session-Token", token);
         if let Some(ua) = self.pick_user_agent() {
             req = req.header(reqwest::header::USER_AGENT, ua);
         }

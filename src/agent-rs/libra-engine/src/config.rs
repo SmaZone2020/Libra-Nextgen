@@ -23,7 +23,7 @@ impl ConfigManager {
             heartbeat_path: "/api/beacon/heartbeat".into(),
             result_path: "/api/beacon/result".into(),
             web_socket_path: "/ws/agent".into(),
-            heartbeat_interval_ms: 3000,
+            heartbeat_interval_ms: 10000,
             jitter_percent: 0.2,
             beacon_secret: String::new(),
             user_agents: Vec::new(),

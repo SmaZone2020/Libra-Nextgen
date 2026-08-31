@@ -204,7 +204,25 @@ impl AgentEngine {
                         let _ = hb_reconnect.send(());
                         break;
                     }
-                    _ => {}
+                    Err(_) => {
+                        // Transient network jitter: retry a couple of quick beats
+                        // before giving up, so a short outage doesn't drop a whole
+                        // heartbeat window (server marks agents offline on gap).
+                        let mut recovered = false;
+                        for _ in 0..2 {
+                            tokio::time::sleep(std::time::Duration::from_millis(1500)).await;
+                            match heartbeat_tick(&hb_http, &hb_agent_id, hb_key.as_ref(), &hb_mm).await {
+                                Ok(()) => { recovered = true; break; }
+                                Err(e2) if e2 == "SESSION_LOST" => {
+                                    libra_common::dlog!("[WARN] session lost — triggering re-registration");
+                                    let _ = hb_reconnect.send(());
+                                    break;
+                                }
+                                Err(_) => continue,
+                            }
+                        }
+                        if recovered { continue; }
+                    }
                 }
 
                 let interval_ms = jittered_interval(hb_interval_ms, hb_jitter);
