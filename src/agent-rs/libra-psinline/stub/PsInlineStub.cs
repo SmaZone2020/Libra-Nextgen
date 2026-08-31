@@ -46,11 +46,22 @@ namespace PsInline
             try
             {
                 // Embedded CLR host has no valid application config path; .NET
-                // Framework ClientConfigPaths then throws "path contains illegal
-                // characters" on EVERY PowerShell command (ServicePointManager
-                // diagnostics init). Fix all the knobs the config system reads:
-                // AppBase + APP_CONFIG_FILE + the FusionStore field, then probe
-                // the config system so failures surface instead of being cached.
+                // Framework ClientConfigPaths throws "path contains illegal
+                // characters" whenever ServicePointManager bootstraps its
+                // diagnostics (TraceSource → DiagnosticsConfiguration →
+                // ConfigurationManager → Path.GetFullPath(host exe config)).
+                //
+                // Primary fix: the documented switch that makes System.Net skip
+                // diagnostic tracing entirely (no config dependency at all).
+                try
+                {
+                    System.AppContext.SetSwitch(
+                        "Switch.System.Net.DontEnableSystemDiagnosticsTracing", true);
+                }
+                catch {}
+
+                // Belt & braces: pin a valid config baseline for any code that
+                // still reaches ConfigurationManager.
                 string cfgPath = null;
                 try
                 {
