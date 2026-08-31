@@ -40,12 +40,37 @@ fn dispatch(input: &str) -> String {
             file_ops::FileOps::list_directory_paged(path, offset, limit)
         }
         "drives" => {
-            let drives = libra_platform::get_executor().get_drives();
-            let escaped: Vec<String> = drives
+            // Structured drive + special-folder listing for the files home view.
+            let ex = libra_platform::get_executor();
+            let drives: Vec<String> = ex
+                .drive_info()
                 .iter()
-                .map(|d| format!(r#""{}""#, d.replace('\\', "\\\\")))
+                .map(|d| {
+                    format!(
+                        r#"{{"path":"{}","kind":"{}","total":{},"free":{}}}"#,
+                        d.path.replace('\\', "\\\\").replace('"', "\\\""),
+                        d.kind,
+                        d.total,
+                        d.free
+                    )
+                })
                 .collect();
-            format!(r#"{{"drives":[{}]}}"#, escaped.join(","))
+            let special: Vec<String> = ex
+                .special_dirs()
+                .iter()
+                .map(|s| {
+                    format!(
+                        r#"{{"name":"{}","path":"{}"}}"#,
+                        s.name,
+                        s.path.replace('\\', "\\\\").replace('"', "\\\"")
+                    )
+                })
+                .collect();
+            format!(
+                r#"{{"drives":[{}],"special":[{}]}}"#,
+                drives.join(","),
+                special.join(",")
+            )
         }
         "read" => file_ops::FileOps::read_file(path),
         "download" => {

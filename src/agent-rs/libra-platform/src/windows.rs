@@ -1,8 +1,10 @@
-use crate::platform::{IPlatformExecutor, InteractiveShellHandle};
+use crate::platform::{DriveInfo, IPlatformExecutor, InteractiveShellHandle, SpecialDir};
 use std::future::Future;
+use std::path::PathBuf;
 use std::pin::Pin;
 use tokio::process::Command;
 use tokio::sync::watch;
+use windows::Win32::Storage::FileSystem::{GetDiskFreeSpaceExW, GetDriveTypeW};
 
 pub struct WindowsExecutor;
 
@@ -89,5 +91,77 @@ impl IPlatformExecutor for WindowsExecutor {
             }
         }
         drives
+    }
+
+    fn drive_info(&self) -> Vec<DriveInfo> {
+        let mut out = Vec::new();
+        for letter in b'A'..=b'Z' {
+            let path = format!("{}:\\", letter as char);
+            let wpath: Vec<u16> = path.encode_utf16().chain(std::iter::once(0)).collect();
+            let pcw = windows::core::PCWSTR(wpath.as_ptr());
+            let kind = match unsafe { GetDriveTypeW(pcw) } as u32 {
+                2 => "removable", // DRIVE_REMOVABLE
+                3 => "local",     // DRIVE_FIXED
+                4 => "network",   // DRIVE_REMOTE
+                5 => "cdrom",     // DRIVE_CDROM
+                6 => "ram",       // DRIVE_RAMDISK
+                _ => "unknown",
+            };
+            // unknown kinds usually mean the drive is not present — report only real volumes
+            if kind == "unknown" {
+                continue;
+            }
+            let mut free: u64 = 0;
+            let mut total: u64 = 0;
+            let mut total_free: u64 = 0;
+            let ok = unsafe {
+                GetDiskFreeSpaceExW(
+                    pcw,
+                    Some(&mut free),
+                    Some(&mut total),
+                    Some(&mut total_free),
+                )
+            };
+            if ok.is_err() {
+                continue;
+            }
+            out.push(DriveInfo {
+                path,
+                kind: kind.to_string(),
+                total,
+                free: total_free,
+            });
+        }
+        out
+    }
+
+    fn special_dirs(&self) -> Vec<SpecialDir> {
+        let root = std::env::var("USERPROFILE").unwrap_or_default();
+        if root.is_empty() {
+            return Vec::new();
+        }
+        let mut out = Vec::new();
+        let candidates = [
+            ("desktop", "Desktop"),
+            ("downloads", "Downloads"),
+            ("documents", "Documents"),
+            ("pictures", "Pictures"),
+            ("music", "Music"),
+            ("videos", "Videos"),
+        ];
+        for (key, dir) in candidates {
+            let p = PathBuf::from(&root).join(dir);
+            if p.is_dir() {
+                out.push(SpecialDir {
+                    name: key.to_string(),
+                    path: p.to_string_lossy().to_string(),
+                });
+            }
+        }
+        out.push(SpecialDir {
+            name: "user".to_string(),
+            path: root.clone(),
+        });
+        out
     }
 }

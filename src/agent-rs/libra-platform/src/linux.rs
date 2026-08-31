@@ -1,5 +1,6 @@
-use crate::platform::{IPlatformExecutor, InteractiveShellHandle};
+use crate::platform::{DriveInfo, IPlatformExecutor, InteractiveShellHandle, SpecialDir};
 use std::future::Future;
+use std::path::PathBuf;
 use std::pin::Pin;
 use tokio::process::Command;
 use tokio::sync::watch;
@@ -102,5 +103,125 @@ impl IPlatformExecutor for LinuxExecutor {
             }
         }
         drives
+    }
+
+    fn drive_info(&self) -> Vec<DriveInfo> {
+        use std::os::unix::fs::MetadataExt;
+        let mut out = Vec::new();
+
+        // Candidate mounts: skip pseudo filesystems so we only show real volumes.
+        let skip: &[&str] = &[
+            "proc",
+            "sysfs",
+            "devpts",
+            "devtmpfs",
+            "tmpfs",
+            "cgroup",
+            "cgroup2",
+            "pstore",
+            "securityfs",
+            "debugfs",
+            "tracefs",
+            "mqueue",
+            "hugetlbfs",
+            "configfs",
+            "binfmt_misc",
+            "overlay",
+            "squashfs",
+            "autofs",
+            "rpc_pipefs",
+        ];
+        let net_fs: &[&str] = &[
+            "nfs",
+            "nfs4",
+            "cifs",
+            "smb3",
+            "fuse.sshfs",
+            "fuse.glusterfs",
+        ];
+        let rem_fs: &[&str] = &["vfat", "exfat", "ntfs", "fuseblk", "iso9660"];
+
+        if let Ok(mounts) = std::fs::read_to_string("/proc/self/mounts") {
+            for line in mounts.lines() {
+                let parts: Vec<&str> = line.split_whitespace().collect();
+                if parts.len() < 3 {
+                    continue;
+                }
+                let fs_type = parts[2];
+                if skip.iter().any(|s| fs_type.starts_with(s)) {
+                    continue;
+                }
+                let path = parts[1].replace("\\040", " ").replace("\\011", "\t");
+                if path.is_empty() || !std::path::Path::new(&path).is_dir() {
+                    continue;
+                }
+                let kind = if net_fs.contains(&fs_type) {
+                    "network"
+                } else if rem_fs.contains(&fs_type) {
+                    "removable"
+                } else if path == "/" {
+                    "local"
+                } else {
+                    "local"
+                };
+                let mut total = 0u64;
+                let mut free = 0u64;
+                unsafe {
+                    let mut stat = std::mem::zeroed::<libc::statvfs>();
+                    if libc::statvfs(
+                        std::ffi::CString::new(path.as_str())
+                            .unwrap_or_default()
+                            .as_ptr(),
+                        &mut stat,
+                    ) == 0
+                    {
+                        let bsize = stat.f_frsize as u64;
+                        total = stat.f_blocks.saturating_mul(bsize);
+                        free = stat.f_bavail.saturating_mul(bsize);
+                    }
+                }
+                if total == 0 {
+                    continue;
+                }
+                out.push(DriveInfo {
+                    path: path.clone(),
+                    kind: kind.to_string(),
+                    total,
+                    free,
+                });
+            }
+        }
+        out.sort_by(|a, b| b.total.cmp(&a.total));
+        out.dedup_by(|a, b| a.path == b.path);
+        out
+    }
+
+    fn special_dirs(&self) -> Vec<SpecialDir> {
+        let home = std::env::var("HOME").unwrap_or_default();
+        let mut out = Vec::new();
+        if !home.is_empty() {
+            let candidates = [
+                ("desktop", "Desktop"),
+                ("downloads", "Downloads"),
+                ("documents", "Documents"),
+                ("pictures", "Pictures"),
+                ("music", "Music"),
+                ("videos", "Videos"),
+            ];
+            for (key, dir) in candidates {
+                let p = PathBuf::from(&home).join(dir);
+                if p.is_dir() {
+                    out.push(SpecialDir {
+                        name: key.to_string(),
+                        path: p.to_string_lossy().to_string(),
+                    });
+                }
+            }
+            out.push(SpecialDir {
+                name: "user".to_string(),
+                path: home.clone(),
+            });
+        }
+        out
     }
 }

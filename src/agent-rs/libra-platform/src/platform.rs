@@ -24,6 +24,30 @@ pub trait IPlatformExecutor: Send + Sync {
 
     /// List logical drives (C:\, D:\ on Windows; /, /mnt/* on Linux).
     fn get_drives(&self) -> Vec<String>;
+
+    /// Structured drive info (path/kind/total/free) for the files UI home view.
+    fn drive_info(&self) -> Vec<DriveInfo>;
+
+    /// Common user folders that exist (Desktop/Downloads/Documents/...).
+    fn special_dirs(&self) -> Vec<SpecialDir>;
+}
+
+/// A mounted volume with capacity info (bytes).
+#[derive(Clone, Debug)]
+pub struct DriveInfo {
+    pub path: String,
+    /// "local" | "removable" | "network" | "cdrom" | "ram" | "unknown"
+    pub kind: String,
+    pub total: u64,
+    pub free: u64,
+}
+
+/// A well-known user folder, present only if it exists and is readable.
+#[derive(Clone, Debug)]
+pub struct SpecialDir {
+    /// English key: desktop | downloads | documents | pictures | music | videos | user
+    pub name: String,
+    pub path: String,
 }
 
 /// Handle to a running interactive PTY shell.

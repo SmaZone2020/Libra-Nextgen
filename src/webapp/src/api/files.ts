@@ -15,8 +15,25 @@ export interface FileEntry {
   attributes?: string;
 }
 
+export interface DriveInfo {
+  path: string;
+  /** local | removable | network | cdrom | ram | unknown */
+  kind: string;
+  /** total capacity in bytes */
+  total: number;
+  /** free space in bytes */
+  free: number;
+}
+
+export interface SpecialDir {
+  /** desktop | downloads | documents | pictures | music | videos | user */
+  name: string;
+  path: string;
+}
+
 export interface DrivesResult {
-  drives: string[];
+  drives: DriveInfo[];
+  special: SpecialDir[];
 }
 
 export interface FileOpResult {

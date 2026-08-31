@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button, Card, Dropdown, TextField, Input, Tooltip } from '@heroui/react';
-import { FolderArrowLeft, FolderTree, Pencil } from '@gravity-ui/icons';
+import { FolderArrowLeft, FolderTree, House, Pencil } from '@gravity-ui/icons';
 import { normalizePath, driveLabel } from '../../utils/path';
 
 interface PathBarProps {
@@ -12,10 +12,11 @@ interface PathBarProps {
   onGoUp: () => void;
   onDriveChange: (drive: string) => void;
   onNavigate: (path: string) => void;
+  onHome: () => void;
 }
 
 /** Normalize a user-entered path: trim, unify separators, fix drive roots. */
-export function PathBar({ path, drives, historyLength, onGoBack, onGoUp, onDriveChange, onNavigate }: PathBarProps) {
+export function PathBar({ path, drives, historyLength, onGoBack, onGoUp, onDriveChange, onNavigate, onHome }: PathBarProps) {
   const { t } = useTranslation();
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState('');
@@ -36,6 +37,14 @@ export function PathBar({ path, drives, historyLength, onGoBack, onGoUp, onDrive
   return (
     <div className="flex items-center gap-2 flex-wrap h-10">
       <Tooltip delay={0}>
+        <Button isIconOnly className="rounded-[12px]" variant='tertiary' onPress={onHome}>
+          <House className="w-4 h-4" />
+        </Button>
+        <Tooltip.Content>
+          <p>{t('fileManager.home')}</p>
+        </Tooltip.Content>
+      </Tooltip>
+      <Tooltip delay={0}>
         <Button isIconOnly className="rounded-[12px]" variant='tertiary' isDisabled={historyLength === 0} onPress={onGoBack}>
           <FolderArrowLeft className="w-4 h-4" />
         </Button>
@@ -55,7 +64,7 @@ export function PathBar({ path, drives, historyLength, onGoBack, onGoUp, onDrive
       <Dropdown>
         <Button
           variant="secondary"
-          className="w-[60px] justify-start rounded-[13px]"
+          className="w-[60px] justify-start rounded-[13px] text-foreground"
         >
           {driveLabel(path)}
         </Button>

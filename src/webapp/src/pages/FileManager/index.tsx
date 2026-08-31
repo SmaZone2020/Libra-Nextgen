@@ -2,26 +2,31 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useOverlayState } from '@heroui/react';
 import { listFiles, getDrives, deleteFile, renameFile, moveFile, copyFile, compressFile, decompressFile, createShortcut, downloadFile, openFile, listArchive } from '../../api/files';
-import type { FileEntry } from '../../api/files';
+import type { FileEntry, DriveInfo, SpecialDir } from '../../api/files';
 import { PathBar } from './PathBar';
 import { FileList, isArchive } from './FileList';
+import { StorageHome } from './StorageHome';
 import { DownloadModal, type DownloadState } from './DownloadModal';
 import { useAgent } from '../../contexts/AgentContext';
 import { AgentRequired } from '../../components/AgentRequired';
 import { useDialog } from '../../hooks/useDialog';
 import { joinPath, getParentPath } from '../../utils/path';
 
+type FileView = 'home' | 'browse';
+
 export default function FileManagerPage() {
   const { t } = useTranslation();
   const { agentId } = useAgent();
   const { alert, confirm, prompt, DialogComponent } = useDialog();
+  const [view, setView] = useState<FileView>('home');
   const [path, setPath] = useState('C:\\');
   const [entries, setEntries] = useState<FileEntry[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [history, setHistory] = useState<string[]>([]);
-  const [drives, setDrives] = useState<string[]>([]);
+  const [drives, setDrives] = useState<DriveInfo[]>([]);
+  const [special, setSpecial] = useState<SpecialDir[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [inArchive, setInArchive] = useState(false);
 
@@ -70,8 +75,10 @@ export default function FileManagerPage() {
       setEntries([]);
       setHistory([]);
       setDrives([]);
+      setSpecial([]);
       setPath('');
       setInArchive(false);
+      setView('home');
       return;
     }
 
@@ -83,20 +90,27 @@ export default function FileManagerPage() {
     setHistory([]);
     setLoading(true);
 
-    // Fetch drives first, then list the first available drive
+    // Home view: fetch drive/special-folder inventory, stay on the landing page.
     getDrives(agentId).then((drivesResult) => {
-      const driveList = drivesResult.drives ?? (Array.isArray(drivesResult) ? drivesResult : []);
-      setDrives(driveList);
-      const firstDrive = driveList[0] ?? 'C:\\';
-      return listFiles(agentId, firstDrive, 0, PAGE_SIZE).then((fileResult) => {
-        setPath(fileResult.path ?? firstDrive);
-        setEntries(fileResult.entries ?? []);
-        setTotal(fileResult.total ?? fileResult.entries?.length ?? 0);
-      });
+      setDrives(drivesResult.drives ?? []);
+      setSpecial(drivesResult.special ?? []);
+      setView('home');
     }).catch((e) => {
       setError(e instanceof Error ? e.message : t('fileManager.connectFailed'));
     }).finally(() => { setLoading(false); });
   }, [agentId]);
+
+  const enterBrowse = useCallback((dirPath: string) => {
+    setHistory(prev => [...prev, path]);
+    setInArchive(false);
+    setView('browse');
+    sendFileList(dirPath);
+  }, [path, sendFileList]);
+
+  const goHome = useCallback(() => {
+    setView('home');
+    setInArchive(false);
+  }, []);
 
   const navigateTo = useCallback((dirPath: string) => {
     setHistory(prev => [...prev, path]);
@@ -171,6 +185,7 @@ export default function FileManagerPage() {
   const handleDriveChange = useCallback((drive: string) => {
     setHistory(prev => [...prev, path]);
     setInArchive(false);
+    setView('browse');
     sendFileList(drive);
   }, [path, sendFileList]);
 
@@ -342,37 +357,44 @@ export default function FileManagerPage() {
 
   return (
     <div className="space-y-2">
-      <PathBar
-        path={path}
-        drives={drives}
-        historyLength={history.length}
-        onGoBack={goBack}
-        onGoUp={goUp}
-        onDriveChange={handleDriveChange}
-        onNavigate={navigateTo}
-      />
+      {view === 'home' ? (
+        <StorageHome drives={drives} special={special} onEnter={enterBrowse} />
+      ) : (
+        <>
+          <PathBar
+            path={path}
+            drives={drives.map(d => d.path)}
+            historyLength={history.length}
+            onGoBack={goBack}
+            onGoUp={goUp}
+            onDriveChange={handleDriveChange}
+            onNavigate={navigateTo}
+            onHome={goHome}
+          />
 
-      <FileList
-        entries={entries}
-        loading={loading}
-        error={error}
-        hasMore={hasMore}
-        isLoadingMore={loadingMore}
-        onLoadMore={loadMore}
-        onRowAction={handleRowAction}
-        onContextMenu={handleContextMenu}
-        contextEntry={contextEntry}
-        onOpen={handleOpen}
-        onViewArchive={handleViewArchive}
-        onRename={handleRename}
-        onMove={handleMove}
-        onCopy={handleCopy}
-        onDelete={handleDelete}
-        onCompress={handleCompress}
-        onDecompress={handleDecompress}
-        onShortcut={handleShortcut}
-        onDownload={handleDownload}
-      />
+          <FileList
+            entries={entries}
+            loading={loading}
+            error={error}
+            hasMore={hasMore}
+            isLoadingMore={loadingMore}
+            onLoadMore={loadMore}
+            onRowAction={handleRowAction}
+            onContextMenu={handleContextMenu}
+            contextEntry={contextEntry}
+            onOpen={handleOpen}
+            onViewArchive={handleViewArchive}
+            onRename={handleRename}
+            onMove={handleMove}
+            onCopy={handleCopy}
+            onDelete={handleDelete}
+            onCompress={handleCompress}
+            onDecompress={handleDecompress}
+            onShortcut={handleShortcut}
+            onDownload={handleDownload}
+          />
+        </>
+      )}
 
       {DialogComponent}
 
