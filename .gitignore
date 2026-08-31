@@ -1,8 +1,13 @@
 .mimocode/
 .claude/
 CLAUDE.md
-# Plugin packaging mirrors / template checkouts (own repos) — not project docs
-/docs/plugin/
+# Plugin packaging mirrors / template checkouts (own repos) — not project docs.
+# Plugin sources live in the separate Libra-Plugins repo; anything under a
+# plugin runtime/install directory is runtime state and must NEVER be committed.
+/docs/plugins/*
+!/docs/plugins/README.md
+/src/plugins/
+/src/service/plugins-service/
 # Logs
 logs
 *.log
@@ -144,9 +149,8 @@ dist
 **/obj/
 /src/build-output/
 /src/wechatdump/
-# Plugin sources live in the separate Libra-Plugins repo (plugins/<id>/).
-# The webapp plugin demo pages under src/webapp/src/plugins ARE tracked
-# (they are the live copies the console loads), so do not ignore that tree.
+# Plugin sources live in the separate Libra-Plugins repo (plugins/<id>/);
+# /src/plugins/ is the server's runtime install dir (import/extract target).
 /src/plugins/
 
 # JetBrains IDE
