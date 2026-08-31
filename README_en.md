@@ -31,7 +31,7 @@ Agents communicate with the server over beacon HTTP(S) and SSE event streams, wi
 - Indirect syscalls and sleep obfuscation
 - Anti-sandbox / anti-VM
 - System, hardware and network fingerprinting (GeoIP)
-- Credential harvesting (browser passwords, RDP, SSH keys, etc.)
+- Credential harvesting (RDP, SSH keys, etc.)
 - SOCKS proxy and intranet web browsing
 - In-memory PowerShell (CLR host)
 - Multi-vector persistence

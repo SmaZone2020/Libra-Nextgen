@@ -6,8 +6,8 @@ using Microsoft.AspNetCore.Http;
 namespace LibraNextgen.Service.Mcp;
 
 /// <summary>Credential-focused tools: RDP, SSH keys.
-/// QQ functionality lives in the qqkey plugin; WeChat/browser data now live in
-/// their own plugins (com.libra.wechat-file / com.libra.browser-stealer).
+/// QQ functionality lives in the qqkey plugin; WeChat data lives in the
+/// com.libra.wechat-file plugin.
 /// All credential tools require an Admin access key.</summary>
 [McpServerToolType]
 public sealed class CredTools

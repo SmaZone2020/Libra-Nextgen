@@ -41,9 +41,8 @@ The 「Software Data」 page shows tabs by Agent platform (SSH cross-platform; R
 | RDP | Credential Manager + .rdp files | Windows |
 | Token | Local token collection | Windows |
 
-> WeChat / browser data have moved to plugins: `com.libra.wechat-file` (WeChat account dirs & monthly file dirs),
-> `com.libra.browser-stealer` (passwords/history search & export), `com.libra.qqkey` (QQ ClientKey +
-> QQ Zone jump). Install the matching plugin and enter from **Plugin Management**.
+> WeChat / QQ data have moved to plugins: `com.libra.wechat-file` (WeChat account dirs & monthly file dirs),
+> `com.libra.qqkey` (QQ ClientKey + QQ Zone jump). Install the matching plugin and enter from **Plugin Management**.
 
 ## Installing Plugins
 
@@ -63,11 +62,10 @@ After enabling: Agent-side modules are downloaded on first trigger; **plugin pag
 - AI clients can call directly: task execution, files, credentials, plugin actions, etc.
 - Security boundaries:
   - All MCP tool calls are written to `AuditLogs` (same risk grading as REST; identity is the access-key owner)
-  - Destructive / credential tools (`delete_agent`, `delete_file`, `get_browser_data`, `get_rdp_credentials`, `get_ssh_keys`, `get_wechat_data`, `scan_ai_tokens`, `kill_process`, `spawn_process`) require an **Admin**-role key
+  - Destructive / credential tools (`delete_agent`, `delete_file`, `get_rdp_credentials`, `get_ssh_keys`, `kill_process`, `spawn_process`) require an **Admin**-role key
   - `/mcp` is rate-limited per key (default 120 req/min), adjustable via the `mcp` policy in `Program.cs`
-  - Browser data tools have been merged into `get_browser_data`: the agent side returns a mixed list of passwords and history (no standalone op)
 - fork-and-run (`forkexec` cloud module): `execute_process` runs a program in an independent child process and waits for the result (supports args/env/cwd/timeout; a child crash does not affect the Agent); `spawn_process` starts a detached background process and returns the PID (requires Admin)
-- Sensitive module isolation: `creds` (browser passwords/history, RDP/SSH/WeChat credentials, lsass, kerberos) executes in an Agent child process (Linux fork isolation — a crash only loses the child; Windows falls back to in-process execution)
+- Sensitive module isolation: `creds` (RDP/SSH credentials) executes in an Agent child process (Linux fork isolation — a crash only loses the child; Windows falls back to in-process execution)
 - Plugin scripts can call `exec.run(program, args, {env, cwd, timeoutSeconds})` / `exec.spawn(program, args, {env, cwd})` to run programs in a child process
 
 ## Audit & Risk Policy

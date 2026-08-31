@@ -212,5 +212,4 @@ The full contract and conventions (zero external dependencies / self-contained C
 | `com.libra.qqkey` | probe the local QQ ClientKey, auto-load lists+avatars, business operations (moments/profile/groups, etc.) |
 | `com.libra.aitoken` | collect local AI agent tool API keys; auto-scans on entry, grouped by vendor |
 | `com.libra.av-list` | antivirus detection (product identification/matching processes/platform) |
-| `com.libra.browser-stealer` | browser passwords/history: paged loading, search, CSV export |
 | `com.libra.wechat-file` | WeChat account dirs & monthly file dirs browsing, download |

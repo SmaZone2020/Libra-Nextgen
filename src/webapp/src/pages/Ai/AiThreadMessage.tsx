@@ -349,7 +349,6 @@ export function AiThreadMessage({
 
         {renderBody()}
 
-        {/* 流式进行中的工具（审批挂起 / 正在执行）穿插在末尾实时显示 */}
         {hasTailTools && (
           <div className="flex flex-col gap-2">
             {tailTools.map((tool, index) =>

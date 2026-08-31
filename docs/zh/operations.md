@@ -39,9 +39,8 @@
 | RDP | 凭据管理器 + .rdp 文件 | Windows |
 | Token | 本机 Token 采集 | Windows |
 
-> 微信 / 浏览器数据已迁入插件：`com.libra.wechat-file`(微信账号目录与文件月目录)、
-> `com.libra.browser-stealer`(密码/历史搜索与导出)、`com.libra.qqkey`(QQ ClientKey +
-> QQ 空间跳转)。安装对应插件后从「插件管理」进入。
+> 微信 / QQ 数据已迁入插件：`com.libra.wechat-file`(微信账号目录与文件月目录)、
+> `com.libra.qqkey`(QQ ClientKey + QQ 空间跳转)。安装对应插件后从「插件管理」进入。
 
 ## 插件安装
 
@@ -63,11 +62,10 @@
 - AI 客户端可直接调用：任务执行、文件、凭据、插件动作等
 - 安全边界：
   - 所有 MCP 工具调用写入 `AuditLogs`（与 REST 相同的风险分级，身份为 access-key 所有者）
-  - 破坏性/凭据类工具（`delete_agent`、`delete_file`、`get_browser_data`、`get_rdp_credentials`、`get_ssh_keys`、`get_wechat_data`、`scan_ai_tokens`、`kill_process`、`spawn_process`）要求 **Admin** 角色 key
+  - 破坏性/凭据类工具（`delete_agent`、`delete_file`、`get_rdp_credentials`、`get_ssh_keys`、`kill_process`、`spawn_process`）要求 **Admin** 角色 key
   - `/mcp` 按 key 限流（默认 120 次/分钟），可在 `Program.cs` 的 `mcp` 策略调整
-  - 浏览器数据工具已合并为 `get_browser_data`：agent 侧返回密码与历史记录的混合列表（无独立 op）
 - fork-and-run（`forkexec` 云模块）：`execute_process` 在独立子进程中执行程序并等待结果（支持 args/env/cwd/超时，子进程崩溃不影响 agent）；`spawn_process` 脱胎启动后台进程返回 PID（需 Admin）
-- 敏感模块隔离执行：`creds`（浏览器密码/历史、RDP/SSH/微信凭据、lsass、kerberos）在 agent 子进程中执行（Linux fork 隔离，崩溃只损失子进程；Windows 降级进程内执行）
+- 敏感模块隔离执行：`creds`（RDP/SSH 凭据）在 agent 子进程中执行（Linux fork 隔离，崩溃只损失子进程；Windows 降级进程内执行）
 - 插件脚本可直接调用 `exec.run(program, args, {env, cwd, timeoutSeconds})` / `exec.spawn(program, args, {env, cwd})` 在子进程中执行程序
 
 ## 审计与风险策略

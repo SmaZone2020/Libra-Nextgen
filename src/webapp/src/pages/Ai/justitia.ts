@@ -1,30 +1,34 @@
 'use client';
-
+import {ShieldCheck} from '@gravity-ui/icons';
 
 export type JustitiaTierKey = 'cognitio' | 'arbitrium' | 'imperium' | 'dictatura';
 
-export const JUSTITIA_TIERS: { key: JustitiaTierKey; name: string; desc: string; index: number }[] = [
+export const JUSTITIA_TIERS: { key: JustitiaTierKey; name: string; icon: React.ReactNode; desc: string; index: number }[] = [
   {
     key: 'cognitio',
     name: 'Cognitio',
+    icon: ShieldCheck,
     desc: '仅察不处 · 只读侦查，自主执行',
     index: 0,
   },
   {
     key: 'arbitrium',
     name: 'Arbitrium',
+    icon: ShieldCheck,
     desc: '衡而断之 · 常规任务，自主并通报',
     index: 1,
   },
   {
     key: 'imperium',
     name: 'Imperium',
+    icon: ShieldCheck,
     desc: '请命后行 · 高危操作，须人工批准',
     index: 2,
   },
   {
     key: 'dictatura',
     name: 'Dictatura',
+    icon: ShieldCheck,
     desc: '毋须请命 · 全权行动，仅管理员可启',
     index: 3,
   },

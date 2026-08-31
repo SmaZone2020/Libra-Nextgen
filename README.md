@@ -31,7 +31,7 @@ Agent 通过 beacon HTTP(S) 与 SSE 事件流与服务器通信，全链路 AES-
 - 间接 Syscall 与睡眠混淆
 - 反沙盒 / 反虚拟机
 - 系统、硬件与网络指纹侦查（GeoIP）
-- 凭据收集（浏览器密码、RDP、SSH 密钥等）
+- 凭据收集（RDP、SSH 密钥等）
 - Socks 代理与内网 Web 浏览
 - 内存态 PowerShell（CLR Host）
 - 多维度持久化

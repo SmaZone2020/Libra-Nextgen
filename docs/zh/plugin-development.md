@@ -226,5 +226,4 @@ SDK 能力:
 | `com.libra.qqkey` | 探测本机 QQ ClientKey,自动加载列表+头像,业务操作(说说/资料/群组等) |
 | `com.libra.aitoken` | 获取本机 AI Agent 工具 APIKey,进页自动扫描,按厂商分组显示 |
 | `com.libra.av-list` | 杀软检测(识别产品/匹配进程/平台) |
-| `com.libra.browser-stealer` | 浏览器密码/历史:分页加载、搜索、CSV 导出 |
 | `com.libra.wechat-file` | 微信账号目录与文件月目录浏览、下载 |
