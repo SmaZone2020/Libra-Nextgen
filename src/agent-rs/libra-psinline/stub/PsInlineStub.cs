@@ -10,6 +10,9 @@ namespace PsInline
 {
     public class Stub
     {
+        /// Host environment snapshot when config boot fails (for diagnosis).
+        private static string HostDiag = null;
+
         public int Run(string args)
         {
             string pipeName = "";
@@ -86,10 +89,45 @@ namespace PsInline
                         if (fAppBase != null) fAppBase.SetValue(store, appBase);
                         if (fCfg != null) fCfg.SetValue(store, cfgPath);
                     }
-                    // Probe: force config boot now; a failure here is fatal and
-                    // surfaces immediately with the real inner path error.
-                    var probe = System.Configuration.ConfigurationManager.GetSection("appSettings");
-                    trace("config boot OK (appSettings=" + (probe == null ? "null" : "non-null") + ")");
+                    // Probe: try to boot the config system. NOT fatal — the
+                    // DontEnableSystemDiagnosticsTracing switch is what stops
+                    // ServicePointManager from needing config at all; the probe
+                    // only records the host environment if something else still
+                    // reaches ConfigurationManager.
+                    try
+                    {
+                        var probe = System.Configuration.ConfigurationManager.GetSection("appSettings");
+                        trace("config boot OK (appSettings=" + (probe == null ? "null" : "non-null") + ")");
+                    }
+                    catch (System.Exception cfgEx)
+                    {
+                        trace("config probe failed (non-fatal): " + cfgEx);
+                        // Snapshot the host environment so the offending input
+                        // (command line / AppBase / config file / entry assembly)
+                        // is identifiable if PowerShell still fails later.
+                        try
+                        {
+                            var sb = new System.Text.StringBuilder();
+                            sb.Append("cmdline:");
+                            try { sb.Append(string.Join("|", Environment.GetCommandLineArgs())); }
+                            catch (System.Exception e) { sb.Append("<err:").Append(e.Message).Append('>'); }
+                            sb.Append("; AB:");
+                            try { sb.Append(System.AppDomain.CurrentDomain.SetupInformation.ApplicationBase); }
+                            catch (System.Exception e) { sb.Append("<err:").Append(e.Message).Append('>'); }
+                            sb.Append("; CF:");
+                            try { sb.Append(System.AppDomain.CurrentDomain.SetupInformation.ConfigurationFile); }
+                            catch (System.Exception e) { sb.Append("<err:").Append(e.Message).Append('>'); }
+                            sb.Append("; EA:");
+                            try
+                            {
+                                var ea = System.Reflection.Assembly.GetEntryAssembly();
+                                sb.Append(ea == null ? "<null>" : ea.Location);
+                            }
+                            catch (System.Exception e) { sb.Append("<err:").Append(e.Message).Append('>'); }
+                            HostDiag = sb.ToString();
+                        }
+                        catch { HostDiag = cfgEx.Message; }
+                    }
                 }
                 catch (System.Exception cfgEx)
                 {
@@ -176,7 +214,10 @@ namespace PsInline
             catch (Exception ex)
             {
                 trace("EXCEPTION: " + ex.GetType().Name + ": " + ex.Message);
-                WriteResult(pipeName, "{\"success\":false,\"output\":null,\"error\":" + JsonEscape(ex.ToString()) + "}");
+                var errText = ex.ToString();
+                if (HostDiag != null && (errText.Contains("Configuration") || errText.Contains("ServicePointManager")))
+                    errText += "\r\n---HOST---\r\n" + HostDiag;
+                WriteResult(pipeName, "{\"success\":false,\"output\":null,\"error\":" + JsonEscape(errText) + "}");
                 return 1;
             }
         }
