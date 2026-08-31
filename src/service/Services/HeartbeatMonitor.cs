@@ -11,8 +11,12 @@ public class HeartbeatMonitor : BackgroundService
 {
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly ILogger<HeartbeatMonitor> _logger;
-    private static readonly TimeSpan CheckInterval = TimeSpan.FromSeconds(15);
-    private static readonly TimeSpan TimeoutThreshold = TimeSpan.FromSeconds(90);
+    private static readonly TimeSpan CheckInterval = TimeSpan.FromSeconds(10);
+    // Offline threshold. The agent's liveness is also refreshed by the SSE event
+    // stream every 30s, so a 60s gap means BOTH the beacon heartbeats AND the SSE
+    // connection have stopped — a much more reliable "really gone" signal than
+    // relying on heartbeats alone under transient network jitter.
+    private static readonly TimeSpan TimeoutThreshold = TimeSpan.FromSeconds(60);
 
     public HeartbeatMonitor(IServiceScopeFactory scopeFactory, ILogger<HeartbeatMonitor> logger)
     {

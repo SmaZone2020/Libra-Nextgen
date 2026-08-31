@@ -134,11 +134,7 @@ public class AgentCommsService
         if (agent == null)
             return (false, null, "");
 
-        var ub = Builders<Agent>.Update;
-        var update = Builders<Agent>.Update.Combine(
-            ub.Set(a => a.LastSeen, DateTime.UtcNow),
-            ub.Set(a => a.Status, AgentStatus.Online));
-        await _agents.UpdateAsync(agentId, update);
+        await TouchLastSeenAsync(agentId);
 
         var task = await _taskService.GetNextPendingForAgentAsync(agentId);
         if (task != null)
@@ -147,6 +143,19 @@ public class AgentCommsService
         }
 
         return (true, task, agent.Hostname);
+    }
+
+    /// <summary>
+    /// Refresh an agent's liveness without pulling a task. Used by the SSE event
+    /// stream: a live connection (and its keepalives) is proof the agent process
+    /// is still alive, so transient heartbeat failures won't knock it offline.
+    /// </summary>
+    public async Task TouchLastSeenAsync(string agentId)
+    {
+        var update = Builders<Agent>.Update
+            .Set(a => a.LastSeen, DateTime.UtcNow)
+            .Set(a => a.Status, AgentStatus.Online);
+        await _agents.UpdateAsync(agentId, update);
     }
 
     public void RecordTraffic(string agentId, string hostname, long bytesReceived, long bytesSent)

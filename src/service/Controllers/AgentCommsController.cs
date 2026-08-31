@@ -480,6 +480,10 @@ public class AgentCommsController : ControllerBase
         Response.Headers.CacheControl = "no-cache";
         Response.Headers.Connection = "keep-alive";
 
+        // A live SSE connection is proof the agent process is alive — keep the
+        // agent seen so transient heartbeat failures don't knock it offline.
+        try { await _commsService.TouchLastSeenAsync(agentId); } catch { /* best-effort */ }
+
         var queue = _eventHub.Subscribe(agentId);
         var abort = HttpContext.RequestAborted;
         long sseBytesSent = 0;
@@ -527,6 +531,8 @@ public class AgentCommsController : ControllerBase
                     await Response.WriteAsync(ping, abort);
                     await Response.Body.FlushAsync(abort);
                     sseBytesSent += ping.Length;
+                    // Keepalive proves liveness every 30s, independent of heartbeats.
+                    try { await _commsService.TouchLastSeenAsync(agentId); } catch { /* best-effort */ }
                 }
             }
         }
