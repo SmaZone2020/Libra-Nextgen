@@ -11,6 +11,7 @@ import {
   getAiSessions,
   type AiProvider,
   type AiSession,
+  mergeSessionLists,
 } from '../../api/ai';
 import { getMyChannelSessions } from '../../api/aiChannels';
 import { useDialog } from '../../hooks/useDialog';
@@ -48,8 +49,10 @@ export function AiSidebar({
     setLoading(true);
     try {
       const [ss, cs, ps] = await Promise.all([getAiSessions(), getMyChannelSessions(), getAiProviders()]);
-      setSessions(ss);
-      setChannelSessions(cs);
+      // Merge instead of replacing: identical lists keep the same array
+      // reference so sidebar rows don't re-render on every progress update.
+      setSessions((prev) => mergeSessionLists(prev, ss));
+      setChannelSessions((prev) => mergeSessionLists(prev, cs));
       setProviders(ps);
       onSessionCountChange?.(ss.length, cs.length);
     } catch {

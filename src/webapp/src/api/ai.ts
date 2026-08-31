@@ -73,6 +73,32 @@ export interface AiSession {
   channelExternalName?: string | null;
 }
 
+/**
+ * Merge a freshly fetched session list into the current one WITHOUT recreating
+ * the array (and thus re-rendering every sidebar row) when nothing the UI shows
+ * actually changed. Live-progress updates keep bumping `updatedAt`, so that
+ * field is deliberately ignored; ordering is taken from the server response as
+ * a whole whenever any significant field differs.
+ */
+export function mergeSessionLists(prev: AiSession[], next: AiSession[]): AiSession[] {
+  if (prev.length !== next.length) return next;
+  for (let i = 0; i < prev.length; i++) {
+    const a = prev[i]!;
+    const b = next[i]!;
+    if (
+      a.id !== b.id ||
+      a.title !== b.title ||
+      a.model !== b.model ||
+      a.providerId !== b.providerId ||
+      a.channelExternalName !== b.channelExternalName ||
+      a.status !== b.status
+    ) {
+      return next;
+    }
+  }
+  return prev;
+}
+
 export interface AiToolDescriptor {
   name: string;
   description: string;

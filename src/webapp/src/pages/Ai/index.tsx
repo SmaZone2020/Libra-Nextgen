@@ -21,6 +21,7 @@ import {
   type AiSession,
   type AiSseEvent,
   type AiToolCall,
+  mergeSessionLists,
 } from '../../api/ai';
 import { ChatConversation, PromptSuggestion } from '../../vendor/ui-pro';
 import { AiSidebar, AiSidebarDrawer } from './AiSidebar';
@@ -118,20 +119,47 @@ export default function AiPage() {
   }, []);
 
   useEffect(() => {
+    // Throttled, merging refresh: ai.session.updated can fire every ~1s while a
+    // channel session streams. Coalesce bursts and keep list array references
+    // stable so nothing re-renders unless something visible actually changed.
+    const listTimer = { current: 0 };
+    const detailTimer = { current: 0 };
+
+    const scheduleListRefresh = () => {
+      if (listTimer.current) return;
+      listTimer.current = window.setTimeout(() => {
+        listTimer.current = 0;
+        void getMyChannelSessions()
+          .then((cs) => setChannelSessions((prev) => mergeSessionLists(prev, cs)))
+          .catch(() => undefined);
+        sidebarRefreshKeyRef.current += 1;
+        setSidebarRefreshKey(sidebarRefreshKeyRef.current);
+      }, 1200);
+    };
+
+    const scheduleDetailRefresh = () => {
+      if (!activeId) return;
+      if (detailTimer.current) return;
+      detailTimer.current = window.setTimeout(() => {
+        detailTimer.current = 0;
+        void getAiSession(activeId).then(setSession).catch(() => undefined);
+      }, 600);
+    };
+
     const refresh = (msg: { data?: unknown }) => {
       const data = msg?.data as { sessionId?: string } | null | undefined;
       if (data?.sessionId === activeId && streamingRef.current === 'idle') {
-        void getAiSession(activeId).then(setSession).catch(() => undefined);
+        scheduleDetailRefresh();
       }
-      void getMyChannelSessions().then(setChannelSessions).catch(() => undefined);
-      sidebarRefreshKeyRef.current += 1;
-      setSidebarRefreshKey(sidebarRefreshKeyRef.current);
+      scheduleListRefresh();
     };
     const offNotify = consoleWs.on('ai.notify', refresh);
     const offUpdated = consoleWs.on('ai.session.updated', refresh);
     return () => {
       offNotify();
       offUpdated();
+      window.clearTimeout(listTimer.current);
+      window.clearTimeout(detailTimer.current);
     };
   }, [activeId]);
 
