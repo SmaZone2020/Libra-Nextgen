@@ -45,19 +45,31 @@ namespace PsInline
             trace("enter");
             try
             {
-                // Embedded CLR host (Rust agent loading this stub via hostfxr) has
-                // no valid executable config path. PowerShell's network/config
-                // initialization (ServicePointManager → DiagnosticsConfiguration →
-                // ClientConfigPaths) then throws "path contains illegal characters"
-                // for EVERY command. Pin a syntactically valid app-config baseline
-                // (in-memory only — nothing is written to disk, keeping the
-                // no-touch-disk footprint), so the configuration system boots
-                // with defaults.
+                // Embedded CLR host has no valid application config path; .NET
+                // Framework's ClientConfigPaths then throws "path contains illegal
+                // characters" for EVERY PowerShell command (ServicePointManager
+                // diagnostics init). AppDomain.SetData("APP_CONFIG_FILE") does NOT
+                // affect SetupInformation.ConfigurationFile in .NET Framework — it
+                // is a snapshot — so patch the FusionStore field the config system
+                // actually reads, and pin a valid empty config file.
                 try
                 {
-                    AppDomain.CurrentDomain.SetData(
-                        "APP_CONFIG_FILE",
-                        System.IO.Path.Combine(System.IO.Path.GetTempPath(), "ps_inline.config"));
+                    var cfgPath = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "libra_pwsh_unused.config");
+                    if (!System.IO.File.Exists(cfgPath))
+                        System.IO.File.WriteAllText(cfgPath, "<?xml version=\"1.0\"?>\r\n<configuration/>\r\n");
+                    var storeField = typeof(System.AppDomain).GetField(
+                        "_FusionStore",
+                        System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+                    if (storeField != null)
+                    {
+                        var store = storeField.GetValue(System.AppDomain.CurrentDomain);
+                        var cfgField = store.GetType().GetField(
+                            "_configuration_file",
+                            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+                        if (cfgField != null)
+                            cfgField.SetValue(store, cfgPath);
+                    }
+                    System.AppDomain.CurrentDomain.SetData("APP_CONFIG_FILE", cfgPath);
                 }
                 catch {}
 
