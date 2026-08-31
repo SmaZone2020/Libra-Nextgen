@@ -738,9 +738,76 @@ public class AiService
 
         state.LlmMessages.AddRange(BuildHistoryMessages(session.Messages));
 
+        // ── Progress persistence ─────────────────────────────────────────────
+        // For channel sessions (Telegram/Lark/WeChat) the console renders the
+        // conversation from the DB. Persist the in-progress assistant message at
+        // most once per second so the console sees tool calls and partial text
+        // live, not only after the whole run finishes. SaveSessionAsync already
+        // broadcasts ai.session.updated which triggers the console refresh.
+        var progressLock = new object();
+        var lastProgressSave = DateTime.MinValue;
+        var progressGate = TimeSpan.FromMilliseconds(1000);
+
+        async Task SaveProgressAsync(bool force = false)
+        {
+            if (!force)
+            {
+                lock (progressLock)
+                {
+                    if (DateTime.UtcNow - lastProgressSave < progressGate) return;
+                    lastProgressSave = DateTime.UtcNow;
+                }
+            }
+            try
+            {
+                var s = await GetSessionAsync(state.SessionId, state.UserId, state.Cts?.Token ?? ct);
+                if (s == null) return;
+                var pending = new AiMessage
+                {
+                    Role = "assistant",
+                    Content = state.AssistantText,
+                    Reasoning = state.Reasoning.Count > 0 ? MergeReasoningSteps(state.Reasoning) : null,
+                    ToolCalls = state.ToolCalls.Count > 0 ? state.ToolCalls : null,
+                    Pending = true,
+                };
+                var last = s.Messages.Count > 0 ? s.Messages[^1] : null;
+                if (last is { Role: "assistant", Pending: true }) s.Messages[^1] = pending;
+                else s.Messages.Add(pending);
+                s.Status = "responding";
+                await SaveSessionAsync(s, ct);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogDebug(ex, "AI progress save failed (session {Session})", state.SessionId);
+            }
+        }
+
+        var emit = onEvent;
+        var throttledOnEvent = new Func<string, Task>(async payload =>
+        {
+            await emit(payload);
+            try
+            {
+                using var doc = JsonDocument.Parse(payload);
+                if (!doc.RootElement.TryGetProperty("type", out var typeProp))
+                    return;
+                var type = typeProp.GetString();
+                if (type == "error")
+                {
+                    var s = await GetSessionAsync(state.SessionId, state.UserId, ct);
+                    if (s != null) { s.Status = "error"; await SaveSessionAsync(s, ct); }
+                }
+                else if (type is "message" or "tool_call" or "tool_result" or "reasoning")
+                {
+                    await SaveProgressAsync();
+                }
+            }
+            catch (JsonException) { /* caller payloads remain forwarded as-is */ }
+        });
+
         try
         {
-            await ChatLoopAsync(state, provider, onEvent, state.Cts.Token);
+            await ChatLoopAsync(state, provider, throttledOnEvent, state.Cts.Token);
         }
         catch (OperationCanceledException)
         {
@@ -909,7 +976,12 @@ public class AiService
         var session = await GetSessionAsync(state.SessionId, state.UserId, ct);
         if (session != null)
         {
-            session.Messages.Add(finalMsg);
+            // Replace the in-progress message (if any) with the final one.
+            var lastMsg = session.Messages.Count > 0 ? session.Messages[^1] : null;
+            if (lastMsg is { Role: "assistant", Pending: true })
+                session.Messages[^1] = finalMsg;
+            else
+                session.Messages.Add(finalMsg);
             if (session.Title == "新对话")
             {
                 var firstUser = state.LlmMessages.FirstOrDefault(m => m["role"]?.GetValue<string>() == "user");
@@ -917,6 +989,7 @@ public class AiService
                 if (text.Length > 24) text = text[..24] + "…";
                 session.Title = text.Length > 0 ? text : "新对话";
             }
+            session.Status = "completed";
             await SaveSessionAsync(session, ct);
         }
         await onEvent(JsonSerializer.Serialize(new { type = "done", sessionId = state.SessionId, messageId = finalMsg.Id }, JsonOpts));

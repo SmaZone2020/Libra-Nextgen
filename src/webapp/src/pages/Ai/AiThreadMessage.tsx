@@ -395,7 +395,14 @@ export function AiThreadMessage({
           </>
         ) : null}
 
-        {!isStreaming && (message.content || renderedToolCalls.length > 0) && (
+        {!isStreaming && message.pending && (
+          <div className="mt-1 inline-flex items-center gap-2 text-sm text-default-500">
+            <ChatLoader.Dots />
+            <span>{t('ai.responding')}</span>
+          </div>
+        )}
+
+        {!isStreaming && !message.pending && (message.content || renderedToolCalls.length > 0) && (
           <ChatMessageActions>
             <ChatMessageActions.Copy
               aria-label={t('common.copy')}

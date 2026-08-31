@@ -75,7 +75,7 @@ public class AgentCommsService
     public bool TryResolveSessionToken(string token, out string? agentId) =>
         _sessionKeys.TryResolveToken(token, out agentId);
 
-    public async Task<Agent?> HandleRegisterAsync(RegisterRequest request, string clientIp)
+    public async Task<Agent?> HandleRegisterAsync(RegisterRequest request, string clientIp, int heartbeatIntervalSeconds = 30)
     {
         var hwid = request.Hardware?.Hwid;
 
@@ -100,7 +100,8 @@ public class AgentCommsService
                 ub.Set(a => a.Arch, request.Arch),
                 ub.Set(a => a.ProcessName, request.ProcessName),
                 ub.Set(a => a.PublicKey, request.PublicKey),
-                ub.Set(a => a.Hwid, hwid)
+                ub.Set(a => a.Hwid, hwid),
+                ub.Set(a => a.HeartbeatInterval, heartbeatIntervalSeconds)
             };
             if (request.Hardware != null) updates.Add(ub.Set(a => a.Hardware, request.Hardware));
             await _agents.UpdateAsync(existing.Id, Builders<Agent>.Update.Combine(updates));
@@ -122,6 +123,7 @@ public class AgentCommsService
             PublicKey = request.PublicKey,
             Hardware = request.Hardware,
             Hwid = hwid,
+            HeartbeatInterval = heartbeatIntervalSeconds,
             Status = AgentStatus.Online
         };
         await _agents.InsertAsync(agent);

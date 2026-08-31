@@ -117,8 +117,9 @@ public class AgentCommsController : ControllerBase
 
         var bytesReceived = Request.ContentLength ?? 0;
 
+        var profile = await _commsService.GetActiveProfileAsync();
         var clientIp = HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
-        var agent = await _commsService.HandleRegisterAsync(request, clientIp);
+        var agent = await _commsService.HandleRegisterAsync(request, clientIp, profile.HeartbeatIntervalSeconds);
 
         if (agent == null)
             return StatusCode(500, new { error = "registration failed" });
@@ -130,7 +131,6 @@ public class AgentCommsController : ControllerBase
         // wire for all subsequent requests. Rotates on every registration.
         var sessionToken = _commsService.IssueSessionToken(agent.Id);
 
-        var profile = await _commsService.GetActiveProfileAsync();
         var response = await BuildRegisterResponseAsync(agent, request, sessionKey, sessionToken, profile);
 
         var responseJson = J(response);
@@ -467,8 +467,13 @@ public class AgentCommsController : ControllerBase
     [HttpGet("/api/beacon/events")]
     public async Task Events(string? channel, CancellationToken ct)
     {
-        if (string.IsNullOrEmpty(channel)
-            || !_commsService.TryResolveSessionToken(channel, out var agentId)
+        // New agents send the session token in X-Session-Token (avoid leaking it
+        // into access logs via the query string); legacy query param still works.
+        var token = channel
+            ?? Request.Headers["X-Session-Token"].FirstOrDefault()
+            ?? Request.Headers["X-Libra-Token"].FirstOrDefault();
+        if (string.IsNullOrEmpty(token)
+            || !_commsService.TryResolveSessionToken(token, out var agentId)
             || string.IsNullOrEmpty(agentId)
             || !_commsService.TryGetSessionKey(agentId, out var key) || key is null)
         {
@@ -574,7 +579,7 @@ public class AgentCommsController : ControllerBase
             return Unauthorized(new { error = "invalid beacon secret" });
 
         var clientIp = HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
-        var agent = await _commsService.HandleRegisterAsync(request, clientIp);
+        var agent = await _commsService.HandleRegisterAsync(request, clientIp, profile.HeartbeatIntervalSeconds);
         if (agent == null)
             return StatusCode(500, new { error = "registration failed" });
 

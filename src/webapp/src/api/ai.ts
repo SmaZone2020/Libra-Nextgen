@@ -51,6 +51,8 @@ export interface AiMessage {
   toolCalls?: AiToolCall[];
   sources?: AiSource[];
   createdAt: string;
+  /** True while the AI is still generating this message (live progress). */
+  pending?: boolean;
 }
 
 export interface AiSession {
@@ -63,6 +65,8 @@ export interface AiSession {
   messages: AiMessage[];
   createdAt: string;
   updatedAt: string;
+  /** 'completed' | 'responding' | 'error' — responding means the AI is generating. */
+  status?: string;
   channelId?: string | null;
   channelType?: 'telegram' | 'lark' | 'wechat-claw' | null;
   channelExternalId?: string | null;

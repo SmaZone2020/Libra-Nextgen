@@ -30,6 +30,10 @@ public class AiSession
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 
+    /// <summary>Run state exposed to clients: idle("completed" for legacy docs) /
+    /// responding while the AI is generating / error.</summary>
+    public string Status { get; set; } = "completed";
+
     public string? ChannelId { get; set; }
     public string? ChannelType { get; set; }
     public string? ChannelExternalId { get; set; }
@@ -123,6 +127,10 @@ public class AiMessage
     public List<AiToolCall>? ToolCalls { get; set; }
     public List<AiSource>? Sources { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+
+    /// <summary>True while the AI is still generating this message (progress
+    /// persisted for streaming visibility; replaced on completion).</summary>
+    public bool Pending { get; set; }
 }
 
 public class AiReasoningStep

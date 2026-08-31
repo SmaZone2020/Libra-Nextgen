@@ -975,6 +975,7 @@ export default {
       thoughtFor: 'Thought for {{count}} steps',
       toolCalls: '{{count}} tool calls',
       usedTool: 'Used tool',
+      responding: 'Responding…',
       sources: '{{count}} sources',
       editMessage: 'Edit message',
       deleteMessage: 'Delete message',

@@ -974,6 +974,7 @@ export default {
       thoughtFor: '已思考 {{count}} 步',
       toolCalls: '{{count}} 次工具调用',
       usedTool: '已调用工具',
+      responding: '正在回答…',
       sources: '{{count}} 个来源',
       editMessage: '编辑消息',
       deleteMessage: '删除消息',
