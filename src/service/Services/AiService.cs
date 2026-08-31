@@ -543,6 +543,8 @@ public class AiService
     }
 
     /// <summary>
+    /// Tools actually exposed to the AI: filtered by the AllowedTools whitelist
+    /// (empty whitelist = everything enabled).
     /// </summary>
     public async Task<List<AiToolDescriptor>> GetToolsAsync(CancellationToken ct = default)
     {
@@ -561,6 +563,29 @@ public class AiService
                 var desc = method.GetCustomAttribute<DescriptionAttribute>()?.Description ?? "";
                 var schema = BuildToolSchema(method);
                 result.Add(new AiToolDescriptor(name, desc, schema));
+            }
+        }
+        return result.OrderBy(t => t.Name).ToList();
+    }
+
+    /// <summary>
+    /// Every registered tool regardless of the whitelist — used by the settings
+    /// UI so newly added tools (e.g. plugin_action) can be discovered and
+    /// whitelisted instead of being invisible once a whitelist exists.
+    /// </summary>
+    public async Task<List<AiToolDescriptor>> GetAllToolsAsync(CancellationToken ct = default)
+    {
+        var cfg = await GetMcpConfigAsync(ct);
+        var result = new List<AiToolDescriptor>();
+        if (!cfg.ToolsEnabled) return result;
+        foreach (var type in typeof(McpService).Assembly.GetTypes())
+        {
+            if (type.GetCustomAttribute<McpServerToolTypeAttribute>() == null) continue;
+            foreach (var method in type.GetMethods(BindingFlags.Public | BindingFlags.Static))
+            {
+                if (method.GetCustomAttribute<McpServerToolAttribute>() == null) continue;
+                var desc = method.GetCustomAttribute<DescriptionAttribute>()?.Description ?? "";
+                result.Add(new AiToolDescriptor(method.Name, desc, BuildToolSchema(method)));
             }
         }
         return result.OrderBy(t => t.Name).ToList();

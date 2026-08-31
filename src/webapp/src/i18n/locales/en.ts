@@ -786,6 +786,8 @@ export default {
       aiDeleteConfirm: 'Delete provider "{{name}}"?',
       aiMcpTitle: 'MCP Tool Connection',
       aiMcpDesc: 'Expose registered MCP tools to the AI assistant',
+      aiMcpTools: 'Tool inventory (checked = exposed to AI)',
+      aiMcpToolsHint: 'New tools (e.g. plugin_action) are not in an existing whitelist — check them to let the AI call them; unchecked-all means everything is exposed.',
       aiMcpWhitelistHint: 'Whitelist controls which tools the model may call',
       language: 'Language',
       theme: 'Theme',

@@ -149,7 +149,9 @@ public class AiController : ControllerBase
         {
             cfg.ToolsEnabled,
             cfg.AllowedTools,
-            tools = await _ai.GetToolsAsync(ct),
+            // Full tool inventory (unfiltered) so the settings UI can whitelist
+            // tools that were added after a whitelist was saved.
+            tools = await _ai.GetAllToolsAsync(ct),
         });
     }
 

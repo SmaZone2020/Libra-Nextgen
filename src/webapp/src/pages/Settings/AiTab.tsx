@@ -173,7 +173,6 @@ export default function AiTab() {
         )}
       </Card>
 
-      {}
       <ProviderFormModal
         open={modalOpen}
         editing={editing}
@@ -181,7 +180,6 @@ export default function AiTab() {
         onSaved={() => void reload()}
       />
 
-      {}
       <Card className="p-6">
         <div className="mb-2 flex items-center justify-between">
           <div>
@@ -195,6 +193,36 @@ export default function AiTab() {
           </Switch>
         </div>
 
+        {(mcp?.tools?.length ?? 0) > 0 && (
+          <div className="mt-4">
+            <div className="mb-2 text-sm font-medium text-default-600">{t('settings.aiMcpTools')}</div>
+            <div className="max-h-72 space-y-1.5 overflow-y-auto pr-1">
+              {mcp!.tools.map((tool) => {
+                const on = (mcp!.allowedTools.length === 0) || mcp!.allowedTools.includes(tool.name);
+                return (
+                  <div
+                    key={tool.name}
+                    className="flex items-center justify-between gap-3 rounded-xl border border-default-200 px-3 py-2 dark:border-default-800"
+                  >
+                    <div className="min-w-0">
+                      <div className="font-mono text-xs font-medium">{tool.name}</div>
+                      {tool.description && (
+                        <div className="truncate text-[11px] text-default-500">{tool.description}</div>
+                      )}
+                    </div>
+                    <Switch
+                      size="sm"
+                      isSelected={on}
+                      onChange={(v) => void handleToolWhitelist(tool, v)}
+                      aria-label={tool.name}
+                    />
+                  </div>
+                );
+              })}
+            </div>
+            <p className="mt-2 text-[11px] text-default-400">{t('settings.aiMcpToolsHint')}</p>
+          </div>
+        )}
       </Card>
       {DialogComponent}
     </div>

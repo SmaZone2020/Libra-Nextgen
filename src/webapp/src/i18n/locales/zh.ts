@@ -785,6 +785,8 @@ export default {
       aiDeleteConfirm: '确定删除供应商「{{name}}」吗？',
       aiMcpTitle: 'MCP 工具连接',
       aiMcpDesc: '将已注册的 MCP 工具开放给 AI 助手调用',
+      aiMcpTools: '工具清单（勾选 = 开放给 AI）',
+      aiMcpToolsHint: '新工具（如 plugin_action）默认不在白名单中，勾选后 AI 即可调用；不勾任何工具 = 全部开放。',
       aiMcpWhitelistHint: '白名单控制模型可调用的工具',
       language: '语言',
       theme: '主题',
