@@ -112,3 +112,7 @@ html {
 .tabs__list-container__scroll-prev,.tabs__list-container__scroll-next{
   display: none;
 }
+
+.xterm-viewport,.xterm-screen{
+  height: 90vh;
+}

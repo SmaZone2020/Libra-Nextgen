@@ -173,8 +173,8 @@ export function AiSidebar({
           aria-label={t('ai.searchSessions')}
         />
         <Button
-          className="aspect-square shrink-0 rounded-[15px]"
-          variant="primary"
+          className="aspect-square shrink-0 text-foreground rounded-[15px]"
+          variant="secondary"
           isIconOnly
           onPress={() => {
             if (enabledProviders.length === 0) {
