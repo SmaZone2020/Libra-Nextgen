@@ -49,14 +49,15 @@ namespace PsInline
                 // no valid executable config path. PowerShell's network/config
                 // initialization (ServicePointManager → DiagnosticsConfiguration →
                 // ClientConfigPaths) then throws "path contains illegal characters"
-                // for EVERY command. Pin a valid empty app-config baseline so the
-                // configuration system boots with defaults.
+                // for EVERY command. Pin a syntactically valid app-config baseline
+                // (in-memory only — nothing is written to disk, keeping the
+                // no-touch-disk footprint), so the configuration system boots
+                // with defaults.
                 try
                 {
-                    var cfgPath = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "ps_inline.config");
-                    if (!System.IO.File.Exists(cfgPath))
-                        System.IO.File.WriteAllText(cfgPath, "<?xml version=\"1.0\"?>\r\n<configuration/>\r\n");
-                    AppDomain.CurrentDomain.SetData("APP_CONFIG_FILE", cfgPath);
+                    AppDomain.CurrentDomain.SetData(
+                        "APP_CONFIG_FILE",
+                        System.IO.Path.Combine(System.IO.Path.GetTempPath(), "ps_inline.config"));
                 }
                 catch {}
 
