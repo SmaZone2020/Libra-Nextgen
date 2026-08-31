@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import Terminal from '../../components/terminal';
 import type { TerminalHandle } from '../../components/terminal';
@@ -9,19 +9,28 @@ import { unwrapTaskOutput } from './taskOutput';
 
 export default function ShellPage() {
   const { t } = useTranslation();
-  const { agentId } = useAgent();
+  const { agentId, selectedAgent } = useAgent();
   const termRef = useRef<TerminalHandle>(null);
   const [running, setRunning] = useState(false);
   const inputBufRef = useRef('');
+
+  /** Prompt shown while waiting for input: "Libra-<deviceName> $ " */
+  const promptText = useMemo(
+    () => `Libra-${selectedAgent?.hostname || agentId.slice(0, 8) || 'agent'} $ `,
+    [selectedAgent?.hostname, agentId],
+  );
 
   const print = useCallback((text: string) => {
     termRef.current?.write(text.replace(/\n/g, '\r\n'));
   }, []);
 
+  const renderPrompt = useCallback(() => {
+    print(`\r\n${promptText}`);
+  }, [print, promptText]);
+
   const execute = useCallback(async (cmd: string) => {
     if (!agentId || !cmd.trim() || running) return;
     setRunning(true);
-    print(`\r\n$ ${cmd}\r\n`);
     try {
       const task = await createTask({
         agentId,
@@ -46,16 +55,28 @@ export default function ShellPage() {
       print(`\r\n${t('shell.error', { msg: e instanceof Error ? e.message : String(e) })}\r\n`);
     } finally {
       setRunning(false);
+      renderPrompt();
       termRef.current?.focus();
     }
-  }, [agentId, running, print]);
+  }, [agentId, running, print, renderPrompt, t]);
 
   const handleInput = useCallback((data: string) => {
     if (data === '\r' || data === '\n' || data === '\r\n') {
       const cmd = inputBufRef.current;
       inputBufRef.current = '';
       print('\r\n');
-      if (cmd.trim()) execute(cmd);
+      if (!cmd.trim()) {
+        renderPrompt();
+        return;
+      }
+      // clear / cls clear the terminal locally.
+      const trimmed = cmd.trim().toLowerCase();
+      if (trimmed === 'clear' || trimmed === 'cls') {
+        termRef.current?.clear();
+        renderPrompt();
+        return;
+      }
+      execute(cmd);
       return;
     }
     if (data === '\x7f' || data === '\b') {
@@ -74,14 +95,15 @@ export default function ShellPage() {
     if (data.length !== 1 || data.charCodeAt(0) < 0x20) return;
     inputBufRef.current += data;
     termRef.current?.write(data);
-  }, [execute, print]);
+  }, [execute, print, renderPrompt]);
 
   useEffect(() => {
     if (agentId) {
       termRef.current?.clear();
       print(`${t('shell.banner')}\r\n`);
+      renderPrompt();
     }
-  }, [agentId, print, t]);
+  }, [agentId, print, renderPrompt, t]);
 
   return (
     <div className="space-y-3">
