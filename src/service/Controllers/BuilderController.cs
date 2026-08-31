@@ -124,9 +124,12 @@ public class BuilderController : ControllerBase
         {
             var name = Path.GetFileName(file);
             if (name.EndsWith(ext, StringComparison.OrdinalIgnoreCase))
-                modules.Add(new { name = Path.GetFileNameWithoutExtension(name), enabled = true });
+                modules.Add(new { name = BuilderBuildService.CanonicalModuleName(Path.GetFileNameWithoutExtension(name)), enabled = true });
             else if (name.EndsWith(ext + ".disable", StringComparison.OrdinalIgnoreCase))
-                modules.Add(new { name = Path.GetFileNameWithoutExtension(name[..^".disable".Length]), enabled = false });
+            {
+                var stem = Path.GetFileNameWithoutExtension(name[..^".disable".Length]);
+                modules.Add(new { name = BuilderBuildService.CanonicalModuleName(stem), enabled = false });
+            }
         }
         return Ok(new { modules });
     }

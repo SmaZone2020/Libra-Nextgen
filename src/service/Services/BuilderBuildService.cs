@@ -41,14 +41,41 @@ public partial class BuilderBuildService
     };
 
     /// <summary>
+    /// Enabled modules for this request. Empty request = all modules enabled.
+    /// Names are matched tolerantly: the canonical module name, the cargo lib
+    /// target name (e.g. shell_module) or a "_module"-suffixed variant all map
+    /// to the same module — legacy deployments used both forms on disk and the
+    /// frontend inventory may therefore carry either.
     /// </summary>
     internal static List<string> EnabledModuleList(BuildContext ctx)
     {
         var requested = ctx.Req.EnabledModules;
         if (requested == null || requested.Count == 0)
             return CloudModules.Select(m => m.Module).ToList();
-        var known = new HashSet<string>(CloudModules.Select(m => m.Module));
-        return requested.Where(known.Contains).Distinct().ToList();
+
+        var canonical = requested
+            .Select(name =>
+            {
+                var normalized = name?.Trim();
+                if (string.IsNullOrEmpty(normalized)) return null;
+                if (normalized.EndsWith("_module", StringComparison.Ordinal))
+                    normalized = normalized[..^"_module".Length];
+                // Exact module name match or lib target name match.
+                foreach (var (module, lib) in CloudModules)
+                {
+                    if (module == normalized || lib == normalized)
+                        return module;
+                }
+                return null;
+            })
+            .Where(m => m != null)
+            .Distinct()
+            .Cast<string>()
+            .ToList();
+
+        return canonical.Count > 0
+            ? canonical
+            : CloudModules.Select(m => m.Module).ToList();
     }
 
     /// <summary>
@@ -126,6 +153,16 @@ public partial class BuilderBuildService
         ("proxy", "proxy_module"),
         ("script", "script_module"),
     ];
+
+    /// <summary>Map a deployed artifact stem (module or cargo lib target name,
+    /// possibly legacy) to the canonical module name used by the agent.</summary>
+    public static string CanonicalModuleName(string fileStem)
+    {
+        foreach (var (module, lib) in CloudModules)
+            if (fileStem == module || fileStem == lib)
+                return module;
+        return fileStem;
+    }
 
     /// <summary>
     /// Resolve the actual Rust target triple for a requested platform based on
