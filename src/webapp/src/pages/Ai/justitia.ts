@@ -1,9 +1,10 @@
 'use client';
-import {ShieldCheck} from '@gravity-ui/icons';
+import type { ComponentType, SVGProps } from 'react';
+import { ShieldCheck } from '@gravity-ui/icons';
 
 export type JustitiaTierKey = 'cognitio' | 'arbitrium' | 'imperium' | 'dictatura';
 
-export const JUSTITIA_TIERS: { key: JustitiaTierKey; name: string; icon: React.ReactNode; desc: string; index: number }[] = [
+export const JUSTITIA_TIERS: { key: JustitiaTierKey; name: string; icon: ComponentType<SVGProps<SVGSVGElement>>; desc: string; index: number }[] = [
   {
     key: 'cognitio',
     name: 'Cognitio',
