@@ -1,13 +1,11 @@
 import { useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Button, Card, Header, Label, ListBox, Popover, Select, Slider, Tabs } from '@heroui/react';
+import { Button, Card, Label, Popover, Slider } from '@heroui/react';
 import { ListView } from '@components/list-view';
 import type { Selection } from 'react-aria-components';
 import { CircleInfo } from '@gravity-ui/icons';
 import type { BuildConfigRequest } from '../../types/models';
 import type { AntiAnalysisToggle, ToggleOption } from './constants';
-import { FALLBACK_PLATFORMS, PLATFORM_LABEL } from './constants';
-import { useBuilderStatus } from './useBuilderStatus';
 
 interface BuilderOptionsCardProps {
   config: BuildConfigRequest;
@@ -33,27 +31,15 @@ const ANTI_ANALYSIS_OPTIONS: AntiAnalysisToggle[] = [
 
 // Options that are Windows-only (no Linux equivalent / not implemented):
 // goldberg PE obfuscation, UAC elevation, scheduled-task persistence,
-// Test-Signing detection, and the Desktop (GUI subsystem) app type.
-const LINUX_DISABLED_BUILD = new Set(['enableObfuscation']);
-const LINUX_DISABLED_PERSIST = new Set(['requireAdmin', 'enablePersistence']);
-const LINUX_DISABLED_ANTI = new Set(['checkTestSigning']);
+// Test-Signing detection.
+const NON_WINDOWS_DISABLED_BUILD = new Set(['enableObfuscation']);
+const NON_WINDOWS_DISABLED_PERSIST = new Set(['requireAdmin', 'enablePersistence']);
+const NON_WINDOWS_DISABLED_ANTI = new Set(['checkTestSigning']);
 
+/** Build options, persistence and anti-analysis toggles (platform card lives in BuilderPlatformCard). */
 export function BuilderOptionsCard({ config, set }: BuilderOptionsCardProps) {
   const { t } = useTranslation();
-  const { status, reload } = useBuilderStatus();
-  const platforms = status?.platforms ?? FALLBACK_PLATFORMS;
-
-  const OS_ORDER = ['windows', 'linux', 'macos'] as const;
-  const OS_TITLES: Record<string, string> = { windows: 'Windows', linux: 'Linux', macos: 'macOS' };
-  const sections = OS_ORDER
-    .map((os) => ({ os, title: OS_TITLES[os], items: platforms.filter((p) => p.os === os) }))
-    .filter((s) => s.items.length > 0);
-
-  // Windows-only features (PE obfuscation, UAC, scheduled-task persistence,
-  // test-signing detection, Desktop GUI subsystem, icon/metadata) exist only
-  // for the x64/x86/win-arm64 keys; linux-*/mac-* targets run as consoles.
-  const isWindowsPlatform = config.platform === 'x64' || config.platform === 'x86' || config.platform === 'win-arm64';
-  const isNonWindows = !isWindowsPlatform;
+  const isNonWindows = !(config.platform === 'x64' || config.platform === 'x86' || config.platform === 'win-arm64');
 
   // Reset Windows-only options when switching to a non-Windows target.
   useEffect(() => {
@@ -93,15 +79,15 @@ export function BuilderOptionsCard({ config, set }: BuilderOptionsCardProps) {
   );
 
   const buildDisabled = useMemo(
-    () => new Set(isNonWindows ? [...LINUX_DISABLED_BUILD] : []),
+    () => new Set(isNonWindows ? [...NON_WINDOWS_DISABLED_BUILD] : []),
     [isNonWindows],
   );
   const persistDisabled = useMemo(
-    () => new Set(isNonWindows ? [...LINUX_DISABLED_PERSIST] : []),
+    () => new Set(isNonWindows ? [...NON_WINDOWS_DISABLED_PERSIST] : []),
     [isNonWindows],
   );
   const antiDisabled = useMemo(
-    () => new Set(isNonWindows ? [...LINUX_DISABLED_ANTI] : []),
+    () => new Set(isNonWindows ? [...NON_WINDOWS_DISABLED_ANTI] : []),
     [isNonWindows],
   );
 
@@ -131,76 +117,22 @@ export function BuilderOptionsCard({ config, set }: BuilderOptionsCardProps) {
     set('antiAnalysis', updated);
   };
 
+  const infoPopover = (title: string, desc: string) => (
+    <Popover>
+      <Button isIconOnly variant="ghost" className="h-8 w-8 min-w-0">
+        <CircleInfo className="h-6 w-6" />
+      </Button>
+      <Popover.Content className="max-w-64">
+        <Popover.Dialog>
+          <Popover.Heading className="text-sm">{title}</Popover.Heading>
+          <p className="mt-1 text-xs text-default-500">{desc}</p>
+        </Popover.Dialog>
+      </Popover.Content>
+    </Popover>
+  );
+
   return (
     <>
-      {/* Platform + Application Type */}
-      <Card className="p-4">
-        <div className="grid grid-cols-2 gap-6">
-          <div>
-            <h2 className="text-lg font-semibold mb-3">{t('builder.platform')}</h2>
-            <Select
-              className="w-full"
-              variant="secondary"
-              selectedKey={config.platform}
-              onSelectionChange={(key) => key && set('platform', String(key))}
-              onOpenChange={(open) => {
-                if (open) reload();
-              }}
-            >
-              <Select.Trigger>
-                <Select.Value />
-                <Select.Indicator />
-              </Select.Trigger>
-              <Select.Popover>
-                <ListBox>
-                  {sections.map((section) => (
-                    <ListBox.Section key={section.os}>
-                      <Header>{section.title}</Header>
-                      {section.items.map((p) => (
-                        <ListBox.Item
-                          key={p.platform}
-                          id={p.platform}
-                          textValue={PLATFORM_LABEL[p.platform] ?? p.platform}
-                        >
-                          <span className="flex w-full items-center justify-between gap-3">
-                            <span>{PLATFORM_LABEL[p.platform] ?? p.platform}</span>
-                            <span className="flex items-center gap-1.5 text-xs text-default-500">
-                              <span
-                                className={`h-1.5 w-1.5 rounded-full ${p.template ? 'bg-success' : 'bg-warning'}`}
-                              />
-                              {p.arch.toUpperCase()}
-                            </span>
-                          </span>
-                          <ListBox.ItemIndicator />
-                        </ListBox.Item>
-                      ))}
-                    </ListBox.Section>
-                  ))}
-                </ListBox>
-              </Select.Popover>
-            </Select>
-          </div>
-          <div>
-            <h2 className="text-lg font-semibold mb-3">{t('builder.applicationType')}</h2>
-            <Tabs
-              selectedKey={config.applicationType}
-              onSelectionChange={(key) => set('applicationType', String(key))}
-            >
-              <Tabs.ListContainer>
-                <Tabs.List>
-                  <Tabs.Tab id="Console">{t('builder.consoleApp')}<Tabs.Indicator /></Tabs.Tab>
-                  <Tabs.Tab id="Desktop" isDisabled={isNonWindows}>{t('builder.desktopApp')}<Tabs.Indicator /></Tabs.Tab>
-                </Tabs.List>
-              </Tabs.ListContainer>
-            </Tabs>
-            <p className="text-xs text-default-500 mt-2">
-              {t(config.applicationType === 'Desktop' ? 'builder.desktopAppDesc' : 'builder.consoleAppDesc')}
-            </p>
-          </div>
-        </div>
-      </Card>
-
-      {/* Build Options + Persistence + Anti-Analysis */}
       <Card className="p-4">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <div>
@@ -219,17 +151,7 @@ export function BuilderOptionsCard({ config, set }: BuilderOptionsCardProps) {
                   <ListView.ItemContent>
                     <div className="flex items-center justify-between w-full">
                       <ListView.Title>{t(`builder.${opt.id}`)}</ListView.Title>
-                      <Popover>
-                        <Button isIconOnly variant="ghost" className="h-8 w-8 min-w-0">
-                          <CircleInfo className="h-6 w-6" />
-                        </Button>
-                        <Popover.Content className="max-w-64">
-                          <Popover.Dialog>
-                            <Popover.Heading className="text-sm">{t(`builder.${opt.id}`)}</Popover.Heading>
-                            <p className="mt-1 text-xs text-default-500">{t(`builder.${opt.id}Desc`)}</p>
-                          </Popover.Dialog>
-                        </Popover.Content>
-                      </Popover>
+                      {infoPopover(t(`builder.${opt.id}`), t(`builder.${opt.id}Desc`))}
                     </div>
                   </ListView.ItemContent>
                 </ListView.Item>
@@ -271,17 +193,7 @@ export function BuilderOptionsCard({ config, set }: BuilderOptionsCardProps) {
                   <ListView.ItemContent>
                     <div className="flex items-center justify-between w-full">
                       <ListView.Title>{t(`builder.${opt.id}`)}</ListView.Title>
-                      <Popover>
-                        <Button isIconOnly variant="ghost" className="h-8 w-8 min-w-0">
-                          <CircleInfo className="h-6 w-6" />
-                        </Button>
-                        <Popover.Content className="max-w-64">
-                          <Popover.Dialog>
-                            <Popover.Heading className="text-sm">{t(`builder.${opt.id}`)}</Popover.Heading>
-                            <p className="mt-1 text-xs text-default-500">{t(`builder.${opt.id}Desc`)}</p>
-                          </Popover.Dialog>
-                        </Popover.Content>
-                      </Popover>
+                      {infoPopover(t(`builder.${opt.id}`), t(`builder.${opt.id}Desc`))}
                     </div>
                   </ListView.ItemContent>
                 </ListView.Item>
@@ -304,17 +216,7 @@ export function BuilderOptionsCard({ config, set }: BuilderOptionsCardProps) {
                   <ListView.ItemContent>
                     <div className="flex items-center justify-between w-full">
                       <ListView.Title>{t(`builder.${opt.id}`)}</ListView.Title>
-                      <Popover>
-                        <Button isIconOnly variant="ghost" className="h-8 w-8 min-w-0">
-                          <CircleInfo className="h-6 w-6" />
-                        </Button>
-                        <Popover.Content className="max-w-64">
-                          <Popover.Dialog>
-                            <Popover.Heading className="text-sm">{t(`builder.${opt.id}`)}</Popover.Heading>
-                            <p className="mt-1 text-xs text-default-500">{t(`builder.${opt.id}Desc`)}</p>
-                          </Popover.Dialog>
-                        </Popover.Content>
-                      </Popover>
+                      {infoPopover(t(`builder.${opt.id}`), t(`builder.${opt.id}Desc`))}
                     </div>
                   </ListView.ItemContent>
                 </ListView.Item>

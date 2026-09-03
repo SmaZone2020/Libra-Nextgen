@@ -25,8 +25,10 @@ import { BuilderConfigCard } from './BuilderConfigCard';
 import { BuilderConnectionCard } from './BuilderConnectionCard';
 import { BuilderDownloadModal } from './BuilderDownloadModal';
 import { BuilderHistoryPanel } from './BuilderHistoryPanel';
+import { BuilderMetadataCard } from './BuilderMetadataCard';
 import { BuilderModals } from './BuilderModals';
 import { BuilderOptionsCard } from './BuilderOptionsCard';
+import { BuilderPlatformCard } from './BuilderPlatformCard';
 import { BuilderTemplateStatusBar } from './BuilderTemplateStatusBar';
 import { BuilderTrafficCard } from './BuilderTrafficCard';
 import { saveBuildPreset } from '../../utils/buildPresets';
@@ -330,10 +332,10 @@ export default function BuilderPage() {
       {/* Left: Build Config */}
       <div className="flex-1 space-y-4">
         <BuilderConfigCard config={config} set={set} applyConfig={applyConfig} />
-        {}
+        <BuilderPlatformCard config={config} set={set} />
+        <BuilderMetadataCard config={config} set={set} />
         <BuilderConnectionCard config={config} set={set} />
         <BuilderOptionsCard config={config} set={set} />
-        {}
         <BuilderTrafficCard
           lists={trafficLists}
           onAddItem={handleAddTrafficItem}
