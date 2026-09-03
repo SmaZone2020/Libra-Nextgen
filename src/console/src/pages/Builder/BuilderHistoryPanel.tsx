@@ -114,7 +114,8 @@ export function BuilderHistoryPanel({
                 textValue={record.fileName}
                 onAction={() => onOpenInfo(record.id)}
               >
-                <ListView.ItemContent>
+                <ListView.ItemContent
+                  title={record.fileName + (record.platform ? ` (${PLATFORM_LABEL[record.platform] || record.platform})` : '')}>
                   <ListView.Title>
                     <span className="text-sm font-medium">
                       {PLATFORM_LABEL[record.platform] || record.platform}
