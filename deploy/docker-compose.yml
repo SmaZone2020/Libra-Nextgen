@@ -25,6 +25,9 @@ services:
       args:
         VITE_API_BASE: ${VITE_API_BASE:-}
         ZIG_VERSION: ${ZIG_VERSION:-0.14.1}
+        RUSTUP_DIST_SERVER: ${RUSTUP_DIST_SERVER:-}
+        RUSTUP_UPDATE_ROOT: ${RUSTUP_UPDATE_ROOT:-}
+        CARGO_REGISTRY_INDEX: ${CARGO_REGISTRY_INDEX:-}
     restart: unless-stopped
     depends_on:
       mongo:

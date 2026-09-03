@@ -41,11 +41,22 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         build-essential pkg-config ca-certificates curl git libssl-dev \
     && rm -rf /var/lib/apt/lists/*
 
+# Optional mirror overrides for restricted networks (compose/.env; empty = official sources)
+ARG RUSTUP_DIST_SERVER="https://static.rust-lang.org"
+ARG RUSTUP_UPDATE_ROOT="https://static.rust-lang.org/rustup"
+ARG CARGO_REGISTRY_INDEX=""
+RUN if [ -n "$CARGO_REGISTRY_INDEX" ]; then \
+        mkdir -p /root/.cargo && \
+        printf '[source.crates-io]\nreplace-with = "mirror"\n[source.mirror]\nregistry = "%s"\n' "$CARGO_REGISTRY_INDEX" > /root/.cargo/config.toml; \
+    fi
+
 # Rust toolchain + target stds
 ARG RUST_TARGETS="x86_64-unknown-linux-gnu x86_64-pc-windows-gnu i686-pc-windows-gnu"
-RUN curl -fsSL https://sh.rustup.rs -sSf | sh -s -- -y --profile minimal --default-toolchain stable \
-    && rustup target add ${RUST_TARGETS} \
-    && rustc --version && cargo --version
+RUN export RUSTUP_DIST_SERVER="${RUSTUP_DIST_SERVER:-https://static.rust-lang.org}" \
+ && export RUSTUP_UPDATE_ROOT="${RUSTUP_UPDATE_ROOT:-https://static.rust-lang.org/rustup}" \
+ && curl -fsSL https://sh.rustup.rs -sSf | sh -s -- -y --profile minimal --default-toolchain stable \
+ && rustup target add ${RUST_TARGETS} \
+ && rustc --version && cargo --version
 
 # zig (cross linker used by cargo-zigbuild; bundles glibc/msvc runtimes)
 ARG ZIG_VERSION=0.14.1
