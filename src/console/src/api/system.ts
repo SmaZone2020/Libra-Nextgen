@@ -132,3 +132,25 @@ export function getSecurity(): Promise<SecurityInfo> {
 export function updateSecurity(req: { openLan?: boolean; allowedOrigins?: string[] }): Promise<SecurityInfo> {
   return api.put<SecurityInfo>('/settings/security', req);
 }
+
+// ── Version / update check (server compares itself to GitHub Releases) ──
+
+export interface ServerUpdateState {
+  enabled: boolean;
+  current: string;
+  latestTag: string | null;
+  htmlUrl: string | null;
+  publishedAt: string | null;
+  notes: string | null;
+  checkedAt: string | null;
+  updateAvailable: boolean;
+  error: string | null;
+}
+
+export function getUpdateStatus(): Promise<ServerUpdateState> {
+  return api.get<ServerUpdateState>('/system/update/status');
+}
+
+export function checkForUpdate(): Promise<ServerUpdateState> {
+  return api.post<ServerUpdateState>('/system/update/check');
+}

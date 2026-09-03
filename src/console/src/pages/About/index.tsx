@@ -1,5 +1,12 @@
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Chip } from '@heroui/react';
+import { LogoGithub } from '@gravity-ui/icons';
 import Markdown from 'react-markdown';
+import { checkForUpdate, getUpdateStatus } from '../../api/system';
+import type { ServerUpdateState } from '../../api/system';
+
+const REPO_URL = 'https://github.com/SmaZone2020/Libra-Nextgen';
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -14,6 +21,30 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 
 export default function AboutPage() {
   const { t } = useTranslation();
+  const [status, setStatus] = useState<ServerUpdateState | null>(null);
+
+  // Auto update check on page entry: show the cached state immediately, then
+  // force a fresh GitHub check in the background.
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const cached = await getUpdateStatus();
+        if (alive) setStatus(cached);
+      } catch {
+        // Ignore — the fresh check below reports the failure if any.
+      }
+      try {
+        const fresh = await checkForUpdate();
+        if (alive) setStatus(fresh);
+      } catch {
+        // Server unreachable or update check disabled.
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   return (
     <div className="max-w-3xl mx-auto space-y-10 py-4">
@@ -42,9 +73,62 @@ export default function AboutPage() {
           <img src="https://img.shields.io/badge/React-61DAFB?style=flat-square&logo=react&logoColor=black" alt="React"/>
           <img src="https://img.shields.io/badge/HeroUI-000000?style=flat-square&logo=heroui&logoColor=white" alt="HeroUI"/>
           <img src="https://img.shields.io/badge/MongoDB-21BF3E?style=flat-square&logo=mongodb&logoColor=white" alt="MongoDB"/>
-          <img src="https://img.shields.io/github/v/release/SmaZone2020/Libra-Nextgen?style=flat-square" alt="Release"/>
         </div>
       </div>
+
+      {/* Version & Updates */}
+      <Section title={t('about.updateTitle')}>
+        <div className="flex items-center gap-2">
+          <span className="font-medium">{t('about.sourceCode')}:</span>
+          <a
+            href={REPO_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1.5 text-primary-600 underline underline-offset-2"
+          >
+            SmaZone2020/Libra-Nextgen
+          </a>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="font-medium">{t('about.currentVersion')}:</span>
+          <img src="https://img.shields.io/github/v/release/SmaZone2020/Libra-Nextgen?style=flat-square" alt="Release" />
+        </div>
+        <div className="flex flex-wrap items-center gap-3 pt-1">
+          {status?.updateAvailable ? (
+            <Chip size="sm" variant="soft" color="warning">
+              {t('about.updateAvailable')} v{status.latestTag}
+            </Chip>
+          ) : status ? (
+            <Chip size="sm" variant="soft" color="success">
+              {t('about.upToDate')}
+            </Chip>
+          ) : null}
+        </div>
+        {status?.updateAvailable && status.latestTag && (
+          <div className="space-y-2 !mt-4">
+            <p className="font-medium">
+              {t('about.releaseNotes')} — v{status.latestTag}
+              {status.publishedAt ? ` · ${new Date(status.publishedAt).toLocaleDateString()}` : ''}
+            </p>
+            {status.notes && <Markdown>{status.notes}</Markdown>}
+            {status.htmlUrl && (
+              <a
+                href={status.htmlUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-block text-primary-600 underline underline-offset-2"
+              >
+                {t('about.openRelease')}
+              </a>
+            )}
+          </div>
+        )}
+        {status?.error && (
+          <p className="text-sm text-danger">
+            {t('about.checkFailed')}: {status.error}
+          </p>
+        )}
+      </Section>
 
       {/* License */}
       <Section title={t('about.licenseTitle')}>

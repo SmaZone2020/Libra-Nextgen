@@ -11,10 +11,12 @@ namespace LibraNextgen.Service.Controllers;
 public class SystemController : ControllerBase
 {
     private readonly RelayService _relay;
+    private readonly UpdateService _updates;
 
-    public SystemController(RelayService relay)
+    public SystemController(RelayService relay, UpdateService updates)
     {
         _relay = relay;
+        _updates = updates;
     }
 
     private async Task<IActionResult> RelayAndWaitAsync(string agentId, object data, CancellationToken ct, int timeoutSeconds = 30)
@@ -129,6 +131,16 @@ public class SystemController : ControllerBase
     {
         return await RelayAndWaitAsync(agentId, new { op = "docker" }, ct, timeoutSeconds: 30);
     }
+
+    // ── Version / update check (notify-first; applying stays manual) ─────
+
+    [HttpGet("update/status")]
+    public Task<UpdateService.UpdateState> UpdateStatus(CancellationToken ct)
+        => _updates.GetStatusAsync(force: false, ct);
+
+    [HttpPost("update/check")]
+    public Task<UpdateService.UpdateState> UpdateCheck(CancellationToken ct)
+        => _updates.GetStatusAsync(force: true, ct);
 }
 
 public record ProcessesRequest(string? LastHash);

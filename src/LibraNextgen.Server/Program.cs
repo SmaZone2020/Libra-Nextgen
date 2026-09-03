@@ -108,6 +108,7 @@ builder.Services.AddSingleton<McpService>();
 builder.Services.AddSingleton<AuditService>();
 builder.Services.AddScoped<AccessKeyService>();
 builder.Services.AddSingleton<TemplateManagerService>();
+builder.Services.AddSingleton<UpdateService>();
 builder.Services.AddSingleton<BuilderBuildService>();
 builder.Services.AddScoped<PluginService>();
 builder.Services.AddHostedService<HeartbeatMonitor>();
