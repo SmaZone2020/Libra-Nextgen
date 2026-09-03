@@ -24,9 +24,8 @@ services:
       dockerfile: deploy/Dockerfile
       args:
         VITE_API_BASE: ${VITE_API_BASE:-same-origin}
-    # For the source-build variant (server compiles payloads itself, needs the
-    # rust+zig toolchain): docker compose build --build-arg VITE_API_BASE=same-origin
-    # with dockerfile deploy/Dockerfile.source, and LIBRA_BUILDER_MODE=source.
+    # Template mode is the only build mode in Docker — the image carries no Rust
+    # toolchain. (LIBRA_BUILDER_MODE=source is a bare-metal dev option.)
     restart: unless-stopped
     depends_on:
       mongo:
@@ -35,7 +34,7 @@ services:
       ASPNETCORE_ENVIRONMENT: Production
       LIBRA_BUILDS_DIR: /build-output
       LIBRA_SERVER_KEY: /secrets/server-rsa.key
-      LIBRA_BUILDER_MODE: ${LIBRA_BUILDER_MODE:-template}
+      LIBRA_BUILDER_MODE: template
       LIBRA_TEMPLATE_REPO: ${LIBRA_TEMPLATE_REPO:-SmaZone2020/Libra-Nextgen}
       LIBRA_TEMPLATE_TAG: ${LIBRA_TEMPLATE_TAG:-latest}
       LIBRA_TEMPLATE_TOKEN: ${LIBRA_TEMPLATE_TOKEN:-}

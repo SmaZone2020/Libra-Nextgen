@@ -7,8 +7,8 @@
 # Build args:
 #   VITE_API_BASE  API origin baked into the console (required for single-port 443)
 #
-# For the classic in-image source compilation (requires rust+zig toolchain),
-# build deploy/Dockerfile.source instead and run with LIBRA_BUILDER_MODE=source.
+# Source compilation (LIBRA_BUILDER_MODE=source) is a bare-metal dev option only:
+# no in-image Rust toolchain exists, and Docker deployments always run template mode.
 
 # ── Stage 1: console SPA ────────────────────────────────────────────────
 FROM node:22-alpine AS console
