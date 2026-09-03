@@ -49,6 +49,19 @@ describe('resolveApiOrigin (deterministic, explicit window)', () => {
     expect(resolveApiOrigin(CONSOLE_WINDOW)).toBe('https://builtin.example.com');
   });
 
+  it('mirrors the page origin for the same-origin marker', () => {
+    vi.stubEnv('VITE_API_BASE', 'same-origin');
+    expect(resolveApiOrigin(CONSOLE_WINDOW)).toBe('http://console.local:5173');
+    expect(`${resolveApiOrigin(CONSOLE_WINDOW)}/api`).toBe('http://console.local:5173/api');
+  });
+
+  it('accepts the http://*:* alias for same-origin (no port on default https)', () => {
+    vi.stubEnv('VITE_API_BASE', 'http://*:*');
+    expect(resolveApiOrigin({
+      location: { protocol: 'https:', hostname: 'c2.example.com', port: '' },
+    } as Window)).toBe('https://c2.example.com');
+  });
+
   it('falls back to localhost when window is unavailable', () => {
     expect(resolveApiOrigin(undefined)).toBe('http://127.0.0.1:5270');
   });

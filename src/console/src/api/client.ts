@@ -10,6 +10,18 @@ function stripTrailingSlash(url: string): string {
   return url.replace(/\/+$/, '');
 }
 
+/** Build-time markers that make the API mirror the page origin exactly. */
+const SAME_ORIGIN_MARKERS = ['same-origin', 'http://*:*'];
+
+function isSameOriginMarker(value: string): boolean {
+  return SAME_ORIGIN_MARKERS.includes(value.trim().toLowerCase());
+}
+
+function pageOrigin(location: { protocol: string; hostname: string; port: string }): string {
+  const host = location.port ? `${location.hostname}:${location.port}` : location.hostname;
+  return `${location.protocol}//${host}`;
+}
+
 /**
  * Derive the backend origin from the frontend page location.
  * Pure function (no global access) so it is unit-testable.
@@ -25,7 +37,8 @@ export function deriveHostOrigin(location: { protocol: string; hostname: string;
  * Resolve the API origin with an explicit window handle.
  *
  * Priority (high → low):
- *   1. build-time VITE_API_BASE
+ *   1. build-time VITE_API_BASE — 'same-origin' (or 'http://*:*') mirrors the page origin;
+ *      any other value is used verbatim
  *   2. derive from the page location (same-origin when served by the backend)
  *   3. fallback http://127.0.0.1:5270
  *
@@ -35,7 +48,15 @@ export function deriveHostOrigin(location: { protocol: string; hostname: string;
  */
 export function resolveApiOrigin(win?: Window | undefined): string {
   const builtin = builtinApiOrigin();
-  if (builtin) return stripTrailingSlash(builtin);
+  if (builtin) {
+    if (isSameOriginMarker(builtin)) {
+      // Mirror the page origin: console and API share the nginx entry, so this
+      // works for any host/IP/domain without baking the URL at build time.
+      if (win) return pageOrigin(win.location);
+      return `http://127.0.0.1:${DEFAULT_BACKEND_PORT}`;
+    }
+    return stripTrailingSlash(builtin);
+  }
   if (win) {
     const derived = deriveHostOrigin(win.location);
     if (derived) return derived;
