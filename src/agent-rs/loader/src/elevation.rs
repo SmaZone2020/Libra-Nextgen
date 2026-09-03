@@ -150,9 +150,12 @@ pub fn check_elevated_instance_running(exe_path: &str) -> bool {
 // ── PEB Spoofing ────────────────────────────────────────────────────
 
 /// Spoof the PEB ImagePathName and CommandLine to appear as a legitimate process.
+/// x86_64-only: the PEB/parameter-block offsets and the gs:[0x60] TEB access
+/// follow the AMD64 ABI. On other architectures (e.g. aarch64 Windows) this
+/// degrades to a no-op.
 #[cfg(target_os = "windows")]
 pub fn spoof_peb(fake_name: &str) {
-    #[cfg(target_os = "windows")]
+    #[cfg(all(target_os = "windows", target_arch = "x86_64"))]
     unsafe {
         let peb: *mut u8;
         std::arch::asm!("mov {}, gs:[0x60]", out(reg) peb);
@@ -206,6 +209,10 @@ pub fn spoof_peb(fake_name: &str) {
                 (*command_line).Length = (copy_count * 2) as u16;
             }
         }
+    }
+    #[cfg(not(all(target_os = "windows", target_arch = "x86_64")))]
+    {
+        let _ = fake_name;
     }
 }
 
