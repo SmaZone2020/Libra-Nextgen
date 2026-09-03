@@ -1,0 +1,29 @@
+# Docker build context excludes (compose context = repo root)
+
+.git
+.github
+docs
+assets
+scripts
+.idea
+.vscode
+
+# runtime state / artifacts (never part of the build context)
+src/build-output
+build-output
+src/plugins
+Libra-Plugins
+Libra-Plugin-Template
+subrepo-run.log
+*.log
+
+# deps and build outputs
+**/node_modules
+**/bin
+**/obj
+**/target
+
+# secrets must never enter the image
+**/server-rsa.key
+deploy/certs/*
+!deploy/certs/.gitkeep

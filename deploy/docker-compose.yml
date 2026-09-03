@@ -1,0 +1,65 @@
+# Libra-Nextgen: single-port 443 deployment (mongo + server + nginx).
+# Usage: cp .env.example .env && docker compose up -d --build
+
+services:
+  mongo:
+    image: mongo:7.0
+    restart: unless-stopped
+    volumes:
+      - mongo-data:/data/db
+    # Applied only on first init of an empty data volume
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_INITDB_ROOT_USERNAME:-}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_INITDB_ROOT_PASSWORD:-}
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  server:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+      args:
+        VITE_API_BASE: ${VITE_API_BASE:-}
+        ZIG_VERSION: ${ZIG_VERSION:-0.14.1}
+    restart: unless-stopped
+    depends_on:
+      mongo:
+        condition: service_healthy
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      LIBRA_BUILDS_DIR: /build-output
+      LIBRA_AGENT_RS_DIR: /agent-rs
+      LIBRA_SERVER_KEY: /secrets/server-rsa.key
+      MongoDB__ConnectionString: ${MONGO_CONNECTION_STRING:-mongodb://mongo:27017}
+      MongoDB__DatabaseName: ${MONGO_DATABASE:-libra_nextgen}
+      Beacon__Secret: ${BEACON_SECRET:-}
+    volumes:
+      - libra-builds:/build-output          # build artifacts / modules / cargo cache (persistent)
+      - libra-config:/root/.config/Libra-Nextgen  # JWT RSA key + listener settings (persistent)
+      - libra-secrets:/secrets              # server RSA key, auto-generated on first start (persistent)
+    expose:
+      - "5270"   # reachable only inside the docker network (agents enter via nginx :443)
+
+  nginx:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    depends_on:
+      - server
+    ports:
+      - "${HTTP_PORT:-80}:80"
+      - "${HTTPS_PORT:-443}:443"
+    volumes:
+      - ./nginx/console.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./certs:/etc/nginx/certs:ro          # TLS certs (fullchain.pem / privkey.pem)
+    volumes_from:
+      - server:ro                            # read-only mount of the console SPA (/srv/console)
+
+volumes:
+  mongo-data:
+  libra-builds:
+  libra-config:
+  libra-secrets:
