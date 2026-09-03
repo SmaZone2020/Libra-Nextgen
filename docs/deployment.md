@@ -134,21 +134,24 @@ build-output/
 - ⚠️ 重新构建/重建 `build-output` 后插件 dll 可能被清掉，插件动作会报 `module download failed: 404`——在插件管理页**禁用再启用**即可重新 stage。
 - Agent 的 `ModuleManager` 对已加载模块有内存缓存：更新 native 模块后需**重启 Agent** 才会重新下载。
 
-## 6.2 Docker 部署（推荐，linux/amd64）
+## 6.2 Docker 部署(推荐)
 
-面向自助部署场景：一条命令起全套（MongoDB + Server + nginx），镜像内置 Rust/zig 工具链，
-可在容器内在线构建 win x64 / win x86（GNU ABI 交叉编译）与 linux-x64 agent。
-服务端镜像仅支持 linux/amd64。
+面向自助部署场景:一条命令起全套(MongoDB + Server + nginx)。
+默认镜像为 **template 模式**(`LIBRA_BUILDER_MODE=template`):无 Rust 工具链,载荷由 Server 从 GitHub
+Releases 拉取的**预编译平台模板**纯 .NET 打包,支持 win x64 / win arm64 / linux x64 / linux arm64 / mac arm64 全平台出包。
+需要服务端自行编译(开发调试)时改用 `deploy/Dockerfile.source`(内置 rustup + zig + cargo-zigbuild,`LIBRA_BUILDER_MODE=source`)。
+平台实测矩阵见 [platform-support.md](platform-support.md)。
 
-### 目录（`deploy/`）
+### 目录(`deploy/`)
 
 | 文件 | 说明 |
 |---|---|
-| `Dockerfile` | 三阶段构建：控制台 SPA → dotnet publish → 运行镜像（含 rustup + zig + cargo-zigbuild） |
-| `docker-compose.yml` | mongo:7 + server + nginx 三服务；五个命名卷持久化 |
-| `.env.example` | 环境变量模板（复制为 `.env` 后填写） |
-| `nginx/console.conf` | nginx 站点配置（SPA 静态 + API/SSE/WS/MCP 分段反代；含 TLS 示例） |
-| `docker/entrypoint.sh` | 容器入口：准备持久化目录后启动服务 |
+| `Dockerfile` | **默认 template 镜像**:控制台 SPA → dotnet publish → 精简运行镜像(无 Rust 工具链,支持跨架构 buildx) |
+| `Dockerfile.source` | **源码编译镜像**:在 template 镜像基础上加 rustup + zig + cargo-zigbuild 与 agent-rs 源码(`LIBRA_BUILDER_MODE=source`) |
+| `docker-compose.yml` | mongo:7 + server + nginx 三服务;五个命名卷持久化 |
+| `.env.example` | 环境变量模板(复制为 `.env` 后填写) |
+| `nginx/console.conf` | nginx 站点配置(SPA 静态 + API/SSE/WS/MCP 分段反代;含 TLS 示例) |
+| `docker/entrypoint.sh` | 容器入口:准备持久化目录后启动服务 |
 
 ### 快速开始
 
@@ -172,7 +175,7 @@ nginx 进入；agent/beacon 同样走 nginx（80/443）。镜像与 IP/域名**�
 | 卷 | 挂载点 | 内容 |
 |---|---|---|
 | `mongo-data` | `/data/db` | MongoDB 全部数据（含审计日志） |
-| `libra-builds` | `/build-output` | 构建产物、模块、`artifacts/`、共享 cargo 缓存（`target-shared`） |
+| `libra-builds` | `/build-output` | 构建产物、模块、`artifacts/`、模板缓存(`templates/`;source 镜像另有 `target-shared` cargo 缓存) |
 | `libra-config` | `/root/.config/Libra-Nextgen` | JWT RSA 密钥 + 监听设置 |
 | `libra-secrets` | `/secrets` | 服务端 RSA 私钥（首次启动自动生成） |
 | `console-dist` | `/srv/console-live` → `/usr/share/nginx/html` | 控制台 SPA（容器入口每次启动从镜像同步），可安全删除、由镜像重建 |
@@ -185,11 +188,18 @@ nginx 进入；agent/beacon 同样走 nginx（80/443）。镜像与 IP/域名**�
 2. 取消 `nginx/console.conf` 中 443 server 块注释（或将 80 改为 301 跳转）
 3. 页面经 https 访问后（`same-origin` 默认自动跟随协议），API 即走 https；如需固定域名可显式设 `VITE_API_BASE=https://…` 并重建镜像
 
-### 在线构建 agent
+### 构建/发布 agent 载荷
 
-- Builder 平台：win x64 / win x86 / linux-x64 均可直接生成；win 载荷为 **GNU ABI**（zig 交叉），
-  与 Windows 开发机上的 MSVC 产物功能等价、可并存。
-- 首次构建某平台会现场编译（容器需联网拉取 crates，依赖已预取入镜像层并缓存在卷）；
+- **默认 template 模式**(所有平台,含 macOS):首次构建某平台时 Server 自动下载对应
+  `libra-agent-tpl-{platform}.zip`(校验清单后缓存到 `build-output/templates/{platform}`),之后每单构建秒级完成,
+  全程无编译。模板由仓库打 tag 触发 `.github/workflows/templates.yml` 在对应 runner 上构建并发布到 Releases;
+  Console Builder 页顶部可查看模板版本/来源并手动刷新。
+  - 平台键/ABI/模块降级见 [platform-support.md](platform-support.md);win-arm64 模板暂不含 `script` 模块。
+  - 模板资产不存在时构建会给出指引(发布 tag / 换 `LIBRA_TEMPLATE_REPO|TAG|BASE_URL|TOKEN` / 回退 source 模式)。
+- **source 模式**(开发调试,需 `deploy/Dockerfile.source` 镜像):
+  Builder 平台 win x64 / win x86 / linux-x64 / linux-arm64;win 载荷为 **GNU ABI**(zig 交叉),
+  与 Windows 开发机上的 MSVC 产物功能等价、可并存。macOS 载荷在 source 模式下仅 macOS 主机可编。
+- 首次 source 构建某平台会现场编译（容器需联网拉取 crates，依赖已预取入镜像层并缓存在卷）；
   `artifacts/{platform}/core.bin` 命中后秒级完成。
 
 ### 升级
@@ -221,6 +231,7 @@ nginx 进入；agent/beacon 同样走 nginx（80/443）。镜像与 IP/域名**�
 | 任务无响应 | agent 离线 / SSE 未连接 | 看 agent 日志（debug 构建）与 Dashboard 在线状态 |
 | loader 下载 401 | loader 版本旧（无 downloadToken） | 重新构建 loader（凭证机制从本版本起强制） |
 | 控制台 500 但无详情 | 生产环境全局异常处理（正确行为） | 看服务端日志（LogError 含 Path/Method） |
-| 容器内 win-x64 载荷构建失败 | zig / cargo-zigbuild 缺失或版本不配对 | 容器内执行 `zig version`；调整 `ZIG_VERSION` 重建镜像 |
+| 容器内 win-x64 载荷构建失败(source 镜像) | zig / cargo-zigbuild 缺失或版本不配对 | 容器内执行 `zig version`；调整 `ZIG_VERSION` 重建镜像 |
+| 构建报 template asset not found | Releases 无对应资产 / tag 与仓库不匹配 | 打 tag 触发模板 workflow 后 Console 刷新;或改 `LIBRA_TEMPLATE_REPO\|TAG\|BASE_URL\|TOKEN`;或 `LIBRA_BUILDER_MODE=source` 回退源码 |
 | 容器重启后登录态失效 | `libra-config` 卷缺失或被清 | 确认 compose 卷存在；JWT 密钥持久化在 `/root/.config/Libra-Nextgen` |
 | 镜像构建时 `auth.docker.io` 超时（国内网络常见） | buildx 拉取 docker.io 镜像需 token 鉴权，该服务不通 | 重试几次；`docker pull node:22-alpine` 等预拉取后再构建；或 Docker Desktop 配置 registry mirror（如 `https://docker.m.daocloud.io`） |

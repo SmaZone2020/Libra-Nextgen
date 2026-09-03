@@ -134,17 +134,21 @@ build-output/
 - ⚠️ Rebuilding/recreating `build-output` may wipe plugin dlls, causing `module download failed: 404` on plugin actions — disable then re-enable on the plugin management page to re-stage.
 - The Agent's `ModuleManager` keeps an in-memory cache of loaded modules: after updating a native module you must **restart the Agent** for it to re-download.
 
-## 6.2 Docker Deployment (recommended, linux/amd64)
+## 6.2 Docker Deployment (recommended)
 
-For self-service deployments: one command brings up the whole stack (MongoDB + Server + nginx), and the
-image ships a Rust/zig toolchain, so **win x64 / win x86 (GNU ABI, cross-compiled) and linux-x64 agents
-can be built online inside the container**. The server image is linux/amd64 only.
+For self-service deployments: one command brings up the whole stack (MongoDB + Server + nginx).
+The default image runs in **template mode** (`LIBRA_BUILDER_MODE=template`): no Rust toolchain — payloads are
+packaged with pure .NET from **prebuilt platform templates** fetched from GitHub Releases, covering
+win x64 / win arm64 / linux x64 / linux arm64 / mac arm64. To let the server compile from source (development),
+build `deploy/Dockerfile.source` instead (rustup + zig + cargo-zigbuild baked in, `LIBRA_BUILDER_MODE=source`).
+See [platform-support.md](platform-support.md) for the verified matrix.
 
 ### Layout (`deploy/`)
 
 | File | Purpose |
 |---|---|
-| `Dockerfile` | Three-stage build: console SPA → dotnet publish → runtime image (rustup + zig + cargo-zigbuild) |
+| `Dockerfile` | **Default template image**: console SPA → dotnet publish → slim runtime image (no Rust toolchain; buildx-friendly for cross-arch) |
+| `Dockerfile.source` | **Source-build image**: template image plus rustup + zig + cargo-zigbuild and the agent-rs tree (`LIBRA_BUILDER_MODE=source`) |
 | `docker-compose.yml` | mongo:7 + server + nginx; five named volumes for persistence |
 | `.env.example` | Environment template (copy to `.env` and fill in) |
 | `nginx/console.conf` | nginx site config (SPA static + segmented API/SSE/WS/MCP proxy; includes a TLS sample) |
@@ -174,7 +178,7 @@ frontend at build time (changing it requires `docker compose up -d --build`).
 | Volume | Mount | Contents |
 |---|---|---|
 | `mongo-data` | `/data/db` | All MongoDB data (incl. audit logs) |
-| `libra-builds` | `/build-output` | Build artifacts, modules, `artifacts/`, shared cargo cache (`target-shared`) |
+| `libra-builds` | `/build-output` | Build artifacts, modules, `artifacts/`, template cache (`templates/`; source image also keeps the `target-shared` cargo cache) |
 | `libra-config` | `/root/.config/Libra-Nextgen` | JWT RSA key + listener settings |
 | `libra-secrets` | `/secrets` | Server RSA private key (auto-generated on first start) |
 | `console-dist` | `/srv/console-live` → `/usr/share/nginx/html` | Console SPA (re-synced from the image by the entrypoint on every start; safe to delete, rebuilt from the image) |
@@ -188,11 +192,22 @@ Removing containers does not touch volumes; backup/migration = copy the four vol
 3. Access the console over https — with `same-origin` (default) the API follows the page protocol
    automatically; set an explicit `VITE_API_BASE=https://…` only if you want to pin a fixed domain
 
-### Building agents online
+### Building / publishing agent payloads
 
-- Builder platforms: win x64 / win x86 / linux-x64 all build directly; win payloads are **GNU ABI**
-  (zig cross-compilation), functionally equivalent to and co-existing with MSVC builds from a Windows dev box.
-- The first build of a platform compiles on the spot (the container needs outbound access to crates.io;
+- **Default template mode** (all platforms, incl. macOS): the first build of a platform downloads the matching
+  `libra-agent-tpl-{platform}.zip` (verified and cached under `build-output/templates/{platform}`); subsequent
+  builds take seconds — no compilation ever happens on the server. Templates are built per-platform by
+  `.github/workflows/templates.yml` when the repo is tagged and attached to the release; the Console Builder
+  page shows template version/source and offers a manual refresh.
+  - Platform keys / ABIs / module degradation: see [platform-support.md](platform-support.md); the win-arm64
+    template currently omits the `script` module.
+  - A missing template asset produces an actionable build error (publish a tag / point
+    `LIBRA_TEMPLATE_REPO|TAG|BASE_URL|TOKEN` elsewhere / fall back to source mode).
+- **Source mode** (development; needs the `deploy/Dockerfile.source` image):
+  Builder platforms win x64 / win x86 / linux-x64 / linux-arm64; win payloads are **GNU ABI** (zig
+  cross-compilation), functionally equivalent to and co-existing with MSVC builds from a Windows dev box.
+  macOS payloads in source mode require a macOS host.
+- The first source build of a platform compiles on the spot (the container needs outbound access to crates.io;
   deps are pre-fetched into the image layer and cached in the volume); `artifacts/{platform}/core.bin`
   hits make subsequent builds take seconds.
 
@@ -225,6 +240,7 @@ Removing containers does not touch volumes; backup/migration = copy the four vol
 | Tasks don't respond | agent offline / SSE not connected | check agent logs (debug build) and Dashboard online status |
 | Loader download 401 | loader version too old (no downloadToken) | rebuild the loader (the credential mechanism is enforced from this version) |
 | Console 500 without details | production global exception handling (correct behavior) | check server logs (LogError includes Path/Method) |
-| win-x64 payload build fails in container | zig / cargo-zigbuild missing or version pairing broken | run `zig version` inside the container; adjust `ZIG_VERSION` and rebuild the image |
+| win-x64 payload build fails in container (source image) | zig / cargo-zigbuild missing or version pairing broken | run `zig version` inside the container; adjust `ZIG_VERSION` and rebuild the image |
+| Build reports template asset not found | release has no matching asset / tag mismatch | tag the repo to trigger the template workflow, then refresh in Console; or repoint `LIBRA_TEMPLATE_REPO\|TAG\|BASE_URL\|TOKEN`; or set `LIBRA_BUILDER_MODE=source` |
 | Login sessions lost after container restart | `libra-config` volume missing or wiped | confirm the compose volume exists; the JWT key persists at `/root/.config/Libra-Nextgen` |
 | Image build times out at `auth.docker.io` (common on CN networks) | buildx needs a token from docker.io to pull images and the service is unreachable | retry; pre-pull with `docker pull node:22-alpine` etc. before building; or configure a registry mirror in Docker Desktop (e.g. `https://docker.m.daocloud.io`) |
