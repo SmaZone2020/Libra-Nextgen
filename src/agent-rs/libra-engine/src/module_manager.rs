@@ -160,9 +160,14 @@ async fn execute_module_isolated_unix(main: ModuleMainFn, input: &str) -> Result
     let mut out = vec![0u8; MODULE_OUTPUT_CAP];
 
     // Result pipe (write end used by the child, read end by the parent).
+    // pipe2(2) is Linux-only; macOS falls back to plain pipe(2).
     let mut pipe = [-1 as libc::c_int; 2];
-    if unsafe { libc::pipe2(pipe.as_mut_ptr(), libc::O_CLOEXEC) } != 0 {
-        return Err(format!("pipe2 failed: {}", std::io::Error::last_os_error()));
+    #[cfg(target_os = "linux")]
+    let pipe_rc = unsafe { libc::pipe2(pipe.as_mut_ptr(), libc::O_CLOEXEC) };
+    #[cfg(not(target_os = "linux"))]
+    let pipe_rc = unsafe { libc::pipe(pipe.as_mut_ptr()) };
+    if pipe_rc != 0 {
+        return Err(format!("pipe failed: {}", std::io::Error::last_os_error()));
     }
 
     let pid = unsafe { libc::fork() };
