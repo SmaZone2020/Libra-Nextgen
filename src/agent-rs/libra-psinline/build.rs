@@ -1,13 +1,13 @@
 //!
-//!   C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe
-//!   C:\Windows\Microsoft.NET\Framework\v4.0.30319\csc.exe
 
-use std::path::PathBuf;
+#[cfg(target_os = "windows")]
 use std::process::Command;
+use std::path::PathBuf;
 
 fn main() {
     println!("cargo:rerun-if-changed=stub/PsInlineStub.cs");
 
+    // Windows host: compile the stub with csc.exe (.NET Framework 4.x).
     #[cfg(target_os = "windows")]
     {
         let csc_candidates = [
@@ -54,6 +54,22 @@ fn main() {
         }
         println!("cargo:rerun-if-changed={}", out_dll.display());
         println!("cargo:rustc-env=PSINLINE_STUB_DLL={}", out_dll.display());
+    }
+
+    // Non-Windows hosts (e.g. the Docker builder cross-compiling win targets):
+    // csc.exe is unavailable, so rely on the committed prebuilt IL stub.
+    #[cfg(not(target_os = "windows"))]
+    {
+        let stub_dll = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap())
+            .join("stub")
+            .join("psinline_stub.dll");
+        if !stub_dll.exists() {
+            panic!(
+                "missing stub/psinline_stub.dll — regenerate it on a Windows host (csc.exe) \
+                 or restore the committed artifact"
+            );
+        }
+        println!("cargo:rerun-if-changed={}", stub_dll.display());
     }
 }
 
