@@ -21,12 +21,11 @@ GitHub Actions 模板矩阵(tag 1.6.0,五平台全绿)。
 ## 平台能力约定
 
 1. **构建方式**:
-   - `LIBRA_BUILDER_MODE=template`(默认):Server 无任何 Rust 工具链。打 tag 触发
+   - `LIBRA_BUILDER_MODE=template`(默认):打 tag 触发
      `.github/workflows/templates.yml`,在对应 runner 构建 loader(+Windows desktop 变体)、core 与云模块,
      打包 `libra-agent-tpl-{platform}.zip` 发布到 GitHub Releases;Server 按需下载/校验/缓存于
      `build-output/templates/{platform}`,每单构建 = 纯 .NET 加密/注入/打包。Console Builder 页可查看模板状态并刷新。
-   - `LIBRA_BUILDER_MODE=source`(仅本机裸机开发):保留服务端本机 cargo+zig 编译链路;
-     Docker 镜像固定 template 模式,不再提供源码编译镜像。
+   - `LIBRA_BUILDER_MODE=source`(本机裸机开发):服务端在本机 cargo+zig 环境下直接编译。
    - macOS 载荷:任何主机都建议走 template 模式;source 模式仅在 macOS 主机上可用。
 2. **ABI 约定**:win x64 模板为 **GNU ABI**(zig);win-arm64 无 rustup GNU std,固定 **MSVC**;
    linux 目标为 glibc GNU;mac 为默认 Mach-O。

@@ -7,7 +7,7 @@
 
 > 完整的环境安装与启动步骤见 [README 快速开始](../README.md)（含各依赖下载地址与验证命令）。
 
-**依赖**：MongoDB 7.0+（先启动）· .NET SDK 10 · Node.js 20+（默认模板模式构建载荷无需 Rust；仅本机源码编译链路需要 Rust 1.80+）。
+**依赖**：MongoDB 7.0+（先启动）· .NET SDK 10 · Node.js 20+（默认 template 模式直接打包预编译模板；本机源码编译路径需自装 Rust 1.80+）。
 
 ```bash
 # 1. Server（http://localhost:5270）
@@ -137,16 +137,16 @@ build-output/
 ## 6.2 Docker 部署(推荐)
 
 面向自助部署场景:一条命令起全套(MongoDB + Server + nginx)。
-镜像固定为 **template 模式**(`LIBRA_BUILDER_MODE=template`):容器内无任何 Rust 工具链,载荷由 Server 从 GitHub
-Releases 拉取的**预编译平台模板**纯 .NET 打包,支持 win x64 / win arm64 / linux x64 / linux arm64 / mac arm64 全平台出包。
-源码编译(`LIBRA_BUILDER_MODE=source`)是**本机裸机开发**选项,Docker 不再提供源码编译镜像。
+镜像运行于 **template 模式**(`LIBRA_BUILDER_MODE=template`):载荷由 Server 从 GitHub
+Releases 拉取的**预编译平台模板**纯 .NET 打包,支持 win x64 / win arm64 / linux x64 / linux arm64 / mac arm64 全平台出包;
+源码编译(`LIBRA_BUILDER_MODE=source`)对应**本机裸机开发**路径。
 平台实测矩阵见 [platform-support.md](platform-support.md)。
 
 ### 目录(`deploy/`)
 
 | 文件 | 说明 |
 |---|---|
-| `Dockerfile` | **默认 template 镜像**:控制台 SPA → dotnet publish → 精简运行镜像(无 Rust 工具链,支持跨架构 buildx) |
+| `Dockerfile` | **默认 template 镜像**:控制台 SPA → dotnet publish → 精简运行镜像(纯 .NET 模板打包,支持跨架构 buildx) |
 | `docker-compose.yml` | mongo:7 + server + nginx 三服务;五个命名卷持久化 |
 | `.env.example` | 环境变量模板(复制为 `.env` 后填写) |
 | `nginx/console.conf` | nginx 站点配置(SPA 静态 + API/SSE/WS/MCP 分段反代;含 TLS 示例) |
@@ -195,7 +195,7 @@ nginx 进入；agent/beacon 同样走 nginx（80/443）。镜像与 IP/域名**�
   Console Builder 页顶部可查看模板版本/来源并手动刷新。
   - 平台键/ABI/模块降级见 [platform-support.md](platform-support.md);win-arm64 模板暂不含 `script` 模块。
   - 模板资产不存在时构建会给出指引(发布 tag / 换 `LIBRA_TEMPLATE_REPO|TAG|BASE_URL|TOKEN`)。
-- **source 模式**(仅本机裸机开发,Docker 不提供源码编译镜像):
+- **source 模式**(本机裸机开发):
   本机设置 `LIBRA_BUILDER_MODE=source` 并安装 Rust + zig(含目标 triple)后,Server 可现场编译;
   首次构建某平台会现场编译(cargo 联网拉取 crates),`artifacts/{platform}/core.bin` 命中后秒级完成。
 

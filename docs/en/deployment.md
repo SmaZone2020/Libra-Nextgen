@@ -10,7 +10,7 @@
 
 > Full environment installation and startup steps are in [README Quick Start](../../README_en.md) (including download URLs and verification commands for each dependency).
 
-**Dependencies**: MongoDB 7.0+ (start first) · .NET SDK 10 · Node.js 20+ (the default template mode builds payloads without Rust; Rust 1.80+ is only needed for the local source-compile path).
+**Dependencies**: MongoDB 7.0+ (start first) · .NET SDK 10 · Node.js 20+ (the default template mode packages payloads directly from CI-prebuilt templates; the local source-compile path needs Rust 1.80+ installed).
 
 ```bash
 # 1. Server (http://localhost:5270)
@@ -137,17 +137,17 @@ build-output/
 ## 6.2 Docker Deployment (recommended)
 
 For self-service deployments: one command brings up the whole stack (MongoDB + Server + nginx).
-The image is fixed to **template mode** (`LIBRA_BUILDER_MODE=template`): no Rust toolchain inside the container —
-payloads are packaged with pure .NET from **prebuilt platform templates** fetched from GitHub Releases, covering
-win x64 / win arm64 / linux x64 / linux arm64 / mac arm64. Source compilation (`LIBRA_BUILDER_MODE=source`) is a
-**bare-metal development** option; Docker no longer ships a source-compile image.
+The image runs in **template mode** (`LIBRA_BUILDER_MODE=template`): payloads are packaged with
+pure .NET from **prebuilt platform templates** fetched from GitHub Releases, covering
+win x64 / win arm64 / linux x64 / linux arm64 / mac arm64; source compilation
+(`LIBRA_BUILDER_MODE=source`) targets bare-metal development.
 See [platform-support.md](platform-support.md) for the verified matrix.
 
 ### Layout (`deploy/`)
 
 | File | Purpose |
 |---|---|
-| `Dockerfile` | **Default template image**: console SPA → dotnet publish → slim runtime image (no Rust toolchain; buildx-friendly for cross-arch) |
+| `Dockerfile` | **Default template image**: console SPA → dotnet publish → slim runtime image (pure .NET template packaging; buildx-friendly for cross-arch) |
 | `docker-compose.yml` | mongo:7 + server + nginx; five named volumes for persistence |
 | `.env.example` | Environment template (copy to `.env` and fill in) |
 | `nginx/console.conf` | nginx site config (SPA static + segmented API/SSE/WS/MCP proxy; includes a TLS sample) |
@@ -202,7 +202,7 @@ Removing containers does not touch volumes; backup/migration = copy the four vol
     template currently omits the `script` module.
   - A missing template asset produces an actionable build error (publish a tag / point
     `LIBRA_TEMPLATE_REPO|TAG|BASE_URL|TOKEN` elsewhere).
-- **Source mode** (bare-metal development only; Docker ships no source-compile image):
+- **Source mode** (bare-metal development):
   set `LIBRA_BUILDER_MODE=source` on the host and install Rust + zig (with the target triples) to let the
   Server compile on the spot.
 - The first source build of a platform compiles on the spot (cargo pulls crates.io); `artifacts/{platform}/core.bin`

@@ -1,14 +1,13 @@
 # Libra-Nextgen server image — TEMPLATE build mode (default).
 # The server packages agent payloads from prebuilt templates downloaded from
-# the GitHub release (LIBRA_BUILDER_MODE=template); no Rust toolchain, zig or
-# agent-rs source tree is baked in, so the image stays small and runs on any
-# architecture (buildx supports linux/amd64 + linux/arm64).
+# the GitHub release (LIBRA_BUILDER_MODE=template); the image holds only the
+# published .NET server plus the console SPA, so it stays small, and buildx
+# builds linux/amd64 + linux/arm64.
 #
 # Build args:
 #   VITE_API_BASE  API origin baked into the console (required for single-port 443)
 #
-# Source compilation (LIBRA_BUILDER_MODE=source) is a bare-metal dev option only:
-# no in-image Rust toolchain exists, and Docker deployments always run template mode.
+# Source compilation (LIBRA_BUILDER_MODE=source) targets bare-metal development.
 
 # ── Stage 1: console SPA ────────────────────────────────────────────────
 FROM node:22-alpine AS console

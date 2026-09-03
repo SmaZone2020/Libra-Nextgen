@@ -37,7 +37,7 @@ Agents communicate with the server over beacon HTTP(S) and SSE event streams, wi
 - Multi-vector persistence
 - Plugin system: upload zip / Git import / plugin market, pages are pure HTML+JS+CSS
 - Online payload building (Builder), Windows / Linux / macOS (x64 and ARM64)
-- One-command Docker deployment (single-port 443; payloads packaged in template mode — no Rust toolchain)
+- One-command Docker deployment (single-port 443; payloads packaged in template mode from prebuilt templates)
 - Built-in AI assistant Justitia (tiered authority + tool-call audit)
 - AI channels: command Justitia from IM — Telegram / Feishu Lark / WeChat iLink, with bind codes, inline approvals, menu and group calls
 - Built-in MCP server (Streamable HTTP)
@@ -59,7 +59,7 @@ Open `http://<server-ip>` (default port 80) — the first visit creates the admi
 
 ### Local development
 
-Requires MongoDB 7.0+, .NET SDK 10, Node.js 20+ (the default template mode builds Agent payloads without Rust; Rust 1.80+ and zig are only needed for the local source-compile path).
+Requires MongoDB 7.0+, .NET SDK 10, Node.js 20+ (the default template mode packages payloads directly from CI-prebuilt templates; the local source-compile path needs Rust 1.80+ and zig installed).
 
 ```bash
 # Start the server (port 5270)
