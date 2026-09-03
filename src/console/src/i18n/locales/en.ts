@@ -684,6 +684,7 @@ export default {
       refreshTemplate: 'Refresh template',
       refreshingTemplate: 'Refreshing…',
       templateRefreshFailed: 'Template refresh failed',
+      templateNotDownloaded: 'not downloaded',
       buildSuccess: 'Build Successful',
       buildSuccessDesc: 'Build completed in {{time}}.',
       templates: 'Templates',

@@ -1,5 +1,8 @@
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Card, Header, ListBox, Select, Tabs } from '@heroui/react';
+import { Button, Card, Header, ListBox, Select, Spinner, Tabs, Tooltip } from '@heroui/react';
+import { ArrowRotateRight } from '@gravity-ui/icons';
+import { refreshTemplates } from '../../api/build';
 import type { BuildConfigRequest } from '../../types/models';
 import { FALLBACK_PLATFORMS, PLATFORM_LABEL } from './constants';
 import { useBuilderStatus } from './useBuilderStatus';
@@ -14,12 +17,15 @@ const OS_TITLES: Record<string, string> = { windows: 'Windows', linux: 'Linux', 
 
 /**
  * Target platform + application type. The platform options are driven by
- * GET /api/builder/status (grouped by OS, arch + template-cache state per
- * option, refreshed on open) with a static fallback for older servers.
+ * GET /api/builder/status (grouped by OS, arch; options whose prebuilt
+ * template is not cached yet are marked "(未下载)") with a static fallback
+ * for older servers. In template mode a refresh button sits next to the
+ * selector to (re-)fetch the selected platform's template.
  */
 export function BuilderPlatformCard({ config, set }: BuilderPlatformCardProps) {
   const { t } = useTranslation();
   const { status, reload } = useBuilderStatus();
+  const [refreshing, setRefreshing] = useState(false);
   const platforms = status?.platforms ?? FALLBACK_PLATFORMS;
 
   const sections = OS_ORDER
@@ -30,52 +36,82 @@ export function BuilderPlatformCard({ config, set }: BuilderPlatformCardProps) {
   const isWindowsPlatform = config.platform === 'x64' || config.platform === 'x86' || config.platform === 'win-arm64';
   const isNonWindows = !isWindowsPlatform;
 
+  const templateMode = status?.mode === 'template';
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await refreshTemplates(config.platform);
+      await reload();
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
   return (
     <Card className="p-4">
       <div className="grid grid-cols-2 gap-6">
         <div>
           <h2 className="text-lg font-semibold mb-3">{t('builder.platform')}</h2>
-          <Select
-            className="w-full"
-            variant="secondary"
-            selectedKey={config.platform}
-            onSelectionChange={(key) => key && set('platform', String(key))}
-            onOpenChange={(open) => {
-              if (open) reload();
-            }}
-          >
-            <Select.Trigger>
-              <Select.Value />
-              <Select.Indicator />
-            </Select.Trigger>
-            <Select.Popover>
-              <ListBox>
-                {sections.map((section) => (
-                  <ListBox.Section key={section.os}>
-                    <Header>{section.title}</Header>
-                    {section.items.map((p) => (
-                      <ListBox.Item
-                        key={p.platform}
-                        id={p.platform}
-                        textValue={PLATFORM_LABEL[p.platform] ?? p.platform}
-                      >
-                        <span className="flex w-full items-center justify-between gap-3">
-                          <span>{PLATFORM_LABEL[p.platform] ?? p.platform}</span>
-                          <span className="flex items-center gap-1.5 text-xs text-default-500">
-                            <span
-                              className={`h-1.5 w-1.5 rounded-full ${p.template ? 'bg-success' : 'bg-warning'}`}
-                            />
-                            {p.arch.toUpperCase()}
+          <div className="flex items-center gap-2">
+            <Select
+              className="min-w-0 flex-1"
+              variant="secondary"
+              selectedKey={config.platform}
+              onSelectionChange={(key) => key && set('platform', String(key))}
+              onOpenChange={(open) => {
+                if (open) reload();
+              }}
+            >
+              <Select.Trigger>
+                <Select.Value />
+                <Select.Indicator />
+              </Select.Trigger>
+              <Select.Popover>
+                <ListBox>
+                  {sections.map((section) => (
+                    <ListBox.Section key={section.os}>
+                      <Header>{section.title}</Header>
+                      {section.items.map((p) => (
+                        <ListBox.Item
+                          key={p.platform}
+                          id={p.platform}
+                          textValue={PLATFORM_LABEL[p.platform] ?? p.platform}
+                        >
+                          <span className="flex w-full items-center justify-between gap-3">
+                            <span>{PLATFORM_LABEL[p.platform] ?? p.platform}</span>
+                            <span className="flex items-center gap-1.5 text-xs text-default-500">
+                              <span
+                                className={`h-1.5 w-1.5 rounded-full ${p.template ? 'bg-success' : 'bg-warning'}`}
+                                title={p.template ? undefined : t('builder.templateNotDownloaded')}
+                              />
+                              {p.arch.toUpperCase()}
+                            </span>
                           </span>
-                        </span>
-                        <ListBox.ItemIndicator />
-                      </ListBox.Item>
-                    ))}
-                  </ListBox.Section>
-                ))}
-              </ListBox>
-            </Select.Popover>
-          </Select>
+                          <ListBox.ItemIndicator />
+                        </ListBox.Item>
+                      ))}
+                    </ListBox.Section>
+                  ))}
+                </ListBox>
+              </Select.Popover>
+            </Select>
+            {templateMode && (
+              <Tooltip delay={0}>
+                <Button
+                  isIconOnly
+                  variant="secondary"
+                  className="rounded-[15px] shrink-0"
+                  isDisabled={refreshing}
+                  onPress={handleRefresh}
+                  aria-label={t('builder.refreshTemplate')}
+                >
+                  {refreshing ? <Spinner size="sm" /> : <ArrowRotateRight />}
+                </Button>
+                <Tooltip.Content placement="top">{t('builder.refreshTemplate')}</Tooltip.Content>
+              </Tooltip>
+            )}
+          </div>
         </div>
         <div>
           <h2 className="text-lg font-semibold mb-3">{t('builder.applicationType')}</h2>
@@ -90,9 +126,6 @@ export function BuilderPlatformCard({ config, set }: BuilderPlatformCardProps) {
               </Tabs.List>
             </Tabs.ListContainer>
           </Tabs>
-          <p className="text-xs text-default-500 mt-2">
-            {t(config.applicationType === 'Desktop' ? 'builder.desktopAppDesc' : 'builder.consoleAppDesc')}
-          </p>
         </div>
       </div>
     </Card>

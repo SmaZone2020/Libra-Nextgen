@@ -683,6 +683,7 @@ export default {
       refreshTemplate: '刷新模板',
       refreshingTemplate: '刷新中…',
       templateRefreshFailed: '模板刷新失败',
+      templateNotDownloaded: '未下载',
       buildSuccess: '构建成功',
       buildSuccessDesc: '构建完成，用时 {{time}}。',
       templates: '模板管理',
