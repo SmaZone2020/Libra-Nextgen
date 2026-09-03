@@ -142,7 +142,7 @@ build-output/
 | 文件 | 说明 |
 |---|---|
 | `Dockerfile` | 三阶段构建：控制台 SPA → dotnet publish → 运行镜像（含 rustup + zig + cargo-zigbuild） |
-| `docker-compose.yml` | mongo:7 + server + nginx 三服务；四个命名卷持久化 |
+| `docker-compose.yml` | mongo:7 + server + nginx 三服务；五个命名卷持久化 |
 | `.env.example` | 环境变量模板（复制为 `.env` 后填写） |
 | `nginx/console.conf` | nginx 站点配置（SPA 静态 + API/SSE/WS/MCP 分段反代；含 TLS 示例） |
 | `docker/entrypoint.sh` | 容器入口：准备持久化目录后启动服务 |
@@ -163,7 +163,7 @@ docker compose up -d --build
 **单端口说明**：`VITE_API_BASE` 在构建镜像时写入前端，控制台的 API/SSE/WS 全部请求该源并经 nginx 443 进入；
 agent/beacon 也走 443。改域名/端口需 `docker compose up -d --build` 重建镜像。
 
-### 持久化（四个命名卷）
+### 持久化（五个命名卷）
 
 | 卷 | 挂载点 | 内容 |
 |---|---|---|
@@ -171,6 +171,7 @@ agent/beacon 也走 443。改域名/端口需 `docker compose up -d --build` 重
 | `libra-builds` | `/build-output` | 构建产物、模块、`artifacts/`、共享 cargo 缓存（`target-shared`） |
 | `libra-config` | `/root/.config/Libra-Nextgen` | JWT RSA 密钥 + 监听设置 |
 | `libra-secrets` | `/secrets` | 服务端 RSA 私钥（首次启动自动生成） |
+| `console-dist` | `/srv/console-live` → `/usr/share/nginx/html` | 控制台 SPA（容器入口每次启动从镜像同步），可安全删除、由镜像重建 |
 
 删除容器不影响卷；备份/迁移 = 把四个卷与 `.env` 一并拷贝。
 

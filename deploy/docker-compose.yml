@@ -41,6 +41,7 @@ services:
       - libra-builds:/build-output          # build artifacts / modules / cargo cache (persistent)
       - libra-config:/root/.config/Libra-Nextgen  # JWT RSA key + listener settings (persistent)
       - libra-secrets:/secrets              # server RSA key, auto-generated on first start (persistent)
+      - console-dist:/srv/console-live      # SPA synced by entrypoint; served by nginx
     expose:
       - "5270"   # reachable only inside the docker network (agents enter via nginx :443)
 
@@ -55,11 +56,11 @@ services:
     volumes:
       - ./nginx/console.conf:/etc/nginx/conf.d/default.conf:ro
       - ./certs:/etc/nginx/certs:ro          # TLS certs (fullchain.pem / privkey.pem)
-    volumes_from:
-      - server:ro                            # read-only mount of the console SPA (/srv/console)
+      - console-dist:/usr/share/nginx/html:ro  # console SPA (written by the server entrypoint)
 
 volumes:
   mongo-data:
   libra-builds:
   libra-config:
   libra-secrets:
+  console-dist:

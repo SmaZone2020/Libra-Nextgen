@@ -142,7 +142,7 @@ The server image is linux/amd64 only.
 | File | Purpose |
 |---|---|
 | `Dockerfile` | Three-stage build: console SPA → dotnet publish → runtime image (rustup + zig + cargo-zigbuild) |
-| `docker-compose.yml` | mongo:7 + server + nginx; four named volumes for persistence |
+| `docker-compose.yml` | mongo:7 + server + nginx; five named volumes for persistence |
 | `.env.example` | Environment template (copy to `.env` and fill in) |
 | `nginx/console.conf` | nginx site config (SPA static + segmented API/SSE/WS/MCP proxy; includes a TLS sample) |
 | `docker/entrypoint.sh` | Container entrypoint: prepare persistent dirs, then start the server |
@@ -164,7 +164,7 @@ Open the `VITE_API_BASE` URL; first visit to `/setup` creates the admin.
 API/SSE/WS calls target that origin through nginx :443, and agent/beacon traffic also enters via 443.
 Changing the domain/port requires rebuilding with `docker compose up -d --build`.
 
-### Persistence (four named volumes)
+### Persistence (five named volumes)
 
 | Volume | Mount | Contents |
 |---|---|---|
@@ -172,6 +172,7 @@ Changing the domain/port requires rebuilding with `docker compose up -d --build`
 | `libra-builds` | `/build-output` | Build artifacts, modules, `artifacts/`, shared cargo cache (`target-shared`) |
 | `libra-config` | `/root/.config/Libra-Nextgen` | JWT RSA key + listener settings |
 | `libra-secrets` | `/secrets` | Server RSA private key (auto-generated on first start) |
+| `console-dist` | `/srv/console-live` → `/usr/share/nginx/html` | Console SPA (re-synced from the image by the entrypoint on every start; safe to delete, rebuilt from the image) |
 
 Removing containers does not touch volumes; backup/migration = copy the four volumes plus `.env`.
 
