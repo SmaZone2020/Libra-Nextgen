@@ -37,6 +37,7 @@ Agent 通过 beacon HTTP(S) 与 SSE 事件流与服务器通信，全链路 AES-
 - 多维度持久化
 - 插件体系：上传 zip / Git 导入 / 插件市场，页面为纯 HTML+JS+CSS
 - 在线载荷构建（Builder），Windows / Linux
+- Docker 一键部署（单端口 443，容器内交叉构建 win/linux Agent）
 - 内置 AI 助手 Justitia（分级权限 + 工具调用审计）
 - AI 频道：Telegram / 飞书 / 微信 iLink 在 IM 中指挥 Justitia，支持绑定码、内联审批、菜单与群组调用
 - 内置 MCP 服务器（Streamable HTTP）
@@ -44,7 +45,21 @@ Agent 通过 beacon HTTP(S) 与 SSE 事件流与服务器通信，全链路 AES-
 
 ## 快速开始
 
-需要 MongoDB 7.0+、.NET SDK 10、Node.js 20+（构建 Agent 载荷另需 Rust 1.80+）。详见 [部署手册](docs/deployment.md)。
+### Docker 一键部署（推荐，linux/amd64）
+
+无需安装 .NET / Node / Rust / MongoDB——镜像内置 Rust/zig 工具链，可在容器内在线构建 win x64 / linux-x64 Agent。
+
+```bash
+cd deploy
+cp .env.example .env   # 填写 VITE_API_BASE（控制台公共访问源，如 https://c2.example.com）
+docker compose up -d --build
+```
+
+浏览器打开 `VITE_API_BASE` 对应地址，首次访问 `/setup` 创建管理员。详见[部署手册 §6.2](docs/deployment.md)。
+
+### 本地开发启动
+
+需要 MongoDB 7.0+、.NET SDK 10、Node.js 20+（构建 Agent 载荷另需 Rust 1.80+）。
 
 ```bash
 # 启动 Server（端口 5270）
@@ -57,7 +72,7 @@ npm install
 npm run dev
 ```
 
-浏览器打开 <http://localhost:5173>，首次访问创建管理员账户。Agent 载荷可在 Console 的 Builder 页在线构建。
+浏览器打开 <http://localhost:5173>，首次访问创建管理员账户。Agent 载荷可在 Console 的 Builder 页在线构建。完整部署细节（nginx/TLS/密钥/升级/迁移）见[部署手册](docs/deployment.md)。
 
 ## 平台支持
 

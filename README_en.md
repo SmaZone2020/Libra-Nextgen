@@ -37,6 +37,7 @@ Agents communicate with the server over beacon HTTP(S) and SSE event streams, wi
 - Multi-vector persistence
 - Plugin system: upload zip / Git import / plugin market, pages are pure HTML+JS+CSS
 - Online payload building (Builder), Windows / Linux
+- One-command Docker deployment (single-port 443; win/linux payloads cross-built in-container)
 - Built-in AI assistant Justitia (tiered authority + tool-call audit)
 - AI channels: command Justitia from IM — Telegram / Feishu Lark / WeChat iLink, with bind codes, inline approvals, menu and group calls
 - Built-in MCP server (Streamable HTTP)
@@ -44,7 +45,21 @@ Agents communicate with the server over beacon HTTP(S) and SSE event streams, wi
 
 ## Getting Started
 
-Requires MongoDB 7.0+, .NET SDK 10, Node.js 20+ (Rust 1.80+ is only needed to build Agent payloads). See the [Deployment Manual](docs/deployment.md).
+### Docker one-command deployment (recommended, linux/amd64)
+
+No .NET / Node / Rust / MongoDB install needed — the image ships a Rust/zig toolchain and can build win x64 / linux-x64 agents online in-container.
+
+```bash
+cd deploy
+cp .env.example .env   # set VITE_API_BASE (public origin of the console, e.g. https://c2.example.com)
+docker compose up -d --build
+```
+
+Open the `VITE_API_BASE` URL — the first visit creates the admin at `/setup`. See [§6.2 of the deployment manual](docs/en/deployment.md).
+
+### Local development
+
+Requires MongoDB 7.0+, .NET SDK 10, Node.js 20+ (Rust 1.80+ is only needed to build Agent payloads).
 
 ```bash
 # Start the server (port 5270)
@@ -57,7 +72,7 @@ npm install
 npm run dev
 ```
 
-Open <http://localhost:5173> — the first visit creates the admin account. Agent payloads can be built online in the Console's Builder page.
+Open <http://localhost:5173> — the first visit creates the admin account. Agent payloads can be built online in the Console's Builder page. Full deployment details (nginx/TLS/keys/upgrades/migration) are in the [Deployment Manual](docs/en/deployment.md).
 
 ## Platform Support
 
