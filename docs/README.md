@@ -12,6 +12,7 @@
 | [README](../README.md) / [README_en](../README_en.md) | 中 / 英 | 项目总览、特性、快速开始 |
 | [部署手册](deployment.md) / [en](en/deployment.md) | 中 / 英 | 环境变量、MongoDB、nginx/TLS、密钥、故障排查 |
 | [操作手册](zh/operations.md) / [en](en/operations.md) | 中 / 英 | 首次登录、Agent 上线、Shell、文件、插件、MCP、审计 |
+| [Agent 开发手册(通信协议 + JS SDK)](agent-development.md) / [en](en/agent-development.md) | 中 / 英 | Agent 通信协议(注册/心跳/SSE/加密/模块)与 Agent 端 JavaScript SDK 全量 API |
 | [插件开发教程](zh/plugin-development.md) / [en](en/plugin-development.md) | 中 / 英 | 插件三层结构、meta.json 契约、Agent 双通道、HTML 页面 |
 | [AI 频道(IM 接入)](zh/ai-channels.md) / [en](en/ai-channels.md) | 中 / 英 | Telegram / 微信 iLink / 飞书 Lark 接入设计与配置 |
 | [平台支持矩阵](platform-support.md) / [en](en/platform-support.md) | 中 / 英 | 平台构建/运行实测记录 |

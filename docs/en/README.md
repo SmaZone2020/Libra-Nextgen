@@ -9,6 +9,7 @@
 | [README](../README.md) / [README_en](../README_en.md) | zh / en | Project overview, features, quick start |
 | [Deployment Manual](../deployment.md) / [en](deployment.md) | zh / en | Environment variables, MongoDB, nginx/TLS, keys, troubleshooting |
 | [Operations Manual](../zh/operations.md) / [en](operations.md) | zh / en | First login, Agent onboarding, Shell, files, plugins, MCP, audit |
+| [Agent Development Handbook (wire protocol + JS SDK)](agent-development.md) / [zh](../agent-development.md) | en / zh | Agent wire protocol (registration/heartbeat/SSE/crypto/modules) and the full Agent-side JavaScript SDK |
 | [Plugin Development](../zh/plugin-development.md) / [en](plugin-development.md) | zh / en | Plugin three-layer structure, meta.json contract, Agent dual channels, HTML pages |
 | [AI Channels (IM)](../zh/ai-channels.md) / [en](ai-channels.md) | zh / en | Telegram / WeChat iLink / Feishu Lark integration design & configuration |
 | [Platform Support Matrix](../platform-support.md) / [en](platform-support.md) | zh / en | Verified platform build/runtime records |
