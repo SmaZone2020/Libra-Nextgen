@@ -27,6 +27,7 @@ import { BuilderDownloadModal } from './BuilderDownloadModal';
 import { BuilderHistoryPanel } from './BuilderHistoryPanel';
 import { BuilderModals } from './BuilderModals';
 import { BuilderOptionsCard } from './BuilderOptionsCard';
+import { BuilderTemplateStatusBar } from './BuilderTemplateStatusBar';
 import { BuilderTrafficCard } from './BuilderTrafficCard';
 import { saveBuildPreset } from '../../utils/buildPresets';
 import { DEFAULT_CONFIG } from './constants';
@@ -321,7 +322,11 @@ export default function BuilderPage() {
   };
 
   return (
-    <div className="flex flex-col lg:flex-row gap-4 max-w-6xl mx-auto items-start">
+    <div className="flex flex-col gap-4 max-w-6xl mx-auto items-start">
+      <div className="w-full">
+        <BuilderTemplateStatusBar platform={config.platform} />
+      </div>
+      <div className="flex flex-col lg:flex-row gap-4 w-full items-start">
       {/* Left: Build Config */}
       <div className="flex-1 space-y-4">
         <BuilderConfigCard config={config} set={set} applyConfig={applyConfig} />
@@ -384,6 +389,7 @@ export default function BuilderPage() {
         record={downloadRecord}
         onClose={() => setDownloadRecord(null)}
       />
+      </div>
     </div>
   );
 }

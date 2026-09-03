@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Button,
@@ -29,8 +29,8 @@ export function BuilderConfigCard({ config, set, applyConfig }: BuilderConfigCar
   const [iconUploading, setIconUploading] = useState(false);
   const [iconPreview, setIconPreview] = useState<string | null>(null);
   const [presets, setPresets] = useState<BuildPreset[]>([]);
-  // PE icon/metadata embedding is Windows-only; hide for Linux targets.
-  const isLinux = config.platform === 'linux-x64';
+  // PE icon/metadata embedding is Windows-only; hide for other targets.
+  const isWindowsPlatform = config.platform === 'x64' || config.platform === 'x86' || config.platform === 'win-arm64';
 
   useEffect(() => {
     setPresets(loadBuildPresets());
@@ -109,7 +109,7 @@ export function BuilderConfigCard({ config, set, applyConfig }: BuilderConfigCar
         </NumberField>
       </div>
       <hr className="my-4 border-default-200" />
-      {!isLinux && (
+      {isWindowsPlatform && (
       <>
       <h2 className="text-lg font-semibold mb-3">{t('builder.metadata')}</h2>
       <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">

@@ -38,11 +38,15 @@ const LINUX_DISABLED_ANTI = new Set(['checkTestSigning']);
 
 export function BuilderOptionsCard({ config, set }: BuilderOptionsCardProps) {
   const { t } = useTranslation();
-  const isLinux = config.platform === 'linux-x64';
+  // Windows-only features (PE obfuscation, UAC, scheduled-task persistence,
+  // test-signing detection, Desktop GUI subsystem, icon/metadata) exist only
+  // for the x64/x86/win-arm64 keys; linux-*/mac-* targets run as consoles.
+  const isWindowsPlatform = config.platform === 'x64' || config.platform === 'x86' || config.platform === 'win-arm64';
+  const isNonWindows = !isWindowsPlatform;
 
-  // Reset Windows-only options when switching to Linux.
+  // Reset Windows-only options when switching to a non-Windows target.
   useEffect(() => {
-    if (config.platform !== 'linux-x64') return;
+    if (!isNonWindows) return;
     let changed = false;
     if (config.enableObfuscation) { set('enableObfuscation', false); changed = true; }
     if (config.requireAdmin) { set('requireAdmin', false); changed = true; }
@@ -58,7 +62,7 @@ export function BuilderOptionsCard({ config, set }: BuilderOptionsCardProps) {
     }
     if (changed) {
       // eslint-disable-next-line no-console
-      console.log('[builder] reset Windows-only options for Linux target');
+      console.log('[builder] reset Windows-only options for non-Windows target');
     }
   }, [config.platform]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -78,16 +82,16 @@ export function BuilderOptionsCard({ config, set }: BuilderOptionsCardProps) {
   );
 
   const buildDisabled = useMemo(
-    () => new Set(isLinux ? [...LINUX_DISABLED_BUILD] : []),
-    [isLinux],
+    () => new Set(isNonWindows ? [...LINUX_DISABLED_BUILD] : []),
+    [isNonWindows],
   );
   const persistDisabled = useMemo(
-    () => new Set(isLinux ? [...LINUX_DISABLED_PERSIST] : []),
-    [isLinux],
+    () => new Set(isNonWindows ? [...LINUX_DISABLED_PERSIST] : []),
+    [isNonWindows],
   );
   const antiDisabled = useMemo(
-    () => new Set(isLinux ? [...LINUX_DISABLED_ANTI] : []),
-    [isLinux],
+    () => new Set(isNonWindows ? [...LINUX_DISABLED_ANTI] : []),
+    [isNonWindows],
   );
 
   const handleBuildSelectionChange = (keys: Selection) => {
@@ -130,8 +134,10 @@ export function BuilderOptionsCard({ config, set }: BuilderOptionsCardProps) {
               <Tabs.ListContainer>
                 <Tabs.List>
                   <Tabs.Tab id="x64">Win x64<Tabs.Indicator /></Tabs.Tab>
-                  <Tabs.Tab id="x86" isDisabled>Win x86<Tabs.Indicator /></Tabs.Tab>
+                  <Tabs.Tab id="win-arm64">Win ARM64<Tabs.Indicator /></Tabs.Tab>
                   <Tabs.Tab id="linux-x64">Linux x64<Tabs.Indicator /></Tabs.Tab>
+                  <Tabs.Tab id="linux-arm64">Linux ARM64<Tabs.Indicator /></Tabs.Tab>
+                  <Tabs.Tab id="mac-arm64">macOS ARM64<Tabs.Indicator /></Tabs.Tab>
                 </Tabs.List>
               </Tabs.ListContainer>
             </Tabs>
@@ -145,7 +151,7 @@ export function BuilderOptionsCard({ config, set }: BuilderOptionsCardProps) {
               <Tabs.ListContainer>
                 <Tabs.List>
                   <Tabs.Tab id="Console">{t('builder.consoleApp')}<Tabs.Indicator /></Tabs.Tab>
-                  <Tabs.Tab id="Desktop" isDisabled={isLinux}>{t('builder.desktopApp')}<Tabs.Indicator /></Tabs.Tab>
+                  <Tabs.Tab id="Desktop" isDisabled={isNonWindows}>{t('builder.desktopApp')}<Tabs.Indicator /></Tabs.Tab>
                 </Tabs.List>
               </Tabs.ListContainer>
             </Tabs>

@@ -158,6 +158,55 @@ export interface ModuleEntry {
   enabled: boolean;
 }
 
+// ── Builder mode + template distribution (LIBRA_BUILDER_MODE=template) ──
+
+export interface BuilderTemplateState {
+  platform: string;
+  os: string;
+  arch: string;
+  ext: string;
+  canBuildLocally: boolean;
+  template: { tag: string; commit: string; asset: string; builtAt: string; zipBytes: number } | null;
+}
+
+export interface BuilderStatus {
+  mode: 'template' | 'source';
+  platforms: BuilderTemplateState[];
+}
+
+export async function getBuilderStatus(): Promise<BuilderStatus> {
+  const response = await fetch(`${apiBase()}/builder/status`, {
+    headers: { Authorization: `Bearer ${getToken()}` },
+  });
+  if (!response.ok) throw new Error(`Failed to get builder status (HTTP ${response.status})`);
+  return response.json();
+}
+
+export interface TemplateRefreshResult {
+  platform: string;
+  ok: boolean;
+  tag?: string;
+  commit?: string;
+  error?: string;
+}
+
+/** Re-fetch and cache the prebuilt template for one platform (or all when omitted). */
+export async function refreshTemplates(platform?: string): Promise<{ results: TemplateRefreshResult[] }> {
+  const response = await fetch(`${apiBase()}/builder/templates/refresh`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${getToken()}`,
+    },
+    body: JSON.stringify({ platform: platform ?? null }),
+  });
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({ error: 'Template refresh failed' }));
+    throw new Error(err.error || `Template refresh failed (HTTP ${response.status})`);
+  }
+  return response.json();
+}
+
 export async function listModules(platform: string): Promise<ModuleEntry[]> {
   const response = await fetch(`${apiBase()}/builder/modules?platform=${encodeURIComponent(platform)}`, {
     headers: { Authorization: `Bearer ${getToken()}` },
