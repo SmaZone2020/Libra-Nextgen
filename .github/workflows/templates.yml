@@ -138,7 +138,7 @@ jobs:
           PKGS: ${{ matrix.pkgs }}
           TAG: ${{ github.event.inputs.tag_name || github.ref_name }}
           SHA: ${{ github.sha }}
-        run: bash .github/workflows/templates-assemble.sh
+        run: bash "$GITHUB_WORKSPACE/.github/workflows/templates-assemble.sh"
 
       - uses: actions/upload-artifact@v4
         with:
