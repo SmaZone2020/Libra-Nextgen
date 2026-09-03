@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="/assets/hero.png" width="600"/>
+  <img src="/assets/branding/hero.png" width="600"/>
   <h1>Libra-Nextgen</h1>
 
   An open-source C2 (Command & Control) framework for enterprise red-team operations
@@ -48,11 +48,11 @@ Requires MongoDB 7.0+, .NET SDK 10, Node.js 20+ (Rust 1.80+ is only needed to bu
 
 ```bash
 # Start the server (port 5270)
-cd src/service
+cd src/LibraNextgen.Server
 dotnet run
 
 # Start the console (port 5173)
-cd src/webapp
+cd src/console
 npm install
 npm run dev
 ```

@@ -1,12 +1,11 @@
-﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "service", "service\service.csproj", "{53C01018-9D42-49A1-AA07-32B174E57DF5}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LibraNextgen.Server", "src\LibraNextgen.Server\LibraNextgen.Server.csproj", "{53C01018-9D42-49A1-AA07-32B174E57DF5}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LibraNextgen.Common", "LibraNextgen.Common\LibraNextgen.Common.csproj", "{88020430-B2AF-4F8B-9F61-9E70A75B8172}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LibraNextgen.Common", "src\LibraNextgen.Common\LibraNextgen.Common.csproj", "{88020430-B2AF-4F8B-9F61-9E70A75B8172}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{0AB3BF05-4346-4AA6-1389-037BE0695223}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LibraNextgen.Tests", "tests\LibraNextgen.Tests\LibraNextgen.Tests.csproj", "{B02401E6-93DF-4905-B85A-92E5DABCF9F9}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LibraNextgen.Tests", "src\tests\LibraNextgen.Tests\LibraNextgen.Tests.csproj", "{B02401E6-93DF-4905-B85A-92E5DABCF9F9}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

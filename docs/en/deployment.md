@@ -10,9 +10,9 @@
 
 ```bash
 # 1. Server (http://localhost:5270)
-cd src/service && dotnet run
+cd src/LibraNextgen.Server && dotnet run
 # 2. Console (http://localhost:5173; /setup on first visit creates the admin)
-cd src/webapp && npm install && npm run dev
+cd src/console && npm install && npm run dev
 ```
 
 ## 1. Architecture Overview

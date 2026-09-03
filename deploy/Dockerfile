@@ -17,17 +17,17 @@ FROM node:22-alpine AS console
 WORKDIR /web
 ARG VITE_API_BASE=""
 ENV VITE_API_BASE=$VITE_API_BASE
-COPY src/webapp/package.json src/webapp/package-lock.json ./
+COPY src/console/package.json src/console/package-lock.json ./
 RUN npm ci
-COPY src/webapp/ ./
+COPY src/console/ ./
 RUN npm run build
 
 # ── Stage 2: publish server ─────────────────────────────────────────────
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS publish
 WORKDIR /src
 COPY src/LibraNextgen.Common/ LibraNextgen.Common/
-COPY src/service/ service/
-RUN dotnet publish service/service.csproj -c Release -o /out
+COPY src/LibraNextgen.Server/ LibraNextgen.Server/
+RUN dotnet publish LibraNextgen.Server/LibraNextgen.Server.csproj -c Release -o /out
 
 # ── Stage 3: runtime ────────────────────────────────────────────────────
 FROM mcr.microsoft.com/dotnet/aspnet:10.0

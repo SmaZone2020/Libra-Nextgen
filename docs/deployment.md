@@ -8,9 +8,9 @@
 
 ```bash
 # 1. Server（http://localhost:5270）
-cd src/service && dotnet run
+cd src/LibraNextgen.Server && dotnet run
 # 2. Console（http://localhost:5173，首次访问 /setup 建管理员）
-cd src/webapp && npm install && npm run dev
+cd src/console && npm install && npm run dev
 ```
 
 ## 1. 架构总览

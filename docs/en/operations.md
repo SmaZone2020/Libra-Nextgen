@@ -5,8 +5,8 @@
 ## First Login
 
 1. Start Server and Console (see [README Quick Start](../../README_en.md) or the [Deployment Manual](../deployment.md)):
-   - Server: `cd src/service && dotnet run` (port 5270; MongoDB must be started first)
-   - Console: `cd src/webapp && npm install && npm run dev` (port 5173)
+   - Server: `cd src/LibraNextgen.Server && dotnet run` (port 5270; MongoDB must be started first)
+   - Console: `cd src/console && npm install && npm run dev` (port 5173)
 2. Open <http://localhost:5173> in a browser → `/setup` to create the admin account
 3. After signing in you land on the main dashboard
 

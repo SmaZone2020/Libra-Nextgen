@@ -1,5 +1,5 @@
 # E2E 回归：起服务端 + agent，跑协议/模块/列表测试，自动清理。
-# 前置：Mongo 运行中、src/service 已构建（dotnet build）、agent 已构建（cargo build -p agent -p loader）。
+# 前置：Mongo 运行中、src/LibraNextgen.Server 已构建（dotnet build）、agent 已构建（cargo build -p agent -p loader）。
 param(
   [int]$Port = 5270,
   [switch]$KeepRunning

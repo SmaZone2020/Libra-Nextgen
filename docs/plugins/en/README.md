@@ -11,8 +11,8 @@
 |---|---|---|
 | `Libra-Plugins/` (separate repository) | Plugin source: `meta.json` + `module/` + `service/` + `page/` + `assets/` | Separate git repository |
 | `src/plugins/` | Server **runtime install directory** (zip import / extraction target) | ❌ gitignored |
-| `src/service/plugins-service/` | Server-side script development fallback directory | ❌ gitignored |
-| `src/webapp/src/plugins/` | Console runtime loader (registry / loader / icons) — contains no plugin pages | ✅ |
+| `src/LibraNextgen.Server/plugins-service/` | Server-side script development fallback directory | ❌ gitignored |
+| `src/console/src/plugins/` | Console runtime loader (registry / loader / icons) — contains no plugin pages | ✅ |
 
 **Installed plugin directories and their related files must never enter the git repository.**
 Plugins can only be landed into the runtime directory via zip import or the install script; any

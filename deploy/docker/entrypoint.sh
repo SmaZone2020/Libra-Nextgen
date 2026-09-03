@@ -14,4 +14,4 @@ if [ -d /srv/console ] && [ -d /srv/console-live ]; then
     cp -a /srv/console/. /srv/console-live/
 fi
 
-exec dotnet /app/service.dll "$@"
+exec dotnet /app/LibraNextgen.Server.dll "$@"

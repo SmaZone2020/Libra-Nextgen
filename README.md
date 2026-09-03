@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="/assets/hero.png" width="600"/>
+  <img src="/assets/branding/hero.png" width="600"/>
   <h1>Libra-Nextgen</h1>
 
   面向企业红蓝对抗的开源 C2（Command & Control）框架
@@ -48,11 +48,11 @@ Agent 通过 beacon HTTP(S) 与 SSE 事件流与服务器通信，全链路 AES-
 
 ```bash
 # 启动 Server（端口 5270）
-cd src/service
+cd src/LibraNextgen.Server
 dotnet run
 
 # 启动 Console（端口 5173）
-cd src/webapp
+cd src/console
 npm install
 npm run dev
 ```

@@ -17,7 +17,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\LibraNextgen.Common\LibraNextgen.Common.csproj" />
-    <ProjectReference Include="..\..\service\service.csproj" />
+    <ProjectReference Include="..\..\LibraNextgen.Server\LibraNextgen.Server.csproj" />
   </ItemGroup>
 
 </Project>

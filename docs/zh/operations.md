@@ -3,8 +3,8 @@
 ## 首次登录
 
 1. 启动 Server 与 Console（见 [README 快速开始](../../README.md) 或 [部署手册](../../deployment.md)）：
-   - Server：`cd src/service && dotnet run`（端口 5270，需先启动 MongoDB）
-   - Console：`cd src/webapp && npm install && npm run dev`（端口 5173）
+   - Server：`cd src/LibraNextgen.Server && dotnet run`（端口 5270，需先启动 MongoDB）
+   - Console：`cd src/console && npm install && npm run dev`（端口 5173）
 2. 浏览器访问 <http://localhost:5173> → `/setup` 创建管理员账户
 3. 登录后进入主界面
 

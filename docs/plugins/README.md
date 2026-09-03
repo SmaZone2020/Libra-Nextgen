@@ -8,8 +8,8 @@
 |---|---|---|
 | `Libra-Plugins/`(独立仓库) | 插件源码:`meta.json` + `module/` + `service/` + `page/` + `assets/` | 独立 git 仓库 |
 | `src/plugins/` | 服务器**运行时安装目录**(zip 导入/解压目标) | ❌ gitignore |
-| `src/service/plugins-service/` | 服务端脚本开发回退目录 | ❌ gitignore |
-| `src/webapp/src/plugins/` | 控制台运行时加载器(registry/loader/icons)——不含任何插件页面 | ✅ |
+| `src/LibraNextgen.Server/plugins-service/` | 服务端脚本开发回退目录 | ❌ gitignore |
+| `src/console/src/plugins/` | 控制台运行时加载器(registry/loader/icons)——不含任何插件页面 | ✅ |
 
 **已安装插件目录及其相关文件一律不允许进入 git 仓库。** 插件只能通过 zip 导入或安装脚本落地到运行时目录;插件源码的增删改一律发生在 Libra-Plugins 仓库。
 
