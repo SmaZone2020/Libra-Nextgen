@@ -3,8 +3,8 @@
 > **Correspondence**: English version of [`../deployment.md`](../deployment.md) (Chinese deployment manual). Content follows the real production implementation.
 
 > **Docker is recommended for production / self-service deployment (§6.2)**: one command brings up
-> MongoDB + Server + nginx, and win x64 / linux-x64 agents can be built online in-container — the host
-> needs no .NET / Node / Rust / MongoDB. Bare-metal deployment is covered in §3–§5, development in §0.
+> MongoDB + Server + nginx — intranet HTTP and public HTTPS are both supported. Bare-metal deployment
+> is covered in §3–§5, development in §0.
 
 ## 0. Development Environment Quick Start
 
@@ -138,8 +138,7 @@ build-output/
 
 For self-service deployments: one command brings up the whole stack (MongoDB + Server + nginx), and the
 image ships a Rust/zig toolchain, so **win x64 / win x86 (GNU ABI, cross-compiled) and linux-x64 agents
-can be built online inside the container** — no .NET / Node / Rust / MongoDB install on the host.
-The server image is linux/amd64 only.
+can be built online inside the container**. The server image is linux/amd64 only.
 
 ### Layout (`deploy/`)
 

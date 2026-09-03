@@ -1,7 +1,7 @@
 # Libra-Nextgen 部署手册
 
-> **生产/自助部署推荐 Docker（§6.2）**：一条命令起 MongoDB + Server + nginx，容器内可在线构建
-> win x64 / linux-x64 Agent，部署机无需安装 .NET / Node / Rust / MongoDB。裸机部署见 §3–§5，开发环境见 §0。
+> **生产/自助部署推荐 Docker（§6.2）**：一条命令起 MongoDB + Server + nginx（内网 HTTP / 公网 HTTPS 均可）。
+> 裸机部署见 §3–§5，开发环境见 §0。
 
 ## 0. 开发环境快速启动
 
@@ -136,9 +136,9 @@ build-output/
 
 ## 6.2 Docker 部署（推荐，linux/amd64）
 
-面向自助部署场景：一条命令起全套（MongoDB + Server + nginx），且容器内置 Rust/zig 工具链，
-**可在容器内在线构建 win x64 / win x86（GNU ABI 交叉编译）与 linux-x64 agent**，
-部署机无需安装 .NET / Node / Rust / MongoDB。服务端镜像仅支持 linux/amd64。
+面向自助部署场景：一条命令起全套（MongoDB + Server + nginx），镜像内置 Rust/zig 工具链，
+可在容器内在线构建 win x64 / win x86（GNU ABI 交叉编译）与 linux-x64 agent。
+服务端镜像仅支持 linux/amd64。
 
 ### 目录（`deploy/`）
 

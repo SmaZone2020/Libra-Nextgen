@@ -47,7 +47,7 @@ Agents communicate with the server over beacon HTTP(S) and SSE event streams, wi
 
 ### Docker one-command deployment (recommended, linux/amd64)
 
-No .NET / Node / Rust / MongoDB install needed — the image ships a Rust/zig toolchain and can build win x64 / linux-x64 agents online in-container.
+Works for both intranet HTTP and public HTTPS (TLS) — the console and agents share one entry point; see [§6.2 of the deployment manual](docs/en/deployment.md).
 
 ```bash
 cd deploy

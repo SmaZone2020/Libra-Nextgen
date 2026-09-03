@@ -47,7 +47,7 @@ Agent 通过 beacon HTTP(S) 与 SSE 事件流与服务器通信，全链路 AES-
 
 ### Docker 一键部署（推荐，linux/amd64）
 
-无需安装 .NET / Node / Rust / MongoDB——镜像内置 Rust/zig 工具链，可在容器内在线构建 win x64 / linux-x64 Agent。
+内网 HTTP 与公网 HTTPS（TLS）均可部署，控制台与 Agent 走同一入口；见[部署手册 §6.2](docs/deployment.md)。
 
 ```bash
 cd deploy
