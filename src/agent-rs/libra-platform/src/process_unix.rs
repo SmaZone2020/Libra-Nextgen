@@ -496,7 +496,11 @@ fn errno_location() -> *mut c_int {
 }
 
 fn pipe2_cloexec(pipe: &mut [c_int; 2]) -> std::io::Result<()> {
+    // macOS has no pipe2(2) — fall back to plain pipe(2) there.
+    #[cfg(target_os = "linux")]
     let r = unsafe { libc::pipe2(pipe.as_mut_ptr(), libc::O_CLOEXEC) };
+    #[cfg(not(target_os = "linux"))]
+    let r = unsafe { libc::pipe(pipe.as_mut_ptr()) };
     if r == 0 {
         Ok(())
     } else {

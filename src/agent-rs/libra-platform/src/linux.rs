@@ -176,8 +176,8 @@ impl IPlatformExecutor for LinuxExecutor {
                     ) == 0
                     {
                         let bsize = stat.f_frsize as u64;
-                        total = stat.f_blocks.saturating_mul(bsize);
-                        free = stat.f_bavail.saturating_mul(bsize);
+                        total = (stat.f_blocks as u64).saturating_mul(bsize);
+                        free = (stat.f_bavail as u64).saturating_mul(bsize);
                     }
                 }
                 if total == 0 {
