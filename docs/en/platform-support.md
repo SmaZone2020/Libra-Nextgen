@@ -2,7 +2,8 @@
 
 > **Correspondence**: English version of [`../platform-support.md`](../platform-support.md) (Chinese platform support matrix). Content follows the real production implementation.
 
-Verified 2026-09 on a Windows 11 x64 dev box (rustc stable + zig cross + clang-cl ARM64 cross).
+Verified 2026-09 on a Windows 11 x64 dev box (rustc stable + zig cross + clang-cl ARM64 cross)
+plus the GitHub Actions template matrix (tag 1.6.0, all five platforms green).
 
 Status definitions:
 
@@ -14,10 +15,10 @@ Status definitions:
 |---|---|---|---|---|
 | Windows x64 | `x64` | `x86_64-pc-windows-msvc` (Win host) / `-gnu` (zig) | source / template | ✅ L3 primary platform |
 | Windows x86 (best effort) | `x86` | `i686-pc-windows-msvc` / `-gnu` | source mode only | ⚠️ L1 compiles; no runtime commitment |
-| Windows ARM64 | `win-arm64` | `aarch64-pc-windows-msvc` | template (CI) or source (needs ARM64 MSVC + clang) | ⚠️ L1: core/loader + 6 modules cross-compile & link; runtime needs a real ARM64 Windows box (untested) |
-| Linux x64 | `linux-x64` | `x86_64-unknown-linux-gnu` | source / template | ⚠️ cross-compiles ✅; L2 runtime in progress (WSL/CI) |
-| Linux ARM64 | `linux-arm64` | `aarch64-unknown-linux-gnu` | source / template | ⚠️ L1 cross-compile ✅ (core/loader/agent + 7 modules); L2 pending on ubuntu-arm runner |
-| macOS ARM64 (M-chip) | `mac-arm64` | `aarch64-apple-darwin` | template (macOS runner native) or source on a macOS host | 🔶 CI compile pending; Linux/Windows hosts cannot produce darwin artifacts |
+| Windows ARM64 | `win-arm64` | `aarch64-pc-windows-msvc` | template (CI) or source (needs ARM64 MSVC + clang) | ⚠️ L1: core/loader + 6 modules compile & publish in CI ✅; runtime needs a real ARM64 Windows box (untested) |
+| Linux x64 | `linux-x64` | `x86_64-unknown-linux-gnu` | source / template | ✅ L2: WSL Debian exercised register→task→report (3/3); full feature set untested |
+| Linux ARM64 | `linux-arm64` | `aarch64-unknown-linux-gnu` | source / template | ⚠️ L1 cross-compile + CI template ✅; L2 pending ubuntu-arm runner / real box |
+| macOS ARM64 (M-chip) | `mac-arm64` | `aarch64-apple-darwin` | template (macOS runner native) or source on a macOS host | ⚠️ CI compile + template publish + payload-on-any-host ✅; runtime pending a real Mac |
 
 ## Platform capability conventions
 

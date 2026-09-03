@@ -1,6 +1,7 @@
 # 平台支持矩阵(实测记录)
 
-验证时间:2026-09,Windows 11 x64 开发机(rustc stable + zig 交叉 + clang-cl ARM64 交叉)。
+验证时间:2026-09,Windows 11 x64 开发机(rustc stable + zig 交叉 + clang-cl ARM64 交叉)+
+GitHub Actions 模板矩阵(tag 1.6.0,五平台全绿)。
 
 状态定义:
 
@@ -12,10 +13,10 @@
 |---|---|---|---|---|
 | Windows x64 | `x64` | `x86_64-pc-windows-msvc`(Win 主机)/ `-gnu`(zig) | 源码 / 模板 | ✅ L3 主力平台 |
 | Windows x86(顺带) | `x86` | `i686-pc-windows-msvc` / `-gnu` | 源码(source 模式) | ⚠️ L1 编译通过,不做运行时承诺 |
-| Windows ARM64 | `win-arm64` | `aarch64-pc-windows-msvc` | 模板(CI)或源码(需 ARM64 MSVC + clang) | ⚠️ L1:core/loader + 6 模块交叉编译/链接验证;运行时需 ARM64 Windows 真机(未测) |
-| Linux x64 | `linux-x64` | `x86_64-unknown-linux-gnu` | 源码 / 模板 | ⚠️ 交叉编译 ✅;L2 实测进行中(WSL/CI) |
-| Linux ARM64 | `linux-arm64` | `aarch64-unknown-linux-gnu` | 源码 / 模板 | ⚠️ L1 交叉编译 ✅(core/loader/agent + 7 模块);L2 待 ubuntu-arm runner |
-| macOS ARM64(M 芯片) | `mac-arm64` | `aarch64-apple-darwin` | 模板(macOS runner 原生)或 macOS 主机源码 | 🔶 CI 编译验证待跑;Linux/Windows 主机无法产 darwin 产物 |
+| Windows ARM64 | `win-arm64` | `aarch64-pc-windows-msvc` | 模板(CI)或源码(需 ARM64 MSVC + clang) | ⚠️ L1:core/loader + 6 模块 CI 全链路编译发布 ✅;运行时需 ARM64 Windows 真机(未测) |
+| Linux x64 | `linux-x64` | `x86_64-unknown-linux-gnu` | 源码 / 模板 | ✅ L2:WSL Debian 实测 注册→任务→上报(3/3);全功能未测 |
+| Linux ARM64 | `linux-arm64` | `aarch64-unknown-linux-gnu` | 源码 / 模板 | ⚠️ L1 交叉编译 + CI 模板 ✅;L2 待 ubuntu-arm runner / 真机 |
+| macOS ARM64(M 芯片) | `mac-arm64` | `aarch64-apple-darwin` | 模板(macOS runner 原生)或 macOS 主机源码 | ⚠️ CI 编译 + 模板发布 + 任意主机出包 ✅;运行时待真机 |
 
 ## 平台能力约定
 
