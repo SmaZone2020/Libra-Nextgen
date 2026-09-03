@@ -24,11 +24,9 @@ services:
       dockerfile: deploy/Dockerfile
       args:
         VITE_API_BASE: ${VITE_API_BASE:-same-origin}
-        ZIG_VERSION: ${ZIG_VERSION:-0.14.1}
-        ZIG_BASE_URL: ${ZIG_BASE_URL:-}
-        RUSTUP_DIST_SERVER: ${RUSTUP_DIST_SERVER:-}
-        RUSTUP_UPDATE_ROOT: ${RUSTUP_UPDATE_ROOT:-}
-        CARGO_REGISTRY_INDEX: ${CARGO_REGISTRY_INDEX:-}
+    # For the source-build variant (server compiles payloads itself, needs the
+    # rust+zig toolchain): docker compose build --build-arg VITE_API_BASE=same-origin
+    # with dockerfile deploy/Dockerfile.source, and LIBRA_BUILDER_MODE=source.
     restart: unless-stopped
     depends_on:
       mongo:
@@ -36,13 +34,17 @@ services:
     environment:
       ASPNETCORE_ENVIRONMENT: Production
       LIBRA_BUILDS_DIR: /build-output
-      LIBRA_AGENT_RS_DIR: /agent-rs
       LIBRA_SERVER_KEY: /secrets/server-rsa.key
+      LIBRA_BUILDER_MODE: ${LIBRA_BUILDER_MODE:-template}
+      LIBRA_TEMPLATE_REPO: ${LIBRA_TEMPLATE_REPO:-SmaZone2020/Libra-Nextgen}
+      LIBRA_TEMPLATE_TAG: ${LIBRA_TEMPLATE_TAG:-latest}
+      LIBRA_TEMPLATE_TOKEN: ${LIBRA_TEMPLATE_TOKEN:-}
+      LIBRA_TEMPLATE_BASE_URL: ${LIBRA_TEMPLATE_BASE_URL:-}
       MongoDB__ConnectionString: ${MONGO_CONNECTION_STRING:-mongodb://mongo:27017}
       MongoDB__DatabaseName: ${MONGO_DATABASE:-libra_nextgen}
       Beacon__Secret: ${BEACON_SECRET:-}
     volumes:
-      - libra-builds:/build-output          # build artifacts / modules / cargo cache (persistent)
+      - libra-builds:/build-output          # payloads / templates / modules cache (persistent)
       - libra-config:/root/.config/Libra-Nextgen  # JWT RSA key + listener settings (persistent)
       - libra-secrets:/secrets              # server RSA key, auto-generated on first start (persistent)
       - console-dist:/srv/console-live      # SPA synced by entrypoint; served by nginx

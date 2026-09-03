@@ -1,0 +1,168 @@
+# Publish prebuilt per-platform agent templates to a GitHub release.
+#
+# Trigger: pushing a tag (v*) — or workflow_dispatch with an optional
+# "tag_name" input for re-publishing.
+#
+# For every platform the workflow builds the loader (+ Windows desktop
+# variant), the core cdylib and all seven cloud modules, then packs them into
+#   libra-agent-tpl-{platform}.zip
+# with a manifest.json (platform / tag / commit / built_at). The Server's
+# template-mode builder (LIBRA_BUILDER_MODE=template, the default) downloads
+# these assets and packages payloads without any Rust toolchain.
+#
+# Layout contract (TemplateManagerService.InstallZip):
+#   manifest.json | loader(.exe) | loader_desktop.exe (windows only)
+#   core.dll | libcore.so | libcore.dylib          (per platform)
+#   {shell,recon,creds,files,powershell,proxy,script}.{dll,so,dylib}
+#
+# Platform ABIs: win x64 / linux x64+arm64 are GNU via zig (matches the
+# container's canonical output); win-arm64 is MSVC (aarch64-pc-windows-gnu std
+# is not shipped by rustup); mac-arm64 is built natively on a macOS runner.
+
+name: Publish Agent Templates
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: 'Release tag to publish under (default: current git ref)'
+        required: false
+
+permissions:
+  contents: write
+
+env:
+  RUST_BACKTRACE: '1'
+
+jobs:
+  build:
+    name: Template ${{ matrix.platform }}
+    runs-on: ${{ matrix.runs-on }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: x64
+            triple: x86_64-pc-windows-gnu
+            runner: ubuntu-24.04
+            zig: '0.16.0'
+          - platform: linux-x64
+            triple: x86_64-unknown-linux-gnu
+            runner: ubuntu-24.04
+            zig: '0.16.0'
+          - platform: linux-arm64
+            triple: aarch64-unknown-linux-gnu
+            runner: ubuntu-24.04
+            zig: '0.16.0'
+          - platform: win-arm64
+            triple: aarch64-pc-windows-msvc
+            runner: windows-2022
+            clang: true
+          - platform: mac-arm64
+            triple: aarch64-apple-darwin
+            runner: macos-14
+    defaults:
+      run:
+        working-directory: src/agent-rs
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.triple }}
+
+      # ring compiles aarch64 windows assembly with clang; MSVC targets need
+      # clang-cl for cross-C compilation as well.
+      - name: Install LLVM (clang) — windows-arm64
+        if: matrix.clang
+        shell: pwsh
+        run: |
+          choco install llvm --no-progress -y
+          Write-Output "C:\Program Files\LLVM\bin" | Out-File -Append $env:GITHUB_PATH
+          Write-Output "CC_aarch64_pc_windows_msvc=clang-cl" | Out-File -Append $env:GITHUB_ENV
+
+      - name: Install zig + cargo-zigbuild
+        if: matrix.zig != ''
+        uses: mlugg/setup-zig@v1
+        with:
+          version: ${{ matrix.zig }}
+      - name: Install cargo-zigbuild
+        if: matrix.zig != ''
+        run: cargo install cargo-zigbuild --locked
+
+      - name: Build core + loader + cloud modules
+        shell: bash
+        env:
+          ZIG_TARGET_ARGS: >-
+            -p core -p loader -p shell-module -p recon-module -p creds-module
+            -p files-module -p powershell-module -p proxy-module -p script-module
+        run: |
+          if [ -n "${{ matrix.zig }}" ]; then
+            cargo zigbuild --release --target "${{ matrix.triple }}" $ZIG_TARGET_ARGS
+          else
+            cargo build --release --target "${{ matrix.triple }}" $ZIG_TARGET_ARGS
+          fi
+
+      # Windows-only: desktop (GUI subsystem) loader variant. The feature
+      # build reuses the loader.exe name, so stash the console build first and
+      # restore it afterwards.
+      - name: Build desktop loader variant (windows)
+        if: contains(matrix.triple, '-windows-')
+        run: |
+          R="target/${{ matrix.triple }}/release"
+          cp "$R/loader.exe" "$R/loader-console.exe"
+          if [ -n "${{ matrix.zig }}" ]; then
+            cargo zigbuild --release --target "${{ matrix.triple }}" --features desktop -p loader
+          else
+            cargo build --release --target "${{ matrix.triple }}" --features desktop -p loader
+          fi
+          mv "$R/loader.exe" "$R/loader_desktop.exe"
+          mv "$R/loader-console.exe" "$R/loader.exe"
+
+      - name: Assemble template zip
+        shell: bash
+        working-directory: src/agent-rs
+        env:
+          PLATFORM: ${{ matrix.platform }}
+          TRIPLE: ${{ matrix.triple }}
+          TAG: ${{ github.event.inputs.tag_name || github.ref_name }}
+          SHA: ${{ github.sha }}
+        run: bash .github/workflows/templates-assemble.sh
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tpl-${{ matrix.platform }}
+          path: src/agent-rs/libra-agent-tpl-${{ matrix.platform }}.zip
+          if-no-files-found: error
+          retention-days: 14
+
+  publish:
+    name: Attach templates to release
+    needs: build
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Abort when any platform build failed
+        if: needs.build.result != 'success'
+        run: |
+          echo "One or more template builds failed — nothing published."
+          exit 1
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: tpl-assets
+          pattern: tpl-*
+          merge-multiple: true
+
+      - name: List assets
+        run: ls -la tpl-assets
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.inputs.tag_name || github.ref_name }}
+          files: tpl-assets/libra-agent-tpl-*.zip
+          generate_release_notes: false
+          fail_on_unmatched_files: true
