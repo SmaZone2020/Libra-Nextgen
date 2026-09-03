@@ -39,13 +39,13 @@ fi
 cp "${R}/${CORE}" "${OUT}/${CORE}"
 
 # Cloud modules, renamed to the canonical {module}.{ext} served by the server.
-# PKGS lists the cargo packages this platform built (subset for win-arm64);
-# module tokens are derived by stripping the "-module" suffix.
-: "${PKGS:=core loader shell-module recon-module creds-module files-module powershell-module proxy-module script-module}"
+# PKGS lists the cargo packages this platform built as "-p name ..." tokens
+# (subset for win-arm64); module tokens are derived by stripping "-module".
+: "${PKGS:=-p core -p loader -p shell-module -p recon-module -p creds-module -p files-module -p powershell-module -p proxy-module -p script-module}"
 MODULES=""
 for p in ${PKGS}; do
   case "${p}" in
-    core|loader) ;;
+    -p|core|loader) ;;
     *) MODULES="${MODULES} ${p%-module}" ;;
   esac
 done

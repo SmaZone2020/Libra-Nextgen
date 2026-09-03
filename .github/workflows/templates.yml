@@ -50,26 +50,26 @@ jobs:
             triple: x86_64-pc-windows-gnu
             runner: ubuntu-24.04
             zig: '0.16.0'
-            pkgs: 'core loader shell-module recon-module creds-module files-module powershell-module proxy-module script-module'
+            pkgs: '-p core -p loader -p shell-module -p recon-module -p creds-module -p files-module -p powershell-module -p proxy-module -p script-module'
           - platform: linux-x64
             triple: x86_64-unknown-linux-gnu
             runner: ubuntu-24.04
             zig: '0.16.0'
-            pkgs: 'core loader shell-module recon-module creds-module files-module powershell-module proxy-module script-module'
+            pkgs: '-p core -p loader -p shell-module -p recon-module -p creds-module -p files-module -p powershell-module -p proxy-module -p script-module'
           - platform: linux-arm64
             triple: aarch64-unknown-linux-gnu
             runner: ubuntu-24.04
             zig: '0.16.0'
-            pkgs: 'core loader shell-module recon-module creds-module files-module powershell-module proxy-module script-module'
+            pkgs: '-p core -p loader -p shell-module -p recon-module -p creds-module -p files-module -p powershell-module -p proxy-module -p script-module'
           - platform: win-arm64
             triple: aarch64-pc-windows-msvc
             runner: windows-2022
             clang: true
-            pkgs: 'core loader shell-module recon-module creds-module files-module powershell-module proxy-module'
+            pkgs: '-p core -p loader -p shell-module -p recon-module -p creds-module -p files-module -p powershell-module -p proxy-module'
           - platform: mac-arm64
             triple: aarch64-apple-darwin
             runner: macos-14
-            pkgs: 'core loader shell-module recon-module creds-module files-module powershell-module proxy-module script-module'
+            pkgs: '-p core -p loader -p shell-module -p recon-module -p creds-module -p files-module -p powershell-module -p proxy-module -p script-module'
     defaults:
       run:
         working-directory: src/agent-rs
@@ -91,11 +91,15 @@ jobs:
           Write-Output "C:\Program Files\LLVM\bin" | Out-File -Append $env:GITHUB_PATH
           Write-Output "CC_aarch64_pc_windows_msvc=clang-cl" | Out-File -Append $env:GITHUB_ENV
 
-      - name: Install zig + cargo-zigbuild
+      - name: Install zig (pinned, official tarball)
         if: matrix.zig != ''
-        uses: mlugg/setup-zig@v1
-        with:
-          version: ${{ matrix.zig }}
+        run: |
+          ZV="${{ matrix.zig }}"
+          mkdir -p "$HOME/zig"
+          curl -fsSL --retry 5 --retry-delay 3 "https://ziglang.org/download/${ZV}/zig-x86_64-linux-${ZV}.tar.xz" \
+            | tar -xJ --strip-components=1 -C "$HOME/zig"
+          "$HOME/zig/zig" version
+          echo "$HOME/zig" >> "$GITHUB_PATH"
       - name: Install cargo-zigbuild
         if: matrix.zig != ''
         run: cargo install cargo-zigbuild --locked
