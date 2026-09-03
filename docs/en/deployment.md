@@ -224,3 +224,4 @@ Removing containers does not touch volumes; backup/migration = copy the four vol
 | Console 500 without details | production global exception handling (correct behavior) | check server logs (LogError includes Path/Method) |
 | win-x64 payload build fails in container | zig / cargo-zigbuild missing or version pairing broken | run `zig version` inside the container; adjust `ZIG_VERSION` and rebuild the image |
 | Login sessions lost after container restart | `libra-config` volume missing or wiped | confirm the compose volume exists; the JWT key persists at `/root/.config/Libra-Nextgen` |
+| Image build times out at `auth.docker.io` (common on CN networks) | buildx needs a token from docker.io to pull images and the service is unreachable | retry; pre-pull with `docker pull node:22-alpine` etc. before building; or configure a registry mirror in Docker Desktop (e.g. `https://docker.m.daocloud.io`) |

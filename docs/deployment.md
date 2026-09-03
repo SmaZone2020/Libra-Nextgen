@@ -222,3 +222,4 @@ agent/beacon 也走 443。改域名/端口需 `docker compose up -d --build` 重
 | 控制台 500 但无详情 | 生产环境全局异常处理（正确行为） | 看服务端日志（LogError 含 Path/Method） |
 | 容器内 win-x64 载荷构建失败 | zig / cargo-zigbuild 缺失或版本不配对 | 容器内执行 `zig version`；调整 `ZIG_VERSION` 重建镜像 |
 | 容器重启后登录态失效 | `libra-config` 卷缺失或被清 | 确认 compose 卷存在；JWT 密钥持久化在 `/root/.config/Libra-Nextgen` |
+| 镜像构建时 `auth.docker.io` 超时（国内网络常见） | buildx 拉取 docker.io 镜像需 token 鉴权，该服务不通 | 重试几次；`docker pull node:22-alpine` 等预拉取后再构建；或 Docker Desktop 配置 registry mirror（如 `https://docker.m.daocloud.io`） |
