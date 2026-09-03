@@ -1,4 +1,5 @@
 import type { BuildConfigRequest } from '../../types/models';
+import type { BuilderTemplateState } from '../../api/build';
 
 export interface ToggleOption {
   id: string;
@@ -63,6 +64,15 @@ export const PLATFORM_LABEL: Record<string, string> = {
   'linux-arm64': 'Linux ARM64',
   'mac-arm64': 'macOS ARM64',
 };
+
+/** Static fallback when GET /builder/status is unavailable (older server). */
+export const FALLBACK_PLATFORMS: BuilderTemplateState[] = [
+  { platform: 'x64', os: 'windows', arch: 'x64', ext: 'dll', canBuildLocally: true, template: null },
+  { platform: 'win-arm64', os: 'windows', arch: 'arm64', ext: 'dll', canBuildLocally: true, template: null },
+  { platform: 'linux-x64', os: 'linux', arch: 'x64', ext: 'so', canBuildLocally: true, template: null },
+  { platform: 'linux-arm64', os: 'linux', arch: 'arm64', ext: 'so', canBuildLocally: true, template: null },
+  { platform: 'mac-arm64', os: 'macos', arch: 'arm64', ext: 'dylib', canBuildLocally: false, template: null },
+];
 
 export const APP_TYPE_LABEL: Record<string, string> = {
   Console: 'builder.consoleApp',

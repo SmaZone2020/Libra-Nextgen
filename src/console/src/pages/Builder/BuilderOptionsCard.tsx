@@ -1,11 +1,13 @@
 import { useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Button, Card, Label, Popover, Slider, Tabs } from '@heroui/react';
+import { Button, Card, Header, Label, ListBox, Popover, Select, Slider, Tabs } from '@heroui/react';
 import { ListView } from '@components/list-view';
 import type { Selection } from 'react-aria-components';
 import { CircleInfo } from '@gravity-ui/icons';
 import type { BuildConfigRequest } from '../../types/models';
 import type { AntiAnalysisToggle, ToggleOption } from './constants';
+import { FALLBACK_PLATFORMS, PLATFORM_LABEL } from './constants';
+import { useBuilderStatus } from './useBuilderStatus';
 
 interface BuilderOptionsCardProps {
   config: BuildConfigRequest;
@@ -38,6 +40,15 @@ const LINUX_DISABLED_ANTI = new Set(['checkTestSigning']);
 
 export function BuilderOptionsCard({ config, set }: BuilderOptionsCardProps) {
   const { t } = useTranslation();
+  const { status, reload } = useBuilderStatus();
+  const platforms = status?.platforms ?? FALLBACK_PLATFORMS;
+
+  const OS_ORDER = ['windows', 'linux', 'macos'] as const;
+  const OS_TITLES: Record<string, string> = { windows: 'Windows', linux: 'Linux', macos: 'macOS' };
+  const sections = OS_ORDER
+    .map((os) => ({ os, title: OS_TITLES[os], items: platforms.filter((p) => p.os === os) }))
+    .filter((s) => s.items.length > 0);
+
   // Windows-only features (PE obfuscation, UAC, scheduled-task persistence,
   // test-signing detection, Desktop GUI subsystem, icon/metadata) exist only
   // for the x64/x86/win-arm64 keys; linux-*/mac-* targets run as consoles.
@@ -127,20 +138,47 @@ export function BuilderOptionsCard({ config, set }: BuilderOptionsCardProps) {
         <div className="grid grid-cols-2 gap-6">
           <div>
             <h2 className="text-lg font-semibold mb-3">{t('builder.platform')}</h2>
-            <Tabs
+            <Select
+              className="w-full"
+              variant="secondary"
               selectedKey={config.platform}
-              onSelectionChange={(key) => set('platform', String(key))}
+              onSelectionChange={(key) => key && set('platform', String(key))}
+              onOpenChange={(open) => {
+                if (open) reload();
+              }}
             >
-              <Tabs.ListContainer>
-                <Tabs.List>
-                  <Tabs.Tab id="x64">Win x64<Tabs.Indicator /></Tabs.Tab>
-                  <Tabs.Tab id="win-arm64">Win ARM64<Tabs.Indicator /></Tabs.Tab>
-                  <Tabs.Tab id="linux-x64">Linux x64<Tabs.Indicator /></Tabs.Tab>
-                  <Tabs.Tab id="linux-arm64">Linux ARM64<Tabs.Indicator /></Tabs.Tab>
-                  <Tabs.Tab id="mac-arm64">macOS ARM64<Tabs.Indicator /></Tabs.Tab>
-                </Tabs.List>
-              </Tabs.ListContainer>
-            </Tabs>
+              <Select.Trigger>
+                <Select.Value />
+                <Select.Indicator />
+              </Select.Trigger>
+              <Select.Popover>
+                <ListBox>
+                  {sections.map((section) => (
+                    <ListBox.Section key={section.os}>
+                      <Header>{section.title}</Header>
+                      {section.items.map((p) => (
+                        <ListBox.Item
+                          key={p.platform}
+                          id={p.platform}
+                          textValue={PLATFORM_LABEL[p.platform] ?? p.platform}
+                        >
+                          <span className="flex w-full items-center justify-between gap-3">
+                            <span>{PLATFORM_LABEL[p.platform] ?? p.platform}</span>
+                            <span className="flex items-center gap-1.5 text-xs text-default-500">
+                              <span
+                                className={`h-1.5 w-1.5 rounded-full ${p.template ? 'bg-success' : 'bg-warning'}`}
+                              />
+                              {p.arch.toUpperCase()}
+                            </span>
+                          </span>
+                          <ListBox.ItemIndicator />
+                        </ListBox.Item>
+                      ))}
+                    </ListBox.Section>
+                  ))}
+                </ListBox>
+              </Select.Popover>
+            </Select>
           </div>
           <div>
             <h2 className="text-lg font-semibold mb-3">{t('builder.applicationType')}</h2>
