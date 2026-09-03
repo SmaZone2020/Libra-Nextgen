@@ -60,12 +60,54 @@ public class ModuleBuildResult
     public List<string> Disabled { get; set; } = new();
 }
 
-/// <summary>Rust cross-compile target OS (platform key → os).</summary>
+/// <summary>Canonical builder platform registry (key → rust target os + arch short name).</summary>
 public static class BuildPlatforms
 {
     public const string WindowsX64 = "x64";
     public const string WindowsX86 = "x86";
+    public const string WindowsArm64 = "win-arm64";
     public const string LinuxX64 = "linux-x64";
+    public const string LinuxArm64 = "linux-arm64";
+    public const string MacArm64 = "mac-arm64";
+
+    /// <summary>All supported platform keys, stable order (primary → niche).</summary>
+    public static readonly string[] All = [WindowsX64, WindowsX86, WindowsArm64, LinuxX64, LinuxArm64, MacArm64];
+
+    /// <summary>Platform key → (rust target os, arch short name).</summary>
+    public static readonly Dictionary<string, (string Os, string Arch)> Specs = new()
+    {
+        [WindowsX64] = ("windows", "x64"),
+        [WindowsX86] = ("windows", "x86"),
+        [WindowsArm64] = ("windows", "arm64"),
+        [LinuxX64] = ("linux", "x64"),
+        [LinuxArm64] = ("linux", "arm64"),
+        [MacArm64] = ("macos", "arm64"),
+    };
+
+    /// <summary>
+    /// Map the OS/arch strings a beacon reports (std::env::consts::{OS, ARCH} or
+    /// os-release output) to a platform key, or null when unrecognized.
+    /// Intel Macs (x86_64 darwin) are intentionally not mapped — M-chip only.
+    /// </summary>
+    public static string? MapOsArch(string osVersion, string arch)
+    {
+        var os = osVersion ?? string.Empty;
+        var a = arch ?? string.Empty;
+        var isArm = a.Contains("aarch64", StringComparison.OrdinalIgnoreCase)
+                 || a.Contains("arm64", StringComparison.OrdinalIgnoreCase);
+        var is86 = !isArm && a.Contains("86", StringComparison.OrdinalIgnoreCase);
+        var is64 = a.Contains("64", StringComparison.OrdinalIgnoreCase);
+
+        if (os.Contains("linux", StringComparison.OrdinalIgnoreCase))
+            return isArm ? LinuxArm64 : LinuxX64;
+        if (os.Contains("darwin", StringComparison.OrdinalIgnoreCase) ||
+            os.Contains("macos", StringComparison.OrdinalIgnoreCase))
+            return MacArm64;
+        if (os.Contains("windows", StringComparison.OrdinalIgnoreCase) ||
+            os.Contains("win32", StringComparison.OrdinalIgnoreCase))
+            return isArm ? WindowsArm64 : is86 && !is64 ? WindowsX86 : WindowsX64;
+        return null;
+    }
 }
 
 

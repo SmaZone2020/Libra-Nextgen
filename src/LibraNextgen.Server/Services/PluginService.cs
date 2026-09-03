@@ -28,7 +28,7 @@ public class PluginService
         Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "plugins"));
 
     /// <summary>Platform keys understood by the module staging logic.</summary>
-    private static readonly string[] Platforms = ["x64", "x86", "linux-x64"];
+    private static readonly string[] Platforms = BuildPlatforms.All;
 
     /// <summary>In-memory cache of plugin script sources, keyed by
     /// <c>pluginId/moduleName</c>. Populated at startup and refreshed on
@@ -372,11 +372,11 @@ public class PluginService
             var srcPlatformDir = Path.Combine(srcDir, platform);
             if (!Directory.Exists(srcPlatformDir)) continue;
 
-            var ext = platform.StartsWith("linux") ? ".so" : ".dll";
+            var ext = BuilderBuildService.ModuleExt(platform);
             var dstDir = BuilderBuildService.ModulesDirFor(platform);
             Directory.CreateDirectory(dstDir);
 
-            foreach (var file in Directory.EnumerateFiles(srcPlatformDir, "*" + ext))
+            foreach (var file in Directory.EnumerateFiles(srcPlatformDir, "*." + ext))
             {
                 try
                 {

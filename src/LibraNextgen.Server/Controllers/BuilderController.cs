@@ -59,6 +59,9 @@ public class BuilderController : ControllerBase
     {
         if (!BuilderBuildService.PlatformOs.ContainsKey(req.Platform))
             return BadRequest(new { error = $"Unsupported platform: {req.Platform}" });
+        var feasibility = BuilderBuildService.FeasibilityError(req.Platform);
+        if (feasibility != null)
+            return BadRequest(new { error = feasibility });
 
         // Windows-only options are force-reset for non-Windows targets.
         if (BuilderBuildService.PlatformOs[req.Platform] != "windows")
@@ -118,14 +121,14 @@ public class BuilderController : ControllerBase
         if (!Directory.Exists(dir))
             return Ok(new { modules = Array.Empty<object>() });
 
-        var ext = platform.StartsWith("linux") ? ".so" : platform.StartsWith("mac") ? ".dylib" : ".dll";
+        var ext = BuilderBuildService.ModuleExt(platform);
         var modules = new List<object>();
         foreach (var file in Directory.GetFiles(dir))
         {
             var name = Path.GetFileName(file);
-            if (name.EndsWith(ext, StringComparison.OrdinalIgnoreCase))
+            if (name.EndsWith("." + ext, StringComparison.OrdinalIgnoreCase))
                 modules.Add(new { name = BuilderBuildService.CanonicalModuleName(Path.GetFileNameWithoutExtension(name)), enabled = true });
-            else if (name.EndsWith(ext + ".disable", StringComparison.OrdinalIgnoreCase))
+            else if (name.EndsWith("." + ext + ".disable", StringComparison.OrdinalIgnoreCase))
             {
                 var stem = Path.GetFileNameWithoutExtension(name[..^".disable".Length]);
                 modules.Add(new { name = BuilderBuildService.CanonicalModuleName(stem), enabled = false });
@@ -146,9 +149,9 @@ public class BuilderController : ControllerBase
         if (!Directory.Exists(dir))
             return NotFound(new { error = "modules directory not found" });
 
-        var ext = req.Platform.StartsWith("linux") ? ".so" : req.Platform.StartsWith("mac") ? ".dylib" : ".dll";
-        var normal = Path.Combine(dir, req.Name + ext);
-        var disabled = Path.Combine(dir, req.Name + ext + ".disable");
+        var ext = BuilderBuildService.ModuleExt(req.Platform);
+        var normal = Path.Combine(dir, req.Name + "." + ext);
+        var disabled = Path.Combine(dir, req.Name + "." + ext + ".disable");
 
         if (req.Enabled)
         {
@@ -237,6 +240,9 @@ public class BuilderController : ControllerBase
     {
         if (!BuilderBuildService.PlatformOs.ContainsKey(req.Platform))
             return BadRequest(new { error = $"Unsupported platform: {req.Platform}" });
+        var feasibility = BuilderBuildService.FeasibilityError(req.Platform);
+        if (feasibility != null)
+            return BadRequest(new { error = feasibility });
 
         var buildId = Guid.NewGuid().ToString("N")[..8];
         var record = new Models.BuildRecord

@@ -60,12 +60,35 @@ public partial class BuilderBuildService
     /// <summary>Platform-scoped cloud module directory (one per target platform).</summary>
     public static string ModulesDirFor(string platform) => Path.Combine(OutputBase, "modules", platform);
 
-    public static readonly Dictionary<string, string> PlatformOs = new()
+    /// <summary>Platform key → rust target OS (derived from the canonical spec table).</summary>
+    public static readonly Dictionary<string, string> PlatformOs = BuildPlatforms.Specs.ToDictionary(
+        kv => kv.Key, kv => kv.Value.Os);
+
+    public static string OsOf(string platform) => BuildPlatforms.Specs[platform].Os;
+
+    public static string ArchOf(string platform) => BuildPlatforms.Specs[platform].Arch;
+
+    /// <summary>Shared-object file extension without a leading dot (dll/so/dylib).</summary>
+    public static string ModuleExt(string platform) => OsOf(platform) switch
     {
-        ["x64"] = "windows",
-        ["x86"] = "windows",
-        ["linux-x64"] = "linux",
+        "windows" => "dll",
+        "macos" => "dylib",
+        _ => "so",
     };
+
+    /// <summary>
+    /// macOS payloads can only be produced on a macOS host (rustc needs the
+    /// Apple SDK to link). Template mode fetches them from the CI release.
+    /// </summary>
+    public static string? FeasibilityError(string platform)
+    {
+        if (!BuildPlatforms.Specs.TryGetValue(platform, out var spec))
+            return $"Unsupported platform: {platform}";
+        if (spec.Os == "macos" && !OperatingSystem.IsMacOS())
+            return "mac-arm64 payloads can only be built on a macOS host. " +
+                   "Use template mode (LIBRA_BUILDER_MODE=template) to download prebuilt artifacts from the GitHub release.";
+        return null;
+    }
 
     /// <summary>
     /// Enabled modules for this request. Empty request = all modules enabled.
@@ -199,14 +222,28 @@ public partial class BuilderBuildService
     /// All cross-combinations use the gnu ABI and the zig toolchain (cargo
     /// zigbuild drives zig as CC/linker, which bundles glibc/msvc support).
     /// Note: musl cannot be used here because the core payload is a cdylib.
+    /// macOS (aarch64-apple-darwin) only exists when the host is macOS — see
+    /// <see cref="FeasibilityError"/>.
     /// </summary>
     public static string ResolveTriple(string platform, bool hostWindows)
     {
-        return PlatformOs[platform] switch
+        var spec = BuildPlatforms.Specs[platform];
+        return spec switch
         {
-            "windows" when hostWindows => platform == "x86" ? "i686-pc-windows-msvc" : "x86_64-pc-windows-msvc",
-            "windows" => platform == "x86" ? "i686-pc-windows-gnu" : "x86_64-pc-windows-gnu",
-            "linux" => "x86_64-unknown-linux-gnu",
+            { Os: "windows" } when hostWindows => spec.Arch switch
+            {
+                "x86" => "i686-pc-windows-msvc",
+                "arm64" => "aarch64-pc-windows-msvc",
+                _ => "x86_64-pc-windows-msvc",
+            },
+            { Os: "windows" } => spec.Arch switch
+            {
+                "x86" => "i686-pc-windows-gnu",
+                "arm64" => "aarch64-pc-windows-gnu",
+                _ => "x86_64-pc-windows-gnu",
+            },
+            { Os: "linux" } => spec.Arch == "arm64" ? "aarch64-unknown-linux-gnu" : "x86_64-unknown-linux-gnu",
+            { Os: "macos" } => "aarch64-apple-darwin",
             _ => throw new InvalidOperationException($"no triple for platform '{platform}'"),
         };
     }
