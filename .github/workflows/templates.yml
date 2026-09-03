@@ -23,7 +23,7 @@ name: Publish Agent Templates
 
 on:
   push:
-    tags: ['v*']
+    tags: ['v*', '*.*.*']
   workflow_dispatch:
     inputs:
       tag_name:
