@@ -59,18 +59,10 @@ RUN export RUSTUP_DIST_SERVER="${RUSTUP_DIST_SERVER:-https://static.rust-lang.or
  && rustc --version && cargo --version
 
 # zig (cross linker used by cargo-zigbuild; bundles glibc/msvc runtimes)
-# A tarball placed at deploy/zig/*.tar.xz skips the network download (slow on CN networks).
-COPY deploy/zig/ /zig-pre/
 ARG ZIG_VERSION=0.14.1
 ARG ZIG_BASE_URL=""
-RUN if [ -z "$(ls /zig-pre/*.tar.xz 2>/dev/null | head -n1)" ]; then \
-        echo "[zig] downloading ${ZIG_VERSION} from ${ZIG_BASE_URL:-ziglang.org}"; \
-        curl -fSL --retry 5 --retry-delay 5 --connect-timeout 20 \
-            "${ZIG_BASE_URL:-https://ziglang.org/download}/${ZIG_VERSION}/zig-x86_64-linux-${ZIG_VERSION}.tar.xz" -o /tmp/zig.tar.xz; \
-    else \
-        cp "$(ls /zig-pre/*.tar.xz | head -n1)" /tmp/zig.tar.xz; \
-        echo "[zig] using local tarball"; \
-    fi \
+RUN curl -fSL --retry 5 --retry-delay 5 --connect-timeout 20 \
+        "${ZIG_BASE_URL:-https://ziglang.org/download}/${ZIG_VERSION}/zig-x86_64-linux-${ZIG_VERSION}.tar.xz" -o /tmp/zig.tar.xz \
     && mkdir -p /usr/local/zig \
     && tar -xJf /tmp/zig.tar.xz -C /usr/local/zig --strip-components=1 \
     && ln -sf /usr/local/zig/zig /usr/local/bin/zig \

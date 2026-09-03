@@ -176,6 +176,3 @@ src/console/pnpm-workspace.yaml
 # Server RSA private key (auto-generated; never commit)
 *.key
 /Libra-Plugin-Template
-
-# zig toolchain tarball (large; fetched out-of-band and scp'd to deploy hosts)
-deploy/zig/*.tar.xz
