@@ -1,8 +1,8 @@
 //!
 
+use std::path::PathBuf;
 #[cfg(target_os = "windows")]
 use std::process::Command;
-use std::path::PathBuf;
 
 fn main() {
     println!("cargo:rerun-if-changed=stub/PsInlineStub.cs");
