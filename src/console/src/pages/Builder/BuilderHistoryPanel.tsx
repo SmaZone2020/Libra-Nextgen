@@ -128,17 +128,6 @@ export function BuilderHistoryPanel({
                 {record.status !== 'building' && (
                   <ListView.ItemAction>
                     <div className="flex gap-1">
-                      {record.status === 'completed' && (
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          isIconOnly
-                          aria-label={t('builder.download')}
-                          onPress={() => onDownload(record.id)}
-                        >
-                          <ArrowDownToLine className="w-4 h-4" />
-                        </Button>
-                      )}
                       <Button
                         size="sm"
                         variant="ghost"
