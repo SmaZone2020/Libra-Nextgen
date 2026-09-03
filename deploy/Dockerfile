@@ -60,9 +60,14 @@ RUN export RUSTUP_DIST_SERVER="${RUSTUP_DIST_SERVER:-https://static.rust-lang.or
 
 # zig (cross linker used by cargo-zigbuild; bundles glibc/msvc runtimes)
 ARG ZIG_VERSION=0.14.1
-RUN curl -fsSL "https://ziglang.org/download/${ZIG_VERSION}/zig-x86_64-linux-${ZIG_VERSION}.tar.xz" -o /tmp/zig.tar.xz \
-    && mkdir -p /usr/local/zig && tar -xJf /tmp/zig.tar.xz -C /usr/local/zig --strip-components=1 \
-    && rm /tmp/zig.tar.xz && zig version
+ARG ZIG_BASE_URL=""
+RUN curl -fSL --retry 5 --retry-delay 5 --connect-timeout 20 \
+        "${ZIG_BASE_URL:-https://ziglang.org/download}/${ZIG_VERSION}/zig-x86_64-linux-${ZIG_VERSION}.tar.xz" -o /tmp/zig.tar.xz \
+    && mkdir -p /usr/local/zig \
+    && tar -xJf /tmp/zig.tar.xz -C /usr/local/zig --strip-components=1 \
+    && ln -sf /usr/local/zig/zig /usr/local/bin/zig \
+    && rm /tmp/zig.tar.xz \
+    && zig version
 
 # cargo-zigbuild (latest stable from crates.io; adjust ZIG_VERSION on pairing changes)
 RUN cargo install cargo-zigbuild --locked --root /usr/local \
