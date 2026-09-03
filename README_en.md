@@ -51,11 +51,11 @@ Works for both intranet HTTP and public HTTPS (TLS) — the console and agents s
 
 ```bash
 cd deploy
-cp .env.example .env   # set VITE_API_BASE (public origin of the console, e.g. https://c2.example.com)
+cp .env.example .env   # defaults to same-origin: console and API share the nginx entry — nothing to edit
 docker compose up -d --build
 ```
 
-Open the `VITE_API_BASE` URL — the first visit creates the admin at `/setup`. See [§6.2 of the deployment manual](docs/en/deployment.md).
+Open `http://<server-ip>` (default port 80) — the first visit creates the admin at `/setup`. See [§6.2 of the deployment manual](docs/en/deployment.md).
 
 ### Local development
 

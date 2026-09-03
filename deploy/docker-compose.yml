@@ -23,7 +23,7 @@ services:
       context: ..
       dockerfile: deploy/Dockerfile
       args:
-        VITE_API_BASE: ${VITE_API_BASE:-}
+        VITE_API_BASE: ${VITE_API_BASE:-same-origin}
         ZIG_VERSION: ${ZIG_VERSION:-0.14.1}
         ZIG_BASE_URL: ${ZIG_BASE_URL:-}
         RUSTUP_DIST_SERVER: ${RUSTUP_DIST_SERVER:-}

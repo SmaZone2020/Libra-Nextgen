@@ -51,11 +51,11 @@ Agent 通过 beacon HTTP(S) 与 SSE 事件流与服务器通信，全链路 AES-
 
 ```bash
 cd deploy
-cp .env.example .env   # 填写 VITE_API_BASE（控制台公共访问源，如 https://c2.example.com）
+cp .env.example .env   # 默认 same-origin：控制台与 API 同源走 nginx，无需改配置
 docker compose up -d --build
 ```
 
-浏览器打开 `VITE_API_BASE` 对应地址，首次访问 `/setup` 创建管理员。详见[部署手册 §6.2](docs/deployment.md)。
+浏览器打开 `http://<服务器IP>`（默认 80 端口），首次访问 `/setup` 创建管理员。详见[部署手册 §6.2](docs/deployment.md)。
 
 ### 本地开发启动
 

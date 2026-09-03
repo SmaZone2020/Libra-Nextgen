@@ -157,14 +157,15 @@ build-output/
 ```bash
 cd deploy
 cp .env.example .env
-# 编辑 .env：至少填写 VITE_API_BASE（控制台的公共访问源，如 https://c2.example.com）
+# VITE_API_BASE 默认 same-origin（控制台与 API 同源走 nginx），一般无需修改
 docker compose up -d --build
 ```
 
-浏览器访问 `VITE_API_BASE` 对应地址，首次访问 `/setup` 创建管理员。
+浏览器访问 `http://<服务器IP>`（或 `.env` 里显式设置的源），首次访问 `/setup` 创建管理员。
 
-**单端口说明**：`VITE_API_BASE` 在构建镜像时写入前端，控制台的 API/SSE/WS 全部请求该源并经 nginx 443 进入；
-agent/beacon 也走 443。改域名/端口需 `docker compose up -d --build` 重建镜像。
+**单端口说明**：`VITE_API_BASE=same-origin`（默认）时，前端完全复制页面 host——控制台的 API/SSE/WS 与页面同源、经
+nginx 进入；agent/beacon 同样走 nginx（80/443）。镜像与 IP/域名**解耦**：换域名/端口无需重建。
+也可显式覆盖（如 `https://c2.example.com`），此时该值在构建时写入前端，改动需重建镜像。
 
 ### 持久化（五个命名卷）
 
@@ -182,7 +183,7 @@ agent/beacon 也走 443。改域名/端口需 `docker compose up -d --build` 重
 
 1. 将 `fullchain.pem` / `privkey.pem` 放入 `deploy/certs/`
 2. 取消 `nginx/console.conf` 中 443 server 块注释（或将 80 改为 301 跳转）
-3. `.env` 中 `VITE_API_BASE` 改为 https 前缀，重建镜像
+3. 页面经 https 访问后（`same-origin` 默认自动跟随协议），API 即走 https；如需固定域名可显式设 `VITE_API_BASE=https://…` 并重建镜像
 
 ### 在线构建 agent
 

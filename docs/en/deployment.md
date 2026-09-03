@@ -157,15 +157,17 @@ Prerequisites: Docker Engine 24+ and Compose v2.
 ```bash
 cd deploy
 cp .env.example .env
-# edit .env: at least set VITE_API_BASE (the public origin the console is served from, e.g. https://c2.example.com)
+# VITE_API_BASE defaults to same-origin (console and API share the nginx entry) — usually nothing to edit
 docker compose up -d --build
 ```
 
-Open the `VITE_API_BASE` URL; first visit to `/setup` creates the admin.
+Open `http://<server-ip>` (or the explicit origin set in `.env`); first visit to `/setup` creates the admin.
 
-**Single-port note**: `VITE_API_BASE` is baked into the frontend at image build time; all console
-API/SSE/WS calls target that origin through nginx :443, and agent/beacon traffic also enters via 443.
-Changing the domain/port requires rebuilding with `docker compose up -d --build`.
+**Single-port note**: with the default `VITE_API_BASE=same-origin` the frontend mirrors the page host exactly —
+all console API/SSE/WS calls are same-origin through nginx, and agent/beacon traffic also enters via
+nginx (80/443). The image is therefore independent of the IP/domain: changing host or port does not
+require a rebuild. An explicit origin (e.g. `https://c2.example.com`) overrides it and is baked into the
+frontend at build time (changing it requires `docker compose up -d --build`).
 
 ### Persistence (five named volumes)
 
@@ -183,7 +185,8 @@ Removing containers does not touch volumes; backup/migration = copy the four vol
 
 1. Put `fullchain.pem` / `privkey.pem` under `deploy/certs/`
 2. Uncomment the 443 server block in `nginx/console.conf` (or turn the 80 server into a 301 redirect)
-3. Set `VITE_API_BASE` to an https:// origin in `.env` and rebuild the image
+3. Access the console over https — with `same-origin` (default) the API follows the page protocol
+   automatically; set an explicit `VITE_API_BASE=https://…` only if you want to pin a fixed domain
 
 ### Building agents online
 
