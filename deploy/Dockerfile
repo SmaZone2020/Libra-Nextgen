@@ -1,5 +1,3 @@
-# syntax=docker/dockerfile:1
-#
 # Libra-Nextgen server image (includes the online agent-build toolchain).
 # Ships: console SPA (/srv/console), Libra-Server (/app), and a rust+zig
 # toolchain for building win x64 / win x86 (GNU ABI, cross) and linux x64
