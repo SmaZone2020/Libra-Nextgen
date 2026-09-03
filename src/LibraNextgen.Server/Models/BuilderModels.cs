@@ -132,4 +132,6 @@ public record ToggleBuildListItemRequest(string List, string Id, bool Enabled);
 
 public record DeleteBuildListItemRequest(string List, string Id);
 
+public record RefreshTemplatesRequest(string? Platform);
+
 internal record struct ProcessResult(int ExitCode, string Stdout, string Stderr);

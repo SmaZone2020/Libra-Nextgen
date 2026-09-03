@@ -253,11 +253,13 @@ public partial class BuilderBuildService
 
     private readonly BeaconSettings _beaconSettings;
     private readonly ServerKeyService _serverKeys;
+    private readonly TemplateManagerService _templates;
 
-    public BuilderBuildService(IOptions<BeaconSettings> beaconSettings, ServerKeyService serverKeys)
+    public BuilderBuildService(IOptions<BeaconSettings> beaconSettings, ServerKeyService serverKeys, TemplateManagerService templates)
     {
         _beaconSettings = beaconSettings.Value;
         _serverKeys = serverKeys;
+        _templates = templates;
     }
 
     // ── Build (async) ──────────────────────────────────────────────────
@@ -296,6 +298,17 @@ public partial class BuilderBuildService
             ctx.ModulesDir = ModulesDirFor(platform);
             ctx.EnvVars["RUSTFLAGS"] = "-C strip=symbols";
 
+            if (TemplateBuildMode)
+            {
+                var tplResult = await BuildModulesFromTemplateAsync(ctx, job);
+                if (!tplResult.Compiled)
+                {
+                    job.Fail($"cloud module sync failed — modules not deployed: {string.Join(", ", tplResult.Missing)}");
+                    return false;
+                }
+                return true;
+            }
+
             var result = await Stage1_6_BuildModuleAsync(ctx, targetArg, job);
             if (!result.Compiled)
             {
@@ -313,6 +326,12 @@ public partial class BuilderBuildService
 
     public async Task RunBuildAsync(string buildId, BuildConfigRequest req, BuildJob job, bool forceRebuild = false)
     {
+        if (TemplateBuildMode)
+        {
+            await RunTemplateBuildAsync(buildId, req, job);
+            return;
+        }
+
         var ctx = new BuildContext
         {
             BuildId = buildId,

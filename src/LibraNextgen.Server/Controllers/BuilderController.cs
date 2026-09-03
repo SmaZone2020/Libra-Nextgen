@@ -15,11 +15,13 @@ public class BuilderController : ControllerBase
 {
     private readonly BuilderBuildService _buildService;
     private readonly BuildListService _lists;
+    private readonly TemplateManagerService _templates;
 
-    public BuilderController(BuilderBuildService buildService, BuildListService lists)
+    public BuilderController(BuilderBuildService buildService, BuildListService lists, TemplateManagerService templates)
     {
         _buildService = buildService;
         _lists = lists;
+        _templates = templates;
     }
 
     // ── Icon upload ────────────────────────────────────────────────────
@@ -52,6 +54,51 @@ public class BuilderController : ControllerBase
         }
     }
 
+    // ── Build mode + template distribution status ───────────────────────
+
+    /// <summary>Builder mode (template/source) and per-platform template cache state.</summary>
+    [HttpGet("status")]
+    public IActionResult Status() => Ok(new
+    {
+        mode = BuilderBuildService.TemplateBuildMode ? "template" : "source",
+        platforms = BuildPlatforms.All.Select(p =>
+        {
+            var t = _templates.Info(p);
+            return new
+            {
+                platform = p,
+                os = BuilderBuildService.OsOf(p),
+                arch = BuilderBuildService.ArchOf(p),
+                ext = BuilderBuildService.ModuleExt(p),
+                canBuildLocally = BuilderBuildService.FeasibilityError(p) == null,
+                template = t == null ? null : new { tag = t.Tag, commit = t.Commit, asset = t.Asset, builtAt = t.BuiltAt, zipBytes = t.ZipBytes },
+            };
+        }),
+    });
+
+    /// <summary>Re-fetch and cache the prebuilt template for one platform (or all).</summary>
+    [HttpPost("templates/refresh")]
+    public async Task<IActionResult> RefreshTemplates([FromBody] RefreshTemplatesRequest? req, CancellationToken ct)
+    {
+        var targets = string.IsNullOrWhiteSpace(req?.Platform) ? BuildPlatforms.All : new[] { req!.Platform };
+        var results = new List<object>();
+        foreach (var platform in targets)
+        {
+            if (!BuildPlatforms.Specs.ContainsKey(platform))
+                return BadRequest(new { error = $"Unsupported platform: {platform}" });
+            try
+            {
+                var t = await _templates.RefreshAsync(platform, log: null, ct);
+                results.Add(new { platform, ok = true, tag = t.Tag, commit = t.Commit, asset = t.Asset });
+            }
+            catch (Exception ex)
+            {
+                results.Add(new { platform, ok = false, error = ex.Message });
+            }
+        }
+        return Ok(new { results });
+    }
+
     // ── Build (async) ──────────────────────────────────────────────────
 
     [HttpPost("build")]
@@ -59,9 +106,12 @@ public class BuilderController : ControllerBase
     {
         if (!BuilderBuildService.PlatformOs.ContainsKey(req.Platform))
             return BadRequest(new { error = $"Unsupported platform: {req.Platform}" });
-        var feasibility = BuilderBuildService.FeasibilityError(req.Platform);
-        if (feasibility != null)
-            return BadRequest(new { error = feasibility });
+        if (!BuilderBuildService.TemplateBuildMode)
+        {
+            var feasibility = BuilderBuildService.FeasibilityError(req.Platform);
+            if (feasibility != null)
+                return BadRequest(new { error = feasibility });
+        }
 
         // Windows-only options are force-reset for non-Windows targets.
         if (BuilderBuildService.PlatformOs[req.Platform] != "windows")
@@ -240,9 +290,12 @@ public class BuilderController : ControllerBase
     {
         if (!BuilderBuildService.PlatformOs.ContainsKey(req.Platform))
             return BadRequest(new { error = $"Unsupported platform: {req.Platform}" });
-        var feasibility = BuilderBuildService.FeasibilityError(req.Platform);
-        if (feasibility != null)
-            return BadRequest(new { error = feasibility });
+        if (!BuilderBuildService.TemplateBuildMode)
+        {
+            var feasibility = BuilderBuildService.FeasibilityError(req.Platform);
+            if (feasibility != null)
+                return BadRequest(new { error = feasibility });
+        }
 
         var buildId = Guid.NewGuid().ToString("N")[..8];
         var record = new Models.BuildRecord

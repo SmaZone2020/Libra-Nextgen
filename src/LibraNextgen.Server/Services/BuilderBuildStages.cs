@@ -296,38 +296,7 @@ public partial class BuilderBuildService
         job.Log($"Loader ready: {new FileInfo(exePath).Length / 1024} KB");
         ctx.ExePath = exePath;
 
-        // ── Icon & metadata embedding via managed PE writer (Windows PE only) ──
-        if (ctx.IsWindows && HasIconOrMetadata(ctx.Req))
-        {
-            await EmbedIconAndMetadata(ctx.Req, exePath, job);
-        }
-
-        // ── Goldberg obfuscation (Windows PE only) ──
-        if (ctx.IsWindows && ctx.Req.EnableObfuscation)
-        {
-            job.Log("Running goldberg obfuscation...");
-            try
-            {
-                var goldbergResult = await RunProcessAsync("goldberg", $"obfuscate \"{exePath}\"", job);
-                if (goldbergResult.ExitCode == 0)
-                    job.Log("Goldberg obfuscation completed.");
-                else
-                    job.Log($"[WARN] goldberg failed (exit {goldbergResult.ExitCode}), continuing without obfuscation.");
-            }
-            catch (Exception ex)
-            {
-                job.Log($"[WARN] goldberg not available: {ex.Message}");
-            }
-        }
-
-        // ── Junk data injection ──
-        if (ctx.Req.InjectJunkData && ctx.Req.JunkDataMb > 0)
-        {
-            job.Log($"Injecting {ctx.Req.JunkDataMb} MB junk data...");
-            var junk = RandomNumberGenerator.GetBytes(ctx.Req.JunkDataMb * 1024 * 1024);
-            await using var fs = System.IO.File.Open(exePath, FileMode.Append);
-            await fs.WriteAsync(junk);
-        }
+        await ApplyLoaderPostProcessAsync(ctx, job);
     }
 
     // ══════════════════════════════════════════════════════════════════
