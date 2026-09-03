@@ -47,7 +47,8 @@ cd src/webapp && npm install && npm run dev
 | Variable | Required | Description |
 |---|---|---|
 | `LIBRA_SERVER_KEY` | Required for public deployments | Path to the server RSA private key PEM file (deployment-level; used for agent registration/key negotiation). **Must be persisted** — auto-generated as `server-rsa.key` on first start; restarting or changing the key forces all online agents to re-register (they self-heal, but disconnect once). Recommend a fixed path after generation |
-| `LIBRA_BUILDS_DIR` | Required for public deployments | Absolute path to the build-artifacts directory (agent executables, module dlls, core.bin). Default relative paths break in published deployments |
+| `LIBRA_BUILDS_DIR` | Required for public deployments | Absolute path to the build-artifacts directory (agent executables, module dlls, core.bin). **Shared by the Builder and module serving** (both read it; when unset, falls back to a relative path under the app base dir, which breaks in published/container deployments — always set it explicitly). Container deployment defaults to `/build-output` |
+| `LIBRA_AGENT_RS_DIR` | Optional | Path to the agent-rs source workspace (used by the Builder). Falls back to the repo dev layout when unset; container deployment defaults to `/agent-rs` (mount a custom source tree to override) |
 | `Beacon__Secret` | Optional | Shared secret (legacy pre-session encryption fallback). Not needed by the new protocol (hybrid encryption); when unset, legacy encrypted registration is rejected |
 | `MongoDB__ConnectionString` | Default | Mongo connection string, default `mongodb://localhost:27017` |
 | `ASPNETCORE_ENVIRONMENT` | Set `Production` in production | Controls the exception detail page (production returns only unified JSON errors) |
@@ -129,6 +130,84 @@ build-output/
 - ⚠️ Rebuilding/recreating `build-output` may wipe plugin dlls, causing `module download failed: 404` on plugin actions — disable then re-enable on the plugin management page to re-stage.
 - The Agent's `ModuleManager` keeps an in-memory cache of loaded modules: after updating a native module you must **restart the Agent** for it to re-download.
 
+## 6.2 Docker Deployment (recommended, linux/amd64)
+
+For self-service deployments: one command brings up the whole stack (MongoDB + Server + nginx), and the
+image ships a Rust/zig toolchain, so **win x64 / win x86 (GNU ABI, cross-compiled) and linux-x64 agents
+can be built online inside the container** — no .NET / Node / Rust / MongoDB install on the host.
+The server image is linux/amd64 only.
+
+### Layout (`deploy/`)
+
+| File | Purpose |
+|---|---|
+| `Dockerfile` | Three-stage build: console SPA → dotnet publish → runtime image (rustup + zig + cargo-zigbuild) |
+| `docker-compose.yml` | mongo:7 + server + nginx; four named volumes for persistence |
+| `.env.example` | Environment template (copy to `.env` and fill in) |
+| `nginx/console.conf` | nginx site config (SPA static + segmented API/SSE/WS/MCP proxy; includes a TLS sample) |
+| `docker/entrypoint.sh` | Container entrypoint: prepare persistent dirs, then start the server |
+
+### Quick start
+
+Prerequisites: Docker Engine 24+ and Compose v2.
+
+```bash
+cd deploy
+cp .env.example .env
+# edit .env: at least set VITE_API_BASE (the public origin the console is served from, e.g. https://c2.example.com)
+docker compose up -d --build
+```
+
+Open the `VITE_API_BASE` URL; first visit to `/setup` creates the admin.
+
+**Single-port note**: `VITE_API_BASE` is baked into the frontend at image build time; all console
+API/SSE/WS calls target that origin through nginx :443, and agent/beacon traffic also enters via 443.
+Changing the domain/port requires rebuilding with `docker compose up -d --build`.
+
+### Persistence (four named volumes)
+
+| Volume | Mount | Contents |
+|---|---|---|
+| `mongo-data` | `/data/db` | All MongoDB data (incl. audit logs) |
+| `libra-builds` | `/build-output` | Build artifacts, modules, `artifacts/`, shared cargo cache (`target-shared`) |
+| `libra-config` | `/root/.config/Libra-Nextgen` | JWT RSA key + listener settings |
+| `libra-secrets` | `/secrets` | Server RSA private key (auto-generated on first start) |
+
+Removing containers does not touch volumes; backup/migration = copy the four volumes plus `.env`.
+
+### TLS
+
+1. Put `fullchain.pem` / `privkey.pem` under `deploy/certs/`
+2. Uncomment the 443 server block in `nginx/console.conf` (or turn the 80 server into a 301 redirect)
+3. Set `VITE_API_BASE` to an https:// origin in `.env` and rebuild the image
+
+### Building agents online
+
+- Builder platforms: win x64 / win x86 / linux-x64 all build directly; win payloads are **GNU ABI**
+  (zig cross-compilation), functionally equivalent to and co-existing with MSVC builds from a Windows dev box.
+- The first build of a platform compiles on the spot (the container needs outbound access to crates.io;
+  deps are pre-fetched into the image layer and cached in the volume); `artifacts/{platform}/core.bin`
+  hits make subsequent builds take seconds.
+
+### Upgrades
+
+- Local build: `git pull && docker compose up -d --build`
+- Image release: GitHub Actions pushes `ghcr.io/<owner>/<repo>` (tags `latest` / `sha-<id>` / `v<tag>`);
+  deploy hosts run `docker compose pull` then `up -d`.
+
+### Migrating from bare-metal / Windows deployments
+
+1. MongoDB: `mongodump` export → `mongorestore` inside the container (or copy the `mongo-data` volume)
+2. Build artifacts: copy the old `build-output/` into the `libra-builds` volume
+3. Keys: the private key file pointed to by `LIBRA_SERVER_KEY`, and the `%APPDATA%/Libra-Nextgen` dir (JWT key)
+4. Fresh deployments auto-generate all keys on first start
+
+### Known limitations (v1)
+
+- Server image is linux/amd64 only
+- HTTP by default; enable TLS as above; MongoDB auth is off by default (enable in production, see §3)
+- Container runs as root and the image is unsigned (OpSec hardening is planned for later versions)
+
 ## 7. Troubleshooting
 
 | Symptom | Cause | Fix |
@@ -139,3 +218,5 @@ build-output/
 | Tasks don't respond | agent offline / SSE not connected | check agent logs (debug build) and Dashboard online status |
 | Loader download 401 | loader version too old (no downloadToken) | rebuild the loader (the credential mechanism is enforced from this version) |
 | Console 500 without details | production global exception handling (correct behavior) | check server logs (LogError includes Path/Method) |
+| win-x64 payload build fails in container | zig / cargo-zigbuild missing or version pairing broken | run `zig version` inside the container; adjust `ZIG_VERSION` and rebuild the image |
+| Login sessions lost after container restart | `libra-config` volume missing or wiped | confirm the compose volume exists; the JWT key persists at `/root/.config/Libra-Nextgen` |

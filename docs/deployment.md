@@ -47,7 +47,8 @@ cd src/webapp && npm install && npm run dev
 | 变量 | 必填 | 说明 |
 |---|---|---|
 | `LIBRA_SERVER_KEY` | 公网必填 | 服务端 RSA 私钥 PEM 文件路径（部署级，agent 注册/密钥协商用）。**必须持久化**——首次启动自动生成 `server-rsa.key`，服务重启/换 key 会导致所有在线 agent 需要重注册（会自愈，但会断线一次）。建议生成后固定路径 |
-| `LIBRA_BUILDS_DIR` | 公网必填 | 构建产物目录绝对路径（agent 可执行文件、模块 dll、core.bin）。默认相对路径在发布部署下会失效 |
+| `LIBRA_BUILDS_DIR` | 公网必填 | 构建产物目录绝对路径（agent 可执行文件、模块 dll、core.bin）。**Builder 与模块下发共用**（均读取本变量；未设置时回退基目录相对路径，发布/容器部署下会失效，务必显式设置）。容器部署默认 `/build-output` |
+| `LIBRA_AGENT_RS_DIR` | 可选 | agent-rs 源码工作区路径（Builder 编译用）。未设置时回退仓库开发布局；容器部署默认 `/agent-rs`（挂载自定义源码可覆盖） |
 | `Beacon__Secret` | 可选 | 共享密钥（旧式预会话加密兜底）。新协议（混合加密）不需要；不设置则旧 agent 的加密注册被拒绝 |
 | `MongoDB__ConnectionString` | 默认 | Mongo 连接串，默认 `mongodb://localhost:27017` |
 | `ASPNETCORE_ENVIRONMENT` | 生产设 `Production` | 控制异常详情页（生产只返回统一 JSON 错误） |
@@ -130,6 +131,81 @@ build-output/
 - ⚠️ 重新构建/重建 `build-output` 后插件 dll 可能被清掉，插件动作会报 `module download failed: 404`——在插件管理页**禁用再启用**即可重新 stage。
 - Agent 的 `ModuleManager` 对已加载模块有内存缓存：更新 native 模块后需**重启 Agent** 才会重新下载。
 
+## 6.2 Docker 部署（推荐，linux/amd64）
+
+面向自助部署场景：一条命令起全套（MongoDB + Server + nginx），且容器内置 Rust/zig 工具链，
+**可在容器内在线构建 win x64 / win x86（GNU ABI 交叉编译）与 linux-x64 agent**，
+部署机无需安装 .NET / Node / Rust / MongoDB。服务端镜像仅支持 linux/amd64。
+
+### 目录（`deploy/`）
+
+| 文件 | 说明 |
+|---|---|
+| `Dockerfile` | 三阶段构建：控制台 SPA → dotnet publish → 运行镜像（含 rustup + zig + cargo-zigbuild） |
+| `docker-compose.yml` | mongo:7 + server + nginx 三服务；四个命名卷持久化 |
+| `.env.example` | 环境变量模板（复制为 `.env` 后填写） |
+| `nginx/console.conf` | nginx 站点配置（SPA 静态 + API/SSE/WS/MCP 分段反代；含 TLS 示例） |
+| `docker/entrypoint.sh` | 容器入口：准备持久化目录后启动服务 |
+
+### 快速开始
+
+前置：Docker Engine 24+ 与 Compose v2。
+
+```bash
+cd deploy
+cp .env.example .env
+# 编辑 .env：至少填写 VITE_API_BASE（控制台的公共访问源，如 https://c2.example.com）
+docker compose up -d --build
+```
+
+浏览器访问 `VITE_API_BASE` 对应地址，首次访问 `/setup` 创建管理员。
+
+**单端口说明**：`VITE_API_BASE` 在构建镜像时写入前端，控制台的 API/SSE/WS 全部请求该源并经 nginx 443 进入；
+agent/beacon 也走 443。改域名/端口需 `docker compose up -d --build` 重建镜像。
+
+### 持久化（四个命名卷）
+
+| 卷 | 挂载点 | 内容 |
+|---|---|---|
+| `mongo-data` | `/data/db` | MongoDB 全部数据（含审计日志） |
+| `libra-builds` | `/build-output` | 构建产物、模块、`artifacts/`、共享 cargo 缓存（`target-shared`） |
+| `libra-config` | `/root/.config/Libra-Nextgen` | JWT RSA 密钥 + 监听设置 |
+| `libra-secrets` | `/secrets` | 服务端 RSA 私钥（首次启动自动生成） |
+
+删除容器不影响卷；备份/迁移 = 把四个卷与 `.env` 一并拷贝。
+
+### TLS
+
+1. 将 `fullchain.pem` / `privkey.pem` 放入 `deploy/certs/`
+2. 取消 `nginx/console.conf` 中 443 server 块注释（或将 80 改为 301 跳转）
+3. `.env` 中 `VITE_API_BASE` 改为 https 前缀，重建镜像
+
+### 在线构建 agent
+
+- Builder 平台：win x64 / win x86 / linux-x64 均可直接生成；win 载荷为 **GNU ABI**（zig 交叉），
+  与 Windows 开发机上的 MSVC 产物功能等价、可并存。
+- 首次构建某平台会现场编译（容器需联网拉取 crates，依赖已预取入镜像层并缓存在卷）；
+  `artifacts/{platform}/core.bin` 命中后秒级完成。
+
+### 升级
+
+- 本地构建：`git pull && docker compose up -d --build`
+- 镜像发布：GitHub Actions 推送 `ghcr.io/<owner>/<repo>`（tag `latest` / `sha-<id>` / `v<tag>`），
+  部署机 `docker compose pull` 后 `up -d`。
+
+### 从裸机/Windows 部署迁移
+
+1. MongoDB：`mongodump` 导出 → 容器内 `mongorestore`（或直接拷贝 `mongo-data` 卷）
+2. 构建产物：拷贝原 `build-output/` 到 `libra-builds` 卷
+3. 密钥：`LIBRA_SERVER_KEY` 指定的私钥文件、`%APPDATA%/Libra-Nextgen` 目录（JWT 密钥）
+4. 全新部署无存量数据时，首次启动自动生成全部密钥
+
+### 已知限制（v1）
+
+- 服务端镜像仅 linux/amd64
+- 默认 HTTP，TLS 需按上文启用；Mongo 默认不开启认证（生产建议启用，见 §3）
+- 容器以 root 运行、镜像不做签名（OpSec 增强列入后续版本）
+
 ## 7. 故障排查
 
 | 症状 | 原因 | 处理 |
@@ -140,3 +216,5 @@ build-output/
 | 任务无响应 | agent 离线 / SSE 未连接 | 看 agent 日志（debug 构建）与 Dashboard 在线状态 |
 | loader 下载 401 | loader 版本旧（无 downloadToken） | 重新构建 loader（凭证机制从本版本起强制） |
 | 控制台 500 但无详情 | 生产环境全局异常处理（正确行为） | 看服务端日志（LogError 含 Path/Method） |
+| 容器内 win-x64 载荷构建失败 | zig / cargo-zigbuild 缺失或版本不配对 | 容器内执行 `zig version`；调整 `ZIG_VERSION` 重建镜像 |
+| 容器重启后登录态失效 | `libra-config` 卷缺失或被清 | 确认 compose 卷存在；JWT 密钥持久化在 `/root/.config/Libra-Nextgen` |
