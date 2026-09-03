@@ -44,25 +44,32 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # win-arm64 excludes the script module: rquickjs-sys ships no
+          # pregenerated bindings for aarch64-pc-windows-msvc (v1 limitation).
           - platform: x64
             triple: x86_64-pc-windows-gnu
             runner: ubuntu-24.04
             zig: '0.16.0'
+            pkgs: 'core loader shell-module recon-module creds-module files-module powershell-module proxy-module script-module'
           - platform: linux-x64
             triple: x86_64-unknown-linux-gnu
             runner: ubuntu-24.04
             zig: '0.16.0'
+            pkgs: 'core loader shell-module recon-module creds-module files-module powershell-module proxy-module script-module'
           - platform: linux-arm64
             triple: aarch64-unknown-linux-gnu
             runner: ubuntu-24.04
             zig: '0.16.0'
+            pkgs: 'core loader shell-module recon-module creds-module files-module powershell-module proxy-module script-module'
           - platform: win-arm64
             triple: aarch64-pc-windows-msvc
             runner: windows-2022
             clang: true
+            pkgs: 'core loader shell-module recon-module creds-module files-module powershell-module proxy-module'
           - platform: mac-arm64
             triple: aarch64-apple-darwin
             runner: macos-14
+            pkgs: 'core loader shell-module recon-module creds-module files-module powershell-module proxy-module script-module'
     defaults:
       run:
         working-directory: src/agent-rs
@@ -95,15 +102,11 @@ jobs:
 
       - name: Build core + loader + cloud modules
         shell: bash
-        env:
-          ZIG_TARGET_ARGS: >-
-            -p core -p loader -p shell-module -p recon-module -p creds-module
-            -p files-module -p powershell-module -p proxy-module -p script-module
         run: |
           if [ -n "${{ matrix.zig }}" ]; then
-            cargo zigbuild --release --target "${{ matrix.triple }}" $ZIG_TARGET_ARGS
+            cargo zigbuild --release --target "${{ matrix.triple }}" ${{ matrix.pkgs }}
           else
-            cargo build --release --target "${{ matrix.triple }}" $ZIG_TARGET_ARGS
+            cargo build --release --target "${{ matrix.triple }}" ${{ matrix.pkgs }}
           fi
 
       # Windows-only: desktop (GUI subsystem) loader variant. The feature
@@ -128,6 +131,7 @@ jobs:
         env:
           PLATFORM: ${{ matrix.platform }}
           TRIPLE: ${{ matrix.triple }}
+          PKGS: ${{ matrix.pkgs }}
           TAG: ${{ github.event.inputs.tag_name || github.ref_name }}
           SHA: ${{ github.sha }}
         run: bash .github/workflows/templates-assemble.sh

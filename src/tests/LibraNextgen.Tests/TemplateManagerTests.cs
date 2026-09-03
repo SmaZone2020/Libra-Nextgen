@@ -92,6 +92,28 @@ public class TemplateManagerTests : IDisposable
     }
 
     [Fact]
+    public void InstallZip_MissingModules_AreOptional()
+    {
+        // win-arm64 templates ship a reduced module set (no QuickJS script
+        // module); the install must succeed and report the absent modules.
+        var path = Path.Combine(_root, "tpl-min.zip");
+        using (var zip = ZipFile.Open(path, ZipArchiveMode.Create))
+        {
+            AddEntry(zip, "manifest.json",
+                """{"platform":"win-arm64","tag":"v1.0.0","commit":"cafe","built_at":"2026-09-03T00:00:00Z"}""");
+            AddEntry(zip, "loader.exe", "loader payload");
+            AddEntry(zip, "loader_desktop.exe", "desktop payload");
+            AddEntry(zip, "core.dll", "core payload");
+            AddEntry(zip, "shell.dll", "shell module");
+        }
+        var install = TemplateManagerService.InstallZip(path, "win-arm64", Path.Combine(_root, "c-min"), "asset.zip", 1, "v1");
+        Assert.Contains("script.dll", install.MissingModules);
+        Assert.DoesNotContain("shell.dll", install.MissingModules);
+        Assert.Equal(6, install.MissingModules.Length);
+        Assert.Equal("v1.0.0", install.Tag);
+    }
+
+    [Fact]
     public void PayloadNames_MatchPlatformLayout()
     {
         Assert.Equal(("loader.exe", "loader_desktop.exe", "core.dll"), TemplateManagerService.PayloadNames("x64"));

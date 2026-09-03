@@ -288,13 +288,18 @@ public sealed class TemplateManagerService
 
             var required = new List<string> { loader, core };
             if (desktopLoader != null) required.Add(desktopLoader);
-            var missing = required.Where(name => !entries.ContainsKey(name)).ToList();
+            var missingRequired = required.Where(name => !entries.ContainsKey(name)).ToList();
             var missingModules = modules.Where(m => !entries.ContainsKey(m)).ToList();
-            missing.AddRange(missingModules);
-            if (missing.Count > 0)
+            if (missingRequired.Count > 0)
                 throw new InvalidDataException(
-                    $"template {Path.GetFileName(zipPath)} is incomplete for {platform}; missing: {string.Join(", ", missing)} — " +
+                    $"template {Path.GetFileName(zipPath)} is incomplete for {platform}; missing: {string.Join(", ", missingRequired)} — " +
                     "regenerate templates from a newer tag (the publish workflow layout may have changed)");
+            if (missingModules.Count > 0)
+            {
+                // Modules are optional: platforms with third-party binding gaps
+                // (e.g. win-arm64 without the QuickJS script module) ship a
+                // reduced set; EnsureAsync reports them on the log line.
+            }
 
             // Install into a fresh sibling dir, then swap, so a failed copy
             // never leaves a half-populated cache behind.
