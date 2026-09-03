@@ -1,7 +1,8 @@
 import { useState } from 'react';
+import type { ComponentType } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button, Card, Header, ListBox, Select, Spinner, Tabs, Tooltip } from '@heroui/react';
-import { ArrowRotateRight } from '@gravity-ui/icons';
+import { ArrowRotateRight, LogoLinux, LogoMacos, LogoWindows } from '@gravity-ui/icons';
 import { refreshTemplates } from '../../api/build';
 import type { BuildConfigRequest } from '../../types/models';
 import { FALLBACK_PLATFORMS, PLATFORM_LABEL } from './constants';
@@ -14,6 +15,11 @@ interface BuilderPlatformCardProps {
 
 const OS_ORDER = ['windows', 'linux', 'macos'] as const;
 const OS_TITLES: Record<string, string> = { windows: 'Windows', linux: 'Linux', macos: 'macOS' };
+const OS_ICONS: Record<string, ComponentType<{ className?: string }>> = {
+  windows: LogoWindows,
+  linux: LogoLinux,
+  macos: LogoMacos,
+};
 
 /**
  * Target platform + application type. The platform options are driven by
@@ -79,7 +85,13 @@ export function BuilderPlatformCard({ config, set }: BuilderPlatformCardProps) {
                           textValue={PLATFORM_LABEL[p.platform] ?? p.platform}
                         >
                           <span className="flex w-full items-center justify-between gap-3">
-                            <span>{PLATFORM_LABEL[p.platform] ?? p.platform}</span>
+                            <span className="flex items-center gap-2">
+                              {(() => {
+                                const OsIcon = OS_ICONS[p.os];
+                                return OsIcon ? <OsIcon className="h-4 w-4 shrink-0 text-default-500" /> : null;
+                              })()}
+                              <span>{PLATFORM_LABEL[p.platform] ?? p.platform}</span>
+                            </span>
                             <span className="flex items-center gap-1.5 text-xs text-default-500">
                               <span
                                 className={`h-1.5 w-1.5 rounded-full ${p.template ? 'bg-success' : 'bg-warning'}`}
