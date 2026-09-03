@@ -20,6 +20,13 @@ using LibraNextgen.Service.Controllers;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Drop the Windows EventLog provider: it is disposed during host shutdown, and a
+// background task (Telegram/IM receiver) logging at that moment crashes the whole
+// process via Logger.ThrowLoggingError. Console output is all the server needs.
+builder.Logging.ClearProviders();
+builder.Logging.AddConsole();
+builder.Logging.AddDebug();
+
 // MongoDB
 builder.Services.Configure<MongoSettings>(builder.Configuration.GetSection(MongoSettings.SectionName));
 builder.Services.AddSingleton<MongoDbContext>();
