@@ -36,8 +36,8 @@ Agents communicate with the server over beacon HTTP(S) and SSE event streams, wi
 - In-memory PowerShell (CLR host)
 - Multi-vector persistence
 - Plugin system: upload zip / Git import / plugin market, pages are pure HTML+JS+CSS
-- Online payload building (Builder), Windows / Linux
-- One-command Docker deployment (single-port 443; win/linux payloads cross-built in-container)
+- Online payload building (Builder), Windows / Linux / macOS (x64 and ARM64)
+- One-command Docker deployment (single-port 443; payloads packaged in template mode — no Rust toolchain)
 - Built-in AI assistant Justitia (tiered authority + tool-call audit)
 - AI channels: command Justitia from IM — Telegram / Feishu Lark / WeChat iLink, with bind codes, inline approvals, menu and group calls
 - Built-in MCP server (Streamable HTTP)
@@ -59,7 +59,7 @@ Open `http://<server-ip>` (default port 80) — the first visit creates the admi
 
 ### Local development
 
-Requires MongoDB 7.0+, .NET SDK 10, Node.js 20+ (Rust 1.80+ is only needed to build Agent payloads).
+Requires MongoDB 7.0+, .NET SDK 10, Node.js 20+ (the default template mode builds Agent payloads without Rust; Rust 1.80+ and zig are only needed for the local source-compile path).
 
 ```bash
 # Start the server (port 5270)
@@ -79,7 +79,10 @@ Open <http://localhost:5173> — the first visit creates the admin account. Agen
 | Platform | Status |
 | --- | --- |
 | Windows x64 | Supported (primary platform, fully verified) |
-| Linux x64 | Cross-compilation passes |
+| Windows ARM64 | Supported (template CI release; runtime testing in progress) |
+| Linux x64 | Supported (end-to-end chain exercised) |
+| Linux ARM64 | Supported (template CI release; runtime testing in progress) |
+| macOS ARM64 (Apple Silicon) | Supported (template CI release; runtime testing in progress) |
 
 See the [platform support matrix](docs/platform-support.md).
 

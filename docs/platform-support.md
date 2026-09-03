@@ -25,9 +25,10 @@ GitHub Actions 模板矩阵(tag 1.6.0,五平台全绿)。
      `.github/workflows/templates.yml`,在对应 runner 构建 loader(+Windows desktop 变体)、core 与云模块,
      打包 `libra-agent-tpl-{platform}.zip` 发布到 GitHub Releases;Server 按需下载/校验/缓存于
      `build-output/templates/{platform}`,每单构建 = 纯 .NET 加密/注入/打包。Console Builder 页可查看模板状态并刷新。
-   - `LIBRA_BUILDER_MODE=source`(开发者):保留本机/镜像内 cargo+zig 编译链路(`deploy/Dockerfile.source`)。
+   - `LIBRA_BUILDER_MODE=source`(仅本机裸机开发):保留服务端本机 cargo+zig 编译链路;
+     Docker 镜像固定 template 模式,不再提供源码编译镜像。
    - macOS 载荷:任何主机都建议走 template 模式;source 模式仅在 macOS 主机上可用。
-2. **ABI 约定**:win x64/win x86 模板为 **GNU ABI**(zig,与源码模式容器产物一致);win-arm64 无 rustup GNU std,固定 **MSVC**;
+2. **ABI 约定**:win x64 模板为 **GNU ABI**(zig);win-arm64 无 rustup GNU std,固定 **MSVC**;
    linux 目标为 glibc GNU;mac 为默认 Mach-O。
 3. **模块降级**:非 Windows 平台构建照常产出全部模块,但 Windows 专属语义(token 令牌操作、powershell 宿主、
    creds 的 LSASS/SAM、注册表/计划任务持久化等)在运行时返回明确 "not supported" 错误,不影响其余模块。

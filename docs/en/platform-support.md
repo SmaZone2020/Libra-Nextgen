@@ -28,9 +28,10 @@ Status definitions:
      modules on the matching runners and publishes `libra-agent-tpl-{platform}.zip` to GitHub Releases. The
      server downloads/verifies/caches them under `build-output/templates/{platform}`; every build is pure-.NET
      packaging. The Console Builder page shows template state and can refresh.
-   - `LIBRA_BUILDER_MODE=source` (developers): keeps the in-place cargo+zig compile chain (`deploy/Dockerfile.source`).
+   - `LIBRA_BUILDER_MODE=source` (bare-metal development only): keeps the in-place cargo+zig compile chain;
+     Docker images are fixed to template mode and no source-compile image is shipped.
    - macOS payloads: use template mode on any host; source mode works on macOS hosts only.
-2. **ABI convention**: win x64/win x86 templates are **GNU ABI** (zig, same as the container's source-mode output);
+2. **ABI convention**: the win x64 template is **GNU ABI** (zig);
    win-arm64 has no rustup GNU std and is fixed to **MSVC**; Linux targets are glibc GNU; macOS is native Mach-O.
 3. **Module degradation**: non-Windows platforms still build all modules, but Windows-only semantics (token
    manipulation, PowerShell host, LSASS/SAM creds, registry/scheduled-task persistence, …) return a clear

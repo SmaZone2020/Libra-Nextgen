@@ -36,8 +36,8 @@ Agent 通过 beacon HTTP(S) 与 SSE 事件流与服务器通信，全链路 AES-
 - 内存态 PowerShell（CLR Host）
 - 多维度持久化
 - 插件体系：上传 zip / Git 导入 / 插件市场，页面为纯 HTML+JS+CSS
-- 在线载荷构建（Builder），Windows / Linux
-- Docker 一键部署（单端口 443，容器内交叉构建 win/linux Agent）
+- 在线载荷构建（Builder），Windows / Linux / macOS（x64 与 ARM64）
+- Docker 一键部署（单端口 443，模板模式打包 Agent 载荷，无需 Rust 工具链）
 - 内置 AI 助手 Justitia（分级权限 + 工具调用审计）
 - AI 频道：Telegram / 飞书 / 微信 iLink 在 IM 中指挥 Justitia，支持绑定码、内联审批、菜单与群组调用
 - 内置 MCP 服务器（Streamable HTTP）
@@ -59,7 +59,7 @@ docker compose up -d --build
 
 ### 本地开发启动
 
-需要 MongoDB 7.0+、.NET SDK 10、Node.js 20+（构建 Agent 载荷另需 Rust 1.80+）。
+需要 MongoDB 7.0+、.NET SDK 10、Node.js 20+（默认模板模式构建 Agent 载荷无需 Rust；仅本机源码编译链路需要 Rust 1.80+ 与 zig）。
 
 ```bash
 # 启动 Server（端口 5270）
@@ -78,8 +78,11 @@ npm run dev
 
 | 平台 | 状态 |
 | --- | --- |
-| Windows x64 | 支持（主平台，全功能验证） |
-| Linux x64 | 交叉编译通过 |
+| Windows x64 | 支持（主力平台，全功能验证） |
+| Windows ARM64 | 支持（模板 CI 发布，运行时实测中） |
+| Linux x64 | 支持（链路实测通过） |
+| Linux ARM64 | 支持（模板 CI 发布，运行时实测中） |
+| macOS ARM64（Apple Silicon） | 支持（模板 CI 发布，运行时实测中） |
 
 详见 [平台支持矩阵](docs/platform-support.md)。
 

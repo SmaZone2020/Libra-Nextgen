@@ -10,7 +10,7 @@
 
 > Full environment installation and startup steps are in [README Quick Start](../../README_en.md) (including download URLs and verification commands for each dependency).
 
-**Dependencies**: MongoDB 7.0+ (start first) · .NET SDK 10 · Node.js 20+ (Rust 1.80+ only needed to build payloads online).
+**Dependencies**: MongoDB 7.0+ (start first) · .NET SDK 10 · Node.js 20+ (the default template mode builds payloads without Rust; Rust 1.80+ is only needed for the local source-compile path).
 
 ```bash
 # 1. Server (http://localhost:5270)
@@ -137,10 +137,10 @@ build-output/
 ## 6.2 Docker Deployment (recommended)
 
 For self-service deployments: one command brings up the whole stack (MongoDB + Server + nginx).
-The default image runs in **template mode** (`LIBRA_BUILDER_MODE=template`): no Rust toolchain — payloads are
-packaged with pure .NET from **prebuilt platform templates** fetched from GitHub Releases, covering
-win x64 / win arm64 / linux x64 / linux arm64 / mac arm64. To let the server compile from source (development),
-build `deploy/Dockerfile.source` instead (rustup + zig + cargo-zigbuild baked in, `LIBRA_BUILDER_MODE=source`).
+The image is fixed to **template mode** (`LIBRA_BUILDER_MODE=template`): no Rust toolchain inside the container —
+payloads are packaged with pure .NET from **prebuilt platform templates** fetched from GitHub Releases, covering
+win x64 / win arm64 / linux x64 / linux arm64 / mac arm64. Source compilation (`LIBRA_BUILDER_MODE=source`) is a
+**bare-metal development** option; Docker no longer ships a source-compile image.
 See [platform-support.md](platform-support.md) for the verified matrix.
 
 ### Layout (`deploy/`)
@@ -148,7 +148,6 @@ See [platform-support.md](platform-support.md) for the verified matrix.
 | File | Purpose |
 |---|---|
 | `Dockerfile` | **Default template image**: console SPA → dotnet publish → slim runtime image (no Rust toolchain; buildx-friendly for cross-arch) |
-| `Dockerfile.source` | **Source-build image**: template image plus rustup + zig + cargo-zigbuild and the agent-rs tree (`LIBRA_BUILDER_MODE=source`) |
 | `docker-compose.yml` | mongo:7 + server + nginx; five named volumes for persistence |
 | `.env.example` | Environment template (copy to `.env` and fill in) |
 | `nginx/console.conf` | nginx site config (SPA static + segmented API/SSE/WS/MCP proxy; includes a TLS sample) |
@@ -178,7 +177,7 @@ frontend at build time (changing it requires `docker compose up -d --build`).
 | Volume | Mount | Contents |
 |---|---|---|
 | `mongo-data` | `/data/db` | All MongoDB data (incl. audit logs) |
-| `libra-builds` | `/build-output` | Build artifacts, modules, `artifacts/`, template cache (`templates/`; source image also keeps the `target-shared` cargo cache) |
+| `libra-builds` | `/build-output` | Build artifacts, modules, `artifacts/`, template cache (`templates/`) |
 | `libra-config` | `/root/.config/Libra-Nextgen` | JWT RSA key + listener settings |
 | `libra-secrets` | `/secrets` | Server RSA private key (auto-generated on first start) |
 | `console-dist` | `/srv/console-live` → `/usr/share/nginx/html` | Console SPA (re-synced from the image by the entrypoint on every start; safe to delete, rebuilt from the image) |
@@ -202,13 +201,11 @@ Removing containers does not touch volumes; backup/migration = copy the four vol
   - Platform keys / ABIs / module degradation: see [platform-support.md](platform-support.md); the win-arm64
     template currently omits the `script` module.
   - A missing template asset produces an actionable build error (publish a tag / point
-    `LIBRA_TEMPLATE_REPO|TAG|BASE_URL|TOKEN` elsewhere / fall back to source mode).
-- **Source mode** (development; needs the `deploy/Dockerfile.source` image):
-  Builder platforms win x64 / win x86 / linux-x64 / linux-arm64; win payloads are **GNU ABI** (zig
-  cross-compilation), functionally equivalent to and co-existing with MSVC builds from a Windows dev box.
-  macOS payloads in source mode require a macOS host.
-- The first source build of a platform compiles on the spot (the container needs outbound access to crates.io;
-  deps are pre-fetched into the image layer and cached in the volume); `artifacts/{platform}/core.bin`
+    `LIBRA_TEMPLATE_REPO|TAG|BASE_URL|TOKEN` elsewhere).
+- **Source mode** (bare-metal development only; Docker ships no source-compile image):
+  set `LIBRA_BUILDER_MODE=source` on the host and install Rust + zig (with the target triples) to let the
+  Server compile on the spot.
+- The first source build of a platform compiles on the spot (cargo pulls crates.io); `artifacts/{platform}/core.bin`
   hits make subsequent builds take seconds.
 
 ### Upgrades
@@ -240,7 +237,6 @@ Removing containers does not touch volumes; backup/migration = copy the four vol
 | Tasks don't respond | agent offline / SSE not connected | check agent logs (debug build) and Dashboard online status |
 | Loader download 401 | loader version too old (no downloadToken) | rebuild the loader (the credential mechanism is enforced from this version) |
 | Console 500 without details | production global exception handling (correct behavior) | check server logs (LogError includes Path/Method) |
-| win-x64 payload build fails in container (source image) | zig / cargo-zigbuild missing or version pairing broken | run `zig version` inside the container; adjust `ZIG_VERSION` and rebuild the image |
-| Build reports template asset not found | release has no matching asset / tag mismatch | tag the repo to trigger the template workflow, then refresh in Console; or repoint `LIBRA_TEMPLATE_REPO\|TAG\|BASE_URL\|TOKEN`; or set `LIBRA_BUILDER_MODE=source` |
+| Build reports template asset not found | release has no matching asset / tag mismatch | tag the repo to trigger the template workflow, then refresh in Console; or repoint `LIBRA_TEMPLATE_REPO\|TAG\|BASE_URL\|TOKEN`; or build in source mode on the host |
 | Login sessions lost after container restart | `libra-config` volume missing or wiped | confirm the compose volume exists; the JWT key persists at `/root/.config/Libra-Nextgen` |
 | Image build times out at `auth.docker.io` (common on CN networks) | buildx needs a token from docker.io to pull images and the service is unreachable | retry; pre-pull with `docker pull node:22-alpine` etc. before building; or configure a registry mirror in Docker Desktop (e.g. `https://docker.m.daocloud.io`) |
