@@ -16,7 +16,21 @@ namespace LibraNextgen.Service.Services;
 /// </summary>
 public partial class BuilderBuildService
 {
-    public static readonly string OutputBase = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "build-output"));
+    /// <summary>
+    /// Resolve the build output root. Honors <c>LIBRA_BUILDS_DIR</c> (kept in
+    /// sync with <see cref="Controllers.AgentCommsController"/>, which serves
+    /// modules from the same directory); falls back to the dev layout relative
+    /// to the app base directory.
+    /// </summary>
+    private static string ResolveOutputBase()
+    {
+        var env = Environment.GetEnvironmentVariable("LIBRA_BUILDS_DIR");
+        if (!string.IsNullOrWhiteSpace(env))
+            return Path.GetFullPath(env);
+        return Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "build-output"));
+    }
+
+    public static readonly string OutputBase = ResolveOutputBase();
     public static readonly string HistoryFile = Path.Combine(OutputBase, "builds.json");
     public static readonly string TemplateDir = Path.Combine(OutputBase, "loader-template");
     public static readonly string IconUploadDir = Path.Combine(Path.GetTempPath(), "libra-build-icons");
@@ -28,7 +42,20 @@ public partial class BuilderBuildService
     /// <summary>Shared cargo target dir — incremental compile cache across builds.</summary>
     public static readonly string SharedTargetDir = Path.Combine(OutputBase, "target-shared");
 
-    private static readonly string RustAgentDir = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "agent-rs"));
+    /// <summary>
+    /// Resolve the agent-rs workspace root. Honors <c>LIBRA_AGENT_RS_DIR</c>
+    /// (e.g. a mounted source tree in container deployments); falls back to
+    /// the dev layout relative to the app base directory.
+    /// </summary>
+    private static string ResolveRustAgentDir()
+    {
+        var env = Environment.GetEnvironmentVariable("LIBRA_AGENT_RS_DIR");
+        if (!string.IsNullOrWhiteSpace(env))
+            return Path.GetFullPath(env);
+        return Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "agent-rs"));
+    }
+
+    private static readonly string RustAgentDir = ResolveRustAgentDir();
 
     /// <summary>Platform-scoped cloud module directory (one per target platform).</summary>
     public static string ModulesDirFor(string platform) => Path.Combine(OutputBase, "modules", platform);
