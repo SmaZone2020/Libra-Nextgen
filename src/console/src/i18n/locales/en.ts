@@ -47,6 +47,13 @@ export default {
       plugins: { label: 'Plugins', subtitle: 'Plugin management' },
       ai: { label: 'Justitia', subtitle: 'Built-in AI agent' },
     },
+    time: {
+      justNow: 'just now',
+      minutesAgo: '{{count}} min ago',
+      hoursAgo: '{{count}} h ago',
+      daysAgo: '{{count}} d ago',
+      monthsAgo: '{{count}} mo ago',
+    },
     common: {
       connect: 'Connect',
       disconnect: 'Disconnect',
@@ -667,7 +674,6 @@ export default {
       noLogsYet: 'No log output yet',
       applicationType: 'Application Type',
       consoleApp: 'Console',
-      consoleAppDesc: 'Output as console application with a terminal window.',
       desktopApp: 'Desktop',
       desktopAppDesc: 'Output as Windows GUI application with no visible console.',
       templateMode: 'Template build mode',

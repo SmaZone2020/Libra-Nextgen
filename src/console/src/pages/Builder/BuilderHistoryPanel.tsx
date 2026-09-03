@@ -7,6 +7,7 @@ import { ArrowDownToLine, CircleInfo, TrashBin } from '@gravity-ui/icons';
 import type { BuildRecord, TemplateInfo } from '../../types/models';
 import type { ModuleEntry } from '../../api/build';
 import { PLATFORM_LABEL, STATUS_LABEL } from './constants';
+import { relativeTime } from '../../utils/relativeTime';
 
 interface BuilderHistoryPanelProps {
   building: boolean;
@@ -37,12 +38,6 @@ const formatSize = (bytes: number): string => {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 };
 
-const formatDate = (iso: string): string => {
-  if (!iso) return '-';
-  const d = new Date(iso);
-  return d.toLocaleString();
-};
-
 export function BuilderHistoryPanel({
   building,
   buildStatus,
@@ -66,6 +61,12 @@ export function BuilderHistoryPanel({
 }: BuilderHistoryPanelProps) {
   const { t } = useTranslation();
   const templateFileRef = useRef<HTMLInputElement>(null);
+
+  /** Humanized age: 刚刚 / N 分钟前 / N 小时前 / N 天前 / N 个月前. */
+  const formatRelative = (iso: string) => {
+    const r = relativeTime(iso);
+    return r ? t(r.key, { count: r.count }) : '-';
+  };
 
   const handleTemplateUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -117,15 +118,10 @@ export function BuilderHistoryPanel({
                   <ListView.Title>
                     <span className="text-sm font-medium">
                       {PLATFORM_LABEL[record.platform] || record.platform}
-                      {' — '}
-                      <span className={record.status === 'failed' ? 'text-danger' : record.status === 'building' ? 'text-primary' : 'text-success'}>
-                        {t(STATUS_LABEL[record.status] || record.status)}
-                      </span>
                     </span>
                   </ListView.Title>
                   <ListView.Description className="text-xs">
-                    {formatDate(record.createdAt)}
-                    {record.fileSize > 0 ? ` · ${formatSize(record.fileSize)}` : ''}
+                    {formatRelative(record.createdAt)}
                   </ListView.Description>
                 </ListView.ItemContent>
                 {record.status !== 'building' && (

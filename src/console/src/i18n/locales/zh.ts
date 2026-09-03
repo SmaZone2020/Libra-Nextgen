@@ -47,6 +47,13 @@ export default {
       plugins: { label: '插件', subtitle: '上传、编辑、启用或禁用插件' },
       ai: { label: 'Justitia', subtitle: '内置 AI 智能体' },
     },
+    time: {
+      justNow: '刚刚',
+      minutesAgo: '{{count}} 分钟前',
+      hoursAgo: '{{count}} 小时前',
+      daysAgo: '{{count}} 天前',
+      monthsAgo: '{{count}} 个月前',
+    },
     common: {
       connect: '连接',
       disconnect: '断开',
@@ -666,7 +673,6 @@ export default {
       noLogsYet: '暂无日志输出',
       applicationType: '程序类型',
       consoleApp: '控制台应用程序',
-      consoleAppDesc: '编译为控制台程序，带有命令行窗口。',
       desktopApp: '桌面应用程序',
       desktopAppDesc: '编译为 Windows GUI 程序，无可见控制台窗口。',
       templateMode: '模板构建模式',
