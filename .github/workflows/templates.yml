@@ -118,6 +118,7 @@ jobs:
       # restore it afterwards.
       - name: Build desktop loader variant (windows)
         if: contains(matrix.triple, '-windows-')
+        shell: bash
         run: |
           R="target/${{ matrix.triple }}/release"
           cp "$R/loader.exe" "$R/loader-console.exe"
