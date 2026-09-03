@@ -78,12 +78,14 @@ RUN if [ -z "$(ls /zig-pre/*.tar.xz 2>/dev/null | head -n1)" ]; then \
     && zig version
 
 # cargo-zigbuild (latest stable from crates.io; adjust ZIG_VERSION on pairing changes)
-RUN cargo install cargo-zigbuild --locked --root /usr/local \
+# CARGO_REGISTRY_INDEX is a build-arg only; unset it so cargo does not read it as
+# the deprecated registry.index config (the mirror is applied via config.toml above).
+RUN unset CARGO_REGISTRY_INDEX && cargo install cargo-zigbuild --locked --root /usr/local \
     && ls -la /usr/local/bin | grep zigbuild
 
 # agent-rs workspace; pre-fetch deps so runtime builds work without network
 COPY src/agent-rs/ /agent-rs/
-RUN cargo fetch --manifest-path /agent-rs/Cargo.toml || echo "[warn] cargo fetch failed"
+RUN unset CARGO_REGISTRY_INDEX && (cargo fetch --manifest-path /agent-rs/Cargo.toml || echo "[warn] cargo fetch failed")
 
 COPY --from=publish /out /app
 COPY --from=console /web/dist /srv/console
