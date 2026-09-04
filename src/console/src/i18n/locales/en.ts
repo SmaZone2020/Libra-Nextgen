@@ -53,9 +53,7 @@ export default {
       devices: 'Devices',
       me: 'Me',
       apps: 'Apps',
-      sort: 'Sort',
-      sortDone: 'Done',
-      sortHint: 'Long-press a tile or tap Sort, then drag to rearrange',
+      appsHint: 'Tap an icon to open it',
     },
     time: {
       justNow: 'just now',

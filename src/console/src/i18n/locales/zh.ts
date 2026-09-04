@@ -53,9 +53,7 @@ export default {
       devices: '设备',
       me: '我的',
       apps: '应用',
-      sort: '排序',
-      sortDone: '完成',
-      sortHint: '长按图标或点「排序」后拖动调整顺序',
+      appsHint: '轻点图标打开对应功能',
     },
     time: {
       justNow: '刚刚',
