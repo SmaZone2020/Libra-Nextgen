@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Button } from '@heroui/react';
-import { AntennaSignal, ChevronLeft, ChevronRight } from '@gravity-ui/icons';
+import { AntennaSignal, Bars, ChevronLeft, ChevronRight } from '@gravity-ui/icons';
 import {
   createAiSession,
   deleteAiMessage,
@@ -551,6 +551,12 @@ export default function AiPage() {
   const approvalPending = streaming === 'approval';
   const noSessions = !loading && sessionCounts.regular + sessionCounts.channel === 0;
   const effectiveSidebarCollapsed = noSessions || sidebarCollapsed;
+  // Mobile header title: current session name, falling back to the session
+  // list entry while loading, then to the "new chat" placeholder.
+  const sessionTitle =
+    session?.title
+    ?? sessions.find((s) => s.id === activeId)?.title
+    ?? t('ai.newChat');
 
   return (
     <div className="relative flex h-full min-h-0 w-full flex-1">
@@ -589,21 +595,30 @@ export default function AiPage() {
       )}
 
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-        {!noSessions && (
+        {/* Mobile single-page header: session list trigger + session name */}
+        <div className="flex w-full shrink-0 items-center border-b border-default-200/70 bg-white/80 px-2 py-1.5 backdrop-blur md:hidden dark:border-default-800 dark:bg-neutral-900/80">
           <Button
             isIconOnly
-            variant="secondary"
             size="sm"
+            variant="ghost"
             aria-label={t('ai.sessions')}
+            isDisabled={noSessions}
             onPress={() => setMobileSidebarOpen(true)}
-            className="absolute top-3/7 -translate-y-1/2 left-0 z-20 size-5 h-14 rounded-l-none rounded-r-lg border border-default-200 shadow-md md:hidden dark:border-default-800"
           >
-            <ChevronRight className="size-3.5" />
+            <Bars className="size-5" />
           </Button>
-        )}
-        <div className="w-full shrink-0 px-4 pt-4 flex" >
-          <Button variant='secondary' className="ml-auto text-foreground" onPress={() => setEventSubOpen(true)}>
-            <AntennaSignal/>
+          <div className="min-w-0 flex-1 text-center">
+            <span className="block truncate px-1 text-sm font-semibold text-neutral-900 dark:text-neutral-100">
+              {sessionTitle}
+            </span>
+          </div>
+          <span aria-hidden="true" className="size-9 shrink-0" />
+        </div>
+
+        {/* Desktop: event subscription trigger on the right */}
+        <div className="hidden w-full shrink-0 px-4 pt-4 md:flex">
+          <Button variant="secondary" className="ml-auto text-foreground" onPress={() => setEventSubOpen(true)}>
+            <AntennaSignal />
             Submit
           </Button>
         </div>

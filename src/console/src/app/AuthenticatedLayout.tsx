@@ -124,24 +124,12 @@ export function AuthenticatedLayout({
         className="sm:pl-[var(--sidebar-w)] flex h-full min-w-0 flex-col transition-all duration-300"
         style={{ '--sidebar-w': `${sidebarWidth}px` } as React.CSSProperties}
       >
-        <header
-          className={`shrink-0 border-b border-neutral-200 bg-white dark:bg-neutral-900 dark:border-neutral-800 px-4 py-3 sm:px-6 lg:px-8`}
-        >
-          {/* Mobile: page title row */}
-          <div className="flex items-center gap-3 sm:hidden">
-            <div className="flex-1 min-w-0 flex items-center">
-              <PageHeader pluginLabels={pluginLabels} />
-              <AgentSelector className="ml-auto" />
-            </div>
-          </div>
-
-          {/* Desktop header row */}
-          <div className="hidden sm:flex justify-between items-center">
-            <PageHeader pluginLabels={pluginLabels} />
-            <div className="flex items-center gap-3">
-              <EventViewer />
-              <AgentSelector />
-            </div>
+        {/* Desktop-only header; mobile has no top bar. */}
+        <header className="hidden shrink-0 items-center justify-between border-b border-neutral-200 bg-white px-4 py-3 sm:flex dark:bg-neutral-900 dark:border-neutral-800 sm:px-6 lg:px-8">
+          <PageHeader pluginLabels={pluginLabels} />
+          <div className="flex items-center gap-3">
+            <EventViewer />
+            <AgentSelector />
           </div>
         </header>
 

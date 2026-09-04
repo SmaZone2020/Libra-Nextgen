@@ -69,12 +69,12 @@ export function MobileTabBar({
     : TABS.findIndex((tab) => tab.isActive(pathname));
 
   return (
-    <div className="fixed bottom-[calc(35px+env(safe-area-inset-bottom))] left-5 right-5 z-40 sm:hidden">
-      <div className="relative rounded-[35px] border border-neutral-200/70 bg-white/70 shadow-lg shadow-black/10 backdrop-blur-md dark:border-neutral-800/80 dark:bg-neutral-900/75">
+    <div className="fixed bottom-[calc(35px+env(safe-area-inset-bottom))] left-4 right-4 z-40 sm:hidden">
+      <div className="relative rounded-[26px] border border-neutral-200/70 bg-white/70 shadow-lg shadow-black/10 backdrop-blur-md dark:border-neutral-800/80 dark:bg-neutral-900/75">
         {activeIndex >= 0 && (
           <motion.div
             aria-hidden="true"
-            className="pointer-events-none absolute bottom-1 top-1 rounded-[28px] bg-primary"
+            className="pointer-events-none absolute bottom-1 top-1 rounded-[20px] bg-accent/10"
             initial={false}
             animate={{
               left: `${(activeIndex / SLOT_COUNT) * 100}%`,
@@ -84,7 +84,7 @@ export function MobileTabBar({
           />
         )}
 
-        <div className="relative z-10 flex">
+        <div className="relative z-10 flex px-2">
           {TABS.map((tab) => {
             const active = !appsOpen && tab.isActive(pathname);
             const Icon = active ? tab.iconActive : tab.icon;
@@ -94,8 +94,8 @@ export function MobileTabBar({
                 type="button"
                 aria-label={t(tab.labelKey)}
                 onClick={() => navigate(tab.to)}
-                className={`flex min-w-0 flex-1 flex-col items-center justify-center gap-0.5 py-2.5 outline-none transition-colors ${
-                  active ? 'text-white' : 'text-neutral-500 dark:text-neutral-400'
+                className={`flex min-w-0 flex-1 flex-col items-center justify-center gap-0.5 py-2 outline-none transition-colors ${
+                  active ? 'text-accent' : 'text-neutral-500 dark:text-neutral-400'
                 }`}
               >
                 <span
@@ -116,8 +116,8 @@ export function MobileTabBar({
             type="button"
             aria-label={t('mobile.apps')}
             onClick={onAppsToggle}
-            className={`flex min-w-0 flex-1 flex-col items-center justify-center gap-0.5 py-2.5 outline-none transition-colors ${
-              appsOpen ? 'text-white' : 'text-neutral-500 dark:text-neutral-400'
+            className={`flex min-w-0 flex-1 flex-col items-center justify-center gap-0.5 py-2 outline-none transition-colors ${
+              appsOpen ? 'text-accent' : 'text-neutral-500 dark:text-neutral-400'
             }`}
           >
             <span
