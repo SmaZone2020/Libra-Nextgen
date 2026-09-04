@@ -2,7 +2,6 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using LibraNextgen.Common.Authorization;
 using LibraNextgen.Common.Models;
-using LibraNextgen.Service.Services;
 using TaskStatus = LibraNextgen.Common.Models.TaskStatus;
 
 namespace LibraNextgen.Service.Controllers;

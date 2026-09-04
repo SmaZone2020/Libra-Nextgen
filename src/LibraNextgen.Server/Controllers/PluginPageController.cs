@@ -1,7 +1,6 @@
 using System.Text;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using LibraNextgen.Service.Services;
 
 namespace LibraNextgen.Service.Controllers;
 

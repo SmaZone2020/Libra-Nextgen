@@ -2,7 +2,6 @@ using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using LibraNextgen.Common.Models;
-using LibraNextgen.Service.Services;
 
 namespace LibraNextgen.Service.Controllers;
 

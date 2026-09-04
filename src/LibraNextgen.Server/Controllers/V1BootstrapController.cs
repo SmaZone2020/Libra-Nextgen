@@ -7,7 +7,6 @@ using LibraNextgen.Common.Profiles;
 using LibraNextgen.Common.Protocol;
 using LibraNextgen.Service.Configuration;
 using LibraNextgen.Service.Profiles;
-using LibraNextgen.Service.Services;
 
 namespace LibraNextgen.Service.Controllers;
 

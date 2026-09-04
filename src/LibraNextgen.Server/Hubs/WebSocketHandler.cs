@@ -3,7 +3,6 @@ using System.Text;
 using System.Text.Json;
 using LibraNextgen.Common.Models;
 using LibraNextgen.Common.Protocol;
-using LibraNextgen.Service.Services;
 
 namespace LibraNextgen.Service.Hubs;
 

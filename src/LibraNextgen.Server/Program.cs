@@ -15,7 +15,6 @@ using LibraNextgen.Common.Protocol;
 using LibraNextgen.Service.Hubs;
 using LibraNextgen.Service.Middleware;
 using LibraNextgen.Service.Models;
-using LibraNextgen.Service.Services;
 using LibraNextgen.Service.Controllers;
 
 var builder = WebApplication.CreateBuilder(args);

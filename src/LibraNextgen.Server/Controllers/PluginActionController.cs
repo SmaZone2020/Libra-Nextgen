@@ -2,7 +2,6 @@ using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using LibraNextgen.Service.Models;
-using LibraNextgen.Service.Services;
 
 namespace LibraNextgen.Service.Controllers;
 

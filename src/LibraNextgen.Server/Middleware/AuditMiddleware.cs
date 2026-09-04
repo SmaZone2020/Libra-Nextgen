@@ -2,7 +2,6 @@ using System.Security.Claims;
 using System.Text;
 using System.Text.Json;
 using LibraNextgen.Common.Authorization;
-using LibraNextgen.Service.Services;
 
 namespace LibraNextgen.Service.Middleware;
 

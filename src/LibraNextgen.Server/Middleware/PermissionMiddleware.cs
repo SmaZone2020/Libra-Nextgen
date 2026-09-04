@@ -1,6 +1,5 @@
 using System.Security.Claims;
 using LibraNextgen.Common.Authorization;
-using LibraNextgen.Service.Services;
 
 namespace LibraNextgen.Service.Middleware;
 

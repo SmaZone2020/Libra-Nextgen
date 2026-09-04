@@ -8,7 +8,6 @@ using LibraNextgen.Common.Protocol;
 using LibraNextgen.Service.Configuration;
 using LibraNextgen.Service.Profiles;
 using LibraNextgen.Service.Models;
-using LibraNextgen.Service.Services;
 
 namespace LibraNextgen.Service.Controllers;
 
