@@ -3,10 +3,15 @@ using System.Threading;
 using System.Windows;
 using System.Windows.Threading;
 using LibraDesktop.Core;
+// UseWindowsForms adds a global using for System.Windows.Forms; alias the
+// types this file shares with WPF to keep calls unambiguous.
+using MessageBox = System.Windows.MessageBox;
+using MessageBoxButton = System.Windows.MessageBoxButton;
+using MessageBoxImage = System.Windows.MessageBoxImage;
 
 namespace LibraDesktop;
 
-public partial class App : Application
+public partial class App : System.Windows.Application
 {
     private const string MutexName = @"Local\LibraDesktop.SmaZone2020";
     private Mutex? _mutex;

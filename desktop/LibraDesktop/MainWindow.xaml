@@ -5,32 +5,8 @@
         Height="820" Width="1240"
         MinHeight="560" MinWidth="900"
         WindowStartupLocation="CenterScreen"
-        Loaded="OnLoaded">
-    <DockPanel>
-        <!-- Toolbar + status -->
-        <Border DockPanel.Dock="Top" Background="#F3F3F3" Padding="8" BorderBrush="#DDDDDD" BorderThickness="0,0,0,1">
-            <DockPanel>
-                <DockPanel DockPanel.Dock="Top">
-                    <TextBlock DockPanel.Dock="Left" Text="Entry URL:" VerticalAlignment="Center" Margin="0,0,6,0" />
-                    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
-                        <Button x:Name="ConnectButton" Content="Connect" Width="90" Margin="6,0,0,0"
-                                Click="OnConnectClick" IsDefault="True" />
-                        <Button x:Name="UpdateButton" Content="Check Update" Width="110" Margin="6,0,0,0"
-                                Click="OnUpdateClick" />
-                    </StackPanel>
-                    <TextBox x:Name="EntryUrl" VerticalContentAlignment="Center" Padding="4,2"
-                             KeyDown="OnEntryKeyDown" ToolTip="Console/server entry URL, e.g. http://127.0.0.1:5270 or your deployed console" />
-                </DockPanel>
-                <TextBlock x:Name="StatusText" Margin="0,6,0,0" Foreground="#555555" TextWrapping="Wrap" />
-            </DockPanel>
-        </Border>
-
-        <!-- Log console -->
-        <TextBox DockPanel.Dock="Bottom" x:Name="LogBox" IsReadOnly="True" Height="110"
-                 FontFamily="Consolas, Courier New" FontSize="11" VerticalScrollBarVisibility="Auto"
-                 Background="#1E1E1E" Foreground="#DCDCDC" BorderThickness="0" TextWrapping="NoWrap" />
-
-        <!-- WebView2 host (created in code so a missing runtime degrades gracefully) -->
-        <Grid x:Name="HostArea" ClipToBounds="True" />
-    </DockPanel>
+        Loaded="OnLoaded"
+        Closing="OnClosing">
+    <!-- Full-bleed WebView2 host; all controls live in the tray menu. -->
+    <Grid x:Name="HostArea" ClipToBounds="True" />
 </Window>
