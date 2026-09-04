@@ -16,9 +16,17 @@ import { consoleWs } from '../ws/consoleWs';
 const RETRY_INTERVAL = 10_000;
 const MAX_RETRIES = 15;
 
-export function NetworkOverlay() {
+export function NetworkOverlay({
+  initiallyOffline = false,
+  onRecovered,
+}: {
+  /** Start already offline (used at app boot when the backend is unreachable). */
+  initiallyOffline?: boolean;
+  /** Called when connectivity comes back and the overlay hides itself. */
+  onRecovered?: () => void;
+} = {}) {
   const { t } = useTranslation();
-  const [offline, setOffline] = useState(false);
+  const [offline, setOffline] = useState(initiallyOffline);
   const [gaveUp, setGaveUp] = useState(false);
   const [retryCount, setRetryCount] = useState(0);
   const [countdown, setCountdown] = useState(RETRY_INTERVAL / 1000);
@@ -81,6 +89,7 @@ export function NetworkOverlay() {
     setGaveUp(false);
     setRetryCount(0);
     setOnNetworkRecovered(null);
+    onRecovered?.();
   };
 
   const startRetry = () => {
@@ -120,6 +129,12 @@ export function NetworkOverlay() {
       clearTimers();
       startRetry();
     });
+
+    // Boot-time offline: show the overlay immediately and start retrying.
+    if (initiallyOffline) {
+      consoleWs.disconnect();
+      startRetry();
+    }
 
     return () => {
       clearTimers();

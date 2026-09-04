@@ -27,9 +27,16 @@ export function App() {
 
   useEffect(() => {
     let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
     (async () => {
       try {
-        const ns = await checkSetupStatus();
+        // Never let the boot probe hang forever (unreachable host, firewall…).
+        const ns = await Promise.race([
+          checkSetupStatus(),
+          new Promise<never>((_, reject) => {
+            timer = setTimeout(() => reject(new Error('boot probe timed out')), 6000);
+          }),
+        ]);
         if (cancelled) return;
         setNeedsSetup(ns);
         setBackendReachable(true);
@@ -37,10 +44,11 @@ export function App() {
         if (cancelled) return;
         setBackendReachable(false);
       } finally {
+        if (timer) clearTimeout(timer);
         if (!cancelled) setChecking(false);
       }
     })();
-    return () => { cancelled = true; };
+    return () => { cancelled = true; if (timer) clearTimeout(timer); };
   }, []);
 
   // Fetch agreement status whenever the user changes.
@@ -111,9 +119,15 @@ export function App() {
   }, []);
 
   if (backendReachable === false) {
+    // Backend is down from the very start: show the disconnect page (with the
+    // backend-address editor) instead of a blank/Loading screen. On recovery
+    // we reboot the boot flow so setup/login state is evaluated fresh.
     return (
       <div className="min-h-screen bg-neutral-50 dark:bg-neutral-950">
-        <NetworkOverlay />
+        <NetworkOverlay
+          initiallyOffline
+          onRecovered={() => window.location.reload()}
+        />
       </div>
     );
   }
