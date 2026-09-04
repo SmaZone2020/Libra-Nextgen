@@ -1,0 +1,170 @@
+# Publish release assets from a 1.2.3-style tag (single-branch workflow):
+#   libra-shell-win-x64-{tag}.zip          WPF desktop shell (self-contained exe)
+#   libra-desktop-win-x64-{tag}.zip        backend bundle consumed by shell Check
+#                                          Update: self-contained server + console
+#                                          + version.json (contract: desktop/README.md)
+#   libra-webapp-{tag}.zip                 console SPA static build
+#   libra-service-win-x64-{tag}.zip        self-contained server, win-x64, no SPA
+#   libra-service-linux-x64-{tag}.zip      self-contained server, linux-x64, no SPA
+# Every zip ships with a sibling .sha256. Agent templates are published by
+# templates.yml on the same tag.
+# Trigger: pushing a tag (1.2.3) or workflow_dispatch with an optional tag_name.
+
+name: Publish Release Assets
+
+on:
+  push:
+    tags: ['*.*.*']
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: 'Release tag to publish under (default: current git ref)'
+        required: false
+
+permissions:
+  contents: write
+
+env:
+  TAG: ${{ github.event.inputs.tag_name || github.ref_name }}
+
+jobs:
+  assets:
+    name: webapp / service / desktop bundle
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: src/console/package-lock.json
+
+      - name: Build console SPA
+        working-directory: src/console
+        run: |
+          npm ci
+          npm run build
+
+      - name: Publish server (win-x64, self-contained, single file)
+        run: |
+          dotnet publish src/LibraNextgen.Server/LibraNextgen.Server.csproj \
+            -c Release -r win-x64 --self-contained \
+            -p:PublishSingleFile=true -p:DebugType=None -p:DebugSymbols=false \
+            -o stage-win
+
+      - name: Publish server (linux-x64, self-contained, single file)
+        run: |
+          dotnet publish src/LibraNextgen.Server/LibraNextgen.Server.csproj \
+            -c Release -r linux-x64 --self-contained \
+            -p:PublishSingleFile=true -p:DebugType=None -p:DebugSymbols=false \
+            -o stage-linux
+
+      - name: Assemble zips + sha256
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p assets out/bundle out/webapp out/service-win out/service-linux
+          # desktop bundle: full win publish dir + SPA + version.json
+          cp -a stage-win/. out/bundle/
+          rm -rf out/bundle/web
+          cp -a src/console/dist/. out/bundle/web/
+          printf '{"tag":"%s","backend":"LibraNextgen.Server.exe","port":5270,"webRoot":"web"}\n' \
+            "$TAG" > out/bundle/version.json
+          cp -a src/console/dist/. out/webapp/
+          cp -a stage-win/. out/service-win/
+          cp -a stage-linux/. out/service-linux/
+          (cd out/bundle       && zip -qr ../../assets/libra-desktop-win-x64-$TAG.zip .)
+          (cd out/webapp       && zip -qr ../../assets/libra-webapp-$TAG.zip .)
+          (cd out/service-win  && zip -qr ../../assets/libra-service-win-x64-$TAG.zip .)
+          (cd out/service-linux && zip -qr ../../assets/libra-service-linux-x64-$TAG.zip .)
+          cd assets
+          for f in *.zip; do sha256sum "$f" | awk '{print $1}' > "$f.sha256"; done
+          ls -la
+          cd ..
+          echo "--- desktop bundle layout ---"
+          unzip -l assets/libra-desktop-win-x64-$TAG.zip | head -12
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-assets
+          path: assets
+          retention-days: 1
+
+  shell:
+    name: desktop shell (win-x64)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Publish shell (WPF, self-contained, single file)
+        run: |
+          dotnet publish desktop/LibraDesktop/LibraDesktop.csproj `
+            -c Release -r win-x64 --self-contained `
+            -p:PublishSingleFile=true -p:DebugType=None -p:DebugSymbols=false `
+            -p:EnableCompressionInSingleFile=true `
+            -o shell-publish
+
+      - name: Zip + sha256
+        shell: pwsh
+        run: |
+          # Single-file publish leaves WPF/WebView2 native dlls (wpfgfx_cor3,
+          # WebView2Loader.dll, ...) next to the exe, so ship the whole
+          # publish dir - still zero-install, just unzip and run.
+          New-Item -ItemType Directory -Force -Path assets | Out-Null
+          Compress-Archive -Path shell-publish/* `
+            -DestinationPath assets/libra-shell-win-x64-$env:TAG.zip -CompressionLevel Optimal
+          $hash = (Get-FileHash assets/libra-shell-win-x64-$env:TAG.zip -Algorithm SHA256).Hash.ToLowerInvariant()
+          Set-Content -Path assets/libra-shell-win-x64-$env:TAG.zip.sha256 -Value $hash
+          Get-ChildItem assets | Select-Object Name, Length
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-assets-shell
+          path: assets
+          retention-days: 1
+
+  attach:
+    name: Attach to release
+    needs: [assets, shell]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Abort when any job failed
+        if: needs.assets.result != 'success' || needs.shell.result != 'success'
+        run: |
+          echo "asset build failed - nothing published"
+          exit 1
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+          pattern: release-assets*
+          merge-multiple: true
+
+      - name: List assets
+        run: ls -la release-assets
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.TAG }}
+          files: |
+            release-assets/libra-shell-win-x64-${{ env.TAG }}.zip
+            release-assets/libra-shell-win-x64-${{ env.TAG }}.zip.sha256
+            release-assets/libra-desktop-win-x64-${{ env.TAG }}.zip
+            release-assets/libra-desktop-win-x64-${{ env.TAG }}.zip.sha256
+            release-assets/libra-webapp-${{ env.TAG }}.zip
+            release-assets/libra-webapp-${{ env.TAG }}.zip.sha256
+            release-assets/libra-service-win-x64-${{ env.TAG }}.zip
+            release-assets/libra-service-win-x64-${{ env.TAG }}.zip.sha256
+            release-assets/libra-service-linux-x64-${{ env.TAG }}.zip
+            release-assets/libra-service-linux-x64-${{ env.TAG }}.zip.sha256
+          fail_on_unmatched_files: true
