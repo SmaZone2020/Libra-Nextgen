@@ -21,11 +21,19 @@ export interface NavItem {
   children?: NavChild[];
 }
 
+export interface SidebarUser {
+  username: string;
+  role: string;
+}
+
 interface SidebarProps {
   brand?: string;
   collapsed: boolean;
   items: NavItem[];
   bottomItems?: NavItem[];
+  /** Signed-in user card pinned below the bottom nav section. */
+  user?: SidebarUser | null;
+  onLogout?: () => void;
   onToggle: (v: boolean) => void;
   mobileOpen: boolean;
   onMobileClose: () => void;
@@ -57,6 +65,8 @@ export function Sidebar({
   collapsed,
   items,
   bottomItems,
+  user,
+  onLogout,
   onToggle,
   mobileOpen,
   onMobileClose,
@@ -133,6 +143,12 @@ export function Sidebar({
               <DesktopNavItem key={item.label} item={item} collapsed={collapsed} />
             ))}
           </motion.div>
+
+          {user && (
+            <div className="mt-2 pt-3 w-full shrink-0 border-t border-neutral-200 dark:border-neutral-800">
+              <SidebarUserCard user={user} collapsed={collapsed} onLogout={onLogout} />
+            </div>
+          )}
         </div>
       </aside>
 
@@ -151,14 +167,9 @@ export function Sidebar({
         <div className="flex flex-col h-full p-4 overflow-hidden">
           <div className="flex items-center justify-between mb-6">
             <span className="text-2xl font-bold text-neutral-900 dark:text-neutral-100 libre">{brand}</span>
-            <Tooltip delay={0}>
-              <Button isIconOnly aria-label="Close sidebar" size="sm" variant="ghost" onPress={onMobileClose}>
-                <LayoutSideContentLeft />
-              </Button>
-              <Tooltip.Content>
-                <p>{t('nav.collapseSidebar')}</p>
-              </Tooltip.Content>
-            </Tooltip>
+            <Button isIconOnly aria-label="Close sidebar" size="sm" variant="ghost" onPress={onMobileClose}>
+              <LayoutSideContentLeft />
+            </Button>
           </div>
 
           <nav className="flex-1 flex flex-col gap-1 overflow-y-auto">
@@ -172,6 +183,12 @@ export function Sidebar({
               <MobileNavItem key={item.label} item={item} onNavigate={onMobileClose} />
             ))}
           </div>
+
+          {user && (
+            <div className="mt-2 pt-3 w-full shrink-0 border-t border-neutral-200 dark:border-neutral-800">
+              <SidebarUserCard user={user} collapsed={false} onLogout={onLogout} />
+            </div>
+          )}
         </div>
       </aside>
     </>
@@ -486,6 +503,81 @@ function MobileNavItem({ item, onNavigate }: { item: NavItem; onNavigate: () => 
       </Button>
       {isActive && <div className="h-6 w-2 bg-blue-500 shrink-0 rounded-md" />}
     </div>
+  );
+}
+
+// ── Pinned user card ────────────────────────────────────────────────────
+
+/** Two-letter uppercase monogram rendered as a small rounded avatar. */
+function MonogramAvatar({ initials }: { initials: string }) {
+  const [first = '', second = ''] = initials.split('');
+  return (
+    <span
+      aria-hidden="true"
+      className="flex h-9 w-9 shrink-0 select-none flex-col items-center justify-center overflow-hidden rounded-xl bg-primary/10 text-[13px] font-semibold leading-[1.15] text-primary"
+    >
+      {second ? (
+        <>
+          <span>{first}</span>
+          <span>{second}</span>
+        </>
+      ) : (
+        <span>{first}</span>
+      )}
+    </span>
+  );
+}
+
+function SidebarUserCard({
+  user,
+  collapsed,
+  onLogout,
+}: {
+  user: SidebarUser;
+  collapsed: boolean;
+  onLogout?: () => void;
+}) {
+  const { t } = useTranslation();
+  const initials = user.username.slice(0, 2).toUpperCase();
+  return (
+    <Dropdown>
+      <Button
+        variant="ghost"
+        isIconOnly={collapsed}
+        aria-label={user.username}
+        className={collapsed
+          ? 'rounded-[15px]'
+          : 'w-full h-auto min-h-10 justify-start gap-3 rounded-[15px] px-2 py-1.5'}
+      >
+        <MonogramAvatar initials={initials} />
+        {!collapsed && (
+          <span className="flex min-w-0 flex-1 flex-col items-start">
+            <span className="max-w-full truncate text-sm font-medium leading-tight text-neutral-900 dark:text-neutral-100">
+              {user.username}
+            </span>
+            <span className="max-w-full truncate text-xs leading-tight text-neutral-500 dark:text-neutral-400">
+              {user.role}
+            </span>
+          </span>
+        )}
+      </Button>
+      <Dropdown.Popover>
+        <Dropdown.Menu
+          onAction={(key) => {
+            if (key === 'logout') onLogout?.();
+          }}
+        >
+          <Dropdown.Item
+            key="logout"
+            id="logout"
+            textValue={t('common.logout')}
+            className="text-danger"
+          >
+            {t('common.logout')}
+          </Dropdown.Item>
+        </Dropdown.Menu>
+      </Dropdown.Popover>
+    </Dropdown>
   );
 }
 

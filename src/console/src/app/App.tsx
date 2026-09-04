@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom';
 import { AnimatePresence, motion } from 'motion/react';
-import { Bars } from '@gravity-ui/icons';
-import { Button, Chip, Dropdown } from '@heroui/react';
+import { Button, Dropdown } from '@heroui/react';
 import { useTranslation } from 'react-i18next';
 import { Sidebar, type NavItem } from '../shared/layout/Sidebar';
 import LoginPage from '../pages/Login';
@@ -370,6 +369,8 @@ function AuthenticatedLayout({
         collapsed={collapsed}
         items={finalItems}
         bottomItems={visibleBottom}
+        user={user}
+        onLogout={onLogout}
         onToggle={onToggle}
         mobileOpen={mobileSidebarOpen}
         onMobileClose={() => setMobileSidebarOpen(false)}
@@ -400,21 +401,6 @@ function AuthenticatedLayout({
             <div className="flex-1 min-w-0">
               <PageHeader pluginLabels={pluginLabels} />
             </div>
-            <Dropdown>
-              <Button isIconOnly size="sm" variant="ghost">
-                <span className="text-sm font-medium">{user.username.slice(0, 2).toUpperCase()}</span>
-              </Button>
-              <Dropdown.Popover>
-                <Dropdown.Menu onAction={(key) => { if (key === 'logout') onLogout(); }}>
-                  <Dropdown.Item key="user" id="user" textValue={user.username} className="opacity-70">
-                    {user.username} ({user.role})
-                  </Dropdown.Item>
-                  <Dropdown.Item key="logout" id="logout" textValue={t('common.logout')} className="text-danger">
-                    {t('common.logout')}
-                  </Dropdown.Item>
-                </Dropdown.Menu>
-              </Dropdown.Popover>
-            </Dropdown>
           </div>
 
           <div className="block sm:hidden">
@@ -427,18 +413,6 @@ function AuthenticatedLayout({
             <div className="flex items-center gap-3">
               <EventViewer />
               <AgentSelector />
-              <Dropdown>
-                <Button variant="ghost">
-                  <span className="text-sm font-medium">{user.username} ({user.role})</span>
-                </Button>
-                <Dropdown.Popover>
-                  <Dropdown.Menu onAction={(key) => { if (key === 'logout') onLogout(); }}>
-                    <Dropdown.Item key="logout" id="logout" textValue={t('common.logout')} className="text-danger">
-                      {t('common.logout')}
-                    </Dropdown.Item>
-                  </Dropdown.Menu>
-                </Dropdown.Popover>
-              </Dropdown>
             </div>
           </div>
         </header>
