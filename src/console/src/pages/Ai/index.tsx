@@ -24,7 +24,8 @@ import {
   mergeSessionLists,
 } from '../../api/ai';
 import { ChatConversation, PromptSuggestion } from '../../vendor/ui-pro';
-import { AiSidebar, AiSidebarDrawer } from './AiSidebar';
+import { AiSidebar } from './AiSidebar';
+import { AiSidebarDrawer } from './AiSidebarDrawer';
 import { AiThreadMessage } from './AiThreadMessage';
 import { AiComposer } from './AiComposer';
 import { AiApprovalModal, type AiPermit } from './AiApprovalModal';

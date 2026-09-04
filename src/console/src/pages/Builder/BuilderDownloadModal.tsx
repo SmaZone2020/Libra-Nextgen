@@ -1,10 +1,11 @@
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button, Chip, Modal } from '@heroui/react';
-import { Copy, ArrowDownToLine } from '@gravity-ui/icons';
+import { ArrowDownToLine } from '@gravity-ui/icons';
 import type { BuildRecordDetail } from '../../types/models';
 import { getArtifactUrl, getBuildDownloadUrlByFormat } from '../../api/build';
 import { PLATFORM_LABEL } from './constants';
+import { CommandBlock } from './CommandBlock';
 
 interface BuilderDownloadModalProps {
   record: BuildRecordDetail | null;
@@ -130,29 +131,5 @@ export function BuilderDownloadModal({ record, onClose }: BuilderDownloadModalPr
         </Modal.Dialog>
       </Modal.Container>
     </Modal.Backdrop>
-  );
-}
-
-interface CommandBlockProps {
-  label: string;
-  text: string;
-  onCopy: (text: string) => void;
-  copied: boolean;
-}
-
-function CommandBlock({ label, text, onCopy, copied }: CommandBlockProps) {
-  return (
-    <div>
-      <div className="flex items-center justify-between mb-1">
-        <span className="text-xs font-mono text-default-500">{label}</span>
-        <Button size="sm" variant="ghost" onPress={() => onCopy(text)} className="h-7 min-w-0 px-2">
-          <Copy className="w-3 h-3" />
-          {copied ? 'Copied' : 'Copy'}
-        </Button>
-      </div>
-      <pre className="bg-default-100 rounded p-2 font-mono text-xs whitespace-pre-wrap break-all leading-5 select-all">
-        {text}
-      </pre>
-    </div>
   );
 }

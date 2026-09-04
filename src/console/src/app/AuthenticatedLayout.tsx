@@ -1,0 +1,200 @@
+import { useEffect, useState } from 'react';
+import { Routes, Route, useLocation } from 'react-router-dom';
+import { AnimatePresence, motion } from 'motion/react';
+import { Button } from '@heroui/react';
+import { useTranslation } from 'react-i18next';
+import { Sidebar, type NavItem } from '../shared/layout/Sidebar';
+import Dashboard from '../pages/Dashboard';
+import AgentsPage from '../pages/Agents';
+import AuditLogsPage from '../pages/AuditLogs';
+import ShellPage from '../pages/Shell';
+import FileManager from '../pages/FileManager';
+import SystemPage from '../pages/System';
+import SoftwareDataPage from '../pages/SoftwareData';
+import ProxyBrowserPage from '../pages/ProxyBrowser';
+import BuilderPage from '../pages/Builder';
+import AboutPage from '../pages/About';
+import SettingsPage, { SettingDetail } from '../pages/Settings';
+import PluginsPage from '../pages/Plugins';
+import AiPage from '../pages/Ai';
+import { useRegisteredPlugins } from '../plugins/registry';
+import { resolvePluginIcon } from '../plugins/icons';
+import { getAccountMe } from '../api/account';
+import { NetworkOverlay } from '../components/NetworkOverlay';
+import { EventViewer } from '../components/EventViewer';
+import type { UserPermissions } from '../types/models';
+import { sidebarItems, sidebarBottomItems } from '../config/site';
+import { PageHeader } from './PageHeader';
+import { AgentSelector } from './AgentSelector';
+
+const pageTransition = {
+  duration: 0.3,
+  ease: [0.25, 0.46, 0.45, 0.94] as const,
+};
+
+export const SIDEBAR_W = { collapsed: 72, expanded: 256 };
+
+export function AuthenticatedLayout({
+  user,
+  collapsed,
+  onToggle,
+  onLogout,
+}: {
+  user: { username: string; role: string };
+  collapsed: boolean;
+  onToggle: (v: boolean) => void;
+  onLogout: () => void;
+}) {
+  const { t } = useTranslation();
+  const location = useLocation();
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+  const [permissions, setPermissions] = useState<UserPermissions | null>(null);
+  const sidebarWidth = collapsed ? SIDEBAR_W.collapsed : SIDEBAR_W.expanded;
+  const registeredPlugins = useRegisteredPlugins();
+
+  useEffect(() => {
+    getAccountMe()
+      .then((me) => setPermissions(me.permissions))
+      .catch(() => setPermissions(null));
+  }, []);
+
+  const canSee = (to: string) => {
+    if (!permissions || permissions.fullAccess) return true;
+    const key = to === '/' ? 'dashboard' : to.replace('/', '');
+    return permissions.allowedPages.includes(key);
+  };
+
+  const NO_PADDING_ROUTES = new Set(['/shell']);
+  const FULL_HEIGHT_ROUTES = new Set(['/shell']);
+  const isAiRoute = location.pathname === '/ai' || location.pathname.startsWith('/ai/');
+  const visibleItems = sidebarItems
+    .map((item): NavItem | null => {
+      if (item.children && item.children.length > 0) {
+        const children = item.children.filter((c) => canSee(c.to));
+        if (children.length === 0) return null;
+        return { ...item, children };
+      }
+      // Plugins manager group (placeholder children) is filled below.
+      if (item.label === 'nav.pluginManager') {
+        if (!canSee(item.to)) return null;
+        return item;
+      }
+      if (!canSee(item.to)) return null;
+      return item;
+    })
+    .filter((i): i is NavItem => i !== null);
+
+  // Fill the plugin-manager group children with enabled plugin pages.
+  const pluginChildren: NavItem['children'] = registeredPlugins.map((p) => ({
+    icon: resolvePluginIcon(p.manifest.entry?.icon),
+    to: p.route,
+    label: p.manifest.name || p.pluginId,
+  }));
+  const finalItems = visibleItems.map((item) =>
+    item.label === 'nav.pluginManager'
+      ? { ...item, children: pluginChildren }
+      : item,
+  );
+
+  const visibleBottom = sidebarBottomItems.filter((i) => canSee(i.to));
+
+  // Route → display name for plugin page headers.
+  const pluginLabels = new Map(registeredPlugins.map((p) => [p.route, p.manifest.name || p.pluginId]));
+
+  return (
+    <div className="h-screen overflow-hidden bg-neutral-50 dark:bg-neutral-950">
+      <NetworkOverlay />
+      <Sidebar
+        brand="Libra Next"
+        collapsed={collapsed}
+        items={finalItems}
+        bottomItems={visibleBottom}
+        user={user}
+        onLogout={onLogout}
+        onToggle={onToggle}
+        mobileOpen={mobileSidebarOpen}
+        onMobileClose={() => setMobileSidebarOpen(false)}
+      />
+
+      <main
+        className="sm:pl-[var(--sidebar-w)] flex h-full min-w-0 flex-col transition-all duration-300"
+        style={{ '--sidebar-w': `${sidebarWidth}px` } as React.CSSProperties}
+      >
+        <header
+          className={`shrink-0 border-b border-neutral-200 bg-white dark:bg-neutral-900 dark:border-neutral-800 px-4 py-3 sm:px-6 lg:px-8`}
+        >
+          {/* Mobile: hamburger + title row */}
+          <div className="flex items-center gap-3 sm:hidden">
+            <Button
+              isIconOnly
+              size="sm"
+              variant="ghost"
+              onPress={() => setMobileSidebarOpen(true)}
+            >
+              <img
+                alt="icon"
+                className="w-8 h-8 object-cover dark:invert select-none pointer-events-none"
+                loading="lazy"
+                src="/images/icon2.webp"
+              />
+            </Button>
+            <div className="flex-1 min-w-0 flex items-center">
+              <PageHeader pluginLabels={pluginLabels} />
+              <AgentSelector className="ml-auto" />
+            </div>
+          </div>
+
+          <div className="block sm:hidden">
+            
+          </div>
+
+          {/* Desktop header row */}
+          <div className="hidden sm:flex justify-between items-center">
+            <PageHeader pluginLabels={pluginLabels} />
+            <div className="flex items-center gap-3">
+              <EventViewer />
+              <AgentSelector />
+            </div>
+          </div>
+        </header>
+
+        <div
+          className={`${FULL_HEIGHT_ROUTES.has(location.pathname) || isAiRoute ? 'flex min-h-0 flex-1 flex-col overflow-hidden' : 'min-h-0 flex-1 overflow-y-auto'} ${NO_PADDING_ROUTES.has(location.pathname) || isAiRoute ? '' : 'px-4 py-6 sm:px-6 lg:px-8'}`}
+        >
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={isAiRoute ? 'ai' : location.pathname}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -12 }}
+              initial={{ opacity: 0, y: 12 }}
+              transition={pageTransition}
+              className={FULL_HEIGHT_ROUTES.has(location.pathname) || isAiRoute ? 'flex min-h-0 flex-1 flex-col' : ''}
+            >
+              <Routes location={location}>
+                <Route path="/" element={<Dashboard />} />
+                <Route path="/agents" element={<AgentsPage />} />
+                <Route path="/shell" element={<ShellPage />} />
+                <Route path="/files" element={<FileManager />} />
+                <Route path="/audit" element={<AuditLogsPage />} />
+                <Route path="/system" element={<SystemPage />} />
+                <Route path="/othersoft" element={<SoftwareDataPage />} />
+                <Route path="/proxy" element={<ProxyBrowserPage />} />
+                <Route path="/builder" element={<BuilderPage />} />
+                <Route path="/ai" element={<AiPage />} />
+                <Route path="/ai/:sessionId" element={<AiPage />} />
+                <Route path="/settings" element={<SettingsPage />} />
+                <Route path="/settings/:settingId" element={<SettingDetail />} />
+                <Route path="/plugins" element={<PluginsPage />} />
+                <Route path="/about" element={<AboutPage />} />
+                {registeredPlugins.map((p) => {
+                  const Page = p.Page;
+                  return <Route key={p.pluginId} path={p.route} element={<Page />} />;
+                })}
+              </Routes>
+            </motion.div>
+          </AnimatePresence>
+        </div>
+      </main>
+    </div>
+  );
+}
