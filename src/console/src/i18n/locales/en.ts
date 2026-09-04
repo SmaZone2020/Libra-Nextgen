@@ -1007,7 +1007,6 @@ export default {
       backend: 'Backend address',
       refresh: 'Refresh Page',
       apply: 'Apply',
-      applyHint: 'Change the backend address here after a disconnect (e.g. http://host:5270). It is probed first; on success the page reloads and reconnects.',
       invalidOrigin: 'Enter a valid backend address (e.g. http://192.168.1.10:5270)',
       unreachableOrigin: 'That address is unreachable — check it and retry (or use Refresh Page to retry the original one)',
     },

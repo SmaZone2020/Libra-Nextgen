@@ -1006,7 +1006,6 @@ export default {
       backend: '后端地址',
       refresh: '刷新页面',
       apply: '应用',
-      applyHint: '断线后可在此修改后端地址（如 http://host:5270）；应用前会先探测连通性，通过后自动刷新重连。',
       invalidOrigin: '请输入有效的后端地址（例如 http://192.168.1.10:5270）',
       unreachableOrigin: '该地址不可达，请检查后重试（或仍可点「刷新页面」重试原地址）',
     },

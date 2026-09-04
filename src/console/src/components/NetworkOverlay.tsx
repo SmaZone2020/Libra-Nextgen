@@ -180,7 +180,6 @@ export function NetworkOverlay({
           {originError && (
             <p className="text-xs text-red-500" role="alert">{originError}</p>
           )}
-          <p className="text-[11px] text-neutral-400">{t('network.applyHint')}</p>
         </div>
 
         {!gaveUp ? (
