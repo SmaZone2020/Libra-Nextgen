@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Button } from '@heroui/react';
+import { Button, Input, TextField } from '@heroui/react';
 import { ArrowRotateLeft } from '@gravity-ui/icons';
 import {
   getToken,
   pingBackend,
   getApiOrigin,
+  setApiOriginOverride,
   setOnNetworkError,
   setOnNetworkRecovered,
   apiBase,
@@ -23,6 +24,51 @@ export function NetworkOverlay() {
   const [countdown, setCountdown] = useState(RETRY_INTERVAL / 1000);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Backend address override form
+  const [originDraft, setOriginDraft] = useState('');
+  const [savingOrigin, setSavingOrigin] = useState(false);
+  const [originError, setOriginError] = useState<string | null>(null);
+
+  // Sync the draft with the effective origin each time we go offline.
+  useEffect(() => {
+    if (offline) {
+      setOriginDraft(getApiOrigin());
+      setOriginError(null);
+    }
+  }, [offline]);
+
+  const handleApplyOrigin = async () => {
+    const raw = originDraft.trim();
+    if (!raw) {
+      setOriginError(t('network.invalidOrigin'));
+      return;
+    }
+    // Allow scheme-less input ("host:5270") by defaulting to http.
+    const candidate = /^https?:\/\//i.test(raw) ? raw : `http://${raw}`;
+    let parsed: URL;
+    try {
+      parsed = new URL(candidate);
+    } catch {
+      setOriginError(t('network.invalidOrigin'));
+      return;
+    }
+    setSavingOrigin(true);
+    setOriginError(null);
+    try {
+      const ok = await pingBackend(parsed.origin);
+      if (!ok) {
+        setOriginError(t('network.unreachableOrigin'));
+        setSavingOrigin(false);
+        return;
+      }
+      setApiOriginOverride(parsed.origin);
+      window.location.reload();
+    } catch {
+      setOriginError(t('network.unreachableOrigin'));
+      setSavingOrigin(false);
+    }
+  };
 
   const clearTimers = () => {
     if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
@@ -93,6 +139,34 @@ export function NetworkOverlay() {
 
         <h2 className="text-xl font-semibold text-neutral-900 dark:text-neutral-100 mb-2">{t('network.title')}</h2>
         <p className="text-sm text-neutral-500 mb-6">{t('network.desc')}</p>
+
+        {/* Change the backend address without leaving the page */}
+        <div className="mb-6 space-y-2 text-left">
+          <div className="text-xs font-medium text-neutral-400">{t('network.backend')}</div>
+          <div className="flex items-center gap-2">
+            <TextField
+              value={originDraft}
+              onChange={setOriginDraft}
+              variant="secondary"
+              className="min-w-0 flex-1"
+              aria-label={t('network.backend')}
+            >
+              <Input variant="secondary" placeholder="http://host:5270" />
+            </TextField>
+            <Button
+              variant="secondary"
+              className="shrink-0"
+              isDisabled={savingOrigin || originDraft.trim() === getApiOrigin()}
+              onPress={() => void handleApplyOrigin()}
+            >
+              {savingOrigin ? t('common.loading') : t('network.apply')}
+            </Button>
+          </div>
+          {originError && (
+            <p className="text-xs text-red-500" role="alert">{originError}</p>
+          )}
+          <p className="text-[11px] text-neutral-400">{t('network.applyHint')}</p>
+        </div>
 
         {!gaveUp ? (
           <div className="space-y-2 mb-6">

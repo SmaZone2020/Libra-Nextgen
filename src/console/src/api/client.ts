@@ -1,6 +1,25 @@
 
 const DEFAULT_BACKEND_PORT = 5270;
 
+/** localStorage key for a user-set backend origin (set from the disconnect page). */
+export const API_ORIGIN_OVERRIDE_KEY = 'libra.api.origin';
+
+export function getApiOriginOverride(): string {
+  try {
+    return (localStorage.getItem(API_ORIGIN_OVERRIDE_KEY) ?? '').trim();
+  } catch {
+    return '';
+  }
+}
+
+export function setApiOriginOverride(origin: string): void {
+  const value = stripTrailingSlash(origin.trim());
+  try {
+    if (value) localStorage.setItem(API_ORIGIN_OVERRIDE_KEY, value);
+    else localStorage.removeItem(API_ORIGIN_OVERRIDE_KEY);
+  } catch { /* storage unavailable */ }
+}
+
 /** Build-time base override; read lazily so tests can stub it per-case. */
 function builtinApiOrigin(): string {
   return (import.meta.env.VITE_API_BASE as string | undefined)?.trim() || '';
@@ -65,6 +84,9 @@ export function resolveApiOrigin(win?: Window | undefined): string {
 }
 
 export function getApiOrigin(): string {
+  // A user-set origin (from the disconnect page) wins over everything else.
+  const override = getApiOriginOverride();
+  if (override) return stripTrailingSlash(override);
   return resolveApiOrigin((globalThis as { window?: Window }).window);
 }
 
