@@ -9,6 +9,7 @@ export const isPluginRoute = (pathname: string) =>
 const PAGE_META_KEYS: Record<string, [string, string]> = {
   '/': ['pageMeta.dashboard.label', 'pageMeta.dashboard.subtitle'],
   '/agents': ['pageMeta.agents.label', 'pageMeta.agents.subtitle'],
+  '/agents/:agentId': ['pageMeta.agentDetail.label', 'pageMeta.agentDetail.subtitle'],
   '/shell': ['pageMeta.shell.label', 'pageMeta.shell.subtitle'],
   '/files': ['pageMeta.explorer.label', 'pageMeta.explorer.subtitle'],
   '/system': ['pageMeta.system.label', 'pageMeta.system.subtitle'],
@@ -34,7 +35,8 @@ export function PageHeader({ pluginLabels }: { pluginLabels: Map<string, string>
   const { t } = useTranslation();
   const { pathname } = useLocation();
   const keys = PAGE_META_KEYS[pathname]
-    ?? (pathname.startsWith('/ai/') ? PAGE_META_KEYS['/ai'] : undefined);
+    ?? (pathname.startsWith('/ai/') ? PAGE_META_KEYS['/ai'] : undefined)
+    ?? (pathname.startsWith('/agents/') ? PAGE_META_KEYS['/agents/:agentId'] : undefined);
   // Plugin pages resolve their heading from the enabled manifest name.
   const pluginName = isPluginRoute(pathname) ? pluginLabels.get(pathname) : undefined;
   if (!keys && !pluginName) return null;

@@ -4,6 +4,7 @@ import { AnimatePresence, motion } from 'motion/react';
 import { Sidebar, type NavItem } from '../shared/layout/Sidebar';
 import Dashboard from '../pages/Dashboard';
 import AgentsPage from '../pages/Agents';
+import AgentDetailPage from '../pages/Agents/AgentDetailPage';
 import AuditLogsPage from '../pages/AuditLogs';
 import ShellPage from '../pages/Shell';
 import FileManager from '../pages/FileManager';
@@ -159,6 +160,7 @@ export function AuthenticatedLayout({
               <Routes location={location}>
                 <Route path="/" element={<Dashboard />} />
                 <Route path="/agents" element={<AgentsPage />} />
+                <Route path="/agents/:agentId" element={<AgentDetailPage />} />
                 <Route path="/shell" element={<ShellPage />} />
                 <Route path="/files" element={<FileManager />} />
                 <Route path="/audit" element={<AuditLogsPage />} />

@@ -47,6 +47,7 @@ export default {
       plugins: { label: 'Plugins', subtitle: 'Plugin management' },
       ai: { label: 'Justitia', subtitle: 'Built-in AI agent' },
       me: { label: 'Me', subtitle: 'Account & settings' },
+      agentDetail: { label: 'Device Details', subtitle: 'Device info & quick actions' },
     },
     mobile: {
       home: 'Home',
@@ -54,6 +55,7 @@ export default {
       me: 'Me',
       apps: 'Apps',
       appsHint: 'Tap an icon to open it',
+      back: 'Back',
     },
     time: {
       justNow: 'just now',
@@ -251,6 +253,9 @@ export default {
       toastOnlineDesc: '{{id}} is now online',
       toastOffline: 'Agent Offline',
       toastOfflineDesc: '{{id}} has gone offline',
+      sleeping: 'Sleeping',
+      compromised: 'Compromised',
+      connected: 'Connected',
     },
     shell: {
       selectAgent: 'Select an online agent to open a remote shell session.',

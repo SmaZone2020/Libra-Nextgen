@@ -1,10 +1,12 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Tabs } from '@heroui/react';
+import { useNavigate } from 'react-router-dom';
+import { Button, Tabs } from '@heroui/react';
 import { getAgents, getAgent, deleteAgent } from '../../api/agents';
 import { createTask } from '../../api/tasks';
 import { AgentTable } from './AgentTable';
 import { AgentDetailModal } from './AgentDetailModal';
+import { AgentCardList } from './AgentCardList';
 import { MobileBuilderEntry } from './MobileBuilderEntry';
 import { useAgent } from '../../contexts/AgentContext';
 import { useDialog } from '../../hooks/useDialog';
@@ -12,6 +14,7 @@ import type { AgentListItem, AgentDetail } from '../../types/models';
 
 export default function AgentsPage() {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const { agentId, selectAgent, disconnect: disconnectAgent } = useAgent();
   const { confirm, alert, DialogComponent } = useDialog();
   const [tab, setTab] = useState<string>('online');
@@ -95,27 +98,53 @@ export default function AgentsPage() {
   return (
     <div className="space-y-3">
       <MobileBuilderEntry />
-      <Tabs
-        selectedKey={tab}
-        onSelectionChange={(key) => handleTabChange(String(key))}
-      >
-        <Tabs.ListContainer className="flex justify-center">
-          <Tabs.List aria-label={t('agents.agentFilters')} className="mx-auto w-md">
-            <Tabs.Tab id="all">{t('agents.all')}<Tabs.Indicator /></Tabs.Tab>
-            <Tabs.Tab id="online">{t('agents.online')}<Tabs.Indicator /></Tabs.Tab>
-            <Tabs.Tab id="offline">{t('agents.offline')}<Tabs.Indicator /></Tabs.Tab>
-          </Tabs.List>
-        </Tabs.ListContainer>
-        <Tabs.Panel id="all">
-          <AgentTable agents={agents} loading={loading} contextAgentId={contextAgentRef.current} connectedAgentId={agentId} onContextMenu={handleContextMenu} onConnect={handleConnect} onDisconnect={handleDisconnect} onViewDetails={handleViewDetails} onRemove={handleRemove} onRestart={handleRestart} onDestroy={handleDestroy} />
-        </Tabs.Panel>
-        <Tabs.Panel id="online">
-          <AgentTable agents={agents} loading={loading} contextAgentId={contextAgentRef.current} connectedAgentId={agentId} onContextMenu={handleContextMenu} onConnect={handleConnect} onDisconnect={handleDisconnect} onViewDetails={handleViewDetails} onRemove={handleRemove} onRestart={handleRestart} onDestroy={handleDestroy} />
-        </Tabs.Panel>
-        <Tabs.Panel id="offline">
-          <AgentTable agents={agents} loading={loading} contextAgentId={contextAgentRef.current} connectedAgentId={agentId} onContextMenu={handleContextMenu} onConnect={handleConnect} onDisconnect={handleDisconnect} onViewDetails={handleViewDetails} onRemove={handleRemove} onRestart={handleRestart} onDestroy={handleDestroy} />
-        </Tabs.Panel>
-      </Tabs>
+
+      {/* Mobile: filter chips + card list */}
+      <div className="space-y-3 sm:hidden">
+        <div className="flex gap-2">
+          {(['all', 'online', 'offline'] as const).map((k) => (
+            <Button
+              key={k}
+              size="sm"
+              variant={tab === k ? 'secondary' : 'ghost'}
+              className="flex-1 rounded-full"
+              onPress={() => setTab(k)}
+            >
+              {t(`agents.${k}`)}
+            </Button>
+          ))}
+        </div>
+        <AgentCardList
+          agents={agents}
+          connectedId={agentId}
+          onOpen={(id) => navigate(`/agents/${id}`)}
+        />
+      </div>
+
+      {/* Desktop: tabs + table */}
+      <div className="hidden space-y-3 sm:block">
+        <Tabs
+          selectedKey={tab}
+          onSelectionChange={(key) => handleTabChange(String(key))}
+        >
+          <Tabs.ListContainer className="flex justify-center">
+            <Tabs.List aria-label={t('agents.agentFilters')} className="mx-auto w-md">
+              <Tabs.Tab id="all">{t('agents.all')}<Tabs.Indicator /></Tabs.Tab>
+              <Tabs.Tab id="online">{t('agents.online')}<Tabs.Indicator /></Tabs.Tab>
+              <Tabs.Tab id="offline">{t('agents.offline')}<Tabs.Indicator /></Tabs.Tab>
+            </Tabs.List>
+          </Tabs.ListContainer>
+          <Tabs.Panel id="all">
+            <AgentTable agents={agents} loading={loading} contextAgentId={contextAgentRef.current} connectedAgentId={agentId} onContextMenu={handleContextMenu} onConnect={handleConnect} onDisconnect={handleDisconnect} onViewDetails={handleViewDetails} onRemove={handleRemove} onRestart={handleRestart} onDestroy={handleDestroy} />
+          </Tabs.Panel>
+          <Tabs.Panel id="online">
+            <AgentTable agents={agents} loading={loading} contextAgentId={contextAgentRef.current} connectedAgentId={agentId} onContextMenu={handleContextMenu} onConnect={handleConnect} onDisconnect={handleDisconnect} onViewDetails={handleViewDetails} onRemove={handleRemove} onRestart={handleRestart} onDestroy={handleDestroy} />
+          </Tabs.Panel>
+          <Tabs.Panel id="offline">
+            <AgentTable agents={agents} loading={loading} contextAgentId={contextAgentRef.current} connectedAgentId={agentId} onContextMenu={handleContextMenu} onConnect={handleConnect} onDisconnect={handleDisconnect} onViewDetails={handleViewDetails} onRemove={handleRemove} onRestart={handleRestart} onDestroy={handleDestroy} />
+          </Tabs.Panel>
+        </Tabs>
+      </div>
 
       <AgentDetailModal
         isOpen={modalOpen}

@@ -28,7 +28,7 @@ const TABS: MobileTab[] = [
     to: '/agents',
     icon: Display,
     iconActive: Display,
-    isActive: (p) => p === '/agents',
+    isActive: (p) => p === '/agents' || p.startsWith('/agents/'),
   },
   {
     key: 'justitia',

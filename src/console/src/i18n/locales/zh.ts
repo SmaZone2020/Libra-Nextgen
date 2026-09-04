@@ -47,6 +47,7 @@ export default {
       plugins: { label: '插件', subtitle: '上传、编辑、启用或禁用插件' },
       ai: { label: 'Justitia', subtitle: '内置 AI 智能体' },
       me: { label: '我的', subtitle: '个人中心' },
+      agentDetail: { label: '设备详情', subtitle: '设备信息与快捷操作' },
     },
     mobile: {
       home: '主页',
@@ -54,6 +55,7 @@ export default {
       me: '我的',
       apps: '应用',
       appsHint: '轻点图标打开对应功能',
+      back: '返回',
     },
     time: {
       justNow: '刚刚',
@@ -250,6 +252,9 @@ export default {
       toastOnlineDesc: '{{id}} 已上线',
       toastOffline: '设备离线',
       toastOfflineDesc: '{{id}} 已离线',
+      sleeping: '休眠',
+      compromised: '异常',
+      connected: '已连接',
     },
     shell: {
       selectAgent: '选择一台在线设备以打开远程终端会话。',
