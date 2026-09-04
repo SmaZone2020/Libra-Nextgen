@@ -1,5 +1,6 @@
 using LibraNextgen.Common.Models;
-using LibraNextgen.Service.Services;
+using LibraNextgen.Service.Services.Ai;
+using LibraNextgen.Service.Services.Channels;
 using Microsoft.Extensions.Logging.Abstractions;
 using Telegram.Bot.Types;
 using Telegram.Bot.Types.Enums;

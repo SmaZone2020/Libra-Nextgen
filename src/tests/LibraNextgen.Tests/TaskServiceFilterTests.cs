@@ -1,5 +1,5 @@
 using LibraNextgen.Common.Models;
-using LibraNextgen.Service.Services;
+using LibraNextgen.Service.Services.Tasks;
 using Xunit;
 using TaskStatus = LibraNextgen.Common.Models.TaskStatus;
 

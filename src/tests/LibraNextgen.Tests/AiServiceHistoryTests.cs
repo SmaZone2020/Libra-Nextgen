@@ -1,5 +1,5 @@
-﻿using LibraNextgen.Common.Models;
-using LibraNextgen.Service.Services;
+using LibraNextgen.Common.Models;
+using LibraNextgen.Service.Services.Ai;
 using System.Text.Json.Nodes;
 using Xunit;
 

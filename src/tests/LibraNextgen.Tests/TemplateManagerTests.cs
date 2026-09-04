@@ -1,7 +1,7 @@
 using System.IO.Compression;
 using System.Text;
 using LibraNextgen.Service.Models;
-using LibraNextgen.Service.Services;
+using LibraNextgen.Service.Services.Builder;
 using Xunit;
 
 namespace LibraNextgen.Tests;

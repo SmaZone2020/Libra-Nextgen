@@ -1,7 +1,7 @@
 using Microsoft.Extensions.Options;
 using LibraNextgen.Service.Configuration;
 using LibraNextgen.Service.Data;
-using LibraNextgen.Service.Services;
+using LibraNextgen.Service.Services.Agents;
 using Xunit;
 
 namespace LibraNextgen.Tests;

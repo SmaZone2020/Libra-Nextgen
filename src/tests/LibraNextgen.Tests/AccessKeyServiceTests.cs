@@ -1,4 +1,4 @@
-using LibraNextgen.Service.Services;
+using LibraNextgen.Service.Services.Auth;
 using Xunit;
 
 namespace LibraNextgen.Tests;

@@ -3,7 +3,7 @@ using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 using LibraNextgen.Common.Models;
-using LibraNextgen.Service.Services;
+using LibraNextgen.Service.Services.Auth;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
 using MongoDB.Driver;
