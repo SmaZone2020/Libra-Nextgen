@@ -634,29 +634,32 @@ export default function AiPage() {
           <ChatConversation.Content className={`flex flex-col ${!session?.messages.length ? 'h-full' : ''}`}>
             <div className="m-auto flex w-full sm:w-[80%] flex-col gap-6 px-4 pb-4">
               {showEmptyState ? (
-                <div className="flex h-[80vh] flex-1 flex-col items-center justify-center">
+                <div className="flex min-h-full w-full flex-1 flex-col items-center justify-center py-4">
                   <PromptSuggestion>
                     <PromptSuggestion.Header>
                       <PromptSuggestion.Title className='text-center'>
                         <img
                           alt="icon"
-                          className="w-50 h-50 mx-auto object-cover dark:invert select-none pointer-events-none"
+                          className="w-28 h-28 sm:w-50 sm:h-50 mx-auto object-cover dark:invert select-none pointer-events-none"
                           loading="lazy"
                           src="/images/icon2.webp"
                         />
                         {t("ai.heroTitle")}
                       </PromptSuggestion.Title>
                     </PromptSuggestion.Header>
-                    <PromptSuggestion.Items>
-                      {suggestedPrompts.map((prompt) => (
-                        <PromptSuggestion.Item
-                          key={prompt}
-                          onPress={() => canSend && void send(prompt)}
-                        >
-                          {prompt}
-                        </PromptSuggestion.Item>
-                      ))}
-                    </PromptSuggestion.Items>
+                    {/* Suggested prompts are desktop-only; mobile keeps the hero. */}
+                    <div className="hidden sm:block">
+                      <PromptSuggestion.Items>
+                        {suggestedPrompts.map((prompt) => (
+                          <PromptSuggestion.Item
+                            key={prompt}
+                            onPress={() => canSend && void send(prompt)}
+                          >
+                            {prompt}
+                          </PromptSuggestion.Item>
+                        ))}
+                      </PromptSuggestion.Items>
+                    </div>
                   </PromptSuggestion>
                 </div>
               ) : (
