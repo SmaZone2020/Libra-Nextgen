@@ -50,7 +50,7 @@ export function AgentCard({
           )}
         </div>
         <div className="truncate text-xs text-neutral-500 dark:text-neutral-400">
-          {agent.ipAddress} · {agent.osVersion}
+          {agent.osVersion}
         </div>
         <div className="mt-1 flex items-center gap-1.5 text-xs">
           <span className={`size-1.5 shrink-0 rounded-full ${tone.dot}`} />
