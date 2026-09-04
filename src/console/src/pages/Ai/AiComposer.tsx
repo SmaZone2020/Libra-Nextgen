@@ -129,7 +129,6 @@ export function AiComposer({
 
   return (
     <>
-      {/* Aurora 渐变定义:供最高档位文本与图标共用(#aurora-grad) */}
       <svg width="0" height="0" className="absolute" aria-hidden="true" focusable="false">
         <defs>
           <linearGradient id="aurora-grad" x1="0%" y1="0%" x2="100%" y2="0%">
@@ -146,13 +145,14 @@ export function AiComposer({
         onValueChange={setValue}
         onStop={onStop}
         onSubmit={handleSubmit}
-        className={permission === 3 ? 'aurora-input aurora-input--active' : undefined}
+        className={`${permission === 3 ? 'aurora-input aurora-input--active' : undefined} rounded-[28px]`}
       >
-        <PromptInput.Shell>
-          <PromptInput.Content>
+        <PromptInput.Shell className="rounded-[28px]">
+          <PromptInput.Content className="rounded-[28px]">
             <PromptInput.TextArea
               placeholder={t('ai.inputPlaceholder')}
               aria-label={t('ai.inputPlaceholder')}
+              className="rounded-[28px]"
             />
           </PromptInput.Content>
           <PromptInput.Toolbar>
@@ -167,10 +167,6 @@ export function AiComposer({
                       className="h-9 min-w-0 max-w-[220px] shrink-0 gap-1.5 rounded-field border border-default-200 px-3 dark:border-default-800"
                     >
                       <BrandIcon name={activeProvider?.name ?? ''} className="size-4" />
-                      <span className="min-w-0 flex-1 truncate text-sm text-foreground">
-                        {activeProvider?.name ?? t('ai.provider')}
-                      </span>
-                      <span className="shrink-0 text-xs text-muted">/</span>
                       <span className="min-w-0 max-w-[90px] truncate text-sm text-foreground">
                         {activeModel ? formatModelDisplay(activeModel) : t('ai.model')}
                       </span>
@@ -204,7 +200,7 @@ export function AiComposer({
                   aria-label={t('ai.justitiaTier')}
                   variant="ghost"
                   isDisabled={isGenerating}
-                  className="h-9 w-[140px] shrink-0 gap-1"
+                  className="h-9 w-[140px] shrink-0 gap-1 rounded-[15px]"
                 >
                   {/* Blur transition for icon + label whenever the tier key changes. */}
                   <AnimatePresence mode="wait" initial={false}>
@@ -214,17 +210,16 @@ export function AiComposer({
                       initial={{ opacity: 0, filter: 'blur(6px)' }}
                       animate={{ opacity: 1, filter: 'blur(0px)' }}
                       exit={{ opacity: 0, filter: 'blur(6px)' }}
-                      transition={{ duration: 0.18, ease: 'easeOut' }}
+                      transition={{ duration: 0.14, ease: 'easeOut' }}
                     >
                       {(() => {
                         const TierIcon = activeTier?.icon ?? JUSTITIA_TIERS[permission]?.icon;
                         if (!TierIcon) return null;
-                        // 最高档位:图标用 SVG 渐变填充 + 流动辉光(避免 background-clip 导致的变白)
                         return activeTierIndex === 3
                           ? <TierIcon className="aurora-icon" fill="url(#aurora-grad)" />
                           : <TierIcon />;
                       })()}
-                      <span className={`text-sm ml-1 font-medium ${activeTierIndex === 3 ? 'aurora-text' : ''}`}>
+                      <span className={`text-sm ml-2 font-medium ${activeTierIndex === 3 ? 'aurora-text' : ''}`}>
                         {activeTier?.name ?? JUSTITIA_TIERS[permission]?.name}
                       </span>
                     </motion.span>

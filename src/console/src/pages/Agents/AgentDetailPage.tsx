@@ -196,23 +196,6 @@ export default function AgentDetailPage() {
             </div>
           </div>
 
-          {/* Info */}
-          <div className="space-y-1 rounded-2xl border border-neutral-200 bg-white p-4 dark:border-neutral-800 dark:bg-neutral-900">
-            {infoRows.map(([label, value]) => (
-              <div key={label} className="flex justify-between gap-3 text-sm">
-                <span className="shrink-0 text-neutral-500 dark:text-neutral-400">{label}</span>
-                <span className="min-w-0 truncate text-right text-neutral-900 dark:text-neutral-100">
-                  {value}
-                </span>
-              </div>
-            ))}
-            {detail.hardware && (
-              <div className="pt-2">
-                <HardwareAccordion hardware={detail.hardware} t={t} />
-              </div>
-            )}
-          </div>
-
           {/* Danger zone */}
           <div className="overflow-hidden rounded-2xl border border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-900">
             <Button
@@ -240,6 +223,24 @@ export default function AgentDetailPage() {
               <span className="text-sm font-medium text-danger">{t('agents.remove')}</span>
             </Button>
           </div>
+          
+          {/* Info */}
+          <div className="space-y-1 rounded-2xl border border-neutral-200 bg-white p-4 dark:border-neutral-800 dark:bg-neutral-900">
+            {infoRows.map(([label, value]) => (
+              <div key={label} className="flex justify-between gap-3 text-sm">
+                <span className="shrink-0 text-neutral-500 dark:text-neutral-400">{label}</span>
+                <span className="min-w-0 truncate text-right text-neutral-900 dark:text-neutral-100">
+                  {value}
+                </span>
+              </div>
+            ))}
+            {detail.hardware && (
+              <div className="pt-2">
+                <HardwareAccordion hardware={detail.hardware} t={t} />
+              </div>
+            )}
+          </div>
+
         </>
       )}
 

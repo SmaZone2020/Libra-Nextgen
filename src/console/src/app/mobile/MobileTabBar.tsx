@@ -95,18 +95,18 @@ export function MobileTabBar({
     void controls.start({
       left,
       width,
-      scale: [1, 1.05, 1],
+      scale: [1, 1.15, 1],
       transition: {
-        left: { type: 'tween', duration: 0.4, ease: 'easeInOut' },
-        width: { type: 'tween', duration: 0.4, ease: 'easeInOut' },
-        scale: { duration: 0.4, times: [0, 0.5, 1], ease: 'easeInOut' },
+        left: { type: 'tween', duration: 0.2, ease: 'easeInOut' },
+        width: { type: 'tween', duration: 0.2, ease: 'easeInOut' },
+        scale: { duration: 0.4, times: [0, 0.2, 1], ease: 'easeInOut' },
       },
     });
   }, [activeIndex, hasMounted, controls]);
 
   return (
-    <div className="fixed bottom-[calc(35px+env(safe-area-inset-bottom))] left-4 right-4 z-40 sm:hidden">
-      <div className="relative rounded-[26px] border border-neutral-200/70 bg-white/70 shadow-lg shadow-black/10 backdrop-blur-md dark:border-neutral-800/80 dark:bg-neutral-900/75">
+    <div className="fixed bottom-[26px] left-4 right-4 z-40 sm:hidden">
+      <div className="relative rounded-[26px] h-[55px] border border-neutral-200/70 bg-white/70 shadow-lg shadow-black/10 backdrop-blur-md dark:border-neutral-800/80 dark:bg-neutral-900/75">
         {activeIndex >= 0 && (
           <motion.div
             aria-hidden="true"
@@ -127,7 +127,7 @@ export function MobileTabBar({
                 type="button"
                 aria-label={t(tab.labelKey)}
                 onClick={() => navigate(tab.to)}
-                className={`flex min-w-0 flex-1 flex-col items-center justify-center gap-0.5 py-2 outline-none transition-colors ${
+                className={`flex min-w-0 flex-1 flex-col items-center justify-center gap-1 py-2.5 outline-none transition-colors ${
                   active ? 'text-accent' : 'text-neutral-500 dark:text-neutral-400'
                 }`}
               >

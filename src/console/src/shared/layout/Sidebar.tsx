@@ -95,7 +95,7 @@ export function Sidebar({
                     alt="icon"
                     className="h-[50px] w-[50px] pointer-events-none object-cover select-none dark:invert"
                     loading="lazy"
-                    src="/images/icon.webp"
+                    src="/images/icon2.webp"
                   />
                   <span className="text-2xl font-bold whitespace-nowrap text-neutral-900 dark:text-neutral-100 libre">
                     {brand}

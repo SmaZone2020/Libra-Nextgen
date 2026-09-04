@@ -54,12 +54,6 @@ export default function AboutPage() {
             alt="icon"
             className="size-50 object-cover dark:invert"
             loading="lazy"
-            src="/images/icon.webp"
-          />
-          <img
-            alt="icon"
-            className="size-50 object-cover dark:invert"
-            loading="lazy"
             src="/images/icon2.webp"
           />
         </div>
@@ -71,8 +65,6 @@ export default function AboutPage() {
           <img src="https://img.shields.io/badge/Rust-FFFFFF?style=flat-square&logo=rust&logoColor=black" alt="Rust"/>
           <img src="https://img.shields.io/badge/TypeScript-3178C6?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript"/>
           <img src="https://img.shields.io/badge/React-61DAFB?style=flat-square&logo=react&logoColor=black" alt="React"/>
-          <img src="https://img.shields.io/badge/HeroUI-000000?style=flat-square&logo=heroui&logoColor=white" alt="HeroUI"/>
-          <img src="https://img.shields.io/badge/MongoDB-21BF3E?style=flat-square&logo=mongodb&logoColor=white" alt="MongoDB"/>
         </div>
       </div>
 

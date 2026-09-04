@@ -113,7 +113,7 @@ export default function Dashboard() {
   return (
     <div className="space-y-6">
       <div className="grid gap-3 lg:grid-cols-[minmax(0,450px)_minmax(0,1fr)_minmax(0,1fr)]">
-        <Card className="relative flex h-full w-full flex-col overflow-hidden border border-accent/20 bg-linear-to-br from-accent/12 via-surface to-surface-secondary shadow-lg shadow-accent/10 dark:border-accent/30 dark:from-accent/20 dark:via-surface dark:to-accent/8 dark:shadow-accent/5">
+        <Card className="relative flex sm:h-full h-[180px] w-full flex-col overflow-hidden border border-accent/20 bg-linear-to-br from-accent/12 via-surface to-surface-secondary shadow-lg shadow-accent/10 dark:border-accent/30 dark:from-accent/20 dark:via-surface dark:to-accent/8 dark:shadow-accent/5">
           <div
             aria-hidden="true"
             className="pointer-events-none absolute -top-12 -right-12 size-40 rounded-full bg-accent/20 blur-3xl dark:bg-accent/30"
@@ -135,31 +135,33 @@ export default function Dashboard() {
               <div className="flex flex-col gap-1">
                 <div>
                   <Card.Title>{t('dashboard.sponsor.title')}</Card.Title>
-                  <Card.Description>{t('dashboard.sponsor.description')}</Card.Description>
+                  <Card.Description>
+                    {t('dashboard.sponsor.description')}
+                    <div className="absolute right-0 sm:-bottom-12 -bottom-4 space-x-2">
+                      <Button
+                        variant="secondary"
+                        isIconOnly
+                        className="transition-all duration-200 hover:w-26 overflow-hidden group rounded-[15px]"
+                        onPress={() => window.open(GITHUB_REPO_URL, '_blank', 'noopener,noreferrer')}
+                      >
+                        <StarFill className='size-5 text-[#E3B341]'/>
+                        <span className="ml-1 hidden group-hover:block transition-opacity duration-200 whitespace-nowrap">{t('dashboard.sponsor.star')}</span>
+                      </Button>
+                      <Button
+                        variant="secondary"
+                        isIconOnly
+                        className="transition-all duration-200 hover:w-28 overflow-hidden group rounded-[15px]"
+                        onPress={() => setDonateOpen(true)}
+                      >
+                        <Heart className='size-5 text-[#FF4BBE]'/>
+                        <span className="ml-1 hidden group-hover:block transition-opacity duration-200 whitespace-nowrap">{t('dashboard.sponsor.upgrade')}</span>
+                      </Button>
+                    </div>
+                  </Card.Description>
                 </div>
               </div>
             </div>
           </Card.Header>
-          <Card.Footer className="mb-auto ml-auto flex gap-2">
-            <Button
-              variant="secondary"
-              isIconOnly
-              className="transition-all duration-200 hover:w-26 overflow-hidden group rounded-[15px]"
-              onPress={() => window.open(GITHUB_REPO_URL, '_blank', 'noopener,noreferrer')}
-            >
-              <StarFill className='size-5 text-[#E3B341]'/>
-              <span className="ml-1 hidden group-hover:block transition-opacity duration-200 whitespace-nowrap">{t('dashboard.sponsor.star')}</span>
-            </Button>
-            <Button
-              variant="secondary"
-              isIconOnly
-              className="transition-all duration-200 hover:w-28 overflow-hidden group rounded-[15px]"
-              onPress={() => setDonateOpen(true)}
-            >
-              <Heart className='size-5 text-[#FF4BBE]'/>
-              <span className="ml-1 hidden group-hover:block transition-opacity duration-200 whitespace-nowrap">{t('dashboard.sponsor.upgrade')}</span>
-            </Button>
-          </Card.Footer>
         </Card>
         <StatsCards
           stats={stats}

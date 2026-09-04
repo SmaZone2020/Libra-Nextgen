@@ -1,3 +1,4 @@
+import { Button } from '@heroui/react';
 import type { ReactNode, SVGProps, ComponentType } from 'react';
 
 export interface DrawerItem {
@@ -26,9 +27,10 @@ export function AppGridItem({
       }}
       className="flex w-full cursor-pointer flex-col items-center gap-1 outline-none select-none"
     >
-      <span className="flex aspect-square w-full items-center justify-center rounded-2xl border border-neutral-200 bg-neutral-100 text-neutral-700 dark:border-neutral-800 dark:bg-neutral-800/70 dark:text-neutral-200">
+      <Button className="flex aspect-square w-[80%] h-[80%] items-center justify-center rounded-2xl border border-neutral-200 bg-neutral-100 text-neutral-700 dark:border-neutral-800 dark:bg-neutral-800/70 dark:text-neutral-200"
+        onPress={() => onOpen(item.id)}>
         <Icon className="size-6" />
-      </span>
+      </Button>
       <span className="w-full truncate text-center text-[11px] leading-tight text-neutral-600 dark:text-neutral-400">
         {item.label}
       </span>

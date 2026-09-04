@@ -118,7 +118,7 @@ export function BuilderMetadataCard({ config, set }: BuilderMetadataCardProps) {
               value={config.iconUrl || ''}
               onChange={(v) => set('iconUrl', v || undefined)}
             >
-              <Input variant="secondary" placeholder="https://example.com/icon.ico" />
+              <Input variant="secondary" placeholder="https://example.com/icon2.ico" />
             </TextField>
           </div>
         </div>
