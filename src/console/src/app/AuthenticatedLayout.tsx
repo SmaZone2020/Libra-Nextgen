@@ -185,9 +185,12 @@ export function AuthenticatedLayout({
               </Routes>
             </motion.div>
           </AnimatePresence>
+
+          {/* Clearance under content for the floating bottom nav (mobile only) */}
+          <div className="h-32 shrink-0 sm:hidden" aria-hidden="true" />
         </div>
 
-        {/* Mobile bottom navigation */}
+        {/* Mobile floating bottom navigation */}
         <MobileTabBar appsOpen={appsOpen} onAppsToggle={() => setAppsOpen((v) => !v)} />
       </main>
 
