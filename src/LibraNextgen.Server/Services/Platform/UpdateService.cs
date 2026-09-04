@@ -18,7 +18,7 @@ namespace LibraNextgen.Service.Services.Platform;
 public sealed class UpdateService
 {
     // Keep in sync with the latest published tag. LIBRA_VERSION overrides.
-    private const string DefaultVersion = "1.6.1";
+    private const string DefaultVersion = "1.6.2";
 
     public static string CurrentVersion =>
         string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("LIBRA_VERSION"))
