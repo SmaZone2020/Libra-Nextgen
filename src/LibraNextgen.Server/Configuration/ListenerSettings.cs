@@ -24,6 +24,7 @@ public static class ListenerSettingsLoader
 
     public static ListenerSettings Load()
     {
+        var settings = new ListenerSettings();
         try
         {
             if (File.Exists(SettingsPath))
@@ -31,13 +32,22 @@ public static class ListenerSettingsLoader
                 var json = File.ReadAllText(SettingsPath);
                 var parsed = System.Text.Json.JsonSerializer.Deserialize<ListenerSettings>(json);
                 if (parsed is { Port: >= 1 and <= 65535 })
-                    return parsed;
+                    settings = parsed;
             }
         }
         catch (Exception ex)
         {
             Console.WriteLine($"[settings] failed to load listener settings: {ex.Message}");
         }
-        return new ListenerSettings();
+
+        // LIBRA_LISTEN_PORT overrides file config: useful for port conflicts
+        // and for the desktop bundle (manifest port wins without touching the
+        // shared %APPDATA% settings file).
+        var portEnv = Environment.GetEnvironmentVariable("LIBRA_LISTEN_PORT");
+        if (int.TryParse(portEnv, out var port) && port is >= 1 and <= 65535)
+            settings.Port = port;
+
+        return settings;
     }
 }
+

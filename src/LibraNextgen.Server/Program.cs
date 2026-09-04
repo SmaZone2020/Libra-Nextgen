@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Hosting.Server;
 using Microsoft.AspNetCore.Hosting.Server.Features;
 using Microsoft.IdentityModel.Tokens;
+using Microsoft.Extensions.FileProviders;
 using Scalar.AspNetCore;
 using LibraNextgen.Common.Models;
 using LibraNextgen.Service.Configuration;
@@ -281,6 +282,18 @@ app.UseExceptionHandler(errorApp =>
     });
 });
 
+// Optional console static hosting. Serves the SPA from a local web/ directory
+// next to the server (desktop/local bundle) or from LIBRA_WEB_ROOT when set.
+// nginx-style deployments keep hosting the SPA externally and skip this block.
+var consoleWebRoot = ResolveConsoleWebRoot();
+if (consoleWebRoot is not null)
+{
+    app.Logger.LogInformation("Serving console SPA from {WebRoot}", consoleWebRoot);
+    app.UseStaticFiles(new StaticFileOptions
+    {
+        FileProvider = new PhysicalFileProvider(consoleWebRoot),
+    });
+}
 app.MapOpenApi();
 if (app.Environment.IsDevelopment())
 {
@@ -305,6 +318,25 @@ app.MapControllers();
 app.UseMiddleware<McpToggleMiddleware>();
 app.MapMcp("/mcp").RequireAuthorization("McpPolicy").RequireRateLimiting("mcp");
 WebSocketHandler.Map(app);
+
+// SPA fallback (only when serving the console in-process). API/beacon/ws/mcp
+// prefixes must keep 404 instead of being swallowed by index.html.
+if (consoleWebRoot is not null)
+{
+    app.MapFallback(async context =>
+    {
+        var p = context.Request.Path;
+        if (p.StartsWithSegments("/api") || p.StartsWithSegments("/ws") ||
+            p.StartsWithSegments("/mcp") || p.StartsWithSegments("/scalar") ||
+            p.StartsWithSegments("/v1"))
+        {
+            context.Response.StatusCode = StatusCodes.Status404NotFound;
+            return;
+        }
+        context.Response.ContentType = "text/html; charset=utf-8";
+        await context.Response.SendFileAsync(Path.Combine(consoleWebRoot!, "index.html"));
+    });
+}
 
 // Ensure MongoDB indexes exist before serving traffic (best-effort).
 try
@@ -332,4 +364,29 @@ catch (Exception ex)
 app.Run();
 
 /// <summary>Exposed for WebApplicationFactory-based integration tests.</summary>
+
+/// <summary>
+/// Locate a console SPA directory for in-process hosting. Resolution order:
+/// LIBRA_WEB_ROOT env, ./web next to the current directory, web next to the
+/// app base. Returns null when absent so nginx deployments are untouched.
+/// </summary>
+static string? ResolveConsoleWebRoot()
+{
+    var fromEnv = Environment.GetEnvironmentVariable("LIBRA_WEB_ROOT");
+    if (!string.IsNullOrWhiteSpace(fromEnv))
+        return Directory.Exists(fromEnv) ? Path.GetFullPath(fromEnv) : null;
+
+    foreach (var candidate in new[]
+             {
+                 Path.Combine(Directory.GetCurrentDirectory(), "web"),
+                 Path.Combine(AppContext.BaseDirectory, "web"),
+             })
+    {
+        if (Directory.Exists(candidate))
+            return Path.GetFullPath(candidate);
+    }
+    return null;
+}
+
 public partial class Program { }
+
