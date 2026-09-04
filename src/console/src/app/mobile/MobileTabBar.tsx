@@ -48,7 +48,19 @@ const TABS: MobileTab[] = [
   },
 ];
 
-const SLOT_COUNT = TABS.length + 1; // + the app-drawer trigger
+/** The sliding highlight. It is rendered inside the ACTIVE slot only; the
+ *  shared layoutId makes motion animate it from the previous slot to the next,
+ *  so it always aligns exactly with the button (no percentage math involved). */
+function TabHighlight() {
+  return (
+    <motion.span
+      layoutId="mobileTabHighlight"
+      transition={{ type: 'spring', stiffness: 320, damping: 30 }}
+      aria-hidden="true"
+      className="pointer-events-none absolute inset-x-1 inset-y-1 rounded-[20px] bg-accent/10"
+    />
+  );
+}
 
 /** Floating pill-style mobile bottom navigation (see the reference project):
  *  a translucent rounded bar hovering above the content with a spring-animated
@@ -64,27 +76,10 @@ export function MobileTabBar({
   const { pathname } = useLocation();
   const navigate = useNavigate();
 
-  const activeIndex = appsOpen
-    ? TABS.length
-    : TABS.findIndex((tab) => tab.isActive(pathname));
-
   return (
     <div className="fixed bottom-[calc(35px+env(safe-area-inset-bottom))] left-4 right-4 z-40 sm:hidden">
       <div className="relative rounded-[26px] border border-neutral-200/70 bg-white/70 shadow-lg shadow-black/10 backdrop-blur-md dark:border-neutral-800/80 dark:bg-neutral-900/75">
-        {activeIndex >= 0 && (
-          <motion.div
-            aria-hidden="true"
-            className="pointer-events-none absolute bottom-1 top-1 rounded-[20px] bg-accent/10"
-            initial={false}
-            animate={{
-              left: `${(activeIndex / SLOT_COUNT) * 100}%`,
-              width: `${100 / SLOT_COUNT}%`,
-            }}
-            transition={{ type: 'spring', stiffness: 320, damping: 30 }}
-          />
-        )}
-
-        <div className="relative z-10 flex px-2">
+        <div className="flex px-2">
           {TABS.map((tab) => {
             const active = !appsOpen && tab.isActive(pathname);
             const Icon = active ? tab.iconActive : tab.icon;
@@ -94,18 +89,19 @@ export function MobileTabBar({
                 type="button"
                 aria-label={t(tab.labelKey)}
                 onClick={() => navigate(tab.to)}
-                className={`flex min-w-0 flex-1 flex-col items-center justify-center gap-0.5 py-2 outline-none transition-colors ${
+                className={`relative flex min-w-0 flex-1 flex-col items-center justify-center gap-0.5 py-2 outline-none transition-colors ${
                   active ? 'text-accent' : 'text-neutral-500 dark:text-neutral-400'
                 }`}
               >
+                {active && <TabHighlight />}
                 <span
-                  className={`flex items-center justify-center transition-transform ${
+                  className={`relative flex items-center justify-center transition-transform ${
                     active ? 'scale-110' : ''
                   }`}
                 >
                   <Icon className="size-5" />
                 </span>
-                <span className="max-w-full truncate text-[10px] font-medium leading-none">
+                <span className="relative max-w-full truncate text-[10px] font-medium leading-none">
                   {t(tab.labelKey)}
                 </span>
               </button>
@@ -116,18 +112,19 @@ export function MobileTabBar({
             type="button"
             aria-label={t('mobile.apps')}
             onClick={onAppsToggle}
-            className={`flex min-w-0 flex-1 flex-col items-center justify-center gap-0.5 py-2 outline-none transition-colors ${
+            className={`relative flex min-w-0 flex-1 flex-col items-center justify-center gap-0.5 py-2 outline-none transition-colors ${
               appsOpen ? 'text-accent' : 'text-neutral-500 dark:text-neutral-400'
             }`}
           >
+            {appsOpen && <TabHighlight />}
             <span
-              className={`flex items-center justify-center transition-transform ${
+              className={`relative flex items-center justify-center transition-transform ${
                 appsOpen ? 'scale-110' : ''
               }`}
             >
               <Dots9 className="size-5" />
             </span>
-            <span className="max-w-full truncate text-[10px] font-medium leading-none">
+            <span className="relative max-w-full truncate text-[10px] font-medium leading-none">
               {t('mobile.apps')}
             </span>
           </button>
