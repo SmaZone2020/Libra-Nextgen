@@ -595,7 +595,7 @@ export default function AiPage() {
       )}
 
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-        {/* Mobile single-page header: session list trigger + session name */}
+        {/* Mobile single-page header: session list trigger + session name + event subscription */}
         <div className="flex w-full shrink-0 items-center border-b border-default-200/70 bg-white/80 px-2 py-1.5 backdrop-blur md:hidden dark:border-default-800 dark:bg-neutral-900/80">
           <Button
             isIconOnly
@@ -612,7 +612,15 @@ export default function AiPage() {
               {sessionTitle}
             </span>
           </div>
-          <span aria-hidden="true" className="size-9 shrink-0" />
+          <Button
+            isIconOnly
+            size="sm"
+            variant="ghost"
+            aria-label={t('ai.eventSub')}
+            onPress={() => setEventSubOpen(true)}
+          >
+            <AntennaSignal className="size-4.5" />
+          </Button>
         </div>
 
         {/* Desktop: event subscription trigger on the right */}

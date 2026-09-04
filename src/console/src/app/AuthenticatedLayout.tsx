@@ -134,7 +134,11 @@ export function AuthenticatedLayout({
         </header>
 
         <div
-          className={`${FULL_HEIGHT_ROUTES.has(location.pathname) || isAiRoute ? 'flex min-h-0 flex-1 flex-col overflow-hidden' : 'min-h-0 flex-1 overflow-y-auto'} ${NO_PADDING_ROUTES.has(location.pathname) || isAiRoute ? '' : 'px-4 py-6 sm:px-6 lg:px-8'}`}
+          className={`${FULL_HEIGHT_ROUTES.has(location.pathname) || isAiRoute ? 'flex min-h-0 flex-1 flex-col overflow-hidden' : 'min-h-0 flex-1 overflow-y-auto'} ${
+            NO_PADDING_ROUTES.has(location.pathname) || isAiRoute
+              ? 'pb-24 sm:pb-0'
+              : 'px-4 pt-6 pb-24 sm:px-6 sm:pb-6 lg:px-8'
+          }`}
         >
           <AnimatePresence mode="wait">
             <motion.div
@@ -173,9 +177,6 @@ export function AuthenticatedLayout({
               </Routes>
             </motion.div>
           </AnimatePresence>
-
-          {/* Clearance under content for the floating bottom nav (mobile only) */}
-          <div className="h-32 shrink-0 sm:hidden" aria-hidden="true" />
         </div>
 
         {/* Mobile floating bottom navigation */}
