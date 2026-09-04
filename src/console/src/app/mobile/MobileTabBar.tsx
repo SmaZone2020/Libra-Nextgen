@@ -57,7 +57,7 @@ function TabHighlight() {
       layoutId="mobileTabHighlight"
       transition={{ type: 'spring', stiffness: 320, damping: 30 }}
       aria-hidden="true"
-      className="pointer-events-none absolute inset-x-1 inset-y-1 rounded-[20px] bg-accent/10"
+      className="pointer-events-none absolute inset-x-0 inset-y-1 rounded-[18px] bg-accent/10"
     />
   );
 }
