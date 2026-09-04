@@ -174,23 +174,30 @@ export default function Dashboard() {
         <StatsCards
           stats={stats}
           compact
+          minimalOnMobile
           className="min-w-0 lg:col-span-2"
         />
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
         <SystemDistributionChart agents={agents} />
-        <TopologyGraph agents={agents} />
+        {/* Session topology is desktop-only; mobile stays light. */}
+        <div className="hidden sm:block">
+          <TopologyGraph agents={agents} />
+        </div>
       </div>
 
+      {/* Traffic chart (with its range tabs) is desktop-only. */}
       {agentIds.length > 0 && (
-        <TrafficChart
-          trafficData={trafficData}
-          agentIds={agentIds}
-          agentHosts={agentHosts}
-          range={range}
-          onRangeChange={setRange}
-        />
+        <div className="hidden sm:block">
+          <TrafficChart
+            trafficData={trafficData}
+            agentIds={agentIds}
+            agentHosts={agentHosts}
+            range={range}
+            onRangeChange={setRange}
+          />
+        </div>
       )}
 
       <Modal.Backdrop isOpen={donateOpen} onOpenChange={setDonateOpen}>
