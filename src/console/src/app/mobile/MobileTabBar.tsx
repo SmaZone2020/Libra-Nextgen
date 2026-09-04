@@ -1,7 +1,8 @@
+import { useEffect, useState } from 'react';
 import type { ComponentType, SVGProps } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { motion } from 'motion/react';
+import { motion, useAnimation } from 'motion/react';
 import { Display, Dots9, House, HouseFill, Person, PersonFill, Sparkles } from '@gravity-ui/icons';
 
 interface MobileTab {
@@ -48,23 +49,13 @@ const TABS: MobileTab[] = [
   },
 ];
 
-/** The sliding highlight. It is rendered inside the ACTIVE slot only; the
- *  shared layoutId makes motion animate it from the previous slot to the next,
- *  so it always aligns exactly with the button (no percentage math involved). */
-function TabHighlight() {
-  return (
-    <motion.span
-      layoutId="mobileTabHighlight"
-      transition={{ type: 'spring', stiffness: 320, damping: 30 }}
-      aria-hidden="true"
-      className="pointer-events-none absolute inset-x-0 inset-y-1 rounded-[18px] bg-accent/10"
-    />
-  );
-}
+const SLOT_COUNT = TABS.length + 1; // + the app-drawer trigger
 
-/** Floating pill-style mobile bottom navigation (see the reference project):
- *  a translucent rounded bar hovering above the content with a spring-animated
- *  highlight capsule that slides to the active slot. */
+/** Floating pill-style mobile bottom navigation, mirroring the reference
+ *  project (BottomNav.tsx): a container-level capsule whose left/width are
+ *  driven by useAnimation in % of the pill (the slot row has no horizontal
+ *  padding, so percentages line up exactly), and which scales up to 1.05x
+ *  while travelling — peaking at the midpoint of the path. */
 export function MobileTabBar({
   appsOpen,
   onAppsToggle,
@@ -76,10 +67,57 @@ export function MobileTabBar({
   const { pathname } = useLocation();
   const navigate = useNavigate();
 
+  const controls = useAnimation();
+  const [hasMounted, setHasMounted] = useState(false);
+
+  useEffect(() => {
+    setHasMounted(true);
+  }, []);
+
+  const activeIndex = appsOpen
+    ? TABS.length
+    : TABS.findIndex((tab) => tab.isActive(pathname));
+
+  useEffect(() => {
+    if (activeIndex < 0) return;
+
+    const left = `${(activeIndex / SLOT_COUNT) * 100}%`;
+    const width = `${100 / SLOT_COUNT}%`;
+
+    if (!hasMounted) {
+      // First paint: place the capsule without animating.
+      void controls.set({ left, width });
+      return;
+    }
+
+    // Same-duration tween for position and scale keeps the 1.05x peak at the
+    // exact middle of the slide.
+    void controls.start({
+      left,
+      width,
+      scale: [1, 1.05, 1],
+      transition: {
+        left: { type: 'tween', duration: 0.4, ease: 'easeInOut' },
+        width: { type: 'tween', duration: 0.4, ease: 'easeInOut' },
+        scale: { duration: 0.4, times: [0, 0.5, 1], ease: 'easeInOut' },
+      },
+    });
+  }, [activeIndex, hasMounted, controls]);
+
   return (
     <div className="fixed bottom-[calc(35px+env(safe-area-inset-bottom))] left-4 right-4 z-40 sm:hidden">
       <div className="relative rounded-[26px] border border-neutral-200/70 bg-white/70 shadow-lg shadow-black/10 backdrop-blur-md dark:border-neutral-800/80 dark:bg-neutral-900/75">
-        <div className="flex px-2">
+        {activeIndex >= 0 && (
+          <motion.div
+            aria-hidden="true"
+            className="pointer-events-none absolute rounded-[18px] bg-accent/10"
+            initial={false}
+            animate={controls}
+            style={{ top: 5, bottom: 5, zIndex: 0 }}
+          />
+        )}
+
+        <div className="relative z-10 flex">
           {TABS.map((tab) => {
             const active = !appsOpen && tab.isActive(pathname);
             const Icon = active ? tab.iconActive : tab.icon;
@@ -89,19 +127,18 @@ export function MobileTabBar({
                 type="button"
                 aria-label={t(tab.labelKey)}
                 onClick={() => navigate(tab.to)}
-                className={`relative flex min-w-0 flex-1 flex-col items-center justify-center gap-0.5 py-2 outline-none transition-colors ${
+                className={`flex min-w-0 flex-1 flex-col items-center justify-center gap-0.5 py-2 outline-none transition-colors ${
                   active ? 'text-accent' : 'text-neutral-500 dark:text-neutral-400'
                 }`}
               >
-                {active && <TabHighlight />}
                 <span
-                  className={`relative flex items-center justify-center transition-transform ${
+                  className={`flex items-center justify-center transition-transform ${
                     active ? 'scale-110' : ''
                   }`}
                 >
                   <Icon className="size-5" />
                 </span>
-                <span className="relative max-w-full truncate text-[10px] font-medium leading-none">
+                <span className="max-w-full truncate text-[10px] font-medium leading-none">
                   {t(tab.labelKey)}
                 </span>
               </button>
@@ -112,19 +149,18 @@ export function MobileTabBar({
             type="button"
             aria-label={t('mobile.apps')}
             onClick={onAppsToggle}
-            className={`relative flex min-w-0 flex-1 flex-col items-center justify-center gap-0.5 py-2 outline-none transition-colors ${
+            className={`flex min-w-0 flex-1 flex-col items-center justify-center gap-0.5 py-2 outline-none transition-colors ${
               appsOpen ? 'text-accent' : 'text-neutral-500 dark:text-neutral-400'
             }`}
           >
-            {appsOpen && <TabHighlight />}
             <span
-              className={`relative flex items-center justify-center transition-transform ${
+              className={`flex items-center justify-center transition-transform ${
                 appsOpen ? 'scale-110' : ''
               }`}
             >
               <Dots9 className="size-5" />
             </span>
-            <span className="relative max-w-full truncate text-[10px] font-medium leading-none">
+            <span className="max-w-full truncate text-[10px] font-medium leading-none">
               {t('mobile.apps')}
             </span>
           </button>
