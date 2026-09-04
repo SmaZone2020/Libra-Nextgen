@@ -1,8 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Routes, Route, useLocation } from 'react-router-dom';
 import { AnimatePresence, motion } from 'motion/react';
-import { Button } from '@heroui/react';
-import { useTranslation } from 'react-i18next';
 import { Sidebar, type NavItem } from '../shared/layout/Sidebar';
 import Dashboard from '../pages/Dashboard';
 import AgentsPage from '../pages/Agents';
@@ -26,6 +24,9 @@ import type { UserPermissions } from '../types/models';
 import { sidebarItems, sidebarBottomItems } from '../config/site';
 import { PageHeader } from './PageHeader';
 import { AgentSelector } from './AgentSelector';
+import { MobileTabBar } from './mobile/MobileTabBar';
+import { AppDrawer } from './mobile/AppDrawer';
+import MePage from '../pages/Me';
 
 const pageTransition = {
   duration: 0.3,
@@ -45,10 +46,9 @@ export function AuthenticatedLayout({
   onToggle: (v: boolean) => void;
   onLogout: () => void;
 }) {
-  const { t } = useTranslation();
   const location = useLocation();
-  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [permissions, setPermissions] = useState<UserPermissions | null>(null);
+  const [appsOpen, setAppsOpen] = useState(false);
   const sidebarWidth = collapsed ? SIDEBAR_W.collapsed : SIDEBAR_W.expanded;
   const registeredPlugins = useRegisteredPlugins();
 
@@ -57,6 +57,11 @@ export function AuthenticatedLayout({
       .then((me) => setPermissions(me.permissions))
       .catch(() => setPermissions(null));
   }, []);
+
+  // Close the app drawer whenever the route changes (drawer navigation, tabs…).
+  useEffect(() => {
+    setAppsOpen(false);
+  }, [location.pathname]);
 
   const canSee = (to: string) => {
     if (!permissions || permissions.fullAccess) return true;
@@ -112,8 +117,6 @@ export function AuthenticatedLayout({
         user={user}
         onLogout={onLogout}
         onToggle={onToggle}
-        mobileOpen={mobileSidebarOpen}
-        onMobileClose={() => setMobileSidebarOpen(false)}
       />
 
       <main
@@ -123,29 +126,12 @@ export function AuthenticatedLayout({
         <header
           className={`shrink-0 border-b border-neutral-200 bg-white dark:bg-neutral-900 dark:border-neutral-800 px-4 py-3 sm:px-6 lg:px-8`}
         >
-          {/* Mobile: hamburger + title row */}
+          {/* Mobile: page title row */}
           <div className="flex items-center gap-3 sm:hidden">
-            <Button
-              isIconOnly
-              size="sm"
-              variant="ghost"
-              onPress={() => setMobileSidebarOpen(true)}
-            >
-              <img
-                alt="icon"
-                className="w-8 h-8 object-cover dark:invert select-none pointer-events-none"
-                loading="lazy"
-                src="/images/icon2.webp"
-              />
-            </Button>
             <div className="flex-1 min-w-0 flex items-center">
               <PageHeader pluginLabels={pluginLabels} />
               <AgentSelector className="ml-auto" />
             </div>
-          </div>
-
-          <div className="block sm:hidden">
-            
           </div>
 
           {/* Desktop header row */}
@@ -186,6 +172,10 @@ export function AuthenticatedLayout({
                 <Route path="/settings/:settingId" element={<SettingDetail />} />
                 <Route path="/plugins" element={<PluginsPage />} />
                 <Route path="/about" element={<AboutPage />} />
+                <Route
+                  path="/me"
+                  element={<MePage user={user} permissions={permissions} onLogout={onLogout} />}
+                />
                 {registeredPlugins.map((p) => {
                   const Page = p.Page;
                   return <Route key={p.pluginId} path={p.route} element={<Page />} />;
@@ -194,7 +184,13 @@ export function AuthenticatedLayout({
             </motion.div>
           </AnimatePresence>
         </div>
+
+        {/* Mobile bottom navigation */}
+        <MobileTabBar appsOpen={appsOpen} onAppsToggle={() => setAppsOpen((v) => !v)} />
       </main>
+
+      {/* Mobile app drawer (Feishu-style) */}
+      <AppDrawer open={appsOpen} onClose={() => setAppsOpen(false)} permissions={permissions} />
     </div>
   );
 }

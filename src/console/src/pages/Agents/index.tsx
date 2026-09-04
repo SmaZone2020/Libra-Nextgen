@@ -5,6 +5,7 @@ import { getAgents, getAgent, deleteAgent } from '../../api/agents';
 import { createTask } from '../../api/tasks';
 import { AgentTable } from './AgentTable';
 import { AgentDetailModal } from './AgentDetailModal';
+import { MobileBuilderEntry } from './MobileBuilderEntry';
 import { useAgent } from '../../contexts/AgentContext';
 import { useDialog } from '../../hooks/useDialog';
 import type { AgentListItem, AgentDetail } from '../../types/models';
@@ -93,6 +94,7 @@ export default function AgentsPage() {
 
   return (
     <div className="space-y-3">
+      <MobileBuilderEntry />
       <Tabs
         selectedKey={tab}
         onSelectionChange={(key) => handleTabChange(String(key))}

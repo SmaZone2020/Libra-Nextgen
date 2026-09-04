@@ -19,6 +19,7 @@ const PAGE_META_KEYS: Record<string, [string, string]> = {
   '/about': ['pageMeta.about.label', 'pageMeta.about.subtitle'],
   '/ai': ['pageMeta.ai.label', 'pageMeta.ai.subtitle'],
   '/ai/:sessionId': ['pageMeta.ai.label', 'pageMeta.ai.subtitle'],
+  '/me': ['pageMeta.me.label', 'pageMeta.me.subtitle'],
   '/settings': ['pageMeta.settings.label', 'pageMeta.settings.subtitle'],
   '/plugins': ['pageMeta.plugins.label', 'pageMeta.plugins.subtitle'],
   '/settings/preferences': ['pageMeta.settings.label', 'pageMeta.settings.subtitle'],

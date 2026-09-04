@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import type { ComponentType, MouseEvent, ReactNode, SVGProps } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { LayoutSideContentLeft, ChevronDown } from '@gravity-ui/icons';
-import { Button, Dropdown, Label, Tooltip } from '@heroui/react';
+import { Avatar, Button, Dropdown, Label, Tooltip } from '@heroui/react';
 import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate } from 'react-router-dom';
 
@@ -35,8 +35,6 @@ interface SidebarProps {
   user?: SidebarUser | null;
   onLogout?: () => void;
   onToggle: (v: boolean) => void;
-  mobileOpen: boolean;
-  onMobileClose: () => void;
 }
 
 function isLeafActive(item: NavItem, pathname: string): boolean {
@@ -68,11 +66,7 @@ export function Sidebar({
   user,
   onLogout,
   onToggle,
-  mobileOpen,
-  onMobileClose,
 }: SidebarProps) {
-  const { t } = useTranslation();
-
   return (
     <>
       {/* Desktop sidebar */}
@@ -151,51 +145,11 @@ export function Sidebar({
           )}
         </div>
       </aside>
-
-      {/* Mobile overlay sidebar */}
-      {mobileOpen && (
-        <div
-          className="sm:hidden fixed inset-0 z-40 bg-black/50 backdrop-blur-sm"
-          onClick={onMobileClose}
-        />
-      )}
-      <aside
-        className={`fixed top-0 left-0 bottom-0 z-50 sm:hidden
-          transition-transform duration-300 ease-in-out bg-white border-r border-neutral-200 dark:bg-neutral-900 dark:border-neutral-800
-          w-64 ${mobileOpen ? 'translate-x-0' : '-translate-x-full'}`}
-      >
-        <div className="flex flex-col h-full p-4 overflow-hidden">
-          <div className="flex items-center justify-between mb-6">
-            <span className="text-2xl font-bold text-neutral-900 dark:text-neutral-100 libre">{brand}</span>
-            <Button isIconOnly aria-label="Close sidebar" size="sm" variant="ghost" onPress={onMobileClose}>
-              <LayoutSideContentLeft />
-            </Button>
-          </div>
-
-          <nav className="flex-1 flex flex-col gap-1 overflow-y-auto">
-            {items.map((item) => (
-              <MobileNavItem key={item.label} item={item} onNavigate={onMobileClose} />
-            ))}
-          </nav>
-
-          <div className="pt-4 border-t border-neutral-200 dark:border-neutral-800 space-y-2 overflow-y-auto">
-            {bottomItems?.map((item) => (
-              <MobileNavItem key={item.label} item={item} onNavigate={onMobileClose} />
-            ))}
-          </div>
-
-          {user && (
-            <div className="mt-2 pt-3 w-full shrink-0 border-t border-neutral-200 dark:border-neutral-800">
-              <SidebarUserCard user={user} collapsed={false} onLogout={onLogout} />
-            </div>
-          )}
-        </div>
-      </aside>
     </>
   );
 }
 
-// ── Desktop item ────────────────────────────────────────────────────────
+// 鈹€鈹€ Desktop item 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 
 function DesktopNavItem({ item, collapsed }: { item: NavItem; collapsed: boolean }) {
   const { t } = useTranslation();
@@ -316,7 +270,7 @@ function DesktopNavItem({ item, collapsed }: { item: NavItem; collapsed: boolean
           </AnimatePresence>
         </motion.div>
 
-        {/* Children — animated collapse with a tree guide line */}
+        {/* Children 鈥?animated collapse with a tree guide line */}
         <AnimatePresence initial={false}>
           {open && !collapsed && (
             <motion.ul
@@ -390,144 +344,6 @@ function DesktopNavItem({ item, collapsed }: { item: NavItem; collapsed: boolean
   );
 }
 
-// ── Mobile item ─────────────────────────────────────────────────────────
-
-function MobileNavItem({ item, onNavigate }: { item: NavItem; onNavigate: () => void }) {
-  const { t } = useTranslation();
-  const location = useLocation();
-  const navigate = useNavigate();
-  const hasChildren = !!item.children && item.children.length > 0;
-  const [open, setOpen] = useState(isGroupActive(item, location.pathname));
-  const groupActive = hasChildren && isGroupActive(item, location.pathname);
-
-  // Auto-expand when navigating to a route owned by this group.
-  useEffect(() => {
-    if (isGroupActive(item, location.pathname)) {
-      setOpen(true);
-    }
-  }, [item, location.pathname]);
-
-  if (hasChildren) {
-    const label = t(item.label);
-    const navigable = !!item.to;
-    const handleBody = () => {
-      if (navigable && item.to) {
-        navigate(item.to);
-        onNavigate();
-      } else {
-        setOpen((v) => !v);
-      }
-    };
-    const handleChevron = (e: MouseEvent) => {
-      e.stopPropagation();
-      setOpen((v) => !v);
-    };
-    return (
-      <div>
-        <div className="flex items-center">
-          <Button
-            variant={groupActive ? 'primary' : 'ghost'}
-            className={`flex-1 justify-start px-3 mr-1 ${groupActive ? 'rounded-[15px]' : ''}`}
-            onPress={handleBody}
-          >
-            <item.icon className="shrink-0" />
-            <span className="font-medium ml-3 flex-1 text-left">{label}</span>
-            <span
-              onClick={handleChevron}
-              onPointerDown={(e) => e.stopPropagation()}
-              className={`shrink-0 ml-1 rounded p-0.5 cursor-pointer ${
-                groupActive
-                  ? 'text-white'
-                  : 'text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-300'
-              }`}
-              aria-label={t('nav.toggleGroup')}
-              role="button"
-            >
-              <motion.span
-                animate={{ rotate: open ? 180 : 0 }}
-                transition={{ duration: 0.25 }}
-                className="block"
-              >
-                <ChevronDown className="w-4 h-4" />
-              </motion.span>
-            </span>
-          </Button>
-          {groupActive && <div className="h-6 w-2 bg-blue-500 shrink-0 rounded-md" />}
-        </div>
-
-        <AnimatePresence initial={false}>
-          {open && (
-            <motion.div
-              key="children"
-              initial={{ height: 0, opacity: 0 }}
-              animate={{ height: 'auto', opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }}
-              transition={{ duration: 0.25, ease: 'easeInOut' }}
-              className="overflow-hidden"
-            >
-              <div className="ml-[22px] pl-2 border-l border-neutral-200 dark:border-neutral-700 flex flex-col gap-0.5 py-1">
-                {item.children!.map((child) => {
-                  const isActive = location.pathname === child.to;
-                  return (
-                    <Button
-                      key={child.to}
-                      variant={isActive ? 'primary' : 'ghost'}
-                      className={`justify-start px-2 ${isActive ? 'rounded-[12px]' : ''}`}
-                      onPress={() => { navigate(child.to); onNavigate(); }}
-                    >
-                      <child.icon className="w-4 h-4 shrink-0" />
-                      <span className="ml-2 text-sm truncate">{t(child.label)}</span>
-                    </Button>
-                  );
-                })}
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </div>
-    );
-  }
-
-  // Leaf
-  const isActive = isLeafActive(item, location.pathname);
-  const label = t(item.label);
-  return (
-    <div className="flex items-center">
-      <Button
-        variant={isActive ? 'primary' : 'ghost'}
-        className={`flex-1 justify-start px-3 mr-1 ${isActive ? 'rounded-[15px]' : ''}`}
-        onPress={() => { navigate(item.to); onNavigate(); }}
-      >
-        <item.icon className="shrink-0" />
-        <span className="font-medium ml-3">{label}</span>
-      </Button>
-      {isActive && <div className="h-6 w-2 bg-blue-500 shrink-0 rounded-md" />}
-    </div>
-  );
-}
-
-// ── Pinned user card ────────────────────────────────────────────────────
-
-/** Two-letter uppercase monogram rendered as a small rounded avatar. */
-function MonogramAvatar({ initials }: { initials: string }) {
-  const [first = '', second = ''] = initials.split('');
-  return (
-    <span
-      aria-hidden="true"
-      className="flex h-9 w-9 shrink-0 select-none flex-col items-center justify-center overflow-hidden rounded-xl bg-primary/10 text-[13px] font-semibold leading-[1.15] text-primary"
-    >
-      {second ? (
-        <>
-          <span>{first}</span>
-          <span>{second}</span>
-        </>
-      ) : (
-        <span>{first}</span>
-      )}
-    </span>
-  );
-}
-
 function SidebarUserCard({
   user,
   collapsed,
@@ -549,7 +365,9 @@ function SidebarUserCard({
           ? 'rounded-[15px]'
           : 'w-full h-auto min-h-10 justify-start gap-3 rounded-[15px] px-2 py-1.5'}
       >
-        <MonogramAvatar initials={initials} />
+      <Avatar>
+        <Avatar.Fallback delayMs={600}>{user.username.slice(0, 2).toUpperCase()}</Avatar.Fallback>
+      </Avatar>
         {!collapsed && (
           <span className="flex min-w-0 flex-1 flex-col items-start">
             <span className="max-w-full truncate text-sm font-medium leading-tight text-neutral-900 dark:text-neutral-100">

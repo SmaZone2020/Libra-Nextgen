@@ -46,6 +46,16 @@ export default {
       settings: { label: 'Settings', subtitle: 'MCP Access Key Management' },
       plugins: { label: 'Plugins', subtitle: 'Plugin management' },
       ai: { label: 'Justitia', subtitle: 'Built-in AI agent' },
+      me: { label: 'Me', subtitle: 'Account & settings' },
+    },
+    mobile: {
+      home: 'Home',
+      devices: 'Devices',
+      me: 'Me',
+      apps: 'Apps',
+      sort: 'Sort',
+      sortDone: 'Done',
+      sortHint: 'Long-press a tile or tap Sort, then drag to rearrange',
     },
     time: {
       justNow: 'just now',

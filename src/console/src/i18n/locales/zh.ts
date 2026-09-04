@@ -46,6 +46,16 @@ export default {
       settings: { label: '设置', subtitle: '系统设置' },
       plugins: { label: '插件', subtitle: '上传、编辑、启用或禁用插件' },
       ai: { label: 'Justitia', subtitle: '内置 AI 智能体' },
+      me: { label: '我的', subtitle: '个人中心' },
+    },
+    mobile: {
+      home: '主页',
+      devices: '设备',
+      me: '我的',
+      apps: '应用',
+      sort: '排序',
+      sortDone: '完成',
+      sortHint: '长按图标或点「排序」后拖动调整顺序',
     },
     time: {
       justNow: '刚刚',
