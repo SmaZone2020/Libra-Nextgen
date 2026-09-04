@@ -200,10 +200,6 @@ export default {
         star: 'Star',
         donateTitle: 'Support us',
         donateDesc: 'Scan with WeChat or Alipay to support us ☕',
-        benefits: {
-          plugins: 'More quality plugins',
-          consulting: 'Better technical consultation',
-        },
       },
     },
     agents: {

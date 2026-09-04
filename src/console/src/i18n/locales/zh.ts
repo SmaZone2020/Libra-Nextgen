@@ -199,10 +199,6 @@ export default {
         star: '去Star',
         donateTitle: '赞赏支持',
         donateDesc: '使用微信或支付宝扫码赞赏，感谢支持 ☕',
-        benefits: {
-          plugins: '更多的优质插件',
-          consulting: '更好的技术咨询',
-        },
       },
     },
     agents: {

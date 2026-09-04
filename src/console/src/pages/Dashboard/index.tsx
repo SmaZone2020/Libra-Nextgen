@@ -11,7 +11,7 @@ import { TopologyGraph } from './TopologyGraph';
 import { useAgent } from '../../contexts/AgentContext';
 import type { TimeRange } from './TrafficChart';
 import { Button, Card, Modal } from '@heroui/react';
-import { Check, Heart, StarFill } from '@gravity-ui/icons';
+import { Heart, StarFill } from '@gravity-ui/icons';
 
 const GITHUB_REPO_URL = 'https://github.com/SmaZone2020/Libra-Nextgen';
 
@@ -137,16 +137,6 @@ export default function Dashboard() {
                   <Card.Title>{t('dashboard.sponsor.title')}</Card.Title>
                   <Card.Description>{t('dashboard.sponsor.description')}</Card.Description>
                 </div>
-                <ul className="flex flex-col gap-1.5">
-                  <li className="flex items-center gap-2 text-sm text-muted">
-                    <Check aria-hidden="true" className="size-4 shrink-0 text-accent" />
-                    {t('dashboard.sponsor.benefits.plugins')}
-                  </li>
-                  <li className="flex items-center gap-2 text-sm text-muted">
-                    <Check aria-hidden="true" className="size-4 shrink-0 text-accent" />
-                    {t('dashboard.sponsor.benefits.consulting')}
-                  </li>
-                </ul>
               </div>
             </div>
           </Card.Header>
