@@ -104,15 +104,22 @@ const TerminalView = forwardRef<TerminalHandle, Props>(function TerminalView(
     let ro: ResizeObserver | null = null;
     let themeObserver: MutationObserver | null = null;
 
-    // Official-demo-minimal configuration. Font stays at xterm's built-in
-    // default ("courier-new, courier, monospace") — no custom stacks. The
-    // only additions are a transparent background (with allowTransparency,
-    // xterm v5 paints black otherwise) and theme colors.
+    // Minimal config close to the official demo, hardened against the known
+    // xterm letter-spacing rendering issues:
+    //  - explicit fontFamily with a real, installed mono face ("Courier New")
+    //    so canvas measurement and DOM spans resolve to the SAME font
+    //    (generic/fallback lists can resolve differently per context)
+    //  - letterSpacing: 0 and customGlyphs: false (draw real font glyphs)
     const t = new Terminal({
       cursorBlink: true,
       cursorStyle: 'block',
       convertEol: true,
       allowTransparency: true,
+      fontFamily: '"Courier New", monospace',
+      fontSize: 14,
+      lineHeight: 1.2,
+      letterSpacing: 0,
+      customGlyphs: false,
       scrollback: 10000,
       theme: resolveTerminalTheme(),
     });
