@@ -34,7 +34,8 @@ release-assets.yml 的 electron job 用 electron-builder 产出(`libra-desktop-i
 ## 设计摘要
 
 - **跨平台**:Electron(win/linux/mac)× 架构;本地模式随包 spawn .NET Server
-  (自包含,读用户目录 libra.conf.json 决定 SQLite/Mongo 与回退),远程模式连已部署 Server;
+  (自包含,读用户目录 libra.conf.json 决定 SQLite/Mongo——启动不可达即报错退出,
+  不回退;窗口关闭行为 desktop.closeBehavior=quit/tray),远程模式连已部署 Server;
 - **界面即网页**:窗口加载本地 service 托管的 console(同源),console 检测桌面 UA 后
   渲染透明顶栏与窗口控制(既有机制);
 - **数据存储**:Server 同一二进制双存储(SQLite/Mongo),见

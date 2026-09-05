@@ -42,7 +42,7 @@ async function main() {
   if (!fs.existsSync(configPath)) {
     fs.writeFileSync(configPath, JSON.stringify({
       schemaVersion: 1,
-      storage: { mode: 'sqlite', fallback: true },
+      storage: { mode: 'sqlite' },
       listener: { port: Number(args.port || 5399), bindLoopback: true },
     }, null, 2));
   }

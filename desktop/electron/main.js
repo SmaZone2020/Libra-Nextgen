@@ -36,6 +36,8 @@ let targetUrl = DEFAULT_URL;
 let tray = null;
 let userDataDir = '';
 let installedPayload = null;
+let closeBehavior = 'quit'; // 'quit' | 'tray' — what the window close button does
+let isQuitting = false;     // real quit (tray Quit / Cmd+Q) bypasses tray-hide
 
 // Splash shown while the local backend starts, so the shell never navigates
 // to the dev URL first when a payload/baseline is present.
@@ -96,25 +98,53 @@ function loadBaselinePayload(userDataDir) {
   };
 }
 
+/** Read the desktop libra.conf.json (null when missing/unreadable). */
+function readUserConfig(userDataDir) {
+  try {
+    return JSON.parse(fs.readFileSync(path.join(userDataDir, 'libra.conf.json'), 'utf8'));
+  } catch {
+    return null;
+  }
+}
+
+/** Atomically persist libra.conf.json (single source of truth for the shell). */
+function writeUserConfig(userDataDir, config) {
+  const configPath = path.join(userDataDir, 'libra.conf.json');
+  const tmp = `${configPath}.tmp`;
+  fs.writeFileSync(tmp, JSON.stringify(config, null, 2));
+  fs.renameSync(tmp, configPath);
+}
+
 /**
  * Write a default sqlite-mode libra.conf.json when none exists: the desktop
  * shell must never fall back to the cloud default (MongoDB) silently — with
  * no reachable Mongo the backend startup bootstrap stalls for minutes.
  */
 function ensureUserConfig(userDataDir) {
-  const configPath = path.join(userDataDir, 'libra.conf.json');
-  if (fs.existsSync(configPath)) return;
+  if (readUserConfig(userDataDir)) return;
   try {
     fs.mkdirSync(userDataDir, { recursive: true });
-    fs.writeFileSync(configPath, JSON.stringify({
+    writeUserConfig(userDataDir, {
       schemaVersion: 1,
-      storage: { mode: 'sqlite', connectString: '', dbPath: '', fallback: true },
+      storage: { mode: 'sqlite', connectString: '', dbPath: '' },
       listener: { port: 5270, bindLoopback: true },
-    }, null, 2));
-    console.log('[shell] wrote default sqlite config to', configPath);
+      desktop: { closeBehavior: 'quit' },
+    });
+    console.log('[shell] wrote default sqlite config to', path.join(userDataDir, 'libra.conf.json'));
   } catch (err) {
     console.error('[shell] failed to write default config:', err.message);
   }
+}
+
+/**
+ * Close-window preference from the config: 'quit' closes the app (and stops
+ * the local service with it); 'tray' hides the window and keeps everything
+ * running. The server ignores the desktop section (unmapped keys skipped).
+ */
+function readCloseBehavior(userDataDir) {
+  const cfg = readUserConfig(userDataDir);
+  const value = cfg && cfg.desktop && cfg.desktop.closeBehavior;
+  return value === 'tray' ? 'tray' : 'quit';
 }
 
 /** Product logo for window/tray: packaged copy (resources/branding) first,
@@ -181,6 +211,8 @@ function createTray() {
         'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==');
   tray = new Tray(icon);
   const menu = Menu.buildFromTemplate([
+    { label: 'Show Libra', click: () => showMainWindow() },
+    { type: 'separator' },
     { label: 'Check for Updates…', click: () => runManualUpdate() },
     { label: 'Open Data Directory', click: () => osShell.openPath(userDataDir) },
     { label: 'Open Remote Entry…', click: () => openRemoteEntry() },
@@ -191,9 +223,7 @@ function createTray() {
   ]);
   tray.setToolTip('Libra Desktop');
   tray.setContextMenu(menu);
-  tray.on('double-click', () => {
-    if (mainWindow) { mainWindow.show(); mainWindow.focus(); }
-  });
+  tray.on('double-click', () => showMainWindow());
 }
 
 /** Spawn options for a payload: baseline pins the port and points the server
@@ -252,23 +282,28 @@ function openRemoteEntry() {
   });
 }
 
-/** Persist the storage config the service reads at startup, then restart it. */
+/** Persist the storage config the service reads at startup, then restart it.
+ *  Merges into the existing file so shell-owned sections (listener, desktop)
+ *  survive storage switches. */
 async function setStorageConfig(settings) {
-  const configPath = path.join(userDataDir, 'libra.conf.json');
-  const payload = {
-    schemaVersion: 1,
-    storage: {
-      mode: settings.mode === 'mongo' ? 'mongo' : 'sqlite',
-      connectString: settings.connectString || '',
-      dbPath: settings.dbPath || '',
-      fallback: settings.fallback !== false,
-    },
+  const existing = readUserConfig(userDataDir) || { schemaVersion: 1 };
+  existing.schemaVersion = 1;
+  existing.storage = {
+    mode: settings.mode === 'mongo' ? 'mongo' : 'sqlite',
+    connectString: settings.connectString || '',
+    dbPath: settings.dbPath || '',
   };
-  const tmp = `${configPath}.tmp`;
-  fs.writeFileSync(tmp, JSON.stringify(payload, null, 2));
-  fs.renameSync(tmp, configPath);
+  writeUserConfig(userDataDir, existing);
   await restartLocalService();
   return true;
+}
+
+/** Bring the main window back from the tray / minimized state. */
+function showMainWindow() {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  if (mainWindow.isMinimized()) mainWindow.restore();
+  mainWindow.show();
+  mainWindow.focus();
 }
 
 function showBootScreen(code, description) {
@@ -335,6 +370,16 @@ function createWindow() {
     mainWindow = null;
   });
 
+  // Window close honors the configurable close behavior (console Settings →
+  // "Close window action"): 'tray' hides to the tray with the local service
+  // alive; 'quit' quits the app (the service is reaped in will-quit).
+  mainWindow.on('close', (event) => {
+    if (isQuitting) return;
+    event.preventDefault();
+    if (closeBehavior === 'tray') mainWindow.hide();
+    else app.quit();
+  });
+
   // With a local backend present, show the splash first (never the dev URL);
   // without one (pure dev/demo) load the configured target as before.
   if (installedPayload) mainWindow.loadURL(SPLASH_URL);
@@ -381,6 +426,20 @@ ipcMain.handle('shell:run-update', async () => {
 ipcMain.handle('shell:open-data-dir', () => osShell.openPath(userDataDir));
 ipcMain.handle('shell:set-storage-config', (_event, settings) => setStorageConfig(settings));
 ipcMain.handle('shell:restart-service', () => restartLocalService());
+ipcMain.handle('shell:get-close-behavior', () => closeBehavior);
+ipcMain.handle('shell:set-close-behavior', (_event, value) => {
+  const next = value === 'tray' ? 'tray' : 'quit';
+  try {
+    const existing = readUserConfig(userDataDir) || { schemaVersion: 1 };
+    existing.desktop = { ...(existing.desktop || {}), closeBehavior: next };
+    writeUserConfig(userDataDir, existing);
+    closeBehavior = next;
+    return true;
+  } catch (err) {
+    console.error('[shell] failed to save close behavior:', err.message);
+    return false;
+  }
+});
 
 app.whenReady().then(async () => {
   applyWindowChrome();
@@ -394,6 +453,7 @@ app.whenReady().then(async () => {
   // Desktop default is SQLite; write the config before the service starts so
   // it never stalls on a missing MongoDB.
   ensureUserConfig(userDataDir);
+  closeBehavior = readCloseBehavior(userDataDir);
   installedPayload = loadPayloadManifest(userDataDir);
 
   // No userData payload yet -> use the embedded baseline service so an
@@ -463,6 +523,12 @@ app.whenReady().then(async () => {
 // Reap a backend this shell started, on quit.
 app.on('will-quit', () => {
   service.stop().catch(() => {});
+});
+
+// Mark real quits (tray Quit / Cmd+Q / OS shutdown) so the window close
+// handler never turns them into tray-hides.
+app.on('before-quit', () => {
+  isQuitting = true;
 });
 
 app.on('window-all-closed', () => {

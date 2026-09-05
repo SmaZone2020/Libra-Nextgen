@@ -22,4 +22,6 @@ contextBridge.exposeInMainWorld('libraDesktop', {
   openDataDir: () => ipcRenderer.invoke('shell:open-data-dir'),
   setStorageConfig: (settings) => ipcRenderer.invoke('shell:set-storage-config', settings),
   restartService: () => ipcRenderer.invoke('shell:restart-service'),
+  getCloseBehavior: () => ipcRenderer.invoke('shell:get-close-behavior'),
+  setCloseBehavior: (value) => ipcRenderer.invoke('shell:set-close-behavior', value),
 });

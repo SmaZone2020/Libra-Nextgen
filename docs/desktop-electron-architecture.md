@@ -55,15 +55,15 @@ Service(ASP.NET Core .NET 10,一个二进制两种形态)
   "storage": {
     "mode": "sqlite",
     "connectString": "",
-    "dbPath": "",
-    "fallback": true
+    "dbPath": ""
   },
-  "listener": { "port": 5270, "bindLoopback": true }
+  "listener": { "port": 5270, "bindLoopback": true },
+  "desktop": { "closeBehavior": "quit" }
 }
 ```
 
-- `mode`: `sqlite|mongo`;`dbPath` 空默认 `<userData>/data/libra.db`;**mongo 模式也持有 sqlite 文件**(回退底座);
-- `fallback`: mongo 启动连不上时 true→回退 sqlite 继续服务;false→带错误码退出由 UI 呈现;
+- `mode`: `sqlite|mongo`;`dbPath` 空默认 `<userData>/data/libra.db`(仅 sqlite 模式使用);
+- `desktop.closeBehavior`(壳读取,服务端忽略未知段):`quit|tray`。关闭窗口:quit=退出应用并停止本地服务;tray=隐藏到托盘、服务继续运行(托盘菜单恢复/彻底退出)。默认 `quit`;由"关闭窗口动作"设置页写入,立即生效、不重启 service;
 - 路径发现优先级:CLI `--user-data-dir` > env `LIBRA_USER_DATA_DIR` > 各 OS 应用数据默认目录(`LibraDesktop` 子目录);
 - 配置优先级(高→低):CLI 参数(`--store/--connect/--dbpath/--user-data-dir`,调试/便携)> config 文件 > env > appsettings。云部署 = 后两级,桌面 = 前两级;
 - 实现:`src/LibraNextgen.Server/Configuration/UserConfig.cs`(`UserConfigLoader.TryLoad`,解析失败/未知 schemaVersion 一律回默认,绝不阻止启动);
@@ -77,14 +77,13 @@ Service(ASP.NET Core .NET 10,一个二进制两种形态)
   → requested store
   → mongo? 启动探测(MongoClient ping,~5s)
        ├─ 通 → effective=mongo
-       ├─ 不通 + fallback → effective=sqlite(日志 + /api/system/storage 暴露 fallbackReason=mongo_unreachable)
-       └─ 不通 + 无 fallback → 错误码退出
+       └─ 不通 → 错误码退出(提示 storage.mode=sqlite;SQLite 回退已移除)
   → sqlite → 直接跑
 ```
 
-**状态端点**:`GET /api/system/storage`(鉴权内)返回 `{ requested, effective, fallbackReason, dbType }`;console 横幅与 Electron 通知共用。
+**状态端点**:`GET /api/system/storage`(鉴权内)返回 `{ requested, effective, dbType }`;console 存储设置页读取当前存储类型与切换 UI 共用。
 
-**边界(产品行为,已接受)**:切换存储 = **重启生效**(无进程内热切换);sqlite↔mongo **数据不自动迁移**(export/import 为后续独立功能);回退只发生在**启动时刻**,运行中 mongo 断连不倒回(避免数据去向漂移),用户手动"重试连接"。
+**边界(产品行为,已接受)**:切换存储 = **重启生效**(无进程内热切换);sqlite↔mongo **数据不自动迁移**(export/import 为后续独立功能);**无回退**:配置 mongo 启动不可达 → 错误码退出(壳 UI 呈现),绝不静默切到 sqlite;运行中 mongo 断连不倒换(避免数据去向漂移),用户手动"重试连接"。
 
 ## 4. Service 改造
 
@@ -121,16 +120,16 @@ HTTP/SSE/WS API 契约、JWT/RBAC、agent beacon 加密协议(RSA+AES-GCM+mallea
 ## 6. Webapp(几乎零改动)
 
 - React 19 SPA 与云端**共用同一份代码与产物**,无 UI 改动;远程模式 = 运行时 origin 切换(既有能力);
-- 新增(desktop-only,检测 `window.DesktopBridge` 存在才渲染,浏览器/云部署自动隐藏):
-  1. **存储设置段**:SQLite/Mongo 单选 + 连接串 + [测试连接](Electron 主进程 MongoClient ping 预检)+ [应用](写入 config → 重启 service → console 自动重连);
-  2. **回退横幅**:`/api/system/storage` 显示 `effective != requested` 时提示"MongoDB 连接失败,当前运行于 SQLite 单机模式(数据未迁移)"+ 重试连接按钮;
+- 新增(desktop-only,检测桌面壳存在才渲染,浏览器/云部署自动隐藏):
+  1. **存储设置段**:Tabs 选择 SQLite / MongoDB(无后缀)+ 连接串 + [应用](写入 config → 重启 service → console 自动重连);
+  2. **关闭窗口动作**:Tabs 选择 退出服务 / 缩放到托盘图标 → 写入 `desktop.closeBehavior`(见 §3),立即生效无需重启;
   3. Check Update 入口、数据目录入口、版本显示。
 - 更新通道:web 产物随每个 release 出 `libra-webapp-{tag}.zip`;Electron 静默下载校验后写 `userData/web`(目录原子换名,无需重启 service);失败/缺失 → `LIBRA_WEB_ROOT` 指向内嵌 baseline-web。
 
 ## 7. Electron 壳
 
 - 工程落点(建议):`desktop/electron/`(TypeScript,electron-builder),与 .NET sidecar 同仓;
-- 职责:spawn/探测/接管本地 service(沿用现 BackendProcess 语义:已活端口 → External 接管不重复拉起)、PayloadManager(SHA-256 强制,校验失败拒绝并保留旧版)、Updater、托盘、远程模式、存储切换编排;
+- 职责:spawn/探测/接管本地 service(沿用现 BackendProcess 语义:已活端口 → External 接管不重复拉起)、PayloadManager(SHA-256 强制,校验失败拒绝并保留旧版)、Updater、托盘(Show Libra/Quit;`desktop.closeBehavior=tray` 时窗口隐藏到托盘)、远程模式、存储切换编排、窗口关闭行为(quit/tray);
 - 更新流:
   1. **service**:用户点 Check Update → 查 GitHub Releases 最新 tag → 与本机 version.json 比对 → 下载本平台 `libra-desktop-{rid}-{tag}.zip`(service+web+version.json)→ 校验 → 停旧 service → 原子换入 `payload/latest`(旧版移入 `.prev`)→ 重启;启动探测失败自动回滚 `.prev`;
   2. **web**:静默(启动后后台),失败回退内嵌 baseline-web;
