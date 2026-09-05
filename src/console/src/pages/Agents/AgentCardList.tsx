@@ -3,18 +3,21 @@ import { Display } from '@gravity-ui/icons';
 import type { AgentListItem } from '../../types/models';
 import { AgentCard } from './AgentCard';
 
-/** Mobile card list of agents with an empty state. */
+/** Card list of agents with an empty state. */
 export function AgentCardList({
   agents,
   connectedId,
   onOpen,
   emptyLabel,
+  onContextMenu,
 }: {
   agents: AgentListItem[];
   connectedId: string;
   onOpen: (id: string) => void;
   /** Overrides the default "no agents" copy (e.g. "nothing matches the filter"). */
   emptyLabel?: string;
+  /** Optional right-click hook per card (desktop context menu). */
+  onContextMenu?: (id: string) => void;
 }) {
   const { t } = useTranslation();
 
@@ -35,6 +38,7 @@ export function AgentCardList({
           agent={agent}
           connected={agent.id === connectedId}
           onOpen={() => onOpen(agent.id)}
+          onContextMenu={onContextMenu}
         />
       ))}
     </div>

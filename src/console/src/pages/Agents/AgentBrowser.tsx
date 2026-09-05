@@ -56,10 +56,13 @@ export function AgentBrowser({
   agents,
   connectedId,
   onOpen,
+  onCardContextMenu,
 }: {
   agents: AgentListItem[];
   connectedId: string;
   onOpen: (id: string) => void;
+  /** Optional per-card right-click hook (desktop context menu). */
+  onCardContextMenu?: (id: string) => void;
 }) {
   const { t } = useTranslation();
   const [query, setQuery] = useState('');
@@ -251,6 +254,7 @@ export function AgentBrowser({
         agents={visibleAgents}
         connectedId={connectedId}
         onOpen={onOpen}
+        onContextMenu={onCardContextMenu}
         emptyLabel={agents.length > 0 ? t('agents.noMatch') : undefined}
       />
 

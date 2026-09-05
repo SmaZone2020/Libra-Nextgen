@@ -261,7 +261,7 @@ export default {
         all: 'All systems',
         windows: 'Windows',
         linux: 'Linux',
-        mac: 'macOS',
+        macos: 'macOS',
         other: 'Other',
       },
       details: 'Agent Details',

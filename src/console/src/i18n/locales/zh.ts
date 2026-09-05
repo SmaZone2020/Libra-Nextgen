@@ -260,7 +260,7 @@ export default {
         all: '全部系统',
         windows: 'Windows',
         linux: 'Linux',
-        mac: 'macOS',
+        macos: 'macOS',
         other: '其他',
       },
       details: '设备详情',

@@ -3,16 +3,19 @@ import { ArrowChevronRight } from '@gravity-ui/icons';
 import type { AgentListItem } from '../../types/models';
 import { relativeTime, statusLabel, statusTone } from './agentStatus';
 
-/** Mobile device card in the style of mainstream remote-desktop apps:
- *  avatar + hostname + status, tap to open the device detail page. */
+/** Device card in the style of mainstream remote-desktop apps:
+ *  avatar + hostname + status, tap to open the device details. */
 export function AgentCard({
   agent,
   connected,
   onOpen,
+  onContextMenu,
 }: {
   agent: AgentListItem;
   connected: boolean;
   onOpen: () => void;
+  /** Desktop context menu hook: fires with the agent id on right-click. */
+  onContextMenu?: (id: string) => void;
 }) {
   const { t } = useTranslation();
   const tone = statusTone(agent.status);
@@ -25,6 +28,14 @@ export function AgentCard({
       onKeyDown={(e) => {
         if (e.key === 'Enter' || e.key === ' ') onOpen();
       }}
+      onContextMenu={
+        onContextMenu
+          ? (e) => {
+              e.preventDefault();
+              onContextMenu(agent.id);
+            }
+          : undefined
+      }
       className={`flex w-full cursor-pointer items-center gap-3 rounded-2xl border bg-white p-3 outline-none transition-colors active:bg-neutral-50 dark:bg-neutral-900 dark:active:bg-neutral-800 ${
         connected
           ? 'border-primary/60'
