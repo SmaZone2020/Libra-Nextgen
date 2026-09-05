@@ -1,11 +1,13 @@
 # Publish release assets from a 1.2.3-style tag (single-branch workflow):
-#   libra-shell-win-x64-{tag}.zip          WPF desktop shell (self-contained exe)
-#   libra-desktop-win-x64-{tag}.zip        backend bundle consumed by shell Check
-#                                          Update: self-contained server + console
-#                                          + version.json (contract: desktop/README.md)
-#   libra-webapp-{tag}.zip                 console SPA static build
-#   libra-service-win-x64-{tag}.zip        self-contained server, win-x64, no SPA
-#   libra-service-linux-x64-{tag}.zip      self-contained server, linux-x64, no SPA
+#   libra-desktop-{rid}-{tag}.zip        per-platform desktop payload bundle
+#                                        (self-contained server + console web/
+#                                        + version.json) consumed by the
+#                                        Electron shell's Check Update
+#   libra-webapp-{tag}.zip               console SPA static build (also the
+#                                        shell's silent web update source)
+#   libra-service-{rid}-{tag}.zip        self-contained server, no SPA (cloud)
+#   (future) electron installers         electron-builder job (TODO, see below)
+# rid = win-x64 | win-arm64 | linux-x64 | linux-arm64
 # Every zip ships with a sibling .sha256. Agent templates are published by
 # templates.yml on the same tag.
 # Trigger: pushing a tag (1.2.3) or workflow_dispatch with an optional tag_name.
@@ -29,8 +31,11 @@ env:
 
 jobs:
   assets:
-    name: webapp / service / desktop bundle
+    name: server bundles (4 RID) + webapp
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        rid: [win-x64, win-arm64, linux-x64, linux-arm64]
     steps:
       - uses: actions/checkout@v4
 
@@ -50,96 +55,84 @@ jobs:
           npm ci
           npm run build
 
-      - name: Publish server (win-x64, self-contained, single file)
+      - name: Publish server (${{ matrix.rid }}, self-contained, single file)
         run: |
           dotnet publish src/LibraNextgen.Server/LibraNextgen.Server.csproj \
-            -c Release -r win-x64 --self-contained \
+            -c Release -r ${{ matrix.rid }} --self-contained \
             -p:PublishSingleFile=true -p:DebugType=None -p:DebugSymbols=false \
-            -o stage-win
-
-      - name: Publish server (linux-x64, self-contained, single file)
-        run: |
-          dotnet publish src/LibraNextgen.Server/LibraNextgen.Server.csproj \
-            -c Release -r linux-x64 --self-contained \
-            -p:PublishSingleFile=true -p:DebugType=None -p:DebugSymbols=false \
-            -o stage-linux
+            -p:EnableCompressionInSingleFile=true \
+            -o stage
 
       - name: Assemble zips + sha256
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p assets out/bundle out/webapp out/service-win out/service-linux
-          # desktop bundle: full win publish dir + SPA + version.json
-          cp -a stage-win/. out/bundle/
+          # Windows backend binary carries .exe; linux/mac do not.
+          if [[ "${{ matrix.rid }}" == win-* ]]; then BIN="LibraNextgen.Server.exe"; else BIN="LibraNextgen.Server"; fi
+          mkdir -p assets out/bundle out/service
+          cp -a stage/. out/bundle/
           rm -rf out/bundle/web
           cp -a src/console/dist/. out/bundle/web/
-          printf '{"tag":"%s","backend":"LibraNextgen.Server.exe","port":5270,"webRoot":"web"}\n' \
-            "$TAG" > out/bundle/version.json
-          cp -a src/console/dist/. out/webapp/
-          cp -a stage-win/. out/service-win/
-          cp -a stage-linux/. out/service-linux/
-          (cd out/bundle       && zip -qr ../../assets/libra-desktop-win-x64-$TAG.zip .)
-          (cd out/webapp       && zip -qr ../../assets/libra-webapp-$TAG.zip .)
-          (cd out/service-win  && zip -qr ../../assets/libra-service-win-x64-$TAG.zip .)
-          (cd out/service-linux && zip -qr ../../assets/libra-service-linux-x64-$TAG.zip .)
+          printf '{"tag":"%s","backend":"%s","port":5270,"webRoot":"web"}\n' \
+            "$TAG" "$BIN" > out/bundle/version.json
+          cp -a stage/. out/service/
+          (cd out/bundle  && zip -qr ../../assets/libra-desktop-${{ matrix.rid }}-$TAG.zip .)
+          (cd out/service && zip -qr ../../assets/libra-service-${{ matrix.rid }}-$TAG.zip .)
           cd assets
-          for f in *.zip; do sha256sum "$f" | awk '{print $1}' > "$f.sha256"; done
+          sha256sum libra-desktop-${{ matrix.rid }}-$TAG.zip | awk '{print $1}' > libra-desktop-${{ matrix.rid }}-$TAG.zip.sha256
+          sha256sum libra-service-${{ matrix.rid }}-$TAG.zip | awk '{print $1}' > libra-service-${{ matrix.rid }}-$TAG.zip.sha256
           ls -la
-          cd ..
-          echo "--- desktop bundle layout ---"
-          unzip -l assets/libra-desktop-win-x64-$TAG.zip | head -12
 
       - uses: actions/upload-artifact@v4
         with:
-          name: release-assets
+          name: release-assets-${{ matrix.rid }}
           path: assets
           retention-days: 1
 
-  shell:
-    name: desktop shell (win-x64)
-    runs-on: windows-latest
+  webapp:
+    name: webapp zip
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-node@v4
         with:
-          dotnet-version: '10.0.x'
-
-      - name: Publish shell (WPF, self-contained, single file)
+          node-version: 20
+          cache: npm
+          cache-dependency-path: src/console/package-lock.json
+      - name: Build console SPA
+        working-directory: src/console
         run: |
-          dotnet publish desktop/LibraDesktop/LibraDesktop.csproj `
-            -c Release -r win-x64 --self-contained `
-            -p:PublishSingleFile=true -p:DebugType=None -p:DebugSymbols=false `
-            -p:EnableCompressionInSingleFile=true `
-            -o shell-publish
-
+          npm ci
+          npm run build
       - name: Zip + sha256
-        shell: pwsh
+        shell: bash
         run: |
-          # Single-file publish leaves WPF/WebView2 native dlls (wpfgfx_cor3,
-          # WebView2Loader.dll, ...) next to the exe, so ship the whole
-          # publish dir - still zero-install, just unzip and run.
-          New-Item -ItemType Directory -Force -Path assets | Out-Null
-          Compress-Archive -Path shell-publish/* `
-            -DestinationPath assets/libra-shell-win-x64-$env:TAG.zip -CompressionLevel Optimal
-          $hash = (Get-FileHash assets/libra-shell-win-x64-$env:TAG.zip -Algorithm SHA256).Hash.ToLowerInvariant()
-          Set-Content -Path assets/libra-shell-win-x64-$env:TAG.zip.sha256 -Value $hash
-          Get-ChildItem assets | Select-Object Name, Length
-
+          mkdir -p assets
+          (cd src/console/dist && zip -qr ../../assets/libra-webapp-$TAG.zip .)
+          cd assets
+          sha256sum libra-webapp-$TAG.zip | awk '{print $1}' > libra-webapp-$TAG.zip.sha256
       - uses: actions/upload-artifact@v4
         with:
-          name: release-assets-shell
+          name: release-assets-webapp
           path: assets
           retention-days: 1
+
+  # TODO(electron): installer job wiring. Sources live in desktop/electron/
+  # (electron-builder, nsis win-x64/arm64, AppImage linux-x64/arm64). Each
+  # installer embeds, as extraResources, the matching RID service publish dir
+  # (baseline-service) and the console dist (baseline-web); payload updates
+  # then arrive through libra-desktop-{rid} zips above. Needs per-OS runners
+  # (windows-latest / ubuntu-24.04) and, for arm64 win, electron-builder arch
+  # flags. Reuse the webapp build + dotnet publish steps of this file.
 
   attach:
     name: Attach to release
-    needs: [assets, shell]
+    needs: [assets, webapp]
     if: always()
     runs-on: ubuntu-latest
     steps:
       - name: Abort when any job failed
-        if: needs.assets.result != 'success' || needs.shell.result != 'success'
+        if: needs.assets.result != 'success' || needs.webapp.result != 'success'
         run: |
           echo "asset build failed - nothing published"
           exit 1
@@ -147,7 +140,7 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           path: release-assets
-          pattern: release-assets*
+          pattern: release-assets-*
           merge-multiple: true
 
       - name: List assets
@@ -157,14 +150,10 @@ jobs:
         with:
           tag_name: ${{ env.TAG }}
           files: |
-            release-assets/libra-shell-win-x64-${{ env.TAG }}.zip
-            release-assets/libra-shell-win-x64-${{ env.TAG }}.zip.sha256
-            release-assets/libra-desktop-win-x64-${{ env.TAG }}.zip
-            release-assets/libra-desktop-win-x64-${{ env.TAG }}.zip.sha256
-            release-assets/libra-webapp-${{ env.TAG }}.zip
-            release-assets/libra-webapp-${{ env.TAG }}.zip.sha256
-            release-assets/libra-service-win-x64-${{ env.TAG }}.zip
-            release-assets/libra-service-win-x64-${{ env.TAG }}.zip.sha256
-            release-assets/libra-service-linux-x64-${{ env.TAG }}.zip
-            release-assets/libra-service-linux-x64-${{ env.TAG }}.zip.sha256
+            release-assets/libra-desktop-*.zip
+            release-assets/libra-desktop-*.zip.sha256
+            release-assets/libra-service-*.zip
+            release-assets/libra-service-*.zip.sha256
+            release-assets/libra-webapp-*.zip
+            release-assets/libra-webapp-*.zip.sha256
           fail_on_unmatched_files: true
