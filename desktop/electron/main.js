@@ -90,7 +90,17 @@ function loadBaselinePayload(userDataDir) {
   };
 }
 
+/** Product logo for window/tray: packaged copy (resources/branding) first,
+ * repository asset when running from source. Null when neither exists. */
+function productIconPath() {
+  const packaged = path.join(process.resourcesPath, 'branding', 'icon.png');
+  if (fs.existsSync(packaged)) return packaged;
+  const dev = path.join(__dirname, '..', '..', 'assets', 'branding', 'icon2.png');
+  return fs.existsSync(dev) ? dev : null;
+}
+
 function getWindowOptions() {
+  const icon = productIconPath();
   const common = {
     width: 1440,
     height: 900,
@@ -98,6 +108,7 @@ function getWindowOptions() {
     minHeight: 700,
     show: false,
     backgroundColor: FRAME_BG,
+    ...(icon ? { icon } : {}),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -134,9 +145,13 @@ function loadTarget() {
 }
 
 function createTray() {
-  // 1x1 transparent PNG keeps the tray present without an icon asset for now.
-  const icon = nativeImage.createFromDataURL(
-    'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==');
+  // Product logo at 16x16 for the tray; fall back to a transparent pixel only
+  // when no icon asset is available (e.g. bare source checkout without assets).
+  const iconPath = productIconPath();
+  const icon = iconPath
+    ? nativeImage.createFromPath(iconPath).resize({ width: 16, height: 16 })
+    : nativeImage.createFromDataURL(
+        'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==');
   tray = new Tray(icon);
   const menu = Menu.buildFromTemplate([
     { label: 'Check for Updates…', click: () => runManualUpdate() },

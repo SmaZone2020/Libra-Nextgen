@@ -27,16 +27,22 @@ extraResources:
   - from: ../baseline-web
     to: baseline-web
     filter: ['**/*']
+  # Product logo for the runtime window/tray (resources/branding/icon.png).
+  - from: ../../assets/branding/icon2.png
+    to: branding/icon.png
 
 win:
+  icon: ../../assets/branding/icon2.ico
   target:
     - target: nsis
       arch: [x64, arm64]
 nsis:
   oneClick: false
   allowToChangeInstallationDirectory: true
+  installerIcon: ../../assets/branding/icon2.ico
 
 linux:
+  icon: ../../assets/branding/icon2.png
   target:
     - target: AppImage
       arch: [x64, arm64]
