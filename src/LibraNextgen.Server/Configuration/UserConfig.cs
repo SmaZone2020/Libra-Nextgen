@@ -64,7 +64,8 @@ public static class UserConfigLoader
     {
         sourcePath = null;
 
-        var dir = cli["user-data-dir"] ?? Environment.GetEnvironmentVariable("LIBRA_USER_DATA_DIR");        string? path = null;
+        var dir = cli["user-data-dir"] ?? Environment.GetEnvironmentVariable("LIBRA_USER_DATA_DIR");
+        string? path = null;
         if (!string.IsNullOrWhiteSpace(dir))
         {
             path = Path.Combine(dir, UserConfig.FileName);
