@@ -180,13 +180,13 @@ function DesktopNavItem({ item, collapsed }: { item: NavItem; collapsed: boolean
             <Dropdown>
               <Button
                 variant="ghost"
-                className={`shrink-0 justify-start rounded-[12px] px-[11px] transition-all duration-300 ${
+                className={`relative shrink-0 justify-start overflow-visible rounded-[12px] p-0 transition-all duration-300 ${
                   groupActive ? 'bg-accent-soft text-accent-soft-foreground' : ''
                 }`}
                 style={{ width: 40, height: 40 }}
                 aria-label={label}
               >
-                <item.icon className="shrink-0" />
+                <item.icon className="absolute top-1/2 left-1/2 size-4 -translate-x-1/2 -translate-y-1/2" />
               </Button>
               <Dropdown.Popover>
                 <Dropdown.Menu aria-label={label} onAction={(key) => navigate(String(key))}>
@@ -293,12 +293,18 @@ function DesktopNavItem({ item, collapsed }: { item: NavItem; collapsed: boolean
         <Button
           variant="ghost"
           className={`justify-start rounded-[12px] transition-all duration-300 ${
-            collapsed ? 'shrink-0 px-[11px]' : 'flex-1 px-3'
+            collapsed ? 'relative shrink-0 p-0 overflow-visible' : 'flex-1 px-3'
           } ${isActive ? 'bg-accent-soft text-accent-soft-foreground' : ''}`}
           style={collapsed ? { width: 40, height: 40 } : undefined}
           onPress={() => navigate(item.to)}
         >
-          <item.icon className="shrink-0" />
+          <item.icon
+            className={
+              collapsed
+                ? 'absolute top-1/2 left-1/2 size-4 -translate-x-1/2 -translate-y-1/2'
+                : 'shrink-0'
+            }
+          />
           <span
             className={`overflow-hidden whitespace-nowrap transition-all duration-300 ${
               isActive ? 'font-semibold' : 'font-medium'
