@@ -195,12 +195,10 @@ export default function Dashboard() {
         </div>
       </div>
 
-      <hr className="lw-divider" />
-
-      {/* Recent activity */}
-      <section>
-        <div className="mb-1 flex items-baseline justify-between gap-4">
-          <h2 className="lw-section-title">{t('dashboard.activityTitle')}</h2>
+      {/* Recent activity — an inner panel like the charts. */}
+      <section className="lw-panel">
+        <div className="lw-panel-head">
+          <h2 className="lw-panel-title">{t('dashboard.activityTitle')}</h2>
           {activity.length > 6 && (
             <Button
               variant="ghost"
@@ -212,13 +210,13 @@ export default function Dashboard() {
             </Button>
           )}
         </div>
-        {visibleActivity.length === 0 ? (
-          <p className="py-4 text-[13px] text-neutral-400 dark:text-neutral-500">
-            {t('dashboard.activityEmpty')}
-          </p>
-        ) : (
-          <div className="mt-2">
-            {visibleActivity.map((e) => {
+        <div className="lw-panel-body lw-panel-body--tight">
+          {visibleActivity.length === 0 ? (
+            <p className="py-4 text-[13px] text-neutral-400 dark:text-neutral-500">
+              {t('dashboard.activityEmpty')}
+            </p>
+          ) : (
+            visibleActivity.map((e) => {
               const rel = relativeTime(e.ts);
               return (
                 <div key={e.id} className="lw-activity-row">
@@ -232,9 +230,9 @@ export default function Dashboard() {
                   </span>
                 </div>
               );
-            })}
-          </div>
-        )}
+            })
+          )}
+        </div>
       </section>
 
       {/* Session / system visuals — inner panels, one level under the workspace. */}
