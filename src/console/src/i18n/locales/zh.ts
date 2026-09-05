@@ -222,7 +222,6 @@ export default {
       activityClearDesc: '将按账号软清除当前可见的事件列表，审计日志与其他协作者不受影响。',
     },
     nodes: {
-      localSection: '本机服务',
       remoteSection: '服务器节点',
       add: '添加节点',
       remoteAdminOnly: '仅管理员可管理远程节点连接。',

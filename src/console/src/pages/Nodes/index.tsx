@@ -191,7 +191,6 @@ function LocalNodeCard({ storeType }: { storeType: 'sqlite' | 'mongo' | null }) 
           <div className="flex flex-wrap items-center gap-2">
             <h3 className="font-semibold">{t('nodes.localName')}</h3>
             <Chip size="sm" variant="soft">{t('nodes.localBadge')}</Chip>
-            <Chip size="sm" variant="soft" color="success">{t('nodes.connected')}</Chip>
           </div>
           <p className="mt-1 truncate font-mono text-xs text-default-500">{origin}</p>
         </div>
@@ -280,7 +279,7 @@ function StoreChip({ storeType, connected }: { storeType: 'sqlite' | 'mongo' | n
       color={storeType === 'sqlite' ? 'accent' : storeType === 'mongo' ? 'success' : 'default'}
     >
       {label
-        ? t('nodes.storage') + ': ' + label
+        ? label
         : connected
           ? t('nodes.storageUnknown')
           : t('nodes.storageNotConnected')}

@@ -223,7 +223,6 @@ export default {
       activityClearDesc: 'Soft-clears the event list for your account; audit logs and other collaborators are unaffected.',
     },
     nodes: {
-      localSection: 'Local service',
       remoteSection: 'Server nodes',
       add: 'Add node',
       remoteAdminOnly: 'Only admins can manage remote node connections.',
