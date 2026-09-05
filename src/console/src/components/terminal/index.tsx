@@ -3,8 +3,7 @@ import { Terminal } from 'xterm';
 import type { ITheme } from 'xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { WebLinksAddon } from '@xterm/addon-web-links';
-import 'xterm/css/xterm.css';
-import '../../styles/terminal-fonts.css';
+import xtermCss from 'xterm/css/xterm.css?inline';
 
 export interface TerminalHandle {
   write(text: string): void;
@@ -22,10 +21,36 @@ interface Props {
   disabled?: boolean;
 }
 
-/** Theme for the integrated terminal: fully transparent surface so the
- *  terminal melts into the workspace, with theme-aware foreground/cursor.
- *  Font stays at xterm's built-in default (browser monospace) — no custom
- *  webfont stack that could race or fall back into wrong-width glyphs. */
+// Scoped CSS injected into the terminal's shadow root. The shadow boundary
+// keeps ALL app styles (Tailwind preflight, heroUI, the global proportional
+// "vivo Sans" reset) away from xterm's measurement + rendering — matching the
+// clean official demo page where the terminal renders correctly.
+const SHADOW_EXTRA_CSS = `
+  :host {
+    display: block;
+    min-height: 0;
+    min-width: 0;
+  }
+  .lw-term-box {
+    height: 100%;
+    width: 100%;
+    min-height: 0;
+    font-family: monospace;
+    font-size: 14px;
+    line-height: 1.2;
+  }
+  .xterm,
+  .xterm * {
+    font-family: monospace !important;
+  }
+  .xterm,
+  .xterm-viewport,
+  .xterm-screen,
+  .xterm canvas {
+    background-color: transparent !important;
+  }
+`;
+
 function resolveTerminalTheme(): ITheme {
   const dark = document.documentElement.classList.contains('dark');
   const foreground = dark ? '#d7dae0' : '#1f2329';
@@ -59,14 +84,11 @@ const TerminalView = forwardRef<TerminalHandle, Props>(function TerminalView(
   { className, style, onInput, onResize, disabled },
   ref,
 ) {
-  const containerRef = useRef<HTMLDivElement>(null);
+  const hostRef = useRef<HTMLDivElement>(null);
   const termRef = useRef<Terminal | null>(null);
   const fitRef = useRef<FitAddon | null>(null);
   const disabledRef = useRef(disabled);
   disabledRef.current = disabled;
-  // Callbacks are held in refs so the terminal instance is created exactly once
-  // on mount: parent re-renders (e.g. ShellPage toggling `running`) change the
-  // handler identities, and recreating xterm on that cleared all output.
   const onInputRef = useRef(onInput);
   onInputRef.current = onInput;
   const onResizeRef = useRef(onResize);
@@ -95,8 +117,21 @@ const TerminalView = forwardRef<TerminalHandle, Props>(function TerminalView(
   }), []);
 
   useEffect(() => {
-    const container = containerRef.current;
-    if (!container) return;
+    const host = hostRef.current;
+    if (!host) return;
+
+    // Shadow DOM isolates xterm from every app stylesheet (fonts, preflight,
+    // component css). This reproduces the clean official-demo environment.
+    const shadow = host.shadowRoot ?? host.attachShadow({ mode: 'open' });
+    shadow.replaceChildren();
+
+    const style = document.createElement('style');
+    style.textContent = `${xtermCss}\n${SHADOW_EXTRA_CSS}`;
+    shadow.appendChild(style);
+
+    const box = document.createElement('div');
+    box.className = 'lw-term-box';
+    shadow.appendChild(box);
 
     let disposed = false;
     let term: Terminal | null = null;
@@ -104,39 +139,31 @@ const TerminalView = forwardRef<TerminalHandle, Props>(function TerminalView(
     let ro: ResizeObserver | null = null;
     let themeObserver: MutationObserver | null = null;
 
-    // Minimal config close to the official demo, hardened against the known
-    // xterm letter-spacing rendering issues:
-    //  - explicit fontFamily with a real, installed mono face ("Courier New")
-    //    so canvas measurement and DOM spans resolve to the SAME font
-    //    (generic/fallback lists can resolve differently per context)
-    //  - letterSpacing: 0 and customGlyphs: false (draw real font glyphs)
     const t = new Terminal({
       cursorBlink: true,
       cursorStyle: 'block',
       convertEol: true,
       allowTransparency: true,
-      fontFamily: '"Courier New", monospace',
+      fontFamily: 'monospace',
       fontSize: 14,
       lineHeight: 1.2,
       letterSpacing: 0,
-      customGlyphs: false,
       scrollback: 10000,
       theme: resolveTerminalTheme(),
     });
     const f = new FitAddon();
     t.loadAddon(f);
     t.loadAddon(new WebLinksAddon());
-    t.open(container);
+    t.open(box);
     term = t;
     fit = f;
 
-    // Live theme switching: re-resolve colors whenever the document theme
-    // class changes (light <-> dark).
+    // Live theme switching for the parent app's light/dark toggle.
     const applyTheme = () => {
       if (termRef.current) {
         try {
           termRef.current.options.theme = resolveTerminalTheme();
-        } catch { /* keep previous theme on invalid colors */ }
+        } catch { /* keep previous theme */ }
       }
     };
     themeObserver = new MutationObserver(applyTheme);
@@ -151,14 +178,10 @@ const TerminalView = forwardRef<TerminalHandle, Props>(function TerminalView(
     });
     t.onResize(({ cols, rows }) => onResizeRef.current?.(cols, rows));
 
-    // Fit the terminal and report geometry only once the container actually
-    // has a usable size (cols/rows > 0). On first mount the container may not
-    // be laid out yet (page transition / placeholder swap), so retry until it
-    // is — otherwise the shell is created with a degenerate 0-size PTY.
     let retries = 0;
     const tryFit = () => {
       if (disposed) return false;
-      try { f.fit(); } catch { /* container may still be sizing */ }
+      try { f.fit(); } catch { /* may still be sizing */ }
       if (t.cols > 0 && t.rows > 0) {
         onResizeRef.current?.(t.cols, t.rows);
         return true;
@@ -175,7 +198,7 @@ const TerminalView = forwardRef<TerminalHandle, Props>(function TerminalView(
       try { f.fit(); } catch { /* ignore */ }
       if (t.cols > 0 && t.rows > 0) onResizeRef.current?.(t.cols, t.rows);
     });
-    ro.observe(container);
+    ro.observe(box);
 
     termRef.current = t;
     fitRef.current = f;
@@ -193,7 +216,7 @@ const TerminalView = forwardRef<TerminalHandle, Props>(function TerminalView(
 
   return (
     <div
-      ref={containerRef}
+      ref={hostRef}
       className={`min-h-0 overflow-hidden ${className ?? ''}`}
       style={style}
     />
