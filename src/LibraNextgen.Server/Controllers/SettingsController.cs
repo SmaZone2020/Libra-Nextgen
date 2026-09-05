@@ -127,6 +127,22 @@ public class SettingsController : ControllerBase
             return StatusCode(500, new { error = "failed to persist settings" });
         }
 
+        // CORS policies are registered at startup: a restart is required for
+        // openLan/origins to take effect (web-app mode relaunches itself;
+        // the desktop shell restarts through its bridge instead).
+        if (SettingsController.RebindListeners != null)
+        {
+            try
+            {
+                await SettingsController.RebindListeners(settings.OpenLan ? "lan" : "loopback", ct);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to schedule restart after security change");
+                return StatusCode(500, new { error = $"failed to schedule restart: {ex.Message}" });
+            }
+        }
+
         _logger.LogInformation("Security settings updated: openLan={OpenLan}", settings.OpenLan);
         return Ok(new
         {

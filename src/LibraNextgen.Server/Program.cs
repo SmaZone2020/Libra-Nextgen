@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Threading.RateLimiting;
+using System.Diagnostics;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Hosting.Server;
@@ -337,12 +338,36 @@ SettingsController.RebindListeners = (listenUrl, ct) =>
         logger.LogInformation("Listener changed to {Url} — restarting service", listenUrl);
         try
         {
-            Environment.Exit(0);
+            if (resolvedConfig?.Listener is not null)
+            {
+                // Desktop shell owns libra.conf.json and supervises the
+                // process; its settings UI applies listener changes through
+                // the shell bridge (write config + restart). Never exit from
+                // underneath the shell in response to a web-app request.
+                logger.LogWarning(
+                    "Listener change deferred: desktop shell owns libra.conf.json — apply it from the app shell");
+                return;
+            }
+
+            // No supervisor (bare web-app deployments): relaunch ourselves
+            // with the identical command line so the new listener binds, then
+            // stop gracefully. systemd/supervisord users can disable this by
+            // relying on their own Restart= policy if double-spawn is unwanted.
+            var psi = new ProcessStartInfo
+            {
+                FileName = Environment.ProcessPath ?? "dotnet",
+                WorkingDirectory = Directory.GetCurrentDirectory(),
+                UseShellExecute = false,
+            };
+            foreach (var arg in Environment.GetCommandLineArgs().Skip(1))
+                psi.ArgumentList.Add(arg);
+            Process.Start(psi);
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Failed to trigger graceful shutdown");
+            logger.LogError(ex, "Failed to relaunch self after listener change");
         }
+        app.Lifetime.StopApplication();
     }, ct);
     return Task.CompletedTask;
 };
