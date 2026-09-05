@@ -135,9 +135,47 @@ export function getToken(): string | null {
   return authToken;
 }
 
+// ── Cross-node routing (workspace mesh) ────────────────────────────────────
+//
+// While a remote node agent is selected (AgentContext.remote), console
+// feature calls that target agents are transparently forwarded through the
+// hub relay (`/api/mesh/nodes/{id}/relay/{path}`). Only the agent-operation
+// surface relays; everything else (mesh, plugins, ai, settings, audit, …)
+// always stays on the home service. Hub-local polling (the agent list in
+// AgentContext, dashboard traffic) uses `apiHome` to never follow the relay.
+
+let apiNodeTarget: string | null = null;
+
+export function setApiNodeTarget(nodeId: string | null) {
+  apiNodeTarget = nodeId;
+}
+
+export function getApiNodeTarget(): string | null {
+  return apiNodeTarget;
+}
+
+const RELAY_ALLOWED_FIRST = new Set([
+  'agents', 'tasks', 'files', 'othersoft', 'proxy', 'token', 'system',
+]);
+
+/** Hub-local system administration never relays, even under /system. */
+const SYSTEM_LOCAL_SEGMENTS = new Set(['storage', 'listener']);
+
+function shouldRelay(path: string): boolean {
+  const segments = path.split('/').filter(Boolean);
+  const first = segments[0]?.toLowerCase();
+  if (!first || !RELAY_ALLOWED_FIRST.has(first)) return false;
+  if (first === 'system') {
+    const second = segments[1]?.toLowerCase();
+    if (!second || SYSTEM_LOCAL_SEGMENTS.has(second)) return false;
+  }
+  return true;
+}
+
 async function request<T>(
   path: string,
-  options: RequestInit = {}
+  options: RequestInit = {},
+  preferHome = false,
 ): Promise<T> {
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
@@ -148,9 +186,15 @@ async function request<T>(
     headers['Authorization'] = `Bearer ${authToken}`;
   }
 
+  // Feature calls follow the selected remote node; home-pinned callers
+  // (agent polling, dashboard traffic) pass preferHome.
+  const target = !preferHome && apiNodeTarget && shouldRelay(path)
+    ? `/mesh/nodes/${apiNodeTarget}/relay/${path.replace(/^\//, '')}`
+    : path;
+
   let response: Response;
   try {
-    response = await fetch(`${apiBase()}${path}`, {
+    response = await fetch(`${apiBase()}${target}`, {
       ...options,
       headers,
     });
@@ -192,4 +236,15 @@ export const api = {
     request<T>(path, { method: 'PUT', body: body ? JSON.stringify(body) : undefined }),
   delete: <T>(path: string, body?: unknown) =>
     request<T>(path, { method: 'DELETE', body: body ? JSON.stringify(body) : undefined }),
+};
+
+/** Always hits the home service, bypassing any active remote-node relay. */
+export const apiHome = {
+  get: <T>(path: string) => request<T>(path, {}, true),
+  post: <T>(path: string, body?: unknown) =>
+    request<T>(path, { method: 'POST', body: body ? JSON.stringify(body) : undefined }, true),
+  put: <T>(path: string, body?: unknown) =>
+    request<T>(path, { method: 'PUT', body: body ? JSON.stringify(body) : undefined }, true),
+  delete: <T>(path: string, body?: unknown) =>
+    request<T>(path, { method: 'DELETE', body: body ? JSON.stringify(body) : undefined }, true),
 };

@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { ContextMenu } from '@components/context-menu';
@@ -13,36 +13,71 @@ import {
 import { AgentBrowser } from './AgentBrowser';
 import { AgentDetailModal } from './AgentDetailModal';
 import { MobileBuilderEntry } from './MobileBuilderEntry';
-import { RemoteNodeAgents } from './RemoteNodeAgents';
-import { useAgent } from '../../contexts/AgentContext';
+import { RemoteNodeAgents, useRemoteAgentSegments, type RemoteAgentSegment } from './RemoteNodeAgents';
+import { useAgent, type RemoteAgentSelection } from '../../contexts/AgentContext';
 import { useDialog } from '../../hooks/useDialog';
 import { getAgent, deleteAgent } from '../../api/agents';
 import { createTask } from '../../api/tasks';
-import type { AgentDetail } from '../../types/models';
+import type { AgentDetail, AgentListItem } from '../../types/models';
 
 export default function AgentsPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const { agents, agentId, selectAgent, disconnect: disconnectAgent } = useAgent();
+  const { agents, agentId, remote, selectAgent, selectNodeAgent, clearRemote, disconnect: disconnectAgent } = useAgent();
   const { confirm, alert, DialogComponent } = useDialog();
   const [modalOpen, setModalOpen] = useState(false);
   const [modalAgent, setModalAgent] = useState<AgentDetail | null>(null);
   const [modalLoading, setModalLoading] = useState(false);
   const contextAgentRef = useRef<string | null>(null);
 
+  const segments = useRemoteAgentSegments();
+
+  // If the node of the currently selected remote agent disappears from the
+  // connected set, drop the remote selection so pages don't relay to a dead node.
+  useEffect(() => {
+    if (remote && !segments.some((s) => s.nodeId === remote.nodeId)) clearRemote();
+  }, [segments, remote, clearRemote]);
+
+  const openDetail = (id: string) => {
+    setModalOpen(true);
+    setModalLoading(true);
+    setModalAgent(null);
+    getAgent(id)
+      .then((detail) => setModalAgent(detail))
+      .catch(() => setModalAgent(null))
+      .finally(() => setModalLoading(false));
+  };
+
   // Desktop shows the detail modal in place; mobile keeps the dedicated page.
   const handleOpen = (id: string) => {
+    // Opening a local card while a remote agent is selected switches back to
+    // the local service for its detail fetch.
+    const isLocal = agents.some((a) => a.id === id);
+    if (remote && isLocal) clearRemote();
+
     if (typeof window !== 'undefined' && window.matchMedia('(min-width: 640px)').matches) {
-      setModalOpen(true);
-      setModalLoading(true);
-      setModalAgent(null);
-      getAgent(id)
-        .then((detail) => setModalAgent(detail))
-        .catch(() => setModalAgent(null))
-        .finally(() => setModalLoading(false));
+      openDetail(id);
       return;
     }
     navigate(`/agents/${id}`);
+  };
+
+  // A remote-device click selects that node agent (hub relay) and opens its
+  // details; subsequent terminal/files/etc. operate through the relay.
+  const handleOpenRemote = (segment: RemoteAgentSegment, agent: AgentListItem) => {
+    const selection: RemoteAgentSelection = {
+      nodeId: segment.nodeId,
+      nodeName: segment.nodeName,
+      origin: segment.origin,
+      agent,
+    };
+    selectNodeAgent(selection);
+
+    if (typeof window !== 'undefined' && window.matchMedia('(min-width: 640px)').matches) {
+      openDetail(agent.id);
+      return;
+    }
+    navigate(`/agents/${agent.id}`);
   };
 
   // Right-click on a card remembers the target agent for the context menu.
@@ -52,6 +87,7 @@ export default function AgentsPage() {
 
   const handleConnect = () => {
     const id = contextAgentRef.current;
+    if (remote) clearRemote(); // local context-menu actions always target home
     if (id) selectAgent(id);
   };
 
@@ -61,6 +97,7 @@ export default function AgentsPage() {
 
   const handleViewDetails = async () => {
     const id = contextAgentRef.current;
+    if (remote) clearRemote();
     if (!id) return;
     setModalOpen(true);
     setModalLoading(true);
@@ -74,6 +111,7 @@ export default function AgentsPage() {
 
   const handleRemove = async () => {
     const id = contextAgentRef.current;
+    if (remote) clearRemote();
     if (!id) return;
     const { confirmed } = await confirm(t('agents.removeConfirm'));
     if (!confirmed) return;
@@ -82,6 +120,7 @@ export default function AgentsPage() {
 
   const handleRestart = async () => {
     const id = contextAgentRef.current;
+    if (remote) clearRemote();
     if (!id) return;
     const { confirmed } = await confirm(t('agents.restartConfirm'));
     if (!confirmed) return;
@@ -94,6 +133,7 @@ export default function AgentsPage() {
 
   const handleDestroy = async () => {
     const id = contextAgentRef.current;
+    if (remote) clearRemote();
     if (!id) return;
     const { confirmed } = await confirm(t('agents.destroyConfirm'));
     if (!confirmed) return;
@@ -158,8 +198,8 @@ export default function AgentsPage() {
         </ContextMenu.Popover>
       </ContextMenu>
 
-      {/* Devices on connected remote nodes — read-only segments (admin). */}
-      <RemoteNodeAgents />
+      {/* Devices on connected remote nodes — selectable segments (admin). */}
+      <RemoteNodeAgents segments={segments} onOpenAgent={handleOpenRemote} />
 
       <AgentDetailModal
         isOpen={modalOpen}

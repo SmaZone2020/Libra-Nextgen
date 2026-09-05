@@ -9,7 +9,7 @@ interface AgentListResponse {
   pageSize: number;
 }
 
-interface TrafficResponse {
+export interface TrafficResponse {
   traffic: TrafficRecord[];
 }
 

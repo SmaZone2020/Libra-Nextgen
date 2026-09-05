@@ -22,9 +22,7 @@ const STORE_LABEL: Record<string, string> = { sqlite: 'SQLite', mongo: 'MongoDB'
 
 /**
  * Poll connected mesh nodes and pull each one's agent list through the hub
- * proxy. Read-only by design (v1): interacting with a remote agent happens in
- * that node's own console. Empty when the current user is not an admin or no
- * node is connected.
+ * proxy. Empty when the current user is not an admin or no node is connected.
  */
 export function useRemoteAgentSegments(): RemoteAgentSegment[] {
   const isAdmin = getStoredUser()?.role === 'Admin';
@@ -95,11 +93,18 @@ export function useRemoteAgentSegments(): RemoteAgentSegment[] {
 
 /**
  * Read-only aggregate view of agents running on connected remote nodes,
- * rendered as node-segmented sections below the local device list.
+ * rendered as node-segmented sections below the local device list. Clicking a
+ * remote device selects it (hub relay) so detail/terminal/files etc. operate
+ * on that node.
  */
-export function RemoteNodeAgents() {
+export function RemoteNodeAgents({
+  segments,
+  onOpenAgent,
+}: {
+  segments: RemoteAgentSegment[];
+  onOpenAgent?: (segment: RemoteAgentSegment, agent: AgentListItem) => void;
+}) {
   const { t } = useTranslation();
-  const segments = useRemoteAgentSegments();
 
   if (segments.length === 0) return null;
 
@@ -144,7 +149,7 @@ export function RemoteNodeAgents() {
                 key={`${seg.nodeId}:${agent.id}`}
                 agent={agent}
                 connected={false}
-                onOpen={() => window.open(seg.origin, '_blank', 'noopener')}
+                onOpen={() => onOpenAgent?.(seg, agent)}
               />
             ))}
           </div>

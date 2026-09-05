@@ -10,11 +10,19 @@ const AGENT_ROUTES = new Set(['/agents', '/shell', '/files', '/system', '/others
 export function AgentSelector({ className }: { className?: string }) {
   const { t } = useTranslation();
   const { pathname } = useLocation();
-  const { agents, agentId, selectedAgent, selectAgent, disconnect } = useAgent();
+  const { agents, agentId, selectedAgent, remote, selectAgent, disconnect } = useAgent();
 
   if (!AGENT_ROUTES.has(pathname) && !isPluginRoute(pathname)) return null;
 
   const onlineAgents = agents.filter((a) => a.status === 'Online');
+
+  const label = remote
+    ? `${remote.nodeName} · ${selectedAgent?.hostname ?? ''}${selectedAgent ? ` (${selectedAgent.ipAddress})` : ''}`
+    : onlineAgents.length === 0
+      ? t('agents.noAgents')
+      : selectedAgent
+        ? `${selectedAgent.hostname} (${selectedAgent.ipAddress})`
+        : t('common.selectAgent');
 
   return (
     <div className={`flex items-center gap-2 sm:gap-3 ${className || ''}`}>
@@ -24,10 +32,7 @@ export function AgentSelector({ className }: { className?: string }) {
           className="flex-1 sm:w-[220px] sm:flex-none justify-start truncate"
           isDisabled={onlineAgents.length === 0}
         >
-          {onlineAgents.length === 0 ?
-          t('agents.noAgents') : selectedAgent ?
-           `${selectedAgent.hostname} (${selectedAgent.ipAddress})` :
-          t('common.selectAgent')}
+          {label}
         </Button>
         <Dropdown.Popover>
           <Dropdown.Menu
@@ -43,7 +48,7 @@ export function AgentSelector({ className }: { className?: string }) {
         </Dropdown.Popover>
       </Dropdown>
 
-      {selectedAgent && (
+      {(selectedAgent || remote) && (
         <>
           <Button size="sm" variant="tertiary" onPress={disconnect}>
             {t('common.disconnect')}

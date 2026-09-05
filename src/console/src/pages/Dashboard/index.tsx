@@ -4,8 +4,8 @@ import { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button, Card, Modal } from '@heroui/react';
 import { Heart, StarFill } from '@gravity-ui/icons';
-import { getAgentTraffic } from '../../api/agents';
-import { getTasks } from '../../api/tasks';
+import type { TrafficResponse } from '../../api/agents';
+import { apiHome } from '../../api/client';
 import { clearRecentEvents, getRecentEvents, type EventItem } from '../../api/events';
 import { consoleWs } from '../../ws/consoleWs';
 import { TrafficChart, RANGES } from './TrafficChart';
@@ -93,7 +93,11 @@ export default function Dashboard() {
     let cancelled = false;
     async function fetchTasks() {
       try {
-        const taskRes = await getTasks(undefined, undefined, 1, 50);
+        // Home-pinned: the overview always shows the local service, never
+        // the relay of a remote node selection.
+        const taskRes = await apiHome.get<{ tasks: Array<{ status: string }>; total: number }>(
+          '/tasks?page=1&pageSize=50',
+        );
         if (!cancelled) {
           setTaskStats({
             tasks: taskRes.total,
@@ -112,7 +116,10 @@ export default function Dashboard() {
     let cancelled = false;
     async function fetchTraffic() {
       try {
-        const trafficRes = await getAgentTraffic(rangeCfg.minutes);
+        // Home-pinned traffic (local overview data regardless of relay target).
+        const trafficRes = await apiHome.get<TrafficResponse>(
+          `/agents/traffic?minutes=${rangeCfg.minutes}`,
+        );
         if (cancelled) return;
 
         const records = trafficRes.traffic ?? [];

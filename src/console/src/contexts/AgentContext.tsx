@@ -1,15 +1,30 @@
 import { createContext, useContext, useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { toast } from '@heroui/react';
 import { useTranslation } from 'react-i18next';
-import { getAgents } from '../api/agents';
+import { apiHome, setApiNodeTarget } from '../api/client';
 import { consoleWs } from '../ws/consoleWs';
 import type { AgentListItem, WsMessage } from '../types/models';
 
+/** An agent selected on a connected remote node (workspace mesh). While a
+ *  remote agent is selected, agent-feature API calls relay through the hub to
+ *  that node (see api/client node targeting). */
+export interface RemoteAgentSelection {
+  nodeId: string;
+  nodeName: string;
+  origin: string;
+  agent: AgentListItem;
+}
+
 interface AgentContextValue {
   agents: AgentListItem[];
+  /** Effective agent id: remote selection wins over the local one. */
   agentId: string;
+  /** Effective selected agent: remote selection wins over the local one. */
   selectedAgent: AgentListItem | null;
+  remote: RemoteAgentSelection | null;
   selectAgent: (id: string) => void;
+  selectNodeAgent: (selection: RemoteAgentSelection) => void;
+  clearRemote: () => void;
   disconnect: () => void;
 }
 
@@ -32,7 +47,10 @@ const AgentContext = createContext<AgentContextValue>({
   agents: [],
   agentId: '',
   selectedAgent: null,
+  remote: null,
   selectAgent: () => {},
+  selectNodeAgent: () => {},
+  clearRemote: () => {},
   disconnect: () => {},
 });
 
@@ -40,14 +58,17 @@ export function AgentProvider({ children }: { children: React.ReactNode }) {
   const { t } = useTranslation();
   const [agents, setAgents] = useState<AgentListItem[]>([]);
   const [agentId, setAgentId] = useState<string>(readStoredAgentId);
+  const [remote, setRemote] = useState<RemoteAgentSelection | null>(null);
   const autoSelectedRef = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
     async function load() {
       try {
-        // Fetch all agents (not just online) to keep full list
-        const res = await getAgents(1, 100);
+        // Home-pinned: this is the LOCAL node's agent list, never the relay.
+        const res = await apiHome.get<{ agents: AgentListItem[] }>(
+          '/agents?page=1&pageSize=100',
+        );
         if (cancelled) return;
         setAgents((prev) => {
           if (JSON.stringify(prev) === JSON.stringify(res.agents)) return prev;
@@ -96,7 +117,8 @@ export function AgentProvider({ children }: { children: React.ReactNode }) {
   // Known online agent IDs to suppress duplicate notifications
   const onlineIdsRef = useRef(new Set<string>());
 
-  // Real-time agent status updates via WebSocket
+  // Real-time agent status updates via WebSocket (local node only — remote
+  // nodes refresh through the mesh pollers).
   useEffect(() => {
     const handler = (msg: WsMessage) => {
       const data = msg.data as { agentId: string; status: string } | null;
@@ -150,25 +172,62 @@ export function AgentProvider({ children }: { children: React.ReactNode }) {
   }, [getNotice, t]);
 
   const selectAgent = useCallback((id: string) => {
+    // Selecting the agent that is already the remote selection keeps the
+    // remote context (detail/action pages call selectAgent with their id).
+    if (remote && remote.agent.id === id) return;
+    if (remote) {
+      setRemote(null);
+      setApiNodeTarget(null);
+    }
     if (id) {
       setAgentId(id);
       try { localStorage.setItem(SELECTED_AGENT_KEY, id); } catch { /* ignore */ }
     }
-  }, []);
+  }, [remote]);
 
-  const disconnect = useCallback(() => {
+  const selectNodeAgent = useCallback((selection: RemoteAgentSelection) => {
+    setRemote(selection);
     setAgentId('');
     try { localStorage.removeItem(SELECTED_AGENT_KEY); } catch { /* ignore */ }
+    setApiNodeTarget(selection.nodeId);
   }, []);
 
-  const selectedAgent = useMemo(
-    () => agents.find(a => a.id === agentId) ?? null,
-    [agents, agentId]
-  );
+  const clearRemote = useCallback(() => {
+    if (remote) {
+      setRemote(null);
+      setApiNodeTarget(null);
+    }
+  }, [remote]);
+
+  const disconnect = useCallback(() => {
+    if (remote) {
+      setRemote(null);
+      setApiNodeTarget(null);
+      return;
+    }
+    setAgentId('');
+    try { localStorage.removeItem(SELECTED_AGENT_KEY); } catch { /* ignore */ }
+  }, [remote]);
+
+  const selectedAgent = useMemo(() => {
+    if (remote) return remote.agent;
+    return agents.find(a => a.id === agentId) ?? null;
+  }, [agents, agentId, remote]);
+
+  const effectiveAgentId = remote ? remote.agent.id : agentId;
 
   const value = useMemo<AgentContextValue>(
-    () => ({ agents, agentId, selectedAgent, selectAgent, disconnect }),
-    [agents, agentId, selectedAgent, selectAgent, disconnect]
+    () => ({
+      agents,
+      agentId: effectiveAgentId,
+      selectedAgent,
+      remote,
+      selectAgent,
+      selectNodeAgent,
+      clearRemote,
+      disconnect,
+    }),
+    [agents, effectiveAgentId, selectedAgent, remote, selectAgent, selectNodeAgent, clearRemote, disconnect],
   );
 
   return <AgentContext.Provider value={value}>{children}</AgentContext.Provider>;

@@ -271,7 +271,7 @@ export default {
       destroyFailed: '销毁任务下发失败（可能没有管理员权限）',
       noAgents: '暂无设备',
       remoteTitle: '其他节点设备',
-      remoteHint: '以下设备来自已连接的远程节点，仅只读展示；操作请前往该节点自己的控制台。',
+      remoteHint: '以下设备来自已连接的远程节点，通过本机中继操作（终端/文件/数据等均可用）；插件动作仍仅限设备所在节点，请到该节点控制台执行。',
       nodeAgentsCount: '{{count}} 台设备',
       openNodeConsole: '打开该节点控制台',
       agentFilters: 'Agent 筛选',

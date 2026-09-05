@@ -272,7 +272,7 @@ export default {
       destroyFailed: 'Failed to send destroy task (admin permission may be required)',
       noAgents: 'No online agents',
       remoteTitle: 'Devices on other nodes',
-      remoteHint: 'Devices below come from connected remote nodes and are read-only here; operate them from that node\'s own console.',
+      remoteHint: 'Devices below come from connected remote nodes and are operated through the local relay (terminal/files/data all work); plugin actions still run only on the node owning the device — use that node\'s console for plugins.',
       nodeAgentsCount: '{{count}} devices',
       openNodeConsole: 'Open node console',
       agentFilters: 'Agent filters',
