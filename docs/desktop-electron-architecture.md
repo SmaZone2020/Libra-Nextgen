@@ -189,7 +189,11 @@ Service 双存储实施全部完成并全量测试通过(基线 216/216,含 Mong
 | `2cb655f` | P1 接线:启动解析/CLI 覆盖/探测/回退/exit、`RegisterStore<T>` 双注册、`DuplicateKeyException`、7 个核心服务迁 IStore、`SqliteModeBootTests`(sqlite 全栈 setup→login E2E) |
 | `efff8ab` | P1 完成:AgentComms/AgentTraffic/SessionKeyStore/RiskPolicy/Audit/Permission 迁 IStore;`GET /api/system/storage`;`StoreTtlCleanupService`(sqlite TTL);audit 搜索翻译实证(ToLower().Contains 可译,OrdinalIgnoreCase 不可译) |
 | `9ca25d3` | P2-1:PluginService/McpService/AiEventNotifier/AiEventSubscriptionController 迁 IStore;无 Repository-only 集合 |
-| P2-2(进行中) | AiService/AiChannelService(7 个 ai_* 集合)迁 IStore |
+| `28fa1ff` | **P2 完成**:AiService/AiChannelService(7 个 ai_* 集合)迁 IStore;IStore 增 ReplaceByIdAsync/DeleteManyAsync;服务端域层不再直接依赖 MongoDbContext;216/216 绿 |
+| `e2786f8` | P3 第一批:`desktop/electron/` 壳(serviceProcess/updater/tray/存储配置 IPC/bridge),依赖安装 + node --check |
+| `6762ebc` | P4 第一批:release-assets.yml 四 RID(win/linux × x64/arm64)载荷矩阵 + 去 WPF 资产;删除 WPF 壳;desktop/README 重写 |
+
+**进行中**:P3 收尾(baseline 载荷打包/electron-builder 安装器 job/壳 GUI 冒烟/console 存储设置 UI 与回退横幅);P4 其余(electron-builder CI 接线)。
 
 **已知 SQLite 侧语义差异**(接受):唯一/partial-unique(TTL/用户名唯一/频道绑定唯一)依赖 Mongo 索引,SQLite 文档存储暂无提取列索引,靠服务层先查后写兜底;SQLite TTL 由 `StoreTtlCleanupService` 周期清理(traffic)。差异不影响 API 契约。
 
