@@ -175,14 +175,15 @@ function DesktopNavItem({ item, collapsed }: { item: NavItem; collapsed: boolean
 
     return (
       <div className="my-0.5 flex flex-col">
-        <div className="flex items-center">
+        <div className={`flex items-center ${collapsed ? 'justify-center' : ''}`}>
           {collapsed ? (
             <Dropdown>
               <Button
                 variant="ghost"
-                className={`h-10 flex-1 justify-start rounded-[12px] px-[11px] transition-all duration-300 ${
+                className={`shrink-0 justify-start rounded-[12px] px-[11px] transition-all duration-300 ${
                   groupActive ? 'bg-accent-soft text-accent-soft-foreground' : ''
                 }`}
+                style={{ width: 40, height: 40 }}
                 aria-label={label}
               >
                 <item.icon className="shrink-0" />
@@ -287,13 +288,14 @@ function DesktopNavItem({ item, collapsed }: { item: NavItem; collapsed: boolean
   const isActive = selfActive;
   const label = t(item.label);
   return (
-    <div className="my-0.5 flex items-center">
+    <div className={`my-0.5 flex items-center ${collapsed ? 'justify-center' : ''}`}>
       <Tooltip delay={0} isDisabled={!collapsed}>
         <Button
           variant="ghost"
-          className={`flex-1 justify-start rounded-[12px] transition-all duration-300 ${
-            collapsed ? 'h-10 px-[11px]' : 'px-3'
+          className={`justify-start rounded-[12px] transition-all duration-300 ${
+            collapsed ? 'shrink-0 px-[11px]' : 'flex-1 px-3'
           } ${isActive ? 'bg-accent-soft text-accent-soft-foreground' : ''}`}
+          style={collapsed ? { width: 40, height: 40 } : undefined}
           onPress={() => navigate(item.to)}
         >
           <item.icon className="shrink-0" />
