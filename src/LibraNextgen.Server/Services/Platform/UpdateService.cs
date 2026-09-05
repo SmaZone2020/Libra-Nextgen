@@ -1,4 +1,4 @@
-using System.Net.Http.Headers;
+﻿using System.Net.Http.Headers;
 using System.Text.Json;
 
 namespace LibraNextgen.Service.Services.Platform;
@@ -18,7 +18,7 @@ namespace LibraNextgen.Service.Services.Platform;
 public sealed class UpdateService
 {
     // Keep in sync with the latest published tag. LIBRA_VERSION overrides.
-    private const string DefaultVersion = "1.7.0";
+    private const string DefaultVersion = "1.7.1";
 
     public static string CurrentVersion =>
         string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("LIBRA_VERSION"))
@@ -41,7 +41,7 @@ public sealed class UpdateService
 
     private static string? NullIfEmpty(string? s) => string.IsNullOrWhiteSpace(s) ? null : s;
 
-    // ── DTOs ─────────────────────────────────────────────────────────────
+    // 鈹€鈹€ DTOs 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 
     public sealed record UpdateState(
         bool Enabled,
@@ -57,7 +57,7 @@ public sealed class UpdateService
     /// <summary>Minimal projection of the GitHub "latest release" payload.</summary>
     public sealed record ReleaseInfo(string Tag, string? HtmlUrl, string? PublishedAt, string? Notes);
 
-    // ── Version helpers (pure, unit-testable) ────────────────────────────
+    // 鈹€鈹€ Version helpers (pure, unit-testable) 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 
     /// <summary>Parse "v1.2.3-beta" style tags into a comparable triple.</summary>
     public static bool TryParseVersion(string? tag, out (int Major, int Minor, int Patch) v)
@@ -103,7 +103,7 @@ public sealed class UpdateService
             var html = root.TryGetProperty("html_url", out var h) ? h.GetString() : null;
             var published = root.TryGetProperty("published_at", out var p) ? p.GetString() : null;
             var body = root.TryGetProperty("body", out var b) ? b.GetString() : null;
-            var preview = string.IsNullOrWhiteSpace(body) ? null : body.Length <= 4000 ? body : body[..4000] + "…";
+            var preview = string.IsNullOrWhiteSpace(body) ? null : body.Length <= 4000 ? body : body[..4000] + "鈥?;
             return new ReleaseInfo(tag, html, published, preview);
         }
         catch (JsonException)
@@ -112,7 +112,7 @@ public sealed class UpdateService
         }
     }
 
-    // ── Check state (cached) ─────────────────────────────────────────────
+    // 鈹€鈹€ Check state (cached) 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 
     private static readonly object Gate = new();
     private static UpdateState? _cached;
@@ -168,7 +168,7 @@ public sealed class UpdateService
         using var resp = await http.GetAsync(api, HttpCompletionOption.ResponseHeadersRead, ct);
         if (!resp.IsSuccessStatusCode)
             throw new InvalidOperationException(
-                $"update check failed: GitHub API returned {(int)resp.StatusCode} — check LIBRA_UPDATE_REPO / LIBRA_UPDATE_TOKEN");
+                $"update check failed: GitHub API returned {(int)resp.StatusCode} 鈥?check LIBRA_UPDATE_REPO / LIBRA_UPDATE_TOKEN");
         return ParseRelease(await resp.Content.ReadAsStringAsync(ct));
     }
 }
