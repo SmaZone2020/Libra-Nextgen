@@ -221,6 +221,7 @@ function createWindow() {
   mainWindow.webContents.on('did-finish-load', () => {
     if (!mainWindow) return;
     const url = mainWindow.webContents.getURL();
+    console.log('[shell] loaded', url);
     if (url.startsWith('http')) failures = 0;
   });
 
@@ -294,7 +295,9 @@ app.whenReady().then(async () => {
   // Start the bundled backend when a payload is installed; keep the plain
   // dev/demo mode otherwise. userData is passed so the service reads the same
   // libra.conf.json the shell writes (single source of truth).
-  userDataDir = app.getPath('userData');
+  // userData can be pinned via LIBRA_USER_DATA_DIR (same name as the server's
+  // env override) for tests and portable setups; defaults to Electron's own.
+  userDataDir = process.env.LIBRA_USER_DATA_DIR || app.getPath('userData');
   installedPayload = loadPayloadManifest(userDataDir);
   if (installedPayload) {
     try {
@@ -307,8 +310,23 @@ app.whenReady().then(async () => {
     }
   }
 
-  createTray();
+  try {
+    createTray();
+  } catch (err) {
+    // Tray creation can fail on headless/service sessions; the shell must
+    // still run (window + service are the critical path).
+    console.log('[shell] tray unavailable:', err.message);
+  }
   createWindow();
+
+  // Headless/GUI smoke hook: exit automatically after N ms (LIBRA_SMOKE_EXIT_MS).
+  const smokeExit = Number(process.env.LIBRA_SMOKE_EXIT_MS || 0);
+  if (smokeExit > 0) {
+    setTimeout(() => {
+      console.log('[shell] smoke exit after', smokeExit, 'ms');
+      app.quit();
+    }, smokeExit);
+  }
 
   // Best-effort silent web refresh; embedded baseline remains the fallback.
   updateWebSilently({ ...UPDATE_SOURCE, userDataDir }).catch(() => {});
