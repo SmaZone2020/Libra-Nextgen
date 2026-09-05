@@ -107,7 +107,9 @@ export function Sidebar({
 
         {/* Navigation rail */}
         <nav
-          className={`flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden ${collapsed ? 'mt-4' : 'mt-3'}`}
+          className={`flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden ${
+            collapsed ? 'mt-4 lw-rail' : 'mt-3'
+          }`}
         >
           {sections.map((section, sectionIndex) => (
             <section

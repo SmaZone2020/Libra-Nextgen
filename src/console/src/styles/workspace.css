@@ -154,6 +154,28 @@
   .lw-sidebar { display: flex; }
 }
 
+/* Sidebar nav scrollbar: slimmer and quieter than the global bar, with a
+   dedicated 4px rail variant so the narrow collapsed track stays intact. */
+.lw-sidebar nav {
+  scrollbar-color: color-mix(in oklab, var(--lw-text-soft) 28%, transparent) transparent;
+}
+.lw-sidebar nav::-webkit-scrollbar {
+  width: 5px;
+}
+.lw-sidebar nav.lw-rail::-webkit-scrollbar {
+  width: 4px;
+}
+.lw-sidebar nav::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--lw-text-soft) 20%, transparent);
+}
+.lw-sidebar:hover nav::-webkit-scrollbar-thumb {
+  background: color-mix(in oklab, var(--lw-text-soft) 48%, transparent);
+}
+.lw-sidebar nav::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in oklab, var(--lw-text-soft) 65%, transparent);
+}
+
 .lw-nav-section {
   display: flex;
   flex-direction: column;
