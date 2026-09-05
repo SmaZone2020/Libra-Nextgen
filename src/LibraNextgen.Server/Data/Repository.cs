@@ -117,6 +117,19 @@ public class Repository<T> : IStore<T> where T : class
         return result.DeletedCount;
     }
 
+    public async Task<long> DeleteManyAsync(Expression<Func<T, bool>> filter, CancellationToken ct = default)
+    {
+        var result = await _collection.DeleteManyAsync(Builders<T>.Filter.Where(filter), ct);
+        return result.DeletedCount;
+    }
+
+    public async Task<long> ReplaceByIdAsync(string id, T entity, CancellationToken ct = default)
+    {
+        var filter = Builders<T>.Filter.Eq("Id", id);
+        var result = await _collection.ReplaceOneAsync(filter, entity, cancellationToken: ct);
+        return result.ModifiedCount;
+    }
+
     public async Task<long> CountAsync(Expression<Func<T, bool>>? filter = null, CancellationToken ct = default)
     {
         var f = filter != null ? Builders<T>.Filter.Where(filter) : FilterDefinition<T>.Empty;

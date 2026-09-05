@@ -13,7 +13,6 @@ using LibraNextgen.Service.Configuration;
 using LibraNextgen.Service.Data;
 using LibraNextgen.Service.Mcp;
 using ModelContextProtocol.Server;
-using MongoDB.Driver;
 
 namespace LibraNextgen.Service.Services.Ai;
 
@@ -55,7 +54,9 @@ public class AiService
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
     };
 
-    private readonly MongoDbContext _db;
+    private readonly IStore<AiProvider> _providers;
+    private readonly IStore<AiSession> _sessions;
+    private readonly IStore<AiMcpConfig> _mcpConfigs;
     private readonly IServiceProvider _services;
     private readonly ILogger<AiService> _logger;
     private readonly AiPromptFileLoader _promptLoader;
@@ -74,7 +75,9 @@ public class AiService
     };
 
     public AiService(
-        MongoDbContext db,
+        IStore<AiProvider> providers,
+        IStore<AiSession> sessions,
+        IStore<AiMcpConfig> mcpConfigs,
         IServiceProvider services,
         ILogger<AiService> logger,
         AiPromptFileLoader promptLoader,
@@ -82,7 +85,9 @@ public class AiService
         IHttpContextAccessor http,
         ConnectionManager ws)
     {
-        _db = db;
+        _providers = providers;
+        _sessions = sessions;
+        _mcpConfigs = mcpConfigs;
         _services = services;
         _logger = logger;
         _promptLoader = promptLoader;
@@ -183,22 +188,17 @@ public class AiService
             """;
     }
 
-    private IMongoCollection<AiProvider> Providers => _db.GetCollection<AiProvider>("ai_providers");
-    private IMongoCollection<AiSession> Sessions => _db.GetCollection<AiSession>("ai_sessions");
-    private IMongoCollection<AiMcpConfig> McpConfigs => _db.GetCollection<AiMcpConfig>("ai_mcp_config");
-
-
     public async Task<List<AiProvider>> GetProvidersAsync(CancellationToken ct = default)
     {
-        var list = await Providers.Find(FilterDefinition<AiProvider>.Empty)
-            .Sort(Builders<AiProvider>.Sort.Descending(p => p.CreatedAt)).ToListAsync(ct);
+        var list = await _providers.FindPagedAsync(
+            null, 1, int.MaxValue, nameof(AiProvider.CreatedAt), true, ct);
         foreach (var p in list) p.ApiKeyEnc = "";
         return list;
     }
 
     public async Task<AiProvider?> GetProviderAsync(string id, bool includeKey, CancellationToken ct = default)
     {
-        var p = await Providers.Find(x => x.Id == id).FirstOrDefaultAsync(ct);
+        var p = await _providers.FirstOrDefaultAsync(x => x.Id == id, ct);
         if (p == null) return null;
         p.ApiKeyEnc = includeKey && p.ApiKeyEnc.Length > 0 ? DecryptKey(p.ApiKeyEnc) : "";
         return p;
@@ -224,31 +224,33 @@ public class AiService
             p.DefaultModel = p.Models.FirstOrDefault() ?? "";
         if (!string.IsNullOrWhiteSpace(input.ApiKeyEnc))
             p.ApiKeyEnc = EncryptKey(input.ApiKeyEnc);
-        await Providers.InsertOneAsync(p, cancellationToken: ct);
+        await _providers.InsertAsync(p, ct);
         p.ApiKeyEnc = "";
         return p;
     }
 
     public async Task<bool> UpdateProviderAsync(string id, AiProvider input, CancellationToken ct = default)
     {
-        var update = Builders<AiProvider>.Update
-            .Set(p => p.Name, input.Name.Trim())
-            .Set(p => p.ProviderType, input.ProviderType)
-            .Set(p => p.BaseUrl, input.BaseUrl?.Trim() ?? "")
-            .Set(p => p.Models, input.Models ?? new List<string>())
-            .Set(p => p.DefaultModel, input.DefaultModel?.Trim() ?? "")
-            .Set(p => p.Enabled, input.Enabled)
-            .Set(p => p.RequireApproval, input.RequireApproval);
+        var updates = new List<FieldUpdate>
+        {
+            new(nameof(AiProvider.Name), input.Name.Trim()),
+            new(nameof(AiProvider.ProviderType), input.ProviderType),
+            new(nameof(AiProvider.BaseUrl), input.BaseUrl?.Trim() ?? ""),
+            new(nameof(AiProvider.Models), input.Models ?? new List<string>()),
+            new(nameof(AiProvider.DefaultModel), input.DefaultModel?.Trim() ?? ""),
+            new(nameof(AiProvider.Enabled), input.Enabled),
+            new(nameof(AiProvider.RequireApproval), input.RequireApproval),
+        };
         if (!string.IsNullOrWhiteSpace(input.ApiKeyEnc))
-            update = update.Set(p => p.ApiKeyEnc, EncryptKey(input.ApiKeyEnc));
-        var r = await Providers.UpdateOneAsync(x => x.Id == id, update, cancellationToken: ct);
-        return r.ModifiedCount > 0 || r.MatchedCount > 0;
+            updates.Add(new FieldUpdate(nameof(AiProvider.ApiKeyEnc), EncryptKey(input.ApiKeyEnc)));
+        var modified = await _providers.UpdateOneAsync(x => x.Id == id, updates, ct);
+        if (modified > 0) return true;
+        return await _providers.ExistsAsync(x => x.Id == id, ct);
     }
 
     public async Task<bool> DeleteProviderAsync(string id, CancellationToken ct = default)
     {
-        var r = await Providers.DeleteOneAsync(x => x.Id == id, ct);
-        return r.DeletedCount > 0;
+        return await _providers.DeleteAsync(id, ct) > 0;
     }
 
     public async Task<(bool Ok, string? Error, List<string>? Models)> TestProviderAsync(AiProvider input, CancellationToken ct = default)
@@ -300,14 +302,16 @@ public class AiService
 
     public async Task<List<AiSession>> GetSessionsAsync(string userId, CancellationToken ct = default)
     {
-        return await Sessions.Find(x => x.UserId == userId && x.ChannelId == null)
-            .Sort(Builders<AiSession>.Sort.Descending(s => s.UpdatedAt)).ToListAsync(ct);
+        return await _sessions.FindPagedAsync(
+            x => x.UserId == userId && x.ChannelId == null,
+            1, int.MaxValue, nameof(AiSession.UpdatedAt), true, ct);
     }
 
     public async Task<List<AiSession>> GetChannelSessionsAsync(string userId, CancellationToken ct = default)
     {
-        return await Sessions.Find(x => x.UserId == userId && x.ChannelId != null)
-            .Sort(Builders<AiSession>.Sort.Descending(s => s.UpdatedAt)).ToListAsync(ct);
+        return await _sessions.FindPagedAsync(
+            x => x.UserId == userId && x.ChannelId != null,
+            1, int.MaxValue, nameof(AiSession.UpdatedAt), true, ct);
     }
 
     /// <summary>
@@ -316,8 +320,8 @@ public class AiService
         string channelId, string channelType, string externalId, string externalName,
         string userId, string userName, string providerId, string model, CancellationToken ct = default)
     {
-        var existing = await Sessions.Find(x => x.ChannelId == channelId && x.ChannelExternalId == externalId)
-            .FirstOrDefaultAsync(ct);
+        var existing = await _sessions.FirstOrDefaultAsync(
+            x => x.ChannelId == channelId && x.ChannelExternalId == externalId, ct);
         if (existing != null) return existing;
 
         var s = new AiSession
@@ -334,12 +338,12 @@ public class AiService
         };
         try
         {
-            await Sessions.InsertOneAsync(s, cancellationToken: ct);
+            await _sessions.InsertAsync(s, ct);
         }
-        catch (MongoDB.Driver.MongoWriteException) when (existing == null)
+        catch (DuplicateKeyException) when (existing == null)
         {
-            return await Sessions.Find(x => x.ChannelId == channelId && x.ChannelExternalId == externalId)
-                .FirstOrDefaultAsync(ct) ?? s;
+            return await _sessions.FirstOrDefaultAsync(
+                x => x.ChannelId == channelId && x.ChannelExternalId == externalId, ct) ?? s;
         }
         return s;
     }
@@ -347,37 +351,41 @@ public class AiService
     public async Task UpdateChannelSessionIdentityAsync(
         string sessionId, string externalName, string userName, CancellationToken ct = default)
     {
-        await Sessions.UpdateOneAsync(
+        await _sessions.UpdateOneAsync(
             x => x.Id == sessionId,
-            Builders<AiSession>.Update
-                .Set(s => s.ChannelExternalName, externalName)
-                .Set(s => s.UserName, userName),
-            cancellationToken: ct);
+            new[]
+            {
+                new FieldUpdate(nameof(AiSession.ChannelExternalName), externalName),
+                new FieldUpdate(nameof(AiSession.UserName), userName),
+            },
+            ct);
     }
 
     public async Task UpdateSessionModelAsync(string sessionId, string model, CancellationToken ct = default)
     {
-        await Sessions.UpdateOneAsync(
+        await _sessions.UpdateOneAsync(
             x => x.Id == sessionId,
-            Builders<AiSession>.Update.Set(s => s.Model, model),
-            cancellationToken: ct);
+            new[] { new FieldUpdate(nameof(AiSession.Model), model) },
+            ct);
     }
 
     public async Task DeleteChannelSessionsAsync(string channelId, CancellationToken ct = default)
     {
-        await Sessions.DeleteManyAsync(x => x.ChannelId == channelId, ct);
+        var sessions = await _sessions.FindAsync(x => x.ChannelId == channelId, ct);
+        foreach (var s in sessions)
+            await _sessions.DeleteAsync(s.Id, ct);
     }
 
     public async Task<AiSession?> GetChannelSessionByExternalAsync(
         string channelId, string externalId, CancellationToken ct = default)
     {
-        return await Sessions.Find(x => x.ChannelId == channelId && x.ChannelExternalId == externalId)
-            .FirstOrDefaultAsync(ct);
+        return await _sessions.FirstOrDefaultAsync(
+            x => x.ChannelId == channelId && x.ChannelExternalId == externalId, ct);
     }
 
     public async Task<JsonObject?> GetPendingApprovalAsync(string sessionId, string userId, CancellationToken ct = default)
     {
-        var session = await Sessions.Find(x => x.Id == sessionId && x.UserId == userId).FirstOrDefaultAsync(ct);
+        var session = await _sessions.FirstOrDefaultAsync(x => x.Id == sessionId && x.UserId == userId, ct);
         if (session == null) return null;
         var state = GetRun(sessionId);
         if (state?.PendingToolCall == null) return null;
@@ -397,7 +405,7 @@ public class AiService
 
     public async Task<AiSession?> GetSessionAsync(string id, string userId, CancellationToken ct = default)
     {
-        return await Sessions.Find(x => x.Id == id && x.UserId == userId).FirstOrDefaultAsync(ct);
+        return await _sessions.FirstOrDefaultAsync(x => x.Id == id && x.UserId == userId, ct);
     }
 
     public async Task<AiSession> CreateSessionAsync(string userId, string userName, string providerId, string model, CancellationToken ct = default)
@@ -410,23 +418,25 @@ public class AiService
             ProviderId = providerId,
             Model = model,
         };
-        await Sessions.InsertOneAsync(s, cancellationToken: ct);
+        await _sessions.InsertAsync(s, ct);
         return s;
     }
 
     public async Task<bool> DeleteSessionAsync(string id, string userId, CancellationToken ct = default)
     {
-        var r = await Sessions.DeleteOneAsync(x => x.Id == id && x.UserId == userId, ct);
-        return r.DeletedCount > 0;
+        var session = await _sessions.FirstOrDefaultAsync(x => x.Id == id && x.UserId == userId, ct);
+        if (session == null) return false;
+        return await _sessions.DeleteAsync(session.Id, ct) > 0;
     }
 
     public async Task<bool> RenameSessionAsync(string id, string userId, string title, CancellationToken ct = default)
     {
-        var r = await Sessions.UpdateOneAsync(
+        var modified = await _sessions.UpdateOneAsync(
             x => x.Id == id && x.UserId == userId,
-            Builders<AiSession>.Update.Set(s => s.Title, title),
-            cancellationToken: ct);
-        return r.ModifiedCount > 0 || r.MatchedCount > 0;
+            new[] { new FieldUpdate(nameof(AiSession.Title), title) },
+            ct);
+        if (modified > 0) return true;
+        return await _sessions.ExistsAsync(x => x.Id == id && x.UserId == userId, ct);
     }
 
     public async Task<bool> EditMessageAsync(
@@ -434,7 +444,7 @@ public class AiService
     {
         if (string.IsNullOrWhiteSpace(content)) return false;
 
-        var session = await Sessions.Find(x => x.Id == sessionId && x.UserId == userId).FirstOrDefaultAsync(ct);
+        var session = await _sessions.FirstOrDefaultAsync(x => x.Id == sessionId && x.UserId == userId, ct);
         if (session == null) return false;
 
         var msg = session.Messages.FirstOrDefault(m => m.Id == messageId);
@@ -450,7 +460,7 @@ public class AiService
     public async Task<bool> DeleteMessageAsync(
         string sessionId, string userId, string messageId, CancellationToken ct = default)
     {
-        var session = await Sessions.Find(x => x.Id == sessionId && x.UserId == userId).FirstOrDefaultAsync(ct);
+        var session = await _sessions.FirstOrDefaultAsync(x => x.Id == sessionId && x.UserId == userId, ct);
         if (session == null) return false;
 
         var idx = session.Messages.FindIndex(m => m.Id == messageId);
@@ -467,7 +477,7 @@ public class AiService
     public async Task<bool> TruncateMessagesAfterAsync(
         string sessionId, string userId, string messageId, CancellationToken ct = default)
     {
-        var session = await Sessions.Find(x => x.Id == sessionId && x.UserId == userId).FirstOrDefaultAsync(ct);
+        var session = await _sessions.FirstOrDefaultAsync(x => x.Id == sessionId && x.UserId == userId, ct);
         if (session == null) return false;
 
         var idx = session.Messages.FindIndex(m => m.Id == messageId);
@@ -484,7 +494,7 @@ public class AiService
 
     public async Task<AiSession?> ForkSessionAsync(string id, string userId, string userName, CancellationToken ct = default)
     {
-        var src = await Sessions.Find(x => x.Id == id && x.UserId == userId).FirstOrDefaultAsync(ct);
+        var src = await _sessions.FirstOrDefaultAsync(x => x.Id == id && x.UserId == userId, ct);
         if (src == null) return null;
 
         var fork = new AiSession
@@ -513,32 +523,33 @@ public class AiService
                 CreatedAt = m.CreatedAt,
             }).ToList(),
         };
-        await Sessions.InsertOneAsync(fork, cancellationToken: ct);
+        await _sessions.InsertAsync(fork, ct);
         return fork;
     }
 
 
     public async Task<AiMcpConfig> GetMcpConfigAsync(CancellationToken ct = default)
     {
-        var cfg = await McpConfigs.Find(FilterDefinition<AiMcpConfig>.Empty).FirstOrDefaultAsync(ct);
+        var cfg = await _mcpConfigs.FirstOrDefaultAsync(_ => true, ct);
         return cfg ?? new AiMcpConfig();
     }
 
     public async Task SetMcpConfigAsync(AiMcpConfig cfg, CancellationToken ct = default)
     {
-        var existing = await McpConfigs.Find(FilterDefinition<AiMcpConfig>.Empty).FirstOrDefaultAsync(ct);
+        var existing = await _mcpConfigs.FirstOrDefaultAsync(_ => true, ct);
         if (existing == null)
         {
-            await McpConfigs.InsertOneAsync(cfg, cancellationToken: ct);
+            await _mcpConfigs.InsertAsync(cfg, ct);
         }
         else
         {
-            await McpConfigs.UpdateOneAsync(
-                Builders<AiMcpConfig>.Filter.Eq(c => c.Id, existing.Id),
-                Builders<AiMcpConfig>.Update
-                    .Set(c => c.ToolsEnabled, cfg.ToolsEnabled)
-                    .Set(c => c.AllowedTools, cfg.AllowedTools ?? new List<string>()),
-                cancellationToken: ct);
+            await _mcpConfigs.UpdateByIdAsync(existing.Id,
+                new[]
+                {
+                    new FieldUpdate(nameof(AiMcpConfig.ToolsEnabled), cfg.ToolsEnabled),
+                    new FieldUpdate(nameof(AiMcpConfig.AllowedTools), cfg.AllowedTools ?? new List<string>()),
+                },
+                ct);
         }
     }
 
@@ -1688,10 +1699,24 @@ public class AiService
     private async Task SaveSessionAsync(AiSession session, CancellationToken ct)
     {
         session.UpdatedAt = DateTime.UtcNow;
-        await Sessions.ReplaceOneAsync(
+        await _sessions.UpdateOneAsync(
             x => x.Id == session.Id && x.UserId == session.UserId,
-            session,
-            new ReplaceOptions { IsUpsert = false },
+            new[]
+            {
+                new FieldUpdate(nameof(AiSession.UserId), session.UserId),
+                new FieldUpdate(nameof(AiSession.UserName), session.UserName),
+                new FieldUpdate(nameof(AiSession.Title), session.Title),
+                new FieldUpdate(nameof(AiSession.ProviderId), session.ProviderId),
+                new FieldUpdate(nameof(AiSession.Model), session.Model),
+                new FieldUpdate(nameof(AiSession.Messages), session.Messages),
+                new FieldUpdate(nameof(AiSession.CreatedAt), session.CreatedAt),
+                new FieldUpdate(nameof(AiSession.UpdatedAt), session.UpdatedAt),
+                new FieldUpdate(nameof(AiSession.Status), session.Status),
+                new FieldUpdate(nameof(AiSession.ChannelId), session.ChannelId),
+                new FieldUpdate(nameof(AiSession.ChannelType), session.ChannelType),
+                new FieldUpdate(nameof(AiSession.ChannelExternalId), session.ChannelExternalId),
+                new FieldUpdate(nameof(AiSession.ChannelExternalName), session.ChannelExternalName),
+            },
             ct);
         NotifySessionUpdated(session);
     }

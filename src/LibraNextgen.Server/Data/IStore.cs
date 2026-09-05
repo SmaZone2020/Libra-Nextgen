@@ -55,4 +55,15 @@ public interface IStore<T> where T : class
     Task<long> UpdateOneAsync(Expression<Func<T, bool>> filter, IReadOnlyList<FieldUpdate> updates, CancellationToken ct = default);
 
     Task<long> DeleteAsync(string id, CancellationToken ct = default);
+
+    /// <summary>Delete every document matching the filter. Returns the number
+    /// of deleted documents.</summary>
+    Task<long> DeleteManyAsync(Expression<Func<T, bool>> filter, CancellationToken ct = default);
+
+    /// <summary>Atomically replace the document with the given id by
+    /// <paramref name="entity"/>. The caller must keep <c>entity.Id</c> equal
+    /// to <paramref name="id"/> (both backends treat the id as immutable).
+    /// Returns the number of replaced documents (0 when the id does not
+    /// exist).</summary>
+    Task<long> ReplaceByIdAsync(string id, T entity, CancellationToken ct = default);
 }

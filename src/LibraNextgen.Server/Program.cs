@@ -123,6 +123,13 @@ RegisterStore<SessionTokenDoc>(builder.Services, "session_tokens");
 RegisterStore<PluginRecord>(builder.Services, "plugins");
 RegisterStore<McpConfig>(builder.Services, "mcp_config");
 RegisterStore<AiEventSubscription>(builder.Services, "ai_event_subscriptions");
+RegisterStore<AiProvider>(builder.Services, "ai_providers");
+RegisterStore<AiSession>(builder.Services, "ai_sessions");
+RegisterStore<AiMcpConfig>(builder.Services, "ai_mcp_config");
+RegisterStore<AiChannel>(builder.Services, "ai_channels");
+RegisterStore<AiChannelUser>(builder.Services, "ai_channel_users");
+RegisterStore<AiChannelBindCode>(builder.Services, "ai_channel_bind_codes");
+RegisterStore<AiChannelCursor>(builder.Services, "ai_channel_cursors");
 builder.Services.AddScoped<BuildListService>();
 builder.Services.AddSingleton<AiService>();
 
@@ -395,31 +402,33 @@ if (consoleWebRoot is not null)
     });
 }
 
-// MongoDB bootstrap (indexes + in-memory caches) applies only in Mongo mode;
-// SQLite mode skips it so a desktop boot never touches a Mongo server.
-if (!useSqlite)
+// Startup bootstrap: Mongo indexes are Mongo-only (SQLite has no TTL/unique
+// index equivalents to build), while the in-memory cache loads (risk policy,
+// MCP flag, plugin scripts, session keys) run against the active store — all
+// of them are dual-store now.
+try
 {
-    try
+    using (var scope = app.Services.CreateScope())
     {
-        using (var scope = app.Services.CreateScope())
+        if (!useSqlite)
         {
             var indexBuilder = scope.ServiceProvider.GetRequiredService<MongoIndexBuilder>();
             indexBuilder.EnsureIndexesAsync().GetAwaiter().GetResult();
-            var riskPolicy = scope.ServiceProvider.GetRequiredService<RiskPolicyService>();
-            riskPolicy.LoadAsync().GetAwaiter().GetResult();
-            var mcp = scope.ServiceProvider.GetRequiredService<McpService>();
-            mcp.LoadAsync().GetAwaiter().GetResult();
-            var plugins = scope.ServiceProvider.GetRequiredService<PluginService>();
-            plugins.PreloadScriptsAsync().GetAwaiter().GetResult();
-            var sessionKeys = scope.ServiceProvider.GetRequiredService<SessionKeyStore>();
-            sessionKeys.LoadAsync().GetAwaiter().GetResult();
         }
+        var riskPolicy = scope.ServiceProvider.GetRequiredService<RiskPolicyService>();
+        riskPolicy.LoadAsync().GetAwaiter().GetResult();
+        var mcp = scope.ServiceProvider.GetRequiredService<McpService>();
+        mcp.LoadAsync().GetAwaiter().GetResult();
+        var plugins = scope.ServiceProvider.GetRequiredService<PluginService>();
+        plugins.PreloadScriptsAsync().GetAwaiter().GetResult();
+        var sessionKeys = scope.ServiceProvider.GetRequiredService<SessionKeyStore>();
+        sessionKeys.LoadAsync().GetAwaiter().GetResult();
     }
-    catch (Exception ex)
-    {
-        var logger = app.Services.GetRequiredService<ILoggerFactory>().CreateLogger("Startup");
-        logger.LogWarning(ex, "MongoDB index initialization failed — continuing without indexes.");
-    }
+}
+catch (Exception ex)
+{
+    var logger = app.Services.GetRequiredService<ILoggerFactory>().CreateLogger("Startup");
+    logger.LogWarning(ex, "Startup bootstrap failed — continuing without indexes/caches.");
 }
 
 if (resolvedConfig is not null)

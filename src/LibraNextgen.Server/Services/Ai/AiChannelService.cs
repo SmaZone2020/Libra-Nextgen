@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Linq.Expressions;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -6,7 +7,6 @@ using System.Text.Json.Nodes;
 using LibraNextgen.Common.Models;
 using LibraNextgen.Common.Protocol;
 using LibraNextgen.Service.Data;
-using MongoDB.Driver;
 
 namespace LibraNextgen.Service.Services.Ai;
 
@@ -34,7 +34,10 @@ public class AiChannelService
     private static string NextThinkingPhrase() =>
         ThinkingPhrases[(Interlocked.Increment(ref _thinkingIdx) & 0x7fffffff) % ThinkingPhrases.Length];
 
-    private readonly MongoDbContext _db;
+    private readonly IStore<AiChannel> _channels;
+    private readonly IStore<AiChannelUser> _channelUsers;
+    private readonly IStore<AiChannelBindCode> _bindCodes;
+    private readonly IStore<AiChannelCursor> _cursors;
     private readonly AiService _ai;
     private readonly AuditService _audit;
     private readonly ConnectionManager _ws;
@@ -49,7 +52,10 @@ public class AiChannelService
     private readonly ConcurrentDictionary<string, Action> _typingKeepalives = new();
 
     public AiChannelService(
-        MongoDbContext db,
+        IStore<AiChannel> channels,
+        IStore<AiChannelUser> channelUsers,
+        IStore<AiChannelBindCode> bindCodes,
+        IStore<AiChannelCursor> cursors,
         AiService ai,
         AuditService audit,
         ConnectionManager ws,
@@ -59,7 +65,10 @@ public class AiChannelService
         WeChatClawAdapter claw,
         ILogger<AiChannelService> logger)
     {
-        _db = db;
+        _channels = channels;
+        _channelUsers = channelUsers;
+        _bindCodes = bindCodes;
+        _cursors = cursors;
         _ai = ai;
         _audit = audit;
         _ws = ws;
@@ -69,11 +78,6 @@ public class AiChannelService
         _claw = claw;
         _logger = logger;
     }
-
-    private IMongoCollection<AiChannel> Channels => _db.GetCollection<AiChannel>("ai_channels");
-    private IMongoCollection<AiChannelUser> ChannelUsers => _db.GetCollection<AiChannelUser>("ai_channel_users");
-    private IMongoCollection<AiChannelBindCode> BindCodes => _db.GetCollection<AiChannelBindCode>("ai_channel_bind_codes");
-    private IMongoCollection<AiChannelCursor> Cursors => _db.GetCollection<AiChannelCursor>("ai_channel_cursors");
 
     private readonly ConcurrentDictionary<string, DateTime> _seenInbound = new();
     private const int SeenInboundMax = 2000;
@@ -146,8 +150,8 @@ public class AiChannelService
 
     public async Task<List<AiChannel>> ListChannelsAsync(bool includeSecrets, CancellationToken ct = default)
     {
-        var list = await Channels.Find(FilterDefinition<AiChannel>.Empty)
-            .Sort(Builders<AiChannel>.Sort.Descending(c => c.CreatedAt)).ToListAsync(ct);
+        var list = await _channels.FindPagedAsync(
+            null, 1, int.MaxValue, nameof(AiChannel.CreatedAt), true, ct);
         foreach (var ch in list)
         {
             if (includeSecrets) DecryptSensitive(ch); else MaskConfig(ch);
@@ -157,7 +161,7 @@ public class AiChannelService
 
     public async Task<AiChannel?> GetChannelAsync(string id, bool includeSecrets, CancellationToken ct = default)
     {
-        var ch = await Channels.Find(x => x.Id == id).FirstOrDefaultAsync(ct);
+        var ch = await _channels.FirstOrDefaultAsync(x => x.Id == id, ct);
         if (ch == null) return null;
         if (includeSecrets) DecryptSensitive(ch); else MaskConfig(ch);
         return ch;
@@ -165,13 +169,21 @@ public class AiChannelService
 
     public async Task<List<AiChannel>> GetEnabledChannelsAsync(IEnumerable<string>? types = null, CancellationToken ct = default)
     {
-        var filter = Builders<AiChannel>.Filter.Eq(c => c.Enabled, true);
+        Expression<Func<AiChannel, bool>> filter = c => c.Enabled == true;
         if (types != null)
         {
             var list = types.ToList();
-            if (list.Count > 0) filter &= Builders<AiChannel>.Filter.In(c => c.ChannelType, list);
+            if (list.Count > 0)
+            {
+                Expression<Func<AiChannel, bool>>? typeFilter = null;
+                foreach (var type in list)
+                    typeFilter = typeFilter is null
+                        ? (Expression<Func<AiChannel, bool>>)(c => c.ChannelType == type)
+                        : ExpressionCombine.OrElse<AiChannel>(typeFilter, c => c.ChannelType == type);
+                filter = ExpressionCombine.AndAlso(filter, typeFilter);
+            }
         }
-        var result = await Channels.Find(filter).ToListAsync(ct);
+        var result = await _channels.FindAsync(filter, ct);
         foreach (var ch in result)
         {
             try { DecryptSensitive(ch); }
@@ -203,7 +215,7 @@ public class AiChannelService
         }
         Validate(ch);
         EncryptSensitive(ch);
-        await Channels.InsertOneAsync(ch, cancellationToken: ct);
+        await _channels.InsertAsync(ch, ct);
         MaskConfig(ch);
         return ch;
     }
@@ -239,16 +251,33 @@ public class AiChannelService
         if (ch.ChannelType == AiChannelTypes.WechatClaw) ch.StreamOutput = false;
         Validate(ch);
         EncryptSensitive(ch);
-        var r = await Channels.ReplaceOneAsync(x => x.Id == id, ch, cancellationToken: ct);
-        return r.MatchedCount > 0;
+        var modified = await _channels.UpdateOneAsync(x => x.Id == id, new[]
+        {
+            new FieldUpdate(nameof(AiChannel.Name), ch.Name),
+            new FieldUpdate(nameof(AiChannel.ChannelType), ch.ChannelType),
+            new FieldUpdate(nameof(AiChannel.Enabled), ch.Enabled),
+            new FieldUpdate(nameof(AiChannel.Config), ch.Config),
+            new FieldUpdate(nameof(AiChannel.DefaultTier), ch.DefaultTier),
+            new FieldUpdate(nameof(AiChannel.RequireBind), ch.RequireBind),
+            new FieldUpdate(nameof(AiChannel.DefaultProviderId), ch.DefaultProviderId),
+            new FieldUpdate(nameof(AiChannel.DefaultModel), ch.DefaultModel),
+            new FieldUpdate(nameof(AiChannel.ShowToolCalls), ch.ShowToolCalls),
+            new FieldUpdate(nameof(AiChannel.StreamOutput), ch.StreamOutput),
+            new FieldUpdate(nameof(AiChannel.AllowInGroups), ch.AllowInGroups),
+            new FieldUpdate(nameof(AiChannel.UpdatedAt), ch.UpdatedAt),
+        }, ct);
+        if (modified > 0) return true;
+        return await _channels.ExistsAsync(x => x.Id == id, ct);
     }
 
     public async Task<bool> DeleteChannelAsync(string id, CancellationToken ct = default)
     {
-        var r = await Channels.DeleteOneAsync(x => x.Id == id, ct);
-        if (r.DeletedCount == 0) return false;
-        await ChannelUsers.DeleteManyAsync(x => x.ChannelId == id, ct);
-        await BindCodes.DeleteManyAsync(x => x.ChannelId == id, ct);
+        var deleted = await _channels.DeleteAsync(id, ct);
+        if (deleted == 0) return false;
+        foreach (var u in await _channelUsers.FindAsync(x => x.ChannelId == id, ct))
+            await _channelUsers.DeleteAsync(u.Id, ct);
+        foreach (var b in await _bindCodes.FindAsync(x => x.ChannelId == id, ct))
+            await _bindCodes.DeleteAsync(b.Id, ct);
         await DeletePollCursorAsync(id, ct);
         await _ai.DeleteChannelSessionsAsync(id, ct);
         return true;
@@ -283,32 +312,31 @@ public class AiChannelService
 
     public async Task<string> GetPollCursorAsync(string channelId, CancellationToken ct = default)
     {
-        var c = await Cursors.Find(x => x.ChannelId == channelId).FirstOrDefaultAsync(ct);
+        var c = await _cursors.FirstOrDefaultAsync(x => x.ChannelId == channelId, ct);
         return c?.Cursor ?? "";
     }
 
     public async Task SetPollCursorAsync(string channelId, string cursor, CancellationToken ct = default)
     {
         if (string.IsNullOrEmpty(cursor)) return;
-        var existing = await Cursors.Find(x => x.ChannelId == channelId).FirstOrDefaultAsync(ct);
+        var existing = await _cursors.FirstOrDefaultAsync(x => x.ChannelId == channelId, ct);
         if (existing == null)
         {
-            await Cursors.InsertOneAsync(new AiChannelCursor { ChannelId = channelId, Cursor = cursor }, cancellationToken: ct);
+            await _cursors.InsertAsync(new AiChannelCursor { ChannelId = channelId, Cursor = cursor }, ct);
         }
         else
         {
-            await Cursors.UpdateOneAsync(
-                x => x.Id == existing.Id,
-                Builders<AiChannelCursor>.Update
-                    .Set(c => c.Cursor, cursor)
-                    .Set(c => c.UpdatedAt, DateTime.UtcNow),
-                cancellationToken: ct);
+            await _cursors.UpdateByIdAsync(existing.Id, new[]
+            {
+                new FieldUpdate(nameof(AiChannelCursor.Cursor), cursor),
+                new FieldUpdate(nameof(AiChannelCursor.UpdatedAt), DateTime.UtcNow),
+            }, ct);
         }
     }
 
     public async Task DeletePollCursorAsync(string channelId, CancellationToken ct = default)
     {
-        await Cursors.DeleteManyAsync(x => x.ChannelId == channelId, ct);
+        await _cursors.DeleteManyAsync(x => x.ChannelId == channelId, ct);
     }
 
     /// <summary>
@@ -333,7 +361,7 @@ public class AiChannelService
                 ch.Config["ilinkBotId"] = ilinkBotId.Trim();
         }
         EncryptSensitive(ch);
-        await Channels.ReplaceOneAsync(x => x.Id == id, ch, cancellationToken: ct);
+        await _channels.ReplaceByIdAsync(id, ch, ct);
         return true;
     }
 
@@ -357,13 +385,13 @@ public class AiChannelService
     public async Task<(string Code, DateTime ExpiresAt, string? BindUrl)> CreateBindCodeAsync(
         string channelId, string boundUserId, CancellationToken ct = default)
     {
-        var ch = await Channels.Find(x => x.Id == channelId).FirstOrDefaultAsync(ct)
+        var ch = await _channels.FirstOrDefaultAsync(x => x.Id == channelId, ct)
             ?? throw new KeyNotFoundException("channel not found");
         var user = await _users.GetByIdAsync(boundUserId, ct)
             ?? throw new KeyNotFoundException("user not found");
         var code = GenerateBindCode();
         var expiresAt = DateTime.UtcNow.AddMinutes(15);
-        await BindCodes.InsertOneAsync(new AiChannelBindCode
+        await _bindCodes.InsertAsync(new AiChannelBindCode
         {
             ChannelId = channelId,
             BoundUserId = user.Id,
@@ -371,7 +399,7 @@ public class AiChannelService
             CodeHash = HashCode(code),
             CodeTail = code.Length >= 4 ? code[^4..] : code,
             ExpiresAt = expiresAt,
-        }, cancellationToken: ct);
+        }, ct);
         _logger.LogInformation("Bind code created for channel {Channel} → user {User}", channelId, user.Username);
         string? bindUrl = null;
         if (ch.ChannelType == AiChannelTypes.Telegram)
@@ -385,24 +413,24 @@ public class AiChannelService
 
     public async Task<List<AiChannelUser>> ListUsersAsync(string channelId, CancellationToken ct = default)
     {
-        return await ChannelUsers.Find(x => x.ChannelId == channelId)
-            .Sort(Builders<AiChannelUser>.Sort.Descending(u => u.BoundAt)).ToListAsync(ct);
+        return await _channelUsers.FindPagedAsync(
+            x => x.ChannelId == channelId, 1, int.MaxValue, nameof(AiChannelUser.BoundAt), true, ct);
     }
 
     public async Task<List<AiChannelBindCode>> ListBindCodesAsync(string channelId, CancellationToken ct = default)
     {
-        return await BindCodes.Find(x => x.ChannelId == channelId)
-            .Sort(Builders<AiChannelBindCode>.Sort.Descending(b => b.CreatedAt)).ToListAsync(ct);
+        return await _bindCodes.FindPagedAsync(
+            x => x.ChannelId == channelId, 1, int.MaxValue, nameof(AiChannelBindCode.CreatedAt), true, ct);
     }
 
     public async Task<bool> RevokeBindCodeAsync(string channelId, string codeId, CancellationToken ct = default)
     {
-        var r = await BindCodes.UpdateOneAsync(
+        var modified = await _bindCodes.UpdateOneAsync(
             x => x.Id == codeId && x.ChannelId == channelId && x.UsedAt == null && x.RevokedAt == null,
-            Builders<AiChannelBindCode>.Update.Set(b => b.RevokedAt, DateTime.UtcNow),
-            cancellationToken: ct);
-        if (r.MatchedCount == 0) return false;
-        var bc = await BindCodes.Find(x => x.Id == codeId).FirstOrDefaultAsync(ct);
+            new[] { new FieldUpdate(nameof(AiChannelBindCode.RevokedAt), DateTime.UtcNow) },
+            ct);
+        if (modified == 0) return false;
+        var bc = await _bindCodes.FirstOrDefaultAsync(x => x.Id == codeId, ct);
         if (bc != null)
         {
             await _audit.LogAsync(bc.BoundUserId, bc.BoundUserName, "AI channel bind code revoke", "ai.channel.bind.revoke",
@@ -414,22 +442,24 @@ public class AiChannelService
     public async Task<bool> SetUserTierAsync(string channelUserId, int? tier, CancellationToken ct = default)
     {
         if (tier is < 0 or > 3) throw new ArgumentException("tier must be 0-3 or null");
-        var upd = Builders<AiChannelUser>.Update.Set(u => u.TierOverride, tier);
-        var r = await ChannelUsers.UpdateOneAsync(x => x.Id == channelUserId, upd, cancellationToken: ct);
-        return r.MatchedCount > 0;
+        var exists = await _channelUsers.ExistsAsync(x => x.Id == channelUserId, ct);
+        if (!exists) return false;
+        await _channelUsers.UpdateByIdAsync(channelUserId,
+            new[] { new FieldUpdate(nameof(AiChannelUser.TierOverride), tier) }, ct);
+        return true;
     }
 
     public async Task<bool> UnbindUserAsync(string channelUserId, CancellationToken ct = default)
     {
-        var u = await ChannelUsers.Find(x => x.Id == channelUserId).FirstOrDefaultAsync(ct);
+        var u = await _channelUsers.FirstOrDefaultAsync(x => x.Id == channelUserId, ct);
         if (u == null) return false;
-        var r = await ChannelUsers.DeleteOneAsync(x => x.Id == channelUserId, ct);
-        if (r.DeletedCount > 0)
+        var deleted = await _channelUsers.DeleteAsync(u.Id, ct);
+        if (deleted > 0)
         {
             await _audit.LogAsync(u.BoundUserId, u.BoundUserName, "AI channel unbind", "ai.channel.unbind",
                 null, $"channel={u.ChannelId} external={u.ExternalId} ({u.ExternalName})", "console", RiskLevel.Safe);
         }
-        return r.DeletedCount > 0;
+        return deleted > 0;
     }
 
 
@@ -478,8 +508,8 @@ public class AiChannelService
 
         if (msg.IsGroup)
         {
-            var bound = await ChannelUsers.Find(x => x.ChannelId == ch.Id && x.ExternalId == msg.ExternalId)
-                .FirstOrDefaultAsync(ct);
+            var bound = await _channelUsers.FirstOrDefaultAsync(
+                x => x.ChannelId == ch.Id && x.ExternalId == msg.ExternalId, ct);
             var isBindCmd = text.StartsWith("/bind", StringComparison.OrdinalIgnoreCase);
             if (bound == null && !isBindCmd)
             {
@@ -500,8 +530,8 @@ public class AiChannelService
             return;
         }
 
-        var user = await ChannelUsers.Find(x => x.ChannelId == ch.Id && x.ExternalId == msg.ExternalId)
-            .FirstOrDefaultAsync(ct);
+        var user = await _channelUsers.FirstOrDefaultAsync(
+            x => x.ChannelId == ch.Id && x.ExternalId == msg.ExternalId, ct);
         if (user == null)
         {
             if (ch.RequireBind)
@@ -514,12 +544,11 @@ public class AiChannelService
             return;
         }
 
-        _ = ChannelUsers.UpdateOneAsync(
-            x => x.Id == user.Id,
-            Builders<AiChannelUser>.Update
-                .Set(u => u.LastSeenAt, DateTime.UtcNow)
-                .Set(u => u.ExternalName, msg.ExternalName),
-            cancellationToken: ct);
+        _ = _channelUsers.UpdateByIdAsync(user.Id, new[]
+        {
+            new FieldUpdate(nameof(AiChannelUser.LastSeenAt), DateTime.UtcNow),
+            new FieldUpdate(nameof(AiChannelUser.ExternalName), msg.ExternalName),
+        }, ct);
 
         var tier = Math.Clamp(user.TierOverride ?? ch.DefaultTier, 0, 3);
         var auditName = $"{user.BoundUserName}({ch.ChannelType}:{msg.ExternalName})";
@@ -597,8 +626,8 @@ public class AiChannelService
                 }
             case "/status":
                 {
-                    var user = await ChannelUsers.Find(x => x.ChannelId == ch.Id && x.ExternalId == msg.ExternalId)
-                        .FirstOrDefaultAsync(ct);
+                    var user = await _channelUsers.FirstOrDefaultAsync(
+                        x => x.ChannelId == ch.Id && x.ExternalId == msg.ExternalId, ct);
                     var tier = user == null ? ch.DefaultTier : Math.Clamp(user.TierOverride ?? ch.DefaultTier, 0, 3);
                     var bound = user == null ? "未绑定" : user.BoundUserName;
                     await TrySendRichAsync(ch, Target(msg),
@@ -625,8 +654,8 @@ public class AiChannelService
                         await TrySendAsync(ch, Target(msg), "该功能需要 Telegram 内联菜单支持。", ct);
                         break;
                     }
-                    var tu = await ChannelUsers.Find(x => x.ChannelId == ch.Id && x.ExternalId == msg.ExternalId)
-                        .FirstOrDefaultAsync(ct);
+                    var tu = await _channelUsers.FirstOrDefaultAsync(
+                        x => x.ChannelId == ch.Id && x.ExternalId == msg.ExternalId, ct);
                     if (tu == null)
                     {
                         await TrySendAsync(ch, Target(msg), "请先绑定控制台账号（/bind 绑定码）。", ct);
@@ -844,8 +873,8 @@ public class AiChannelService
                     }
                 case "help-tier":
                     {
-                        var user = await ChannelUsers.Find(x => x.ChannelId == ch.Id && x.ExternalId == action.ExternalId)
-                            .FirstOrDefaultAsync(ct);
+                        var user = await _channelUsers.FirstOrDefaultAsync(
+                            x => x.ChannelId == ch.Id && x.ExternalId == action.ExternalId, ct);
                         if (user == null)
                         {
                             await adapter.EditMenuAsync(ch, action.ChatId, action.MessageId,
@@ -859,8 +888,8 @@ public class AiChannelService
                     }
                 case "help-status":
                     {
-                        var user = await ChannelUsers.Find(x => x.ChannelId == ch.Id && x.ExternalId == action.ExternalId)
-                            .FirstOrDefaultAsync(ct);
+                        var user = await _channelUsers.FirstOrDefaultAsync(
+                            x => x.ChannelId == ch.Id && x.ExternalId == action.ExternalId, ct);
                         var tier = user == null ? ch.DefaultTier : Math.Clamp(user.TierOverride ?? ch.DefaultTier, 0, 3);
                         var bound = user == null ? "未绑定" : user.BoundUserName;
                         var session = await _ai.GetChannelSessionByExternalAsync(ch.Id, action.ExternalId, ct);
@@ -992,11 +1021,14 @@ public class AiChannelService
         if (ch == null) return false;
         if (tier < 0 || tier > Math.Clamp(ch.DefaultTier, 0, 3))
             throw new ArgumentException($"tier must be ≤ channel default ({ch.DefaultTier})");
-        var r = await ChannelUsers.UpdateOneAsync(
+        var exists = await _channelUsers.ExistsAsync(
+            x => x.ChannelId == channelId && x.ExternalId == externalId, ct);
+        if (!exists) return false;
+        await _channelUsers.UpdateOneAsync(
             x => x.ChannelId == channelId && x.ExternalId == externalId,
-            Builders<AiChannelUser>.Update.Set(u => u.TierOverride, tier),
-            cancellationToken: ct);
-        return r.MatchedCount > 0;
+            new[] { new FieldUpdate(nameof(AiChannelUser.TierOverride), tier) },
+            ct);
+        return true;
     }
 
     /// <summary>
@@ -1035,8 +1067,8 @@ public class AiChannelService
 
     private async Task TryBindAsync(AiChannel ch, ChannelInboundMessage msg, string code, CancellationToken ct)
     {
-        var existing = await ChannelUsers.Find(x => x.ChannelId == ch.Id && x.ExternalId == msg.ExternalId)
-            .FirstOrDefaultAsync(ct);
+        var existing = await _channelUsers.FirstOrDefaultAsync(
+            x => x.ChannelId == ch.Id && x.ExternalId == msg.ExternalId, ct);
         if (existing != null)
         {
             await TrySendRichAsync(ch, Target(msg),
@@ -1052,35 +1084,37 @@ public class AiChannelService
 
         var now = DateTime.UtcNow;
         var hash = HashCode(code);
-        var bc = await BindCodes.Find(x => x.ChannelId == ch.Id && x.CodeHash == hash
-                && x.ExpiresAt > now && x.UsedAt == null && x.RevokedAt == null).FirstOrDefaultAsync(ct);
+        var bc = await _bindCodes.FirstOrDefaultAsync(x => x.ChannelId == ch.Id && x.CodeHash == hash
+                && x.ExpiresAt > now && x.UsedAt == null && x.RevokedAt == null, ct);
         if (bc == null)
         {
             await TrySendAsync(ch, Target(msg), "❌ 绑定码无效或已过期，请重新生成。", ct);
             return;
         }
 
-        var mark = await BindCodes.UpdateOneAsync(
+        var mark = await _bindCodes.UpdateOneAsync(
             x => x.Id == bc.Id && x.UsedAt == null,
-            Builders<AiChannelBindCode>.Update
-                .Set(b => b.UsedAt, now)
-                .Set(b => b.UsedByExternalId, msg.ExternalId)
-                .Set(b => b.UsedByExternalName, msg.ExternalName),
-            cancellationToken: ct);
-        if (mark.ModifiedCount == 0)
+            new[]
+            {
+                new FieldUpdate(nameof(AiChannelBindCode.UsedAt), now),
+                new FieldUpdate(nameof(AiChannelBindCode.UsedByExternalId), msg.ExternalId),
+                new FieldUpdate(nameof(AiChannelBindCode.UsedByExternalName), msg.ExternalName),
+            },
+            ct);
+        if (mark == 0)
         {
             await TrySendAsync(ch, Target(msg), "❌ 绑定码已被使用，请重新生成。", ct);
             return;
         }
 
-        await ChannelUsers.InsertOneAsync(new AiChannelUser
+        await _channelUsers.InsertAsync(new AiChannelUser
         {
             ChannelId = ch.Id,
             ExternalId = msg.ExternalId,
             ExternalName = msg.ExternalName,
             BoundUserId = bc.BoundUserId,
             BoundUserName = bc.BoundUserName,
-        }, cancellationToken: ct);
+        }, ct);
         await _audit.LogAsync(bc.BoundUserId, bc.BoundUserName, "AI channel bind", "ai.channel.bind", null,
             $"channel={ch.Id} type={ch.ChannelType} external={msg.ExternalId} ({msg.ExternalName})",
             "channel", RiskLevel.Safe);
@@ -1426,9 +1460,9 @@ public class AiChannelService
 
     public async Task<AiChannelUser?> GetLatestBoundUserAsync(string channelId, CancellationToken ct = default)
     {
-        return await ChannelUsers.Find(x => x.ChannelId == channelId)
-            .Sort(Builders<AiChannelUser>.Sort.Descending(u => u.LastSeenAt))
-            .FirstOrDefaultAsync(ct);
+        var list = await _channelUsers.FindPagedAsync(
+            x => x.ChannelId == channelId, 1, 1, nameof(AiChannelUser.LastSeenAt), true, ct);
+        return list.Count > 0 ? list[0] : null;
     }
 
     public async Task<CallbackResult> HandleCallbackAsync(CallbackAction action, CancellationToken ct = default)

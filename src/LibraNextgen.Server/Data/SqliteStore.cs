@@ -243,6 +243,31 @@ public sealed class SqliteStore<T> : IStore<T> where T : class
             return (long)cmd.ExecuteNonQuery();
         });
 
+    public Task<long> DeleteManyAsync(Expression<Func<T, bool>> filter, CancellationToken ct = default)
+        => _db.RunAsync(conn =>
+        {
+            var predicate = filter.Compile();
+            long deleted = 0;
+            foreach (var entity in LoadAll(conn).Where(predicate))
+            {
+                using var cmd = conn.CreateCommand();
+                cmd.CommandText = $"DELETE FROM {_quoted} WHERE _id = $id;";
+                cmd.Parameters.AddWithValue("$id", EntityId(entity));
+                deleted += cmd.ExecuteNonQuery();
+            }
+            return deleted;
+        });
+
+    public Task<long> ReplaceByIdAsync(string id, T entity, CancellationToken ct = default)
+        => _db.RunAsync(conn =>
+        {
+            using var cmd = conn.CreateCommand();
+            cmd.CommandText = $"UPDATE {_quoted} SET doc = $doc WHERE _id = $id;";
+            cmd.Parameters.AddWithValue("$doc", Serialize(entity));
+            cmd.Parameters.AddWithValue("$id", id);
+            return (long)cmd.ExecuteNonQuery();
+        });
+
     // ── internals ────────────────────────────────────────────────────────
 
     private static string EntityId(T entity)
