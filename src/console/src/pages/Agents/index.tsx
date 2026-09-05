@@ -13,6 +13,7 @@ import {
 import { AgentBrowser } from './AgentBrowser';
 import { AgentDetailModal } from './AgentDetailModal';
 import { MobileBuilderEntry } from './MobileBuilderEntry';
+import { RemoteNodeAgents } from './RemoteNodeAgents';
 import { useAgent } from '../../contexts/AgentContext';
 import { useDialog } from '../../hooks/useDialog';
 import { getAgent, deleteAgent } from '../../api/agents';
@@ -156,6 +157,9 @@ export default function AgentsPage() {
           </ContextMenu.Menu>
         </ContextMenu.Popover>
       </ContextMenu>
+
+      {/* Devices on connected remote nodes — read-only segments (admin). */}
+      <RemoteNodeAgents />
 
       <AgentDetailModal
         isOpen={modalOpen}

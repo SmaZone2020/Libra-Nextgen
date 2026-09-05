@@ -1,4 +1,5 @@
 import { api } from './client';
+import type { AgentListItem } from '../types/models';
 
 export interface MeshNode {
   id: string;
@@ -52,7 +53,7 @@ export async function disconnectMeshNode(id: string): Promise<{ connected: boole
 }
 
 export interface MeshAgentsResponse {
-  agents: unknown[];
+  agents: AgentListItem[];
   total: number;
   online: number;
   page: number;
