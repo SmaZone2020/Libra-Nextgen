@@ -6,6 +6,7 @@ import { Button } from '@heroui/react';
 import { AntennaSignal } from '@gravity-ui/icons';
 import { Sidebar, type NavItem, type SidebarSection } from '../shared/layout/Sidebar';
 import Dashboard from '../pages/Dashboard';
+import NodesPage from '../pages/Nodes';
 import AgentsPage from '../pages/Agents';
 import AgentDetailPage from '../pages/Agents/AgentDetailPage';
 import AuditLogsPage from '../pages/AuditLogs';
@@ -186,6 +187,7 @@ export function AuthenticatedLayout({
                 >
                   <Routes location={location}>
                     <Route path="/" element={<Dashboard />} />
+                    <Route path="/nodes" element={<NodesPage />} />
                     <Route path="/agents" element={<AgentsPage />} />
                     <Route path="/agents/:agentId" element={<AgentDetailPage />} />
                     <Route path="/shell" element={<ShellPage />} />

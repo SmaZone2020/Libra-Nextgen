@@ -8,6 +8,7 @@ export const isPluginRoute = (pathname: string) =>
 
 const PAGE_META_KEYS: Record<string, [string, string]> = {
   '/': ['pageMeta.dashboard.label', 'pageMeta.dashboard.subtitle'],
+  '/nodes': ['pageMeta.nodes.label', 'pageMeta.nodes.subtitle'],
   '/agents': ['pageMeta.agents.label', 'pageMeta.agents.subtitle'],
   '/agents/:agentId': ['pageMeta.agentDetail.label', 'pageMeta.agentDetail.subtitle'],
   '/shell': ['pageMeta.shell.label', 'pageMeta.shell.subtitle'],

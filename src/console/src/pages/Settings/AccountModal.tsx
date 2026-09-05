@@ -202,6 +202,7 @@ export function AccountModal({ open, editing, onClose, onSaved }: AccountModalPr
 
 const PAGE_OPTIONS: { key: string; labelKey: string }[] = [
   { key: 'dashboard', labelKey: 'nav.dashboard' },
+  { key: 'nodes', labelKey: 'nav.nodes' },
   { key: 'agents', labelKey: 'nav.agents' },
   { key: 'shell', labelKey: 'nav.shell' },
   { key: 'files', labelKey: 'nav.explorer' },

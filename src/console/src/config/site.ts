@@ -1,4 +1,4 @@
-import { ChartLine, Cpu, Display, Folder, Globe, Shield, Terminal, PlugConnection, Code, CircleInfo, Gear, Puzzle, Sparkles } from "@gravity-ui/icons";
+import { ChartLine, Cpu, Display, Folder, Globe, Shield, Terminal, PlugConnection, Code, CircleInfo, Gear, Puzzle, Sparkles, Server } from "@gravity-ui/icons";
 import type { NavItem, SidebarSection } from "../shared/layout/Sidebar";
 
 export const siteConfig = {
@@ -19,6 +19,7 @@ export const sidebarSections: SidebarSection[] = [
   {
     items: [
       { icon: ChartLine, to: '/', label: 'nav.dashboard' },
+      { icon: Server, to: '/nodes', label: 'nav.nodes' },
       { icon: Display, to: '/agents', label: 'nav.agents' },
       { icon: Sparkles, to: '/ai', label: 'nav.ai' },
     ],
