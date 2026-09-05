@@ -1,22 +1,11 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button, Drawer } from '@heroui/react';
 import { LayoutCells, LayoutList, Magnifier, SlidersVertical, Xmark } from '@gravity-ui/icons';
 import type { AgentListItem } from '../../types/models';
-import { AgentCardList } from './AgentCardList';
-
-type LayoutKind = 'list' | 'grid';
-const LAYOUT_KEY = 'agents_layout';
-
-function readLayout(): LayoutKind {
-  try {
-    return localStorage.getItem(LAYOUT_KEY) === 'grid' ? 'grid' : 'list';
-  } catch {
-    return 'list';
-  }
-}
+import { AgentCardList, type AgentListLayout } from './AgentCardList';
 
 type StatusFilter = 'all' | 'online' | 'offline';
 type OsFilter = 'all' | 'windows' | 'linux' | 'macos' | 'other';
@@ -110,11 +99,16 @@ function OptionChip({
 export function AgentBrowser({
   agents,
   connectedId,
+  layout,
+  onLayoutToggle,
   onOpen,
   onCardContextMenu,
 }: {
   agents: AgentListItem[];
   connectedId: string;
+  /** Shared list/grid layout — also applied to remote-node segments above. */
+  layout: AgentListLayout;
+  onLayoutToggle: () => void;
   onOpen: (id: string) => void;
   /** Optional per-card right-click hook (desktop context menu). */
   onCardContextMenu?: (id: string) => void;
@@ -125,17 +119,8 @@ export function AgentBrowser({
   const [os, setOs] = useState<OsFilter>(DEFAULTS.os);
   const [sortKind, setSortKind] = useState<SortKind>(DEFAULTS.sortKind);
   const [sortDir, setSortDir] = useState<SortDir>(DEFAULTS.sortDir);
-  const [layout, setLayout] = useState<LayoutKind>(readLayout);
   const [sheetOpen, setSheetOpen] = useState(false);
   const isDesktop = useIsDesktop();
-
-  const toggleLayout = () => {
-    setLayout((prev) => {
-      const next: LayoutKind = prev === 'list' ? 'grid' : 'list';
-      try { localStorage.setItem(LAYOUT_KEY, next); } catch { /* ignore */ }
-      return next;
-    });
-  };
 
   const activeFilterCount =
     (status !== DEFAULTS.status ? 1 : 0) +
@@ -325,7 +310,7 @@ export function AgentBrowser({
           isIconOnly
           aria-label={layout === 'grid' ? t('agents.layoutList') : t('agents.layoutGrid')}
           aria-pressed={layout === 'grid'}
-          onPress={toggleLayout}
+          onPress={onLayoutToggle}
           variant="secondary"
           className={`size-10 shrink-0 rounded-[12px] ${
             layout === 'grid' ? 'bg-accent text-accent-foreground shadow-sm' : 'text-neutral-600 dark:text-neutral-300'

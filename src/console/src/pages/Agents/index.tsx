@@ -18,7 +18,18 @@ import { useAgent, type RemoteAgentSelection } from '../../contexts/AgentContext
 import { useDialog } from '../../hooks/useDialog';
 import { getAgent, deleteAgent } from '../../api/agents';
 import { createTask } from '../../api/tasks';
+import type { AgentListLayout } from './AgentCardList';
 import type { AgentDetail, AgentListItem } from '../../types/models';
+
+const AGENTS_LAYOUT_KEY = 'agents_layout';
+
+function readLayout(): AgentListLayout {
+  try {
+    return localStorage.getItem(AGENTS_LAYOUT_KEY) === 'grid' ? 'grid' : 'list';
+  } catch {
+    return 'list';
+  }
+}
 
 export default function AgentsPage() {
   const { t } = useTranslation();
@@ -28,9 +39,18 @@ export default function AgentsPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [modalAgent, setModalAgent] = useState<AgentDetail | null>(null);
   const [modalLoading, setModalLoading] = useState(false);
+  const [layout, setLayout] = useState<AgentListLayout>(readLayout);
   const contextAgentRef = useRef<string | null>(null);
 
   const segments = useRemoteAgentSegments();
+
+  const toggleLayout = () => {
+    setLayout((prev) => {
+      const next: AgentListLayout = prev === 'list' ? 'grid' : 'list';
+      try { localStorage.setItem(AGENTS_LAYOUT_KEY, next); } catch { /* ignore */ }
+      return next;
+    });
+  };
 
   // If the node of the currently selected remote agent disappears from the
   // connected set, drop the remote selection so pages don't relay to a dead node.
@@ -159,6 +179,8 @@ export default function AgentsPage() {
             <AgentBrowser
               agents={agents}
               connectedId={agentId}
+              layout={layout}
+              onLayoutToggle={toggleLayout}
               onOpen={handleOpen}
               onCardContextMenu={handleCardContextMenu}
             />
@@ -199,7 +221,7 @@ export default function AgentsPage() {
       </ContextMenu>
 
       {/* Devices on connected remote nodes — selectable segments (admin). */}
-      <RemoteNodeAgents segments={segments} onOpenAgent={handleOpenRemote} />
+      <RemoteNodeAgents segments={segments} layout={layout} onOpenAgent={handleOpenRemote} />
 
       <AgentDetailModal
         isOpen={modalOpen}

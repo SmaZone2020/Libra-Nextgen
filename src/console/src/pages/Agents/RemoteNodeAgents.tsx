@@ -92,9 +92,12 @@ export function useRemoteAgentSegments(): RemoteAgentSegment[] {
  */
 export function RemoteNodeAgents({
   segments,
+  layout,
   onOpenAgent,
 }: {
   segments: RemoteAgentSegment[];
+  /** Follows the local device list's layout switch. */
+  layout: 'list' | 'grid';
   onOpenAgent?: (segment: RemoteAgentSegment, agent: AgentListItem) => void;
 }) {
   const { t } = useTranslation();
@@ -135,7 +138,13 @@ export function RemoteNodeAgents({
             </a>
           </div>
 
-          <div className="space-y-2.5">
+          <div
+            className={
+              layout === 'grid'
+                ? 'grid gap-2.5 grid-cols-[repeat(auto-fill,minmax(300px,1fr))]'
+                : 'space-y-2.5'
+            }
+          >
             {seg.agents.map((agent) => (
               <AgentCard
                 key={`${seg.nodeId}:${agent.id}`}
