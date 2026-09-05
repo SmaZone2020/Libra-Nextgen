@@ -194,8 +194,10 @@ Service 双存储实施全部完成并全量测试通过(基线 216/216,含 Mong
 | `6762ebc` | P4 第一批:release-assets.yml 四 RID(win/linux × x64/arm64)载荷矩阵 + 去 WPF 资产;删除 WPF 壳;desktop/README 重写 |
 | `7bc4cb8` | P3 验证:libra.conf.json listener 段生效(端口/回环);smoke-service.js 壳↔服务冒烟(真 win-x64 payload:sqlite 启动+探测+回收全绿) |
 | `3f84fc4` | P3:console desktop-only 存储设置 Tab(/api/system/storage + setStorageConfig 桥)与回退横幅;typecheck + 37 单测绿 |
+| `a9597e6` | P4:electron-builder 配置(electron-builder.yml:extraResources baseline-service/baseline-web;nsis/AppImage x64/arm64) |
+| `f749175` | P4:release-assets.yml electron 安装器 job(win/linux × x64/arm64 矩阵,per-OS runner,产物 libra-desktop-installer-*);**首次实测随下一个 tag 发布** |
 
-**进行中**:electron-builder 安装器 CI 接线(release-assets.yml TODO 落实);壳 GUI 全流程冒烟;全量回归复跑与资产矩阵自检。
+**余项(需环境/发布验证,非代码缺口)**:①下一次 tag 发布时验证四 RID 载荷 + electron 安装器产物的端到端(CI 首次实测);②有显示环境时的 Electron GUI 全流程冒烟(壳 → 本地 sqlite 服务 → console 存储切换);③Release 资产矩阵与文档一致性自检。
 
 **已知 SQLite 侧语义差异**(接受):唯一/partial-unique(TTL/用户名唯一/频道绑定唯一)依赖 Mongo 索引,SQLite 文档存储暂无提取列索引,靠服务层先查后写兜底;SQLite TTL 由 `StoreTtlCleanupService` 周期清理(traffic)。差异不影响 API 契约。
 

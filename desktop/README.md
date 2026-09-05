@@ -28,7 +28,8 @@ desktop/
 
 rid = win-x64 / win-arm64 / linux-x64 / linux-arm64(mac 列入 v1.1)。所有 zip 均有
 同名 .sha256 伴生资产;壳对载荷强制校验 SHA-256,缺失即拒绝。
-Electron 安装包(win nsis / linux AppImage)由 electron-builder 产出(CI 接线为 TODO)。
+Electron 安装包(win nsis / linux AppImage,内嵌 baseline-service/baseline-web)由
+release-assets.yml 的 electron job 用 electron-builder 产出(`libra-desktop-installer-*`)。
 
 ## 设计摘要
 
