@@ -176,7 +176,7 @@ function DesktopNavItem({ item, collapsed }: { item: NavItem; collapsed: boolean
 
     return (
       <div className="my-0.5 flex flex-col">
-        <motion.div layout className="flex items-center">
+        <motion.div layout className={`flex items-center ${collapsed ? 'justify-center' : ''}`}>
           {collapsed ? (
             <Dropdown>
               <Button
@@ -289,25 +289,26 @@ function DesktopNavItem({ item, collapsed }: { item: NavItem; collapsed: boolean
   const isActive = selfActive;
   const label = t(item.label);
   return (
-    <motion.div layout className="my-0.5 flex items-center">
+    <motion.div layout className={`my-0.5 flex items-center ${collapsed ? 'justify-center' : ''}`}>
       <Tooltip delay={0} isDisabled={!collapsed}>
         <Button
           isIconOnly={collapsed}
           variant="ghost"
-          className={`flex-1 justify-start rounded-[12px] px-3 transition-all duration-300 ${
-            isActive ? 'bg-accent-soft text-accent-soft-foreground' : ''
-          }`}
+          className={`rounded-[12px] transition-all duration-300 ${
+            collapsed ? '' : 'flex-1 justify-start px-3'
+          } ${isActive ? 'bg-accent-soft text-accent-soft-foreground' : ''}`}
           onPress={() => navigate(item.to)}
         >
           <item.icon className="shrink-0" />
-          <span
-            className={`overflow-hidden whitespace-nowrap transition-all duration-300 ${
-              isActive ? 'font-semibold' : 'font-medium'
-            }`}
-            style={{ maxWidth: collapsed ? 0 : '14rem', opacity: collapsed ? 0 : 1 }}
-          >
-            {label}
-          </span>
+          {!collapsed && (
+            <span
+              className={`overflow-hidden whitespace-nowrap transition-all duration-300 ${
+                isActive ? 'font-semibold' : 'font-medium'
+              }`}
+            >
+              {label}
+            </span>
+          )}
         </Button>
         <Tooltip.Content placement="right">{label}</Tooltip.Content>
       </Tooltip>
