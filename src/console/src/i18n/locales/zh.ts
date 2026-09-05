@@ -217,6 +217,8 @@ export default {
       activityTitle: '最近活动',
       activityClear: '清空',
       activityEmpty: '暂无活动，等待 Agent 事件…',
+      activityClearTitle: '清空最近活动？',
+      activityClearDesc: '将按账号软清除当前可见的事件列表，审计日志与其他协作者不受影响。',
     },
     agents: {
       all: '全部',

@@ -218,6 +218,8 @@ export default {
       activityTitle: 'Recent Activity',
       activityClear: 'Clear',
       activityEmpty: 'No activity yet, waiting for agent events…',
+      activityClearTitle: 'Clear recent activity?',
+      activityClearDesc: 'Soft-clears the event list for your account; audit logs and other collaborators are unaffected.',
     },
     agents: {
       all: 'All',

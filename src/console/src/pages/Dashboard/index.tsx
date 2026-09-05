@@ -6,7 +6,7 @@ import { Button, Card, Modal } from '@heroui/react';
 import { Heart, StarFill } from '@gravity-ui/icons';
 import { getAgentTraffic } from '../../api/agents';
 import { getTasks } from '../../api/tasks';
-import { getRecentEvents, type EventItem } from '../../api/events';
+import { clearRecentEvents, getRecentEvents, type EventItem } from '../../api/events';
 import { consoleWs } from '../../ws/consoleWs';
 import { TrafficChart, RANGES } from './TrafficChart';
 import { SystemDistributionChart } from './SystemDistributionChart';
@@ -23,6 +23,11 @@ const KIND_DOT: Record<string, string> = {
   operator: 'bg-amber-500',
   shell: 'bg-violet-500',
 };
+
+/** Newest first ordering for the recent-activity feed. */
+function byNewest(a: EventItem, b: EventItem): number {
+  return new Date(b.ts).getTime() - new Date(a.ts).getTime();
+}
 
 interface Stat {
   key: string;
@@ -42,6 +47,9 @@ export default function Dashboard() {
   const [range, setRange] = useState<TimeRange>('today');
   const [taskStats, setTaskStats] = useState({ tasks: 0, pending: 0 });
   const [activity, setActivity] = useState<EventItem[]>([]);
+  const [clearOpen, setClearOpen] = useState(false);
+  const [clearing, setClearing] = useState(false);
+  const [clearError, setClearError] = useState<string | null>(null);
 
   const rangeCfg = useMemo(() => RANGES.find((r) => r.key === range)!, [range]);
 
@@ -53,7 +61,7 @@ export default function Dashboard() {
     pending: taskStats.pending,
   }), [agents, taskStats]);
 
-  // Recent activity: last events first, mirroring the header event viewer.
+  // Recent activity: newest first, mirroring the header event viewer.
   useEffect(() => {
     let cancelled = false;
     getRecentEvents(30)
@@ -62,7 +70,7 @@ export default function Dashboard() {
         setActivity((prev) => {
           const ids = new Set(prev.map((e) => e.id));
           const fresh = (r.events ?? []).filter((e) => !ids.has(e.id));
-          return [...fresh, ...prev].slice(-40);
+          return [...prev, ...fresh].sort(byNewest).slice(0, 40);
         });
       })
       .catch(() => { /* ignore */ });
@@ -73,7 +81,9 @@ export default function Dashboard() {
     const off = consoleWs.on('event.item', (msg) => {
       const e = msg.data as unknown as EventItem;
       if (!e?.id || !e?.text) return;
-      setActivity((prev) => (prev.some((x) => x.id === e.id) ? prev : [e, ...prev].slice(-40)));
+      setActivity((prev) =>
+        prev.some((x) => x.id === e.id) ? prev : [e, ...prev].sort(byNewest).slice(0, 40),
+      );
     });
     return off;
   }, []);
@@ -151,6 +161,22 @@ export default function Dashboard() {
     return () => { cancelled = true; clearInterval(timer); };
   }, [rangeCfg]);
 
+  // Soft-clear on the server first, then drop the local list. Audit logs and
+  // other collaborators' feeds are untouched by the backend.
+  const handleClearActivity = async () => {
+    setClearing(true);
+    setClearError(null);
+    try {
+      await clearRecentEvents();
+      setActivity([]);
+      setClearOpen(false);
+    } catch (err) {
+      setClearError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setClearing(false);
+    }
+  };
+
   const metricItems: Stat[] = useMemo(() => [
     { key: t('dashboard.totalAgents'), value: stats.agents },
     { key: t('dashboard.online'), value: stats.online },
@@ -201,7 +227,10 @@ export default function Dashboard() {
               variant="ghost"
               size="sm"
               className="h-7 rounded-[9px] px-2 text-[12px] text-neutral-400 hover:text-danger dark:text-neutral-500"
-              onPress={() => setActivity([])}
+              onPress={() => {
+                setClearError(null);
+                setClearOpen(true);
+              }}
             >
               {t('dashboard.activityClear')}
             </Button>
@@ -275,6 +304,35 @@ export default function Dashboard() {
                 <p className="text-sm text-default-500">{t('dashboard.sponsor.donateDesc')}</p>
               </div>
             </Modal.Body>
+          </Modal.Dialog>
+        </Modal.Container>
+      </Modal.Backdrop>
+
+      {/* Clear-activity confirmation: destructive, requires a second
+          confirmation before soft-clearing the current user's events. */}
+      <Modal.Backdrop
+        isOpen={clearOpen}
+        onOpenChange={(open) => {
+          if (!open && !clearing) setClearOpen(false);
+        }}
+      >
+        <Modal.Container placement="center" size="sm">
+          <Modal.Dialog>
+            <Modal.Header>
+              <Modal.Heading>{t('dashboard.activityClearTitle')}</Modal.Heading>
+            </Modal.Header>
+            <Modal.Body>
+              <p className="text-sm text-default-500">{t('dashboard.activityClearDesc')}</p>
+              {clearError && <p className="mt-2 text-sm text-danger">{clearError}</p>}
+            </Modal.Body>
+            <Modal.Footer>
+              <Button variant="ghost" isDisabled={clearing} onPress={() => setClearOpen(false)}>
+                {t('common.cancel')}
+              </Button>
+              <Button variant="danger" isPending={clearing} onPress={() => void handleClearActivity()}>
+                {t('dashboard.activityClear')}
+              </Button>
+            </Modal.Footer>
           </Modal.Dialog>
         </Modal.Container>
       </Modal.Backdrop>
