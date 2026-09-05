@@ -18,8 +18,9 @@ export interface DesktopStorageSettings {
   mode: 'sqlite' | 'mongo';
   connectString?: string;
   dbPath?: string;
-  fallback?: boolean;
 }
+
+export type CloseBehavior = 'quit' | 'tray';
 
 export interface LibraDesktopBridge {
   minimize: () => void;
@@ -34,6 +35,8 @@ export interface LibraDesktopBridge {
   openDataDir?: () => Promise<void>;
   setStorageConfig?: (settings: DesktopStorageSettings) => Promise<boolean>;
   restartService?: () => Promise<void>;
+  getCloseBehavior?: () => Promise<CloseBehavior>;
+  setCloseBehavior?: (value: CloseBehavior) => Promise<boolean>;
 }
 
 declare global {

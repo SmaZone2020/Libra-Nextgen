@@ -2,10 +2,12 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Button, Card, Chip, Label, Radio, RadioGroup, Switch, TextField, Input } from '@heroui/react';
+import { Button, Card, Chip, Label, Tabs, TextField, Input } from '@heroui/react';
 import { getStorageStatus } from '../../api/system';
 import type { SystemStorageStatus } from '../../api/system';
 import { isLibraDesktopShell } from '../../desktop/DesktopTopBar';
+
+const STORE_LABEL: Record<string, string> = { sqlite: 'SQLite', mongo: 'MongoDB' };
 
 /**
  * Desktop-only storage settings. Only meaningful inside the Libra Desktop
@@ -21,7 +23,6 @@ export default function StorageTab() {
   const [status, setStatus] = useState<SystemStorageStatus | null>(null);
   const [mode, setMode] = useState<'sqlite' | 'mongo'>('sqlite');
   const [connectString, setConnectString] = useState('');
-  const [fallback, setFallback] = useState(true);
   const [busy, setBusy] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -31,7 +32,6 @@ export default function StorageTab() {
       const s = await getStorageStatus();
       setStatus(s);
       setMode(s.requested === 'mongo' ? 'mongo' : 'sqlite');
-      setFallback(true);
     } catch {
       /* service may be mid-restart; keep last state */
     }
@@ -59,7 +59,6 @@ export default function StorageTab() {
       await bridge.setStorageConfig!({
         mode,
         connectString: mode === 'mongo' ? connectString.trim() : '',
-        fallback,
       });
       setSaved(true);
       setTimeout(() => setSaved(false), 4000);
@@ -72,16 +71,8 @@ export default function StorageTab() {
     }
   };
 
-  const fellBack = status != null && status.effective !== status.requested;
-
   return (
     <div className="space-y-6">
-      {fellBack && status?.message && (
-        <div className="rounded-2xl border border-warning/40 bg-warning/10 p-4 text-sm text-warning-foreground">
-          {status.message}
-        </div>
-      )}
-
       <Card className="p-6 space-y-5">
         <div>
           <h3 className="font-semibold">{t('settings.storageTab')}</h3>
@@ -90,25 +81,18 @@ export default function StorageTab() {
 
         {status && (
           <div className="flex items-center gap-2 text-sm">
-            <Chip size="sm" variant="soft" color={fellBack ? 'warning' : 'success'}>
-              {t('settings.storageCurrent')}: {status.effective}
+            <Chip size="sm" variant="soft" color="success">
+              {t('settings.storageCurrent')}: {STORE_LABEL[status.effective] ?? status.effective}
             </Chip>
-            {status.requested !== status.effective && (
-              <span className="text-xs text-default-500">
-                {t('settings.storageRequested')}: {status.requested}
-              </span>
-            )}
           </div>
         )}
 
-        <RadioGroup value={mode} onChange={(v: string) => setMode(v as 'sqlite' | 'mongo')}>
-          <Radio value="sqlite">
-            <span className="text-sm">{t('settings.storageModeSqlite')}</span>
-          </Radio>
-          <Radio value="mongo">
-            <span className="text-sm">{t('settings.storageModeMongo')}</span>
-          </Radio>
-        </RadioGroup>
+        <Tabs selectedKey={mode} onSelectionChange={(key) => setMode(String(key) as 'sqlite' | 'mongo')}>
+          <Tabs.List>
+            <Tabs.Tab id="sqlite" className="w-32">{STORE_LABEL.sqlite}<Tabs.Indicator /></Tabs.Tab>
+            <Tabs.Tab id="mongo" className="w-32">{STORE_LABEL.mongo}<Tabs.Indicator /></Tabs.Tab>
+          </Tabs.List>
+        </Tabs>
 
         {mode === 'mongo' && (
           <TextField variant="secondary" value={connectString} onChange={setConnectString}>
@@ -116,11 +100,6 @@ export default function StorageTab() {
             <Input placeholder="mongodb://user:pass@host:27017" />
           </TextField>
         )}
-
-        <div className="flex items-center gap-3">
-          <Switch isSelected={fallback} onChange={setFallback} size="sm" />
-          <span className="text-sm text-default-600">{t('settings.storageFallbackSwitch')}</span>
-        </div>
 
         {error && <p className="text-sm text-danger">{error}</p>}
         {saved && <p className="text-sm text-success">{t('settings.storageSaved')}</p>}
