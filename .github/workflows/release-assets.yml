@@ -162,6 +162,7 @@ jobs:
           npm run build
 
       - name: Publish server ${{ matrix.rid }} (baseline-service)
+        shell: bash
         run: |
           dotnet publish src/LibraNextgen.Server/LibraNextgen.Server.csproj \
             -c Release -r ${{ matrix.rid }} --self-contained \
