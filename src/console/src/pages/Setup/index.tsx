@@ -98,13 +98,6 @@ export default function SetupPage({ onSetup }: SetupPageProps) {
           <Card.Title className="mx-auto text-[28px] libre">Libra-Nextgen</Card.Title>
         </Card.Header>
 
-        <p className="mb-4 text-center text-xs text-neutral-500 dark:text-neutral-400">
-          {t('setup.stepLabel', {
-            current: phase === 'backend' ? 1 : 2,
-            total: 2,
-          })}
-        </p>
-
         {phase === 'backend' ? (
           <>
             <Card.Content className="flex flex-col gap-4">
@@ -114,10 +107,6 @@ export default function SetupPage({ onSetup }: SetupPageProps) {
               <p className="text-sm text-neutral-600 dark:text-neutral-400 text-center">
                 {t('setup.backendDesc')}
               </p>
-              <div className="rounded-lg bg-neutral-100 px-3 py-2 text-xs text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300">
-                {t('setup.currentOrigin')}：
-                <code className="font-mono">{getApiOrigin()}</code>
-              </div>
               <TextField
                 variant="secondary"
                 autoFocus

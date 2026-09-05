@@ -173,7 +173,7 @@ export default {
       passwordsMismatch: '两次输入的密码不一致。',
       stepLabel: '步骤 {{current}} / {{total}}',
       backendTitle: '连接后端服务',
-      backendDesc: '设置控制台要连接的后端地址。后端在本机默认端口或与页面同源时，可直接「使用默认并继续」。',
+      backendDesc: '连接本机默认后端,或填写远程服务器地址。',
       currentOrigin: '当前后端地址',
       nextStep: '下一步',
       useDefault: '使用默认并继续',

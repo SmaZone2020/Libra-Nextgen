@@ -174,7 +174,7 @@ export default {
       passwordsMismatch: 'Passwords do not match.',
       stepLabel: 'Step {{current}} of {{total}}',
       backendTitle: 'Connect to the backend',
-      backendDesc: 'Set the backend address the console talks to. If the backend runs on the default local port (or same origin as this page), keep the default and continue.',
+      backendDesc: 'Connect to the local backend, or enter a remote server address.',
       currentOrigin: 'Current backend address',
       nextStep: 'Next',
       useDefault: 'Keep default & continue',
