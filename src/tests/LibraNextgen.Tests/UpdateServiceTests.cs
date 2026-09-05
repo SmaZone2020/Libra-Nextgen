@@ -33,7 +33,7 @@ public class UpdateServiceTests
     [Fact]
     public void ParseRelease_ReadsFieldsAndTruncatesNotes()
     {
-        var notes = new string('x', 1200);
+        var notes = new string('x', 5000);
         var json =
             $$"""{"tag_name":"1.6.1","html_url":"https://github.com/o/r/releases/tag/1.6.1","published_at":"2026-09-03T00:00:00Z","body":"{{notes}}"}""";
         var info = UpdateService.ParseRelease(json);
@@ -41,8 +41,20 @@ public class UpdateServiceTests
         Assert.NotNull(info);
         Assert.Equal("1.6.1", info!.Tag);
         Assert.Equal("https://github.com/o/r/releases/tag/1.6.1", info.HtmlUrl);
-        Assert.Equal(601, info.Notes!.Length); // 600 chars + ellipsis
+        Assert.Equal(4001, info.Notes!.Length); // 4000 chars + ellipsis
         Assert.EndsWith("…", info.Notes);
+    }
+
+    [Fact]
+    public void ParseRelease_KeepsShortNotesUntruncated()
+    {
+        var notes = new string('x', 1200);
+        var json = $$"""{"tag_name":"1.6.1","body":"{{notes}}"}""";
+        var info = UpdateService.ParseRelease(json);
+
+        Assert.NotNull(info);
+        Assert.Equal(1200, info!.Notes!.Length);
+        Assert.DoesNotContain("…", info.Notes);
     }
 
     [Fact]

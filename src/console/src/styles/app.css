@@ -153,3 +153,19 @@ html.lw-user-select-enabled * {
   -webkit-user-select: text !important;
   user-select: text !important;
 }
+
+/* ---- Default: text selection and dragging are disabled app-wide. ----------
+ * Desktop-app feel: nothing is selectable until the 'Allow text selection'
+ * preference (Preferences, desktop only) is switched on — the override below
+ * re-enables selection with !important at the root scope. */
+* {
+  user-select: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+
+  user-drag: none;
+  -webkit-user-drag: none;
+  -moz-user-drag: none;
+  -ms-user-drag: none;
+}
