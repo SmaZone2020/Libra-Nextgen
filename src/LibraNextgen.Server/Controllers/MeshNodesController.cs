@@ -11,12 +11,14 @@ namespace LibraNextgen.Service.Controllers;
 
 /// <summary>
 /// Workspace mesh: hub-side management of remote Libra service nodes.
-/// Every mutating operation also pushes a console event so the audit trail
-/// surface (EventViewer) reflects node lifecycle changes.
+/// Reads (list, agent proxy) are open to every authenticated console user so
+/// remote-node devices show up in web consoles too; every mutating operation
+/// (register/connect/relay…) is Admin-only and also pushes a console event so
+/// the audit surface (EventViewer) reflects node lifecycle changes.
 /// </summary>
 [ApiController]
 [Route("api/mesh/nodes")]
-[Authorize(Roles = "Admin")]
+[Authorize]
 public class MeshNodesController : ControllerBase
 {
     private readonly MeshNodeService _nodes;
@@ -66,6 +68,7 @@ public class MeshNodesController : ControllerBase
     }
 
     [HttpPost]
+    [Authorize(Roles = "Admin")]
     public async Task<IActionResult> Create([FromBody] MeshNodeCreateReq req, CancellationToken ct)
     {
         if (req.Auth is null || req.Auth.Kind is null)
@@ -91,6 +94,7 @@ public class MeshNodesController : ControllerBase
     }
 
     [HttpPatch("{id}")]
+    [Authorize(Roles = "Admin")]
     public async Task<IActionResult> Update(string id, [FromBody] MeshNodePatchReq req, CancellationToken ct)
     {
         MeshAuthSpec? auth = null;
@@ -118,6 +122,7 @@ public class MeshNodesController : ControllerBase
     }
 
     [HttpDelete("{id}")]
+    [Authorize(Roles = "Admin")]
     public async Task<IActionResult> Delete(string id, CancellationToken ct)
     {
         var node = await _nodes.GetAsync(id, ct);
@@ -132,6 +137,7 @@ public class MeshNodesController : ControllerBase
     }
 
     [HttpPost("{id}/connect")]
+    [Authorize(Roles = "Admin")]
     public async Task<IActionResult> Connect(string id, CancellationToken ct)
     {
         var node = await _nodes.GetAsync(id, ct);
@@ -156,6 +162,7 @@ public class MeshNodesController : ControllerBase
     }
 
     [HttpPost("{id}/disconnect")]
+    [Authorize(Roles = "Admin")]
     public async Task<IActionResult> Disconnect(string id, CancellationToken ct)
     {
         var node = await _nodes.GetAsync(id, ct);
@@ -264,18 +271,22 @@ public class MeshNodesController : ControllerBase
     }
 
     [HttpGet("{id}/relay/{**relayPath}")]
+    [Authorize(Roles = "Admin")]
     public Task<IActionResult> RelayGet(string id, string relayPath, CancellationToken ct)
         => RelayAsync(id, relayPath, HttpMethod.Get, ct);
 
     [HttpPost("{id}/relay/{**relayPath}")]
+    [Authorize(Roles = "Admin")]
     public Task<IActionResult> RelayPost(string id, string relayPath, CancellationToken ct)
         => RelayAsync(id, relayPath, HttpMethod.Post, ct);
 
     [HttpPut("{id}/relay/{**relayPath}")]
+    [Authorize(Roles = "Admin")]
     public Task<IActionResult> RelayPut(string id, string relayPath, CancellationToken ct)
         => RelayAsync(id, relayPath, HttpMethod.Put, ct);
 
     [HttpDelete("{id}/relay/{**relayPath}")]
+    [Authorize(Roles = "Admin")]
     public Task<IActionResult> RelayDelete(string id, string relayPath, CancellationToken ct)
         => RelayAsync(id, relayPath, HttpMethod.Delete, ct);
 
