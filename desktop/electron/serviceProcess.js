@@ -127,9 +127,6 @@ class ServiceProcess {
       } catch {
         logStream = null;
       }
-      const logLine = (chunk) => {
-        if (logStream) logStream.write(String(chunk));
-      };
 
       this.log(`starting backend ${exe} on port ${spawnPort} ...`);
       this.child = spawn(exe, ['--user-data-dir', userDataDir], {
@@ -138,8 +135,18 @@ class ServiceProcess {
         stdio: logStream ? ['ignore', 'pipe', 'pipe'] : 'ignore',
         env,
       });
-      if (this.child.stdout && logStream) this.child.stdout.on('data', logLine);
-      if (this.child.stderr && logStream) this.child.stderr.on('data', logLine);
+      if (logStream) this.log(`[shell] backend log -> ${path.join(userDataDir, 'logs', 'backend.log')}`);
+      // Mirror the server's stderr plus error-ish stdout lines to the shell
+      // console so exceptions are visible when launched with --enable-logging.
+      const mirror = (chunk, isErr) => {
+        if (logStream) logStream.write(String(chunk));
+        const text = String(chunk);
+        if (isErr || /fail|error|exception|warn|crit/i.test(text)) {
+          for (const ln of text.split(/\r?\n/)) if (ln.trim()) this.log(ln.trim());
+        }
+      };
+      if (this.child.stdout) this.child.stdout.on('data', (d) => mirror(d, false));
+      if (this.child.stderr) this.child.stderr.on('data', (d) => mirror(d, true));
       this.child.on('exit', (code) => {
         if (this.child !== null && this.ownership !== BackendOwnership.Owned) {
           this.log(`backend exited with code ${code} before becoming ready`);
