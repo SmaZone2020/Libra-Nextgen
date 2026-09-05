@@ -123,7 +123,8 @@ async function restartLocalService() {
   try {
     await service.stop();
     await service.start(installedPayload, userDataDir);
-    if (mainWindow && targetUrl.startsWith('http://127.0.0.1:')) mainWindow.loadURL(targetUrl);
+    const port = service.effectivePort ?? installedPayload.port;
+    if (mainWindow && targetUrl.startsWith('http://127.0.0.1:')) mainWindow.loadURL(`http://127.0.0.1:${port}/`);
   } catch (err) {
     dialog.showErrorBox('Libra Desktop', `Failed to restart the local service: ${err.message}`);
   }
@@ -138,9 +139,10 @@ async function runManualUpdate() {
       return;
     }
     installedPayload = { ...result, rootDir: path.join(userDataDir, 'payload', 'latest') };
-    targetUrl = `http://127.0.0.1:${result.port}/`;
     await service.stop();
     await service.start(installedPayload, userDataDir);
+    const port = service.effectivePort ?? installedPayload.port;
+    targetUrl = `http://127.0.0.1:${port}/`;
     if (mainWindow) mainWindow.loadURL(targetUrl);
     // Refresh agent template cache in the background; never fails the update.
     refreshAgentTemplates({ ...UPDATE_SOURCE, userDataDir }).catch(() => {});
@@ -302,7 +304,7 @@ app.whenReady().then(async () => {
   if (installedPayload) {
     try {
       await service.start(installedPayload, userDataDir);
-      targetUrl = `http://127.0.0.1:${installedPayload.port}/`;
+      targetUrl = `http://127.0.0.1:${service.effectivePort ?? installedPayload.port}/`;
     } catch (err) {
       console.error('failed to start local backend:', err.message);
       // Fall through: the window will retry the previous target and land on

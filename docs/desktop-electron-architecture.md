@@ -135,7 +135,8 @@ HTTP/SSE/WS API 契约、JWT/RBAC、agent beacon 加密协议(RSA+AES-GCM+mallea
   1. **service**:用户点 Check Update → 查 GitHub Releases 最新 tag → 与本机 version.json 比对 → 下载本平台 `libra-desktop-{rid}-{tag}.zip`(service+web+version.json)→ 校验 → 停旧 service → 原子换入 `payload/latest`(旧版移入 `.prev`)→ 重启;启动探测失败自动回滚 `.prev`;
   2. **web**:静默(启动后后台),失败回退内嵌 baseline-web;
   3. agent 模板:`libra-agent-tpl-*.zip` 种子内置 + Check Update 同 tag 刷新到 `templates/`,Builder(template 模式)直接读缓存,免 GitHub 依赖(离线桌面场景可用;模板平台键注意 **win 桌面是 `x64`**);
-  4. 壳自身不自更新(与现状一致,版本迭代靠换装)。
+  4. 壳自身不自更新(与现状一致,版本迭代靠换装);
+  5. **端口冲突**:manifest 端口已被 Libra 后端占用 → 接管(不重复拉起);被**非 Libra 服务**占用 → 自动向后扫描空闲端口并以 `LIBRA_LISTEN_PORT` 环境变量拉起,`service.effectivePort` 为实际端口(窗口 URL 与重启逻辑跟随),启动竞态早退自动重试一次空闲端口。
 
 ## 8. Release 资产矩阵与 CI(替换 WPF 时代)
 

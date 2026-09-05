@@ -55,12 +55,14 @@ async function main() {
   const service = new ServiceProcess();
   const ownership = await service.start(payload, userDataDir);
   console.log(`ownership=${ownership}`);
+  const effectivePort = service.effectivePort ?? payload.port;
+  console.log(`effective port=${effectivePort}`);
 
   const dbPath = path.join(userDataDir, 'data', 'libra.db');
   console.log(`sqlite db exists at ${dbPath}: ${fs.existsSync(dbPath)}`);
 
-  const probeAlive = await ServiceProcess.isAlive(payload.port);
-  console.log(`backend alive on ${payload.port}: ${probeAlive}`);
+  const probeAlive = await ServiceProcess.isAlive(effectivePort);
+  console.log(`backend alive on ${effectivePort}: ${probeAlive}`);
 
   await service.stop();
   console.log('stopped cleanly');
