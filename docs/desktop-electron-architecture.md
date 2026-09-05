@@ -192,8 +192,10 @@ Service 双存储实施全部完成并全量测试通过(基线 216/216,含 Mong
 | `28fa1ff` | **P2 完成**:AiService/AiChannelService(7 个 ai_* 集合)迁 IStore;IStore 增 ReplaceByIdAsync/DeleteManyAsync;服务端域层不再直接依赖 MongoDbContext;216/216 绿 |
 | `e2786f8` | P3 第一批:`desktop/electron/` 壳(serviceProcess/updater/tray/存储配置 IPC/bridge),依赖安装 + node --check |
 | `6762ebc` | P4 第一批:release-assets.yml 四 RID(win/linux × x64/arm64)载荷矩阵 + 去 WPF 资产;删除 WPF 壳;desktop/README 重写 |
+| `7bc4cb8` | P3 验证:libra.conf.json listener 段生效(端口/回环);smoke-service.js 壳↔服务冒烟(真 win-x64 payload:sqlite 启动+探测+回收全绿) |
+| `3f84fc4` | P3:console desktop-only 存储设置 Tab(/api/system/storage + setStorageConfig 桥)与回退横幅;typecheck + 37 单测绿 |
 
-**进行中**:P3 收尾(baseline 载荷打包/electron-builder 安装器 job/壳 GUI 冒烟/console 存储设置 UI 与回退横幅);P4 其余(electron-builder CI 接线)。
+**进行中**:electron-builder 安装器 CI 接线(release-assets.yml TODO 落实);壳 GUI 全流程冒烟;全量回归复跑与资产矩阵自检。
 
 **已知 SQLite 侧语义差异**(接受):唯一/partial-unique(TTL/用户名唯一/频道绑定唯一)依赖 Mongo 索引,SQLite 文档存储暂无提取列索引,靠服务层先查后写兜底;SQLite TTL 由 `StoreTtlCleanupService` 周期清理(traffic)。差异不影响 API 契约。
 

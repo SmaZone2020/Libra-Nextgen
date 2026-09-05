@@ -1,0 +1,45 @@
+# electron-builder packaging for the Libra Desktop shell.
+# The service payload and console web assets are embedded as extraResources
+# (baseline-service / baseline-web); runtime payload updates arrive through
+# the libra-desktop-{rid} release zips (see updater.js).
+
+appId: com.libra.desktop
+productName: Libra Desktop
+directories:
+  output: release
+  buildResources: build
+
+files:
+  - main.js
+  - preload.js
+  - serviceProcess.js
+  - updater.js
+  - boot.html
+  - package.json
+
+extraResources:
+  # baseline-service: per-RID self-contained server publish dir (CI staged).
+  # baseline-web: console SPA dist (CI staged). The shell falls back to these
+  # when payload/latest is absent and serves as the silent-web-update fallback.
+  - from: ../baseline-service
+    to: baseline-service
+    filter: ['**/*']
+  - from: ../baseline-web
+    to: baseline-web
+    filter: ['**/*']
+
+win:
+  target:
+    - target: nsis
+      arch: [x64, arm64]
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+
+linux:
+  target:
+    - target: AppImage
+      arch: [x64, arm64]
+  category: Utility
+
+# macOS is deferred (v1.1); when enabled, add mac.target [dmg] and signing.
