@@ -39,6 +39,23 @@ public class ConnectionManager
 
     public List<EventEntry> GetRecentEvents(int count = 100)
         => _eventLog.Reverse().Take(count).Reverse().ToList();
+
+    // Per-user soft-clear watermark: entries older than this stay in the global
+    // ring (audit + other users) but are hidden from that user's own feeds.
+    private readonly ConcurrentDictionary<string, DateTime> _clearedBeforeUtc = new();
+
+    public DateTime? GetClearedBeforeUtc(string username)
+    {
+        if (string.IsNullOrEmpty(username)) return null;
+        return _clearedBeforeUtc.TryGetValue(username, out var ts) ? ts : null;
+    }
+
+    public void ClearEventsForUser(string username)
+    {
+        if (string.IsNullOrEmpty(username)) return;
+        _clearedBeforeUtc[username] = DateTime.UtcNow;
+    }
+
     private readonly ISessionLock _sessionLock;
     private readonly AgentTrafficService _traffic;
     private readonly SessionKeyStore _sessionKeys;
