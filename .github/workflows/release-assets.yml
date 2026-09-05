@@ -182,7 +182,8 @@ jobs:
 
       - name: Stamp app version from tag
         working-directory: desktop/electron
-        run: npm version "$TAG" --no-git-tag-version
+        # --allow-same-version: repo version may already equal the tag.
+        run: npm version "$TAG" --no-git-tag-version --allow-same-version
 
       - name: Build installer (${{ matrix.os }} ${{ matrix.arch }})
         working-directory: desktop/electron
