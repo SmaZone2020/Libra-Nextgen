@@ -2,6 +2,20 @@ import { api } from './client';
 import type { ProcessListResult, WindowListResult, EnvVarsResult, NetworkResult, LanScanResult, PackagesResult, DockerResult } from '../types/models';
 import type { AgentTask } from '../types/models';
 
+/** Effective store reported by GET /api/system/storage (desktop mode). */
+export interface SystemStorageStatus {
+  requested: 'sqlite' | 'mongo';
+  effective: 'sqlite' | 'mongo';
+  fallbackReason?: string | null;
+  dbType: 'sqlite' | 'mongo';
+  message?: string | null;
+}
+
+/** Which store is the service actually running on (local desktop mode). */
+export function getStorageStatus(): Promise<SystemStorageStatus> {
+  return api.get<SystemStorageStatus>('/system/storage');
+}
+
 export function getProcesses(agentId: string, lastHash?: string): Promise<ProcessListResult> {
   return api.post<ProcessListResult>(`/system/${agentId}/processes`, { lastHash: lastHash ?? null });
 }

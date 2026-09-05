@@ -7,6 +7,20 @@ export const LIBRA_DESKTOP_UA = 'LibraDesktop';
 
 export const DESKTOP_TOPBAR_H = 32;
 
+export interface DesktopAppInfo {
+  version: string;
+  userDataDir: string;
+  payloadTag: string | null;
+  rid: string;
+}
+
+export interface DesktopStorageSettings {
+  mode: 'sqlite' | 'mongo';
+  connectString?: string;
+  dbPath?: string;
+  fallback?: boolean;
+}
+
 export interface LibraDesktopBridge {
   minimize: () => void;
   toggleMaximize: () => void;
@@ -14,6 +28,12 @@ export interface LibraDesktopBridge {
   isMaximized: () => Promise<boolean>;
   retry?: () => Promise<void>;
   onMaximizeChange: (cb: (maximized: boolean) => void) => () => void;
+  // Desktop-shell capabilities (older shells may not expose them).
+  getAppInfo?: () => Promise<DesktopAppInfo>;
+  runUpdate?: () => Promise<{ ok: boolean; error?: string }>;
+  openDataDir?: () => Promise<void>;
+  setStorageConfig?: (settings: DesktopStorageSettings) => Promise<boolean>;
+  restartService?: () => Promise<void>;
 }
 
 declare global {

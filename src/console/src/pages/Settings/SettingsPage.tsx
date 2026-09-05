@@ -17,6 +17,7 @@ import {
   Sparkles,
 } from '@gravity-ui/icons';
 import { getStoredUser } from '../../api/auth';
+import { isLibraDesktopShell } from '../../desktop/DesktopTopBar';
 import AccountTab from './AccountTab';
 import PreferencesTab from './PreferencesTab';
 import AppearanceTab from './AppearanceTab';
@@ -26,6 +27,7 @@ import SecurityTab from './SecurityTab';
 import AccessKeysTab from './AccessKeysTab';
 import AiTab from './AiTab';
 import ChannelsTab from './ChannelsTab';
+import StorageTab from './StorageTab';
 
 export interface SettingRoute {
   id: string;
@@ -33,6 +35,8 @@ export interface SettingRoute {
   descKey: string;
   icon: ComponentType<SVGProps<SVGSVGElement>>;
   adminOnly?: boolean;
+  /** Only visible inside the Libra Desktop shell (local storage switcher). */
+  desktopOnly?: boolean;
   render: () => ReactNode;
 }
 
@@ -105,11 +109,22 @@ export const SETTING_ROUTES: SettingRoute[] = [
     adminOnly: true,
     render: () => <RiskPolicyTab />,
   },
+  {
+    id: 'storage',
+    labelKey: 'settings.storageTab',
+    descKey: 'settings.storageDesc',
+    icon: SlidersVertical,
+    desktopOnly: true,
+    render: () => <StorageTab />,
+  },
 ];
 
 export function getVisibleSettingRoutes(): SettingRoute[] {
   const isAdmin = getStoredUser()?.role === 'Admin';
-  return SETTING_ROUTES.filter((r) => !r.adminOnly || isAdmin);
+  const desktop = isLibraDesktopShell();
+  return SETTING_ROUTES.filter(
+    (r) => (!r.adminOnly || isAdmin) && (!r.desktopOnly || desktop),
+  );
 }
 
 // Captioned groups for the desktop-wide rail, mirroring the sidebar's
@@ -124,7 +139,7 @@ const SETTING_GROUPS: SettingGroup[] = [
   {
     key: 'general',
     labelKey: 'settings.section.general',
-    routeIds: ['preferences', 'appearance'],
+    routeIds: ['preferences', 'appearance', 'storage'],
   },
   {
     key: 'ai',
@@ -144,7 +159,7 @@ export default function SettingsPage() {
   const isAdmin = getStoredUser()?.role === 'Admin';
   const [activeId, setActiveId] = useState<string>('preferences');
 
-  const visibleRoutes = SETTING_ROUTES.filter((r) => !r.adminOnly || isAdmin);
+  const visibleRoutes = getVisibleSettingRoutes();
   const routeById = new Map(visibleRoutes.map((r) => [r.id, r]));
   const activeRoute =
     visibleRoutes.find((r) => r.id === activeId) ?? visibleRoutes[0] ?? null;
