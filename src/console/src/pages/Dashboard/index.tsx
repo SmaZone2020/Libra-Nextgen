@@ -6,8 +6,8 @@ import { Button, Card, Modal } from '@heroui/react';
 import { Heart, StarFill } from '@gravity-ui/icons';
 import type { TrafficResponse } from '../../api/agents';
 import { apiHome } from '../../api/client';
-import { clearRecentEvents, getRecentEvents, type EventItem } from '../../api/events';
-import { consoleWs } from '../../ws/consoleWs';
+import { clearRecentEvents, type EventItem } from '../../api/events';
+import { getEventFeed, subscribeEventFeed, clearEventFeed } from '../../utils/eventFeed';
 import { TrafficChart, RANGES } from './TrafficChart';
 import { SystemDistributionChart } from './SystemDistributionChart';
 import { TopologyGraph } from './TopologyGraph';
@@ -23,11 +23,6 @@ const KIND_DOT: Record<string, string> = {
   operator: 'bg-amber-500',
   shell: 'bg-violet-500',
 };
-
-/** Newest first ordering for the recent-activity feed. */
-function byNewest(a: EventItem, b: EventItem): number {
-  return new Date(b.ts).getTime() - new Date(a.ts).getTime();
-}
 
 interface Stat {
   key: string;
@@ -61,31 +56,10 @@ export default function Dashboard() {
     pending: taskStats.pending,
   }), [agents, taskStats]);
 
-  // Recent activity: newest first, mirroring the header event viewer.
+  // Recent activity: mirrors the header event viewer — both render the same
+  // shared feed (utils/eventFeed), newest first.
   useEffect(() => {
-    let cancelled = false;
-    getRecentEvents(30)
-      .then((r) => {
-        if (cancelled) return;
-        setActivity((prev) => {
-          const ids = new Set(prev.map((e) => e.id));
-          const fresh = (r.events ?? []).filter((e) => !ids.has(e.id));
-          return [...prev, ...fresh].sort(byNewest).slice(0, 40);
-        });
-      })
-      .catch(() => { /* ignore */ });
-    return () => { cancelled = true; };
-  }, []);
-
-  useEffect(() => {
-    const off = consoleWs.on('event.item', (msg) => {
-      const e = msg.data as unknown as EventItem;
-      if (!e?.id || !e?.text) return;
-      setActivity((prev) =>
-        prev.some((x) => x.id === e.id) ? prev : [e, ...prev].sort(byNewest).slice(0, 40),
-      );
-    });
-    return off;
+    return subscribeEventFeed(() => setActivity(getEventFeed().slice(0, 40)));
   }, []);
 
   // Fetch task totals periodically
@@ -175,7 +149,7 @@ export default function Dashboard() {
     setClearError(null);
     try {
       await clearRecentEvents();
-      setActivity([]);
+      clearEventFeed(); // shared feed → header event drawer empties too
       setClearOpen(false);
     } catch (err) {
       setClearError(err instanceof Error ? err.message : String(err));

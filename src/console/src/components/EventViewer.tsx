@@ -2,9 +2,9 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button, Drawer } from '@heroui/react';
 import { Bell } from '@gravity-ui/icons';
-import { consoleWs } from '../ws/consoleWs';
-import { getRecentEvents, type EventItem } from '../api/events';
+import type { EventItem } from '../api/events';
 import { getEnabledEventTypes } from '../utils/eventTypes';
+import { getEventFeed, subscribeEventFeed } from '../utils/eventFeed';
 
 const KIND_COLOR: Record<string, string> = {
   agent: 'text-emerald-500',
@@ -20,38 +20,38 @@ function fmtTime(ts: string): string {
   return `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
 }
 
+/**
+ * Header event drawer. Renders the SAME shared feed as the Dashboard "recent
+ * activity" panel (see utils/eventFeed) — identical fetch, live WS events and
+ * soft-clear behaviour. Newest entries sit at the bottom of the drawer.
+ */
 export function EventViewer() {
+  const { t } = useTranslation();
   const [events, setEvents] = useState<EventItem[]>([]);
   const [unread, setUnread] = useState(0);
   const [open, setOpen] = useState(false);
   const listRef = useRef<HTMLDivElement>(null);
+  const openRef = useRef(false);
+  const prevIdsRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
-    let cancelled = false;
-    getRecentEvents(50)
-      .then((r) => {
-        if (cancelled) return;
-        setEvents((prev) => {
-          const ids = new Set(prev.map((e) => e.id));
-          const fresh = (r.events ?? []).filter((e) => !ids.has(e.id));
-          return [...fresh, ...prev].slice(-200);
-        });
-      })
-      .catch(() => { /* ignore */ });
-    return () => { cancelled = true; };
-  }, []);
+    openRef.current = open;
+  }, [open]);
 
   useEffect(() => {
-    const off = consoleWs.on('event.item', (msg) => {
-      const e = msg.data as unknown as EventItem;
-      if (!e?.id || !e?.text) return;
-      setEvents((prev) => [...prev.slice(-199), e]);
+    return subscribeEventFeed(() => {
+      const next = getEventFeed();
+      const added = next.filter((e) => !prevIdsRef.current.has(e.id));
+      prevIdsRef.current = new Set(next.map((e) => e.id));
+      setEvents(next);
 
       const enabled = getEnabledEventTypes();
-      if ((!enabled || enabled.has(e.kind)) && !open) setUnread((u) => u + 1);
+      if (added.length > 0 && !openRef.current
+        && (!enabled || added.some((a) => enabled.has(a.kind)))) {
+        setUnread((u) => u + added.length);
+      }
     });
-    return off;
-  }, [open]);
+  }, []);
 
   useEffect(() => {
     if (open) {
@@ -69,7 +69,6 @@ export function EventViewer() {
     return events.filter((e) => enabled.has(e.kind));
   }, [events]);
 
-  const { t } = useTranslation();
   const KIND_LABEL: Record<string, string> = {
     agent: 'Agent',
     task: t('eventViewer.eventTask'),
@@ -98,7 +97,7 @@ export function EventViewer() {
                 <div ref={listRef} className="h-full overflow-y-auto p-2 space-y-1 text-sm">
                   {visibleEvents.length === 0 ? (
                     <div className="text-neutral-500 text-center py-8">{t('eventViewer.empty')}</div>
-                  ) : visibleEvents.map((e) => (
+                  ) : [...visibleEvents].reverse().map((e) => (
                     <div key={e.id} className="flex gap-2 items-baseline">
                       <span className={`shrink-0 text-xs font-medium ${KIND_COLOR[e.kind] ?? 'text-neutral-400'}`}>
                         [{KIND_LABEL[e.kind] ?? e.kind}]
