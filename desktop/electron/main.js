@@ -37,6 +37,12 @@ let tray = null;
 let userDataDir = '';
 let installedPayload = null;
 
+// Splash shown while the local backend starts, so the shell never navigates
+// to the dev URL first when a payload/baseline is present.
+const SPLASH_URL = `data:text/html;charset=utf-8,${encodeURIComponent(
+  '<!doctype html><html><head><meta charset="utf-8"><style>html,body{margin:0;height:100%}body{background:#0b0f14;color:#9aa4b2;display:flex;align-items:center;justify-content:center;font:14px/1.6 system-ui}main{text-align:center}main p{margin:6px 0 0;opacity:.65}</style></head><body><main>Starting Libra local service…<p>please wait</p></main></body></html>',
+)}`;
+
 // Local .NET sidecar (desktop architecture: payload/latest under userData).
 const service = new ServiceProcess();
 
@@ -88,6 +94,27 @@ function loadBaselinePayload(userDataDir) {
     baseline: true,
     baselineWeb: fs.existsSync(webDir) ? webDir : null,
   };
+}
+
+/**
+ * Write a default sqlite-mode libra.conf.json when none exists: the desktop
+ * shell must never fall back to the cloud default (MongoDB) silently — with
+ * no reachable Mongo the backend startup bootstrap stalls for minutes.
+ */
+function ensureUserConfig(userDataDir) {
+  const configPath = path.join(userDataDir, 'libra.conf.json');
+  if (fs.existsSync(configPath)) return;
+  try {
+    fs.mkdirSync(userDataDir, { recursive: true });
+    fs.writeFileSync(configPath, JSON.stringify({
+      schemaVersion: 1,
+      storage: { mode: 'sqlite', connectString: '', dbPath: '', fallback: true },
+      listener: { port: 5270, bindLoopback: true },
+    }, null, 2));
+    console.log('[shell] wrote default sqlite config to', configPath);
+  } catch (err) {
+    console.error('[shell] failed to write default config:', err.message);
+  }
 }
 
 /** Product logo for window/tray: packaged copy (resources/branding) first,
@@ -308,7 +335,10 @@ function createWindow() {
     mainWindow = null;
   });
 
-  loadTarget();
+  // With a local backend present, show the splash first (never the dev URL);
+  // without one (pure dev/demo) load the configured target as before.
+  if (installedPayload) mainWindow.loadURL(SPLASH_URL);
+  else loadTarget();
   mainWindow.once('ready-to-show', () => mainWindow.show());
 }
 
@@ -361,6 +391,9 @@ app.whenReady().then(async () => {
   // userData can be pinned via LIBRA_USER_DATA_DIR (same name as the server's
   // env override) for tests and portable setups; defaults to Electron's own.
   userDataDir = process.env.LIBRA_USER_DATA_DIR || app.getPath('userData');
+  // Desktop default is SQLite; write the config before the service starts so
+  // it never stalls on a missing MongoDB.
+  ensureUserConfig(userDataDir);
   installedPayload = loadPayloadManifest(userDataDir);
 
   // No userData payload yet -> use the embedded baseline service so an
