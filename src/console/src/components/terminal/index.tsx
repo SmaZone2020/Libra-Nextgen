@@ -24,9 +24,12 @@ interface Props {
   fontFamily?: string;
 }
 
-/** Default: JetBrains Mono (bundled) for modern monospace Latin, with CJK
- *  routed to a monospace CJK font (2 cells). */
-const DEFAULT_FONT = '"JetBrainsMono", "LibraTermCJK", ui-monospace, monospace';
+/** Default font stack: native Windows/macOS monospace first (Cascadia Mono /
+ *  Consolas / SF Mono — always available, exactly one cell per ASCII glyph,
+ *  no webfont loading race), bundled JetBrains Mono as a lighter cross-platform
+ *  option, and a CJK font at the end (2 cells per glyph). */
+const DEFAULT_FONT =
+  '"Cascadia Mono", Consolas, ui-monospace, "JetBrainsMono", "LibraTermCJK", monospace';
 
 // VS Code-like terminal palette. Colors resolve from the app's live design
 // tokens so the terminal follows the light/dark theme (and wallpaper frost)

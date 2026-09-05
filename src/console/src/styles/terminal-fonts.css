@@ -8,7 +8,8 @@
    not just the root element. */
 .xterm,
 .xterm * {
-  font-family: "JetBrainsMono", "LibraTermCJK", ui-monospace, monospace !important;
+  font-family: "Cascadia Mono", Consolas, ui-monospace, "JetBrainsMono",
+    "LibraTermCJK", monospace !important;
 }
 
 /* Transparent terminal surface: xterm ships a black default for the viewport

@@ -266,9 +266,9 @@ export default function ShellPage() {
       {!agentId && <AgentRequired />}
 
       {agentId && (
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col px-2.5 pb-1 sm:px-4 sm:pb-2">
           {/* Transparent integrated-terminal toolbar */}
-          <div className="flex h-8 shrink-0 items-center gap-2.5 px-3.5 text-[var(--lw-terminal-fg)]">
+          <div className="flex h-8 shrink-0 items-center gap-2.5 text-[var(--lw-terminal-fg)]">
             <span
               aria-hidden="true"
               className={`size-1.5 shrink-0 rounded-full ${isOnline ? 'bg-emerald-500' : 'bg-neutral-400'}`}
