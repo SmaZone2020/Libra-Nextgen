@@ -7,27 +7,43 @@ namespace LibraNextgen.Tests;
 
 public class TaskServiceFilterTests
 {
-    [Fact]
-    public void CollectFilters_NoCriteria_IsEmpty()
+    private static AgentTask Task(string agentId, TaskStatus status) => new()
     {
-        Assert.Empty(TaskService.CollectFilters(null, null));
+        Id = Guid.NewGuid().ToString("N"),
+        AgentId = agentId,
+        Status = status,
+    };
+
+    [Fact]
+    public void BuildFilter_NoCriteria_MatchesEverything()
+    {
+        var filter = TaskService.BuildFilter(null, null).Compile();
+        Assert.True(filter(Task("a1", TaskStatus.Pending)));
+        Assert.True(filter(Task("a2", TaskStatus.Completed)));
     }
 
     [Fact]
-    public void CollectFilters_StatusOnly_IsSingle()
+    public void BuildFilter_StatusOnly_MatchesStatus()
     {
-        Assert.Single(TaskService.CollectFilters(TaskStatus.Pending, null));
+        var filter = TaskService.BuildFilter(TaskStatus.Pending, null).Compile();
+        Assert.True(filter(Task("a", TaskStatus.Pending)));
+        Assert.False(filter(Task("a", TaskStatus.Completed)));
     }
 
     [Fact]
-    public void CollectFilters_AgentOnly_IsSingle()
+    public void BuildFilter_AgentOnly_MatchesAgent()
     {
-        Assert.Single(TaskService.CollectFilters(null, "agent-1"));
+        var filter = TaskService.BuildFilter(null, "a1").Compile();
+        Assert.True(filter(Task("a1", TaskStatus.Pending)));
+        Assert.False(filter(Task("a2", TaskStatus.Pending)));
     }
 
     [Fact]
-    public void CollectFilters_StatusAndAgent_IsTwo()
+    public void BuildFilter_StatusAndAgent_BothMustMatch()
     {
-        Assert.Equal(2, TaskService.CollectFilters(TaskStatus.Pending, "agent-1").Count);
+        var filter = TaskService.BuildFilter(TaskStatus.Pending, "a1").Compile();
+        Assert.True(filter(Task("a1", TaskStatus.Pending)));
+        Assert.False(filter(Task("a1", TaskStatus.Completed)));
+        Assert.False(filter(Task("a2", TaskStatus.Pending)));
     }
 }

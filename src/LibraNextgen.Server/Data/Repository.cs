@@ -1,5 +1,6 @@
+using System.Globalization;
 using System.Linq.Expressions;
-using MongoDB.Bson;
+using System.Reflection;
 using MongoDB.Driver;
 
 namespace LibraNextgen.Service.Data;
@@ -72,12 +73,28 @@ public class Repository<T> : IStore<T> where T : class
 
     public async Task InsertAsync(T entity, CancellationToken ct = default)
     {
-        await _collection.InsertOneAsync(entity, cancellationToken: ct);
+        try
+        {
+            await _collection.InsertOneAsync(entity, cancellationToken: ct);
+        }
+        catch (MongoWriteException ex) when (ex.WriteError?.Category == ServerErrorCategory.DuplicateKey)
+        {
+            throw new DuplicateKeyException(
+                $"duplicate key in collection '{_collection.CollectionNamespace.CollectionName}'", ex);
+        }
     }
 
     public async Task InsertManyAsync(IEnumerable<T> entities, CancellationToken ct = default)
     {
-        await _collection.InsertManyAsync(entities, cancellationToken: ct);
+        try
+        {
+            await _collection.InsertManyAsync(entities, cancellationToken: ct);
+        }
+        catch (MongoBulkWriteException ex) when (ex.WriteErrors.Any(e => e.Category == ServerErrorCategory.DuplicateKey))
+        {
+            throw new DuplicateKeyException(
+                $"duplicate key in collection '{_collection.CollectionNamespace.CollectionName}'", ex);
+        }
     }
 
     public async Task<long> UpdateAsync(string id, UpdateDefinition<T> update, CancellationToken ct = default)
@@ -158,32 +175,48 @@ public class Repository<T> : IStore<T> where T : class
         return result.ModifiedCount;
     }
 
-    /// <summary>Translate field assignments into a typed Mongo update so each
-    /// value is serialized with the serializer of its runtime type (identical
-    /// to writing the lambdas by hand).</summary>
+    /// <summary>Translate field assignments into a typed Mongo update. The
+    /// driver exposes only <c>Set&lt;TField&gt;(Expression&lt;Func&lt;T,TField&gt;&gt;, TField)</c>
+    /// (no string-field overload in MongoDB.Driver 3.x), so each assignment is
+    /// turned into a property-typed lambda; values are coerced to the property
+    /// type so serialization matches hand-written lambdas.</summary>
     private UpdateDefinition<T> BuildUpdate(IReadOnlyList<FieldUpdate> updates)
     {
         var builder = Builders<T>.Update;
         var definitions = new List<UpdateDefinition<T>>(updates.Count);
-        // UpdateDefinitionBuilder<T>.Set<TField>(string field, TField value)
-        var setter = typeof(UpdateDefinitionBuilder<T>).GetMethods()
+        // UpdateDefinitionBuilder<T>.Set<TField>(Expression<Func<T,TField>> field, TField value)
+        var setExpression = typeof(UpdateDefinitionBuilder<T>).GetMethods()
             .First(m => m.Name == nameof(UpdateDefinitionBuilder<T>.Set)
                         && m.IsGenericMethodDefinition
                         && m.GetParameters().Length == 2
-                        && m.GetParameters()[0].ParameterType == typeof(string)
-                        && m.GetParameters()[1].ParameterType.IsGenericParameter);
+                        && m.GetParameters()[0].ParameterType.IsGenericType
+                        && m.GetParameters()[0].ParameterType.GetGenericTypeDefinition() == typeof(Expression<>));
 
         foreach (var update in updates)
         {
-            if (update.Value is null)
-            {
-                definitions.Add(builder.Set(update.Field, BsonNull.Value));
-                continue;
-            }
-            var typedSetter = setter.MakeGenericMethod(update.Value.GetType());
-            definitions.Add((UpdateDefinition<T>)typedSetter.Invoke(builder, new[] { update.Field, update.Value })!);
+            var property = typeof(T).GetProperty(update.Field, BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase)
+                ?? throw new InvalidOperationException($"'{update.Field}' is not a property of {typeof(T).Name}");
+
+            var value = Coerce(update.Value, property.PropertyType);
+            var parameter = Expression.Parameter(typeof(T), "x");
+            var member = Expression.Property(parameter, property);
+            var delegateType = typeof(Func<,>).MakeGenericType(typeof(T), property.PropertyType);
+            var lambda = Expression.Lambda(delegateType, member, parameter);
+
+            var typedSetter = setExpression.MakeGenericMethod(property.PropertyType);
+            definitions.Add((UpdateDefinition<T>)typedSetter.Invoke(builder, new[] { lambda, value })!);
         }
 
         return definitions.Count == 1 ? definitions[0] : builder.Combine(definitions);
+    }
+
+    private static object? Coerce(object? value, Type propertyType)
+    {
+        if (value is null || propertyType.IsInstanceOfType(value))
+            return value;
+        var targetType = Nullable.GetUnderlyingType(propertyType) ?? propertyType;
+        if (targetType.IsEnum)
+            return Enum.Parse(targetType, value.ToString()!, ignoreCase: true);
+        return Convert.ChangeType(value, targetType, CultureInfo.InvariantCulture);
     }
 }

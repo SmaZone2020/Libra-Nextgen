@@ -1,6 +1,5 @@
 using LibraNextgen.Service.Data;
 using LibraNextgen.Service.Models;
-using MongoDB.Driver;
 
 namespace LibraNextgen.Service.Services.Builder;
 
@@ -8,9 +7,9 @@ namespace LibraNextgen.Service.Services.Builder;
 /// </summary>
 public class BuildListService
 {
-    private readonly Repository<BuildTrafficLists> _lists;
+    private readonly IStore<BuildTrafficLists> _lists;
 
-    public BuildListService(Repository<BuildTrafficLists> lists)
+    public BuildListService(IStore<BuildTrafficLists> lists)
     {
         _lists = lists;
     }
@@ -30,7 +29,7 @@ public class BuildListService
         {
             await _lists.InsertAsync(doc, ct);
         }
-        catch (MongoWriteException)
+        catch (DuplicateKeyException)
         {
             doc = await _lists.GetByIdAsync("traffic", ct) ?? doc;
         }
@@ -79,12 +78,12 @@ public class BuildListService
 
     private async Task SaveAsync(BuildTrafficLists doc, CancellationToken ct)
     {
-        await _lists.UpdateAsync("traffic",
-            Builders<BuildTrafficLists>.Update
-                .Set(d => d.UserAgents, doc.UserAgents)
-                .Set(d => d.ExtraHeaders, doc.ExtraHeaders)
-                .Set(d => d.PathSuffixes, doc.PathSuffixes),
-            ct);
+        await _lists.UpdateByIdAsync("traffic", new[]
+        {
+            new FieldUpdate(nameof(BuildTrafficLists.UserAgents), doc.UserAgents),
+            new FieldUpdate(nameof(BuildTrafficLists.ExtraHeaders), doc.ExtraHeaders),
+            new FieldUpdate(nameof(BuildTrafficLists.PathSuffixes), doc.PathSuffixes),
+        }, ct);
     }
 
     private static List<string> Default(string list) => list switch

@@ -1,15 +1,14 @@
 using LibraNextgen.Common.Models;
 using LibraNextgen.Service.Data;
-using MongoDB.Driver;
 
 namespace LibraNextgen.Service.Services.Agents;
 
 public class AgentService
 {
-    private readonly Repository<Agent> _agents;
+    private readonly IStore<Agent> _agents;
     private readonly AgentEventHub _eventHub;
 
-    public AgentService(Repository<Agent> agents, AgentEventHub eventHub)
+    public AgentService(IStore<Agent> agents, AgentEventHub eventHub)
     {
         _agents = agents;
         _eventHub = eventHub;
@@ -17,11 +16,10 @@ public class AgentService
 
     public async Task<List<AgentListItem>> GetAllAsync(int page = 1, int pageSize = 50, AgentStatus? status = null, CancellationToken ct = default)
     {
-        var filter = status.HasValue
-            ? Builders<Agent>.Filter.Eq(a => a.Status, status.Value)
-            : Builders<Agent>.Filter.Where(a => true);
-        var sort = Builders<Agent>.Sort.Descending(a => a.FirstSeen);
-        var agents = await _agents.FindPagedAsync(filter, page, pageSize, sort, ct);
+        var filter = status is null
+            ? (System.Linq.Expressions.Expression<Func<Agent, bool>>)(a => true)
+            : a => a.Status == status.Value;
+        var agents = await _agents.FindPagedAsync(filter, page, pageSize, nameof(Agent.FirstSeen), true, ct);
         return agents.Select(MapToList).ToList();
     }
 
@@ -38,30 +36,31 @@ public class AgentService
 
     public async Task UpdateStatusAsync(string id, AgentStatus status, CancellationToken ct = default)
     {
-        var update = Builders<Agent>.Update
-            .Set(a => a.Status, status)
-            .Set(a => a.LastSeen, DateTime.UtcNow);
-        await _agents.UpdateAsync(id, update, ct);
+        await _agents.UpdateByIdAsync(id, new[]
+        {
+            new FieldUpdate(nameof(Agent.Status), status),
+            new FieldUpdate(nameof(Agent.LastSeen), DateTime.UtcNow),
+        }, ct);
     }
 
     public async Task UpdateLastSeenAsync(string id, CancellationToken ct = default)
     {
-        var update = Builders<Agent>.Update.Set(a => a.LastSeen, DateTime.UtcNow);
-        await _agents.UpdateAsync(id, update, ct);
+        await _agents.UpdateByIdAsync(id,
+            new[] { new FieldUpdate(nameof(Agent.LastSeen), DateTime.UtcNow) }, ct);
     }
 
     public async Task UpdateGeoAsync(string id, GeoInfo geo, CancellationToken ct = default)
     {
-        var update = Builders<Agent>.Update.Set(a => a.Geo, geo);
-        await _agents.UpdateAsync(id, update, ct);
+        await _agents.UpdateByIdAsync(id,
+            new[] { new FieldUpdate(nameof(Agent.Geo), geo) }, ct);
     }
 
     public async Task<bool> SetWsNeededAsync(string id, bool needed, CancellationToken ct = default)
     {
         var agent = await _agents.GetByIdAsync(id, ct);
         if (agent == null) return false;
-        var update = Builders<Agent>.Update.Set(a => a.WsNeeded, needed);
-        await _agents.UpdateAsync(id, update, ct);
+        await _agents.UpdateByIdAsync(id,
+            new[] { new FieldUpdate(nameof(Agent.WsNeeded), needed) }, ct);
         _eventHub.Push(id, "ws", new { wsNeeded = needed });
         return true;
     }

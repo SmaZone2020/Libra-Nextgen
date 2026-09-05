@@ -4,16 +4,15 @@ using LibraNextgen.Common.Models;
 using LibraNextgen.Common.Protocol;
 using LibraNextgen.Service.Configuration;
 using LibraNextgen.Service.Data;
-using MongoDB.Driver;
 
 namespace LibraNextgen.Service.Services.Auth;
 
 public class AuthService
 {
-    private readonly Repository<User> _users;
+    private readonly IStore<User> _users;
     private readonly JwtSettings _jwtSettings;
 
-    public AuthService(Repository<User> users, JwtSettings jwtSettings)
+    public AuthService(IStore<User> users, JwtSettings jwtSettings)
     {
         _users = users;
         _jwtSettings = jwtSettings;
@@ -35,11 +34,12 @@ public class AuthService
 
         var refreshToken = GenerateRefreshToken();
 
-        var update = Builders<User>.Update
-            .Set(u => u.LastLogin, DateTime.UtcNow)
-            .Set(u => u.RefreshTokenHash, HashRefreshToken(refreshToken))
-            .Set(u => u.RefreshTokenExpiresAt, DateTime.UtcNow.AddDays(_jwtSettings.RefreshTokenExpirationDays));
-        await _users.UpdateAsync(user.Id, update);
+        await _users.UpdateByIdAsync(user.Id, new[]
+        {
+            new FieldUpdate(nameof(User.LastLogin), DateTime.UtcNow),
+            new FieldUpdate(nameof(User.RefreshTokenHash), HashRefreshToken(refreshToken)),
+            new FieldUpdate(nameof(User.RefreshTokenExpiresAt), DateTime.UtcNow.AddDays(_jwtSettings.RefreshTokenExpirationDays)),
+        });
 
         return new LoginResponse
         {
@@ -73,11 +73,12 @@ public class AuthService
             _jwtSettings.TokenExpirationMinutes);
 
         var newRefreshToken = GenerateRefreshToken();
-        var update = Builders<User>.Update
-            .Set(u => u.RefreshTokenHash, HashRefreshToken(newRefreshToken))
-            .Set(u => u.RefreshTokenExpiresAt, DateTime.UtcNow.AddDays(_jwtSettings.RefreshTokenExpirationDays))
-            .Set(u => u.LastLogin, DateTime.UtcNow);
-        await _users.UpdateAsync(user.Id, update);
+        await _users.UpdateByIdAsync(user.Id, new[]
+        {
+            new FieldUpdate(nameof(User.RefreshTokenHash), HashRefreshToken(newRefreshToken)),
+            new FieldUpdate(nameof(User.RefreshTokenExpiresAt), DateTime.UtcNow.AddDays(_jwtSettings.RefreshTokenExpirationDays)),
+            new FieldUpdate(nameof(User.LastLogin), DateTime.UtcNow),
+        });
 
         return new LoginResponse
         {
@@ -111,7 +112,7 @@ public class AuthService
         {
             await _users.InsertAsync(user);
         }
-        catch (MongoWriteException)
+        catch (DuplicateKeyException)
         {
             throw new InvalidOperationException("Setup has already been completed.");
         }
@@ -123,10 +124,11 @@ public class AuthService
 
         var refreshToken = GenerateRefreshToken();
 
-        var update = Builders<User>.Update
-            .Set(u => u.RefreshTokenHash, HashRefreshToken(refreshToken))
-            .Set(u => u.RefreshTokenExpiresAt, DateTime.UtcNow.AddDays(_jwtSettings.RefreshTokenExpirationDays));
-        await _users.UpdateAsync(user.Id, update);
+        await _users.UpdateByIdAsync(user.Id, new[]
+        {
+            new FieldUpdate(nameof(User.RefreshTokenHash), HashRefreshToken(refreshToken)),
+            new FieldUpdate(nameof(User.RefreshTokenExpiresAt), DateTime.UtcNow.AddDays(_jwtSettings.RefreshTokenExpirationDays)),
+        });
 
         return new LoginResponse
         {

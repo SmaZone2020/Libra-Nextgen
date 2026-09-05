@@ -64,8 +64,7 @@ public static class UserConfigLoader
     {
         sourcePath = null;
 
-        var dir = cli["user-data-dir"] ?? Environment.GetEnvironmentVariable("LIBRA_USER_DATA_DIR");
-        string? path = null;
+        var dir = cli["user-data-dir"] ?? Environment.GetEnvironmentVariable("LIBRA_USER_DATA_DIR");        string? path = null;
         if (!string.IsNullOrWhiteSpace(dir))
         {
             path = Path.Combine(dir, UserConfig.FileName);
@@ -111,5 +110,33 @@ public static class UserConfigLoader
             // Unreadable config must never prevent startup; defaults apply.
             return null;
         }
+    }
+
+    /// <summary>
+    /// Overlay CLI override keys (--store/--connect/--dbpath/--fallback) on top
+    /// of the loaded file config. Returns null only when neither a file config
+    /// nor any override key exists (pure cloud launch). A missing file with
+    /// overrides behaves like a desktop config (sqlite default) so portable
+    /// launches can run without writing libra.conf.json.
+    /// </summary>
+    public static UserConfig? MergeOverrides(UserConfig? baseConfig, IConfiguration cli)
+    {
+        var store = cli["store"];
+        var connect = cli["connect"];
+        var dbPath = cli["dbpath"];
+        var fallback = cli["fallback"];
+        if (store is null && connect is null && dbPath is null && fallback is null)
+            return baseConfig;
+
+        var config = baseConfig ?? new UserConfig();
+        if (store is "sqlite" or "mongo")
+            config.Storage.Mode = store;
+        if (connect is not null)
+            config.Storage.ConnectString = connect;
+        if (dbPath is not null)
+            config.Storage.DbPath = dbPath;
+        if (fallback is not null && bool.TryParse(fallback, out var fallbackEnabled))
+            config.Storage.Fallback = fallbackEnabled;
+        return config;
     }
 }

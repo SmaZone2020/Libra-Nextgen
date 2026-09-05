@@ -34,12 +34,44 @@ builder.Services.AddSingleton<ServerKeyService>();
 builder.Services.AddSingleton<MongoIndexBuilder>();
 
 // Desktop user config (libra.conf.json under --user-data-dir or the OS
-// application-data default). Absent in cloud deployments, where appsettings
-// and env vars keep driving behavior unchanged. P0 only loads and exposes it;
-// effective store selection activates once the SQLite adapter lands (P1).
+// application-data default), optionally overridden by CLI flags
+// (--store/--connect/--dbpath/--fallback) for portable launches. Absent in
+// cloud deployments -> Mongo exactly as before: no probe, no exit.
 var userConfig = UserConfigLoader.TryLoad(builder.Configuration, out var userConfigPath);
-if (userConfig is not null)
-    builder.Services.AddSingleton(new UserConfigSource(userConfigPath!, userConfig));
+var resolvedConfig = UserConfigLoader.MergeOverrides(userConfig, builder.Configuration);
+if (resolvedConfig is not null)
+    builder.Services.AddSingleton(new UserConfigSource(userConfigPath ?? "(cli overrides)", resolvedConfig));
+
+var mongoConnectString = builder.Configuration["connect"]
+    ?? resolvedConfig?.Storage.ConnectString
+    ?? builder.Configuration.GetSection(MongoSettings.SectionName)["ConnectionString"]
+    ?? "mongodb://localhost:27017";
+
+// Startup store decision (docs/desktop-electron-architecture.md §3): sqlite
+// config -> sqlite; mongo config -> reachability probe with optional fallback
+// to sqlite; no config (cloud) -> mongo, never probing or exiting.
+var resolution = new StoreModeResolver(new MongoReachabilityProbe(mongoConnectString))
+    .ResolveAsync(resolvedConfig)
+    .GetAwaiter()
+    .GetResult();
+
+if (resolution.ExitRequested)
+{
+    Console.Error.WriteLine(resolution.Error);
+    Environment.Exit(3);
+}
+
+var useSqlite = resolution.Effective == StoreKind.Sqlite;
+
+if (useSqlite)
+{
+    var configDir = userConfigPath is not null ? Path.GetDirectoryName(userConfigPath) : null;
+    var sqliteDbPath = resolvedConfig!.Storage.DbPath
+        ?? (configDir is not null
+            ? Path.Combine(configDir, "data", "libra.db")
+            : Path.Combine(AppContext.BaseDirectory, "data", "libra.db"));
+    builder.Services.AddSingleton(_ => new SqliteDbContext(sqliteDbPath));
+}
 
 // Beacon authentication (shared secret injected at build time)
 builder.Services.Configure<BeaconSettings>(builder.Configuration.GetSection(BeaconSettings.SectionName));
@@ -61,24 +93,31 @@ builder.WebHost.ConfigureKestrel(options =>
 
 builder.Services.AddHttpClient();
 
-builder.Services.AddSingleton<Repository<Agent>>(sp =>
-    new Repository<Agent>(sp.GetRequiredService<MongoDbContext>(), "agents"));
-builder.Services.AddSingleton<Repository<AgentTask>>(sp =>
-    new Repository<AgentTask>(sp.GetRequiredService<MongoDbContext>(), "tasks"));
-builder.Services.AddSingleton<Repository<User>>(sp =>
-    new Repository<User>(sp.GetRequiredService<MongoDbContext>(), "users"));
+// Per-collection stores. Repository<T> (Mongo) stays registered for consumers
+// that are not yet migrated; IStore<T> resolves per effective store kind
+// (SQLite on the desktop, Mongo elsewhere) and is what migrated services use.
+void RegisterStore<T>(IServiceCollection services, string collectionName) where T : class
+{
+    services.AddSingleton(sp => new Repository<T>(sp.GetRequiredService<MongoDbContext>(), collectionName));
+    services.AddSingleton<IStore<T>>(sp => useSqlite
+        ? new SqliteStore<T>(sp.GetRequiredService<SqliteDbContext>(), collectionName)
+        : sp.GetRequiredService<Repository<T>>());
+}
+
+RegisterStore<Agent>(builder.Services, "agents");
+RegisterStore<AgentTask>(builder.Services, "tasks");
+RegisterStore<User>(builder.Services, "users");
+RegisterStore<MalleableProfileConfig>(builder.Services, "profiles");
+RegisterStore<AccessKey>(builder.Services, "access_keys");
+RegisterStore<BuildTrafficLists>(builder.Services, "build_lists");
+
+// Not yet migrated to IStore<T>: audit logs, traffic and plugins stay Mongo-backed.
 builder.Services.AddSingleton<Repository<AuditLog>>(sp =>
     new Repository<AuditLog>(sp.GetRequiredService<MongoDbContext>(), "audit_logs"));
-builder.Services.AddSingleton<Repository<MalleableProfileConfig>>(sp =>
-    new Repository<MalleableProfileConfig>(sp.GetRequiredService<MongoDbContext>(), "profiles"));
 builder.Services.AddSingleton<Repository<TrafficRecord>>(sp =>
     new Repository<TrafficRecord>(sp.GetRequiredService<MongoDbContext>(), "traffic"));
-builder.Services.AddSingleton<Repository<AccessKey>>(sp =>
-    new Repository<AccessKey>(sp.GetRequiredService<MongoDbContext>(), "access_keys"));
 builder.Services.AddSingleton<Repository<PluginRecord>>(sp =>
     new Repository<PluginRecord>(sp.GetRequiredService<MongoDbContext>(), "plugins"));
-builder.Services.AddSingleton<Repository<BuildTrafficLists>>(sp =>
-    new Repository<BuildTrafficLists>(sp.GetRequiredService<MongoDbContext>(), "build_lists"));
 builder.Services.AddScoped<BuildListService>();
 builder.Services.AddSingleton<AiService>();
 
@@ -346,35 +385,39 @@ if (consoleWebRoot is not null)
     });
 }
 
-// Ensure MongoDB indexes exist before serving traffic (best-effort).
-try
+// MongoDB bootstrap (indexes + in-memory caches) applies only in Mongo mode;
+// SQLite mode skips it so a desktop boot never touches a Mongo server.
+if (!useSqlite)
 {
-    using (var scope = app.Services.CreateScope())
+    try
     {
-        var indexBuilder = scope.ServiceProvider.GetRequiredService<MongoIndexBuilder>();
-        indexBuilder.EnsureIndexesAsync().GetAwaiter().GetResult();
-        var riskPolicy = scope.ServiceProvider.GetRequiredService<RiskPolicyService>();
-        riskPolicy.LoadAsync().GetAwaiter().GetResult();
-        var mcp = scope.ServiceProvider.GetRequiredService<McpService>();
-        mcp.LoadAsync().GetAwaiter().GetResult();
-        var plugins = scope.ServiceProvider.GetRequiredService<PluginService>();
-        plugins.PreloadScriptsAsync().GetAwaiter().GetResult();
-        var sessionKeys = scope.ServiceProvider.GetRequiredService<SessionKeyStore>();
-        sessionKeys.LoadAsync().GetAwaiter().GetResult();
+        using (var scope = app.Services.CreateScope())
+        {
+            var indexBuilder = scope.ServiceProvider.GetRequiredService<MongoIndexBuilder>();
+            indexBuilder.EnsureIndexesAsync().GetAwaiter().GetResult();
+            var riskPolicy = scope.ServiceProvider.GetRequiredService<RiskPolicyService>();
+            riskPolicy.LoadAsync().GetAwaiter().GetResult();
+            var mcp = scope.ServiceProvider.GetRequiredService<McpService>();
+            mcp.LoadAsync().GetAwaiter().GetResult();
+            var plugins = scope.ServiceProvider.GetRequiredService<PluginService>();
+            plugins.PreloadScriptsAsync().GetAwaiter().GetResult();
+            var sessionKeys = scope.ServiceProvider.GetRequiredService<SessionKeyStore>();
+            sessionKeys.LoadAsync().GetAwaiter().GetResult();
+        }
+    }
+    catch (Exception ex)
+    {
+        var logger = app.Services.GetRequiredService<ILoggerFactory>().CreateLogger("Startup");
+        logger.LogWarning(ex, "MongoDB index initialization failed — continuing without indexes.");
     }
 }
-catch (Exception ex)
-{
-    var logger = app.Services.GetRequiredService<ILoggerFactory>().CreateLogger("Startup");
-    logger.LogWarning(ex, "MongoDB index initialization failed — continuing without indexes.");
-}
 
-if (userConfig is not null)
+if (resolvedConfig is not null)
 {
     var userCfgLog = app.Services.GetRequiredService<ILoggerFactory>().CreateLogger("UserConfig");
     userCfgLog.LogInformation(
-        "User config loaded from {ConfigPath}: mode={StoreMode} (store selection activates with the SQLite adapter)",
-        userConfigPath, userConfig.Storage.Mode);
+        "User config from {ConfigPath}: requested={Requested} effective={Effective} fallbackReason={FallbackReason}",
+        userConfigPath ?? "(cli overrides)", resolution.Requested, resolution.Effective, resolution.FallbackReason ?? "-");
 }
 
 app.Run();

@@ -6,9 +6,9 @@ namespace LibraNextgen.Service.Services.Profiles;
 
 public class ProfileService
 {
-    private readonly Repository<MalleableProfileConfig> _profiles;
+    private readonly IStore<MalleableProfileConfig> _profiles;
 
-    public ProfileService(Repository<MalleableProfileConfig> profiles)
+    public ProfileService(IStore<MalleableProfileConfig> profiles)
     {
         _profiles = profiles;
     }
@@ -20,8 +20,8 @@ public class ProfileService
     }
 
     /// <summary>
-    /// Load the active persisted profile from Mongo, falling back to the default
-    /// when none is activated.
+    /// Load the active persisted profile from the store, falling back to the
+    /// default when none is activated.
     /// </summary>
     public async Task<IMalleableProfile> GetActiveProfileAsync(CancellationToken ct = default)
     {
@@ -58,8 +58,8 @@ public class ProfileService
         foreach (var p in all)
         {
             p.IsActive = p.Id == id;
-            await _profiles.UpdateAsync(p.Id,
-                MongoDB.Driver.Builders<MalleableProfileConfig>.Update.Set(x => x.IsActive, p.IsActive), ct);
+            await _profiles.UpdateByIdAsync(p.Id,
+                new[] { new FieldUpdate(nameof(MalleableProfileConfig.IsActive), p.IsActive) }, ct);
         }
         return true;
     }

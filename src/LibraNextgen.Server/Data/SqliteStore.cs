@@ -292,7 +292,7 @@ public sealed class SqliteStore<T> : IStore<T> where T : class
         }
         catch (SqliteException ex) when (ex.SqliteErrorCode == 19) // SQLITE_CONSTRAINT
         {
-            throw new InvalidOperationException($"duplicate _id '{id}' in collection '{_table}'", ex);
+            throw new DuplicateKeyException($"duplicate _id '{id}' in collection '{_table}'", ex);
         }
     }
 

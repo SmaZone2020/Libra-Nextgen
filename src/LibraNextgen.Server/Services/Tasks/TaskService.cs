@@ -2,18 +2,17 @@ using System.Linq.Expressions;
 using LibraNextgen.Common.Authorization;
 using LibraNextgen.Common.Models;
 using LibraNextgen.Service.Data;
-using MongoDB.Driver;
 using TaskStatus = LibraNextgen.Common.Models.TaskStatus;
 
 namespace LibraNextgen.Service.Services.Tasks;
 
 public class TaskService
 {
-    private readonly Repository<AgentTask> _tasks;
+    private readonly IStore<AgentTask> _tasks;
     private readonly ConnectionManager _wsManager;
     private readonly AgentEventHub _eventHub;
 
-    public TaskService(Repository<AgentTask> tasks, ConnectionManager wsManager, AgentEventHub eventHub)
+    public TaskService(IStore<AgentTask> tasks, ConnectionManager wsManager, AgentEventHub eventHub)
     {
         _tasks = tasks;
         _wsManager = wsManager;
@@ -28,35 +27,29 @@ public class TaskService
         CancellationToken ct = default)
     {
         var filter = BuildFilter(status, agentId);
-        var sort = Builders<AgentTask>.Sort.Descending(t => t.CreatedAt);
-        return await _tasks.FindPagedAsync(filter, page, pageSize, sort, ct);
+        return await _tasks.FindPagedAsync(filter, page, pageSize, nameof(AgentTask.CreatedAt), true, ct);
     }
 
     /// <summary>
-    /// Builds a native MongoDB filter. Combining expressions with
-    /// <c>filter.Compile()(t)</c> inside a new lambda is not translatable by the
-    /// driver, so we compose FilterDefinitions directly instead.
+    /// Compose the optional criteria into one provider-neutral predicate.
+    /// Sub-expressions are joined with AndAlso (no Expression.Invoke) so the
+    /// Mongo LINQ translator can map them server-side.
     /// </summary>
-    public static FilterDefinition<AgentTask> BuildFilter(TaskStatus? status, string? agentId)
+    public static Expression<Func<AgentTask, bool>> BuildFilter(TaskStatus? status, string? agentId)
     {
-        var filters = CollectFilters(status, agentId);
-        return filters.Count > 0
-            ? Builders<AgentTask>.Filter.And(filters)
-            : Builders<AgentTask>.Filter.Empty;
-    }
-
-    public static IReadOnlyList<FilterDefinition<AgentTask>> CollectFilters(TaskStatus? status, string? agentId)
-    {
-        var builder = Builders<AgentTask>.Filter;
-        var filters = new List<FilterDefinition<AgentTask>>();
+        Expression<Func<AgentTask, bool>>? filter = null;
 
         if (status.HasValue)
-            filters.Add(builder.Eq(t => t.Status, status.Value));
+            filter = t => t.Status == status.Value;
 
         if (!string.IsNullOrEmpty(agentId))
-            filters.Add(builder.Eq(t => t.AgentId, agentId));
+        {
+            filter = filter is null
+                ? t => t.AgentId == agentId
+                : ExpressionCombine.AndAlso(filter, t => t.AgentId == agentId);
+        }
 
-        return filters;
+        return filter ?? (_ => true);
     }
 
     public async Task<AgentTask?> GetByIdAsync(string id, CancellationToken ct = default)
@@ -95,30 +88,33 @@ public class TaskService
     {
         var tasks = await _tasks.FindPagedAsync(
             t => t.AgentId == agentId && t.Status == TaskStatus.Pending,
-            1, 1, Builders<AgentTask>.Sort.Ascending(t => t.CreatedAt), ct);
+            1, 1, nameof(AgentTask.CreatedAt), false, ct);
         return tasks.FirstOrDefault();
     }
 
     public async Task UpdateStatusAsync(string id, TaskStatus status, string? output = null, string? error = null, CancellationToken ct = default)
     {
-        var update = Builders<AgentTask>.Update.Set(t => t.Status, status);
+        var updates = new List<FieldUpdate>
+        {
+            new(nameof(AgentTask.Status), status),
+        };
         if (output != null)
-            update = update.Set(t => t.Output, output);
+            updates.Add(new FieldUpdate(nameof(AgentTask.Output), output));
         if (error != null)
-            update = update.Set(t => t.Error, error);
-
+            updates.Add(new FieldUpdate(nameof(AgentTask.Error), error));
         if (status == TaskStatus.Sent)
-            update = update.Set(t => t.DispatchedAt, DateTime.UtcNow);
+            updates.Add(new FieldUpdate(nameof(AgentTask.DispatchedAt), DateTime.UtcNow));
         if (status is TaskStatus.Completed or TaskStatus.Failed)
-            update = update.Set(t => t.CompletedAt, DateTime.UtcNow);
+            updates.Add(new FieldUpdate(nameof(AgentTask.CompletedAt), DateTime.UtcNow));
 
-        await _tasks.UpdateAsync(id, update, ct);
+        await _tasks.UpdateByIdAsync(id, updates, ct);
     }
 
     public async Task<long> CancelPendingAsync(string agentId, CancellationToken ct = default)
     {
-        var update = Builders<AgentTask>.Update.Set(t => t.Status, TaskStatus.Cancelled);
-        return await _tasks.UpdateOneAsync(t => t.AgentId == agentId && t.Status == TaskStatus.Pending, update, ct);
+        return await _tasks.UpdateOneAsync(
+            t => t.AgentId == agentId && t.Status == TaskStatus.Pending,
+            new[] { new FieldUpdate(nameof(AgentTask.Status), TaskStatus.Cancelled) }, ct);
     }
 
     /// <summary>
@@ -128,8 +124,9 @@ public class TaskService
     /// </summary>
     public async Task<long> CancelPendingByIdAsync(string id, CancellationToken ct = default)
     {
-        var update = Builders<AgentTask>.Update.Set(t => t.Status, TaskStatus.Cancelled);
-        return await _tasks.UpdateOneAsync(t => t.Id == id && t.Status == TaskStatus.Pending, update, ct);
+        return await _tasks.UpdateOneAsync(
+            t => t.Id == id && t.Status == TaskStatus.Pending,
+            new[] { new FieldUpdate(nameof(AgentTask.Status), TaskStatus.Cancelled) }, ct);
     }
 
     public async Task<long> DeleteAsync(string id, CancellationToken ct = default)

@@ -3,16 +3,15 @@ using LibraNextgen.Common.Models;
 using LibraNextgen.Common.Protocol;
 using LibraNextgen.Service.Configuration;
 using LibraNextgen.Service.Data;
-using MongoDB.Driver;
 
 namespace LibraNextgen.Service.Services.Auth;
 
 public class AccountService
 {
-    private readonly Repository<User> _users;
+    private readonly IStore<User> _users;
     private readonly JwtSettings _jwtSettings;
 
-    public AccountService(Repository<User> users, JwtSettings jwtSettings)
+    public AccountService(IStore<User> users, JwtSettings jwtSettings)
     {
         _users = users;
         _jwtSettings = jwtSettings;
@@ -31,8 +30,8 @@ public class AccountService
     /// <summary>Record that the current user accepted the authorized-use agreement.</summary>
     public async Task AcceptAgreementAsync(string userId)
     {
-        var update = Builders<User>.Update.Set(u => u.AgreedAt, DateTime.UtcNow);
-        await _users.UpdateAsync(userId, update);
+        await _users.UpdateByIdAsync(userId,
+            new[] { new FieldUpdate(nameof(User.AgreedAt), DateTime.UtcNow) });
     }
 
     /// <summary>The agreement timestamp, or null if the user has not accepted yet.</summary>
@@ -102,7 +101,7 @@ public class AccountService
         if (user.IsInitial)
             throw new InvalidOperationException("Cannot edit the initial admin account.");
 
-        var updates = new List<UpdateDefinition<User>>();
+        var updates = new List<FieldUpdate>();
 
         if (request.Username != null)
         {
@@ -110,20 +109,20 @@ public class AccountService
                 throw new ArgumentException("Username must be at least 2 characters.");
             if (await _users.ExistsAsync(u => u.Username == request.Username && u.Id != id))
                 throw new ArgumentException("Username already exists.");
-            updates.Add(Builders<User>.Update.Set(u => u.Username, request.Username));
+            updates.Add(new FieldUpdate(nameof(User.Username), request.Username));
         }
 
         if (request.Role.HasValue)
-            updates.Add(Builders<User>.Update.Set(u => u.Role, request.Role.Value));
+            updates.Add(new FieldUpdate(nameof(User.Role), request.Role.Value));
 
         if (request.IsActive.HasValue)
-            updates.Add(Builders<User>.Update.Set(u => u.IsActive, request.IsActive.Value));
+            updates.Add(new FieldUpdate(nameof(User.IsActive), request.IsActive.Value));
 
         if (request.Permissions != null)
-            updates.Add(Builders<User>.Update.Set(u => u.Permissions, request.Permissions));
+            updates.Add(new FieldUpdate(nameof(User.Permissions), request.Permissions));
 
         if (updates.Count > 0)
-            await _users.UpdateAsync(id, Builders<User>.Update.Combine(updates));
+            await _users.UpdateByIdAsync(id, updates);
     }
 
     public async Task DeleteAsync(string id, string currentUserId)
@@ -155,8 +154,8 @@ public class AccountService
         if (!VerifyPassword(currentPassword, user.PasswordHash))
             throw new UnauthorizedAccessException("Current password is incorrect.");
 
-        var update = Builders<User>.Update.Set(u => u.PasswordHash, HashPassword(newPassword));
-        await _users.UpdateAsync(userId, update);
+        await _users.UpdateByIdAsync(userId,
+            new[] { new FieldUpdate(nameof(User.PasswordHash), HashPassword(newPassword)) });
     }
 
     public async Task<bool> IsInitialAccountAsync(string userId)
@@ -182,6 +181,7 @@ public class AccountService
         var hash = new byte[32];
         Buffer.BlockCopy(combined, 0, salt, 0, 16);
         Buffer.BlockCopy(combined, 16, hash, 0, 32);
+
         var computedHash = Rfc2898DeriveBytes.Pbkdf2(password, salt, 600_000, HashAlgorithmName.SHA256, 32);
         return CryptographicOperations.FixedTimeEquals(hash, computedHash);
     }

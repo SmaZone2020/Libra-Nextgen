@@ -1,15 +1,14 @@
 using System.Security.Cryptography;
 using LibraNextgen.Common.Models;
 using LibraNextgen.Service.Data;
-using MongoDB.Driver;
 
 namespace LibraNextgen.Service.Services.Auth;
 
 public class AccessKeyService
 {
-    private readonly Repository<AccessKey> _repo;
+    private readonly IStore<AccessKey> _repo;
 
-    public AccessKeyService(Repository<AccessKey> repo)
+    public AccessKeyService(IStore<AccessKey> repo)
     {
         _repo = repo;
     }
@@ -66,8 +65,8 @@ public class AccessKeyService
         if (key.ExpiresAt.HasValue && key.ExpiresAt.Value < DateTime.UtcNow)
             return null;
 
-        var update = Builders<AccessKey>.Update.Set(k => k.LastUsedAt, DateTime.UtcNow);
-        await _repo.UpdateAsync(key.Id, update);
+        await _repo.UpdateByIdAsync(key.Id,
+            new[] { new FieldUpdate(nameof(AccessKey.LastUsedAt), DateTime.UtcNow) });
 
         return key;
     }

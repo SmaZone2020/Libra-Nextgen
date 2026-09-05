@@ -59,7 +59,7 @@ public class SqliteStoreTests : IDisposable
     public async Task Insert_DuplicateId_Throws()
     {
         await _store.InsertAsync(Doc("a"));
-        await Assert.ThrowsAsync<InvalidOperationException>(() => _store.InsertAsync(Doc("a", "dup")));
+        await Assert.ThrowsAsync<DuplicateKeyException>(() => _store.InsertAsync(Doc("a", "dup")));
     }
 
     [Fact]
