@@ -168,10 +168,13 @@ export default function PluginsPage() {
     );
   }
 
+  // No installed plugins → land on the market tab so the page is never a dead end.
+  const initialTab = plugins.length === 0 ? 'market' : 'installed';
+
   return (
     <div className="space-y-4">
 
-      <Tabs defaultSelectedKey="installed" className="w-full">
+      <Tabs key={initialTab} defaultSelectedKey={initialTab} className="w-full">
         <div className="p-6">
           <div className="flex items-center justify-between flex-wrap gap-4 sm:flex sm:gap-0">
               <Tabs.ListContainer className="sm:w-auto">
