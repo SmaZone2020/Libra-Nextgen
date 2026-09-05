@@ -3,6 +3,7 @@ using System.Net.Http.Headers;
 using System.Text.Json;
 using LibraNextgen.Common.Models;
 using LibraNextgen.Service.Services.Mesh;
+using Microsoft.AspNetCore.Http;
 using ModelContextProtocol.Server;
 
 namespace LibraNextgen.Service.Mcp;
@@ -88,6 +89,57 @@ public sealed class MeshTools
         {
             return McpUtils.Error($"failed to reach node '{match.Name}': {ex.Message}");
         }
+    }
+
+    [McpServerTool]
+    [Description("连接一个已登记的服务器节点（用 mesh_list_nodes 的名称或 id）。需要 Admin 访问密钥或已获批准的对话等级；凭据取自本机登记，成功后节点事件与设备列表立即可用。")]
+    public static async Task<string> mesh_node_connect(
+        MeshNodeService nodes,
+        MeshSessionManager sessions,
+        IHttpContextAccessor http,
+        [Description("节点名称或节点 id")] string node,
+        CancellationToken ct = default)
+    {
+        var adminError = McpUtils.RequireAdmin(McpUtils.GetCaller(http), "mesh_node_connect");
+        if (adminError.Length > 0) return adminError;
+
+        var match = await FindNodeAsync(nodes, node, ct);
+        if (match is null) return McpUtils.Error($"node '{node}' not found (see mesh_list_nodes)");
+        if (sessions.GetSession(match.Id) is not null)
+            return McpUtils.Ok(new { connected = true, storageType = sessions.GetSession(match.Id)!.StorageType, already = true });
+
+        var result = await sessions.ConnectAsync(match, nodes.GetSecret(match), ct);
+        await nodes.RecordConnectResultAsync(match.Id, result.Ok, result.Error, ct);
+        if (!result.Ok) return McpUtils.Error($"connect failed: {result.Error}");
+
+        return McpUtils.Ok(new { connected = true, storageType = result.StorageType, expiresAt = result.ExpiresAt });
+    }
+
+    [McpServerTool]
+    [Description("断开一个已连接的服务器节点（用 mesh_list_nodes 的名称或 id）。需要 Admin 访问密钥或已获批准的对话等级；仅清本机会话，不影响远端服务。")]
+    public static async Task<string> mesh_node_disconnect(
+        MeshNodeService nodes,
+        MeshSessionManager sessions,
+        IHttpContextAccessor http,
+        [Description("节点名称或节点 id")] string node,
+        CancellationToken ct = default)
+    {
+        var adminError = McpUtils.RequireAdmin(McpUtils.GetCaller(http), "mesh_node_disconnect");
+        if (adminError.Length > 0) return adminError;
+
+        var match = await FindNodeAsync(nodes, node, ct);
+        if (match is null) return McpUtils.Error($"node '{node}' not found (see mesh_list_nodes)");
+
+        sessions.Disconnect(match.Id);
+        return McpUtils.Ok(new { connected = false });
+    }
+
+    private static async Task<LibraNextgen.Common.Models.MeshNode?> FindNodeAsync(
+        MeshNodeService nodes, string node, CancellationToken ct)
+    {
+        var key = (node ?? "").Trim();
+        var all = await nodes.ListAsync(ct);
+        return all.FirstOrDefault(n => n.Id == key || n.Name.Equals(key, StringComparison.OrdinalIgnoreCase));
     }
 
     private static async Task<int> CountOnlineAsync(

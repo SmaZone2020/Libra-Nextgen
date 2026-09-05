@@ -34,12 +34,16 @@ public static class JustitiaPolicy
         ["get_network_info"] = JustitiaTier.Cognitio,
         ["scan_lan"] = JustitiaTier.Cognitio,
         ["scan_wifi"] = JustitiaTier.Cognitio,
+        ["mesh_list_nodes"] = JustitiaTier.Cognitio,
+        ["mesh_node_agents"] = JustitiaTier.Cognitio,
 
         ["rename_file"] = JustitiaTier.Arbitrium,
         ["move_file"] = JustitiaTier.Arbitrium,
         ["copy_file"] = JustitiaTier.Arbitrium,
         ["create_task"] = JustitiaTier.Arbitrium,
         ["cancel_task"] = JustitiaTier.Arbitrium,
+        ["mesh_node_connect"] = JustitiaTier.Arbitrium,
+        ["mesh_node_disconnect"] = JustitiaTier.Arbitrium,
 
         ["execute_shell"] = JustitiaTier.Imperium,
         ["execute_powershell"] = JustitiaTier.Imperium,

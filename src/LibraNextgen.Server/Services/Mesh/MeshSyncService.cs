@@ -34,6 +34,13 @@ public sealed class MeshSyncService : BackgroundService
 
     private readonly ConcurrentDictionary<string, Dictionary<string, MeshAgentSnapshot>> _lastByNode = new();
 
+    // Auto-reconnect bookkeeping: after a server restart every registered node
+    // is reconnected by credential (login / key-exchange) with exponential
+    // backoff, so the event bridge resumes without manual intervention.
+    private readonly ConcurrentDictionary<string, (DateTime NextAttemptAt, int Fails)> _retryByNode = new();
+    private static readonly TimeSpan RetryStart = TimeSpan.FromSeconds(5);
+    private static readonly TimeSpan RetryMax = TimeSpan.FromMinutes(5);
+
     public MeshSyncService(
         IStore<MeshNode> nodes,
         MeshSessionManager sessions,
@@ -85,9 +92,12 @@ public sealed class MeshSyncService : BackgroundService
             var session = _sessions.GetSession(node.Id);
             if (session is null)
             {
+                await TryReconnectAsync(node, ct);
                 _lastByNode.TryRemove(node.Id, out _);
                 continue;
             }
+
+            _retryByNode.TryRemove(node.Id, out _);
 
             Dictionary<string, MeshAgentSnapshot> current;
             try
@@ -128,6 +138,57 @@ public sealed class MeshSyncService : BackgroundService
             }
 
             _lastByNode[node.Id] = current;
+        }
+    }
+
+    /// <summary>
+    /// Reconnect a registered-but-idle node by its stored credential, paced by
+    /// per-node exponential backoff. Success clears the backoff state; the
+    /// next tick then establishes the event baseline (no bogus notifications).
+    /// </summary>
+    private async Task TryReconnectAsync(MeshNode node, CancellationToken ct)
+    {
+        var now = DateTime.UtcNow;
+        if (_retryByNode.TryGetValue(node.Id, out var state) && now < state.NextAttemptAt)
+            return;
+
+        var result = await _sessions.ConnectAsync(node, MeshSecrets.Unprotect(node.SecretCipher), ct);
+        if (result.Ok)
+        {
+            _retryByNode.TryRemove(node.Id, out _);
+            _logger.LogInformation("Auto-reconnected mesh node {NodeId} ({Origin})", node.Id, node.Origin);
+            await RecordConnectResultAsync(node, true, null, ct);
+            return;
+        }
+
+        var fails = state.Fails + 1;
+        var delay = RetryStart * Math.Pow(2, Math.Min(fails - 1, 9)); // 5s → 10s → … → 5min cap
+        if (delay > RetryMax) delay = RetryMax;
+        _retryByNode[node.Id] = (DateTime.UtcNow + delay, fails);
+        _logger.LogDebug("Mesh auto-reconnect for {NodeId} failed ({Fails}): {Error}",
+            node.Id, fails, result.Error);
+        await RecordConnectResultAsync(node, false, result.Error, ct);
+    }
+
+    private async Task RecordConnectResultAsync(MeshNode node, bool success, string? error, CancellationToken ct)
+    {
+        var updates = new List<FieldUpdate>();
+        if (success)
+        {
+            updates.Add(new FieldUpdate(nameof(MeshNode.LastConnectedAt), DateTime.UtcNow));
+            updates.Add(new FieldUpdate(nameof(MeshNode.LastError), null));
+        }
+        else
+        {
+            updates.Add(new FieldUpdate(nameof(MeshNode.LastError), error));
+        }
+        try
+        {
+            await _nodes.UpdateByIdAsync(node.Id, updates, ct);
+        }
+        catch
+        {
+            // Bookkeeping must never break the sync loop.
         }
     }
 

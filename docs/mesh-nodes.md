@@ -56,10 +56,15 @@ console 事件(`node` 类目)推送,节点侧对实际业务操作按各自审�
   上下线变化复用 `AiEventNotifier`(agent.online/agent.offline)→ 现有 AI 事件
   订阅(会话/频道)对远端节点与本地一视同仁,提示文案带 `节点名 · 主机名`;
   节点(重)连接后的首轮轮询作为基线不产生事件,避免上线风暴;状态仅存内存;
-- **节点获取 MCP 工具**(只读,随 MCP 鉴权与审计):
-  - `mesh_list_nodes`:注册节点 + 存储类型 + 连接状态 + 在线设备数;
-  - `mesh_node_agents`:指定节点的在线设备明细。
-- 连/断节点仍是 Admin console 动作;工具不触达节点凭据。
+- **自动重连**:服务重启后,该服务对每个已登记节点按存储凭据(账密登录 /
+  密钥兑换)自动重连,指数退避 5s→10s→…→5min;成功即恢复事件桥,无需人工
+  干预;失败的尝试会把 `lastError` 写到节点卡(节点页可见);
+- **节点 MCP 工具**(随 MCP 鉴权与审计,分级见 JustitiaPolicy):
+  - `mesh_list_nodes` / `mesh_node_agents`(只读,Cognitio);
+  - `mesh_node_connect` / `mesh_node_disconnect`(Arbitrium 且 Admin):用登记
+    凭据连接/断开节点;对话会话等级不足时进入既有审批流(escalation),绝不
+    静默执行;
+- 连/断节点同时保持为 Admin console 动作;凭据不随工具出入。
 
 ## Console 节点页(/nodes)
 
@@ -73,16 +78,15 @@ console 事件(`node` 类目)推送,节点侧对实际业务操作按各自审�
 
 ## 边界与安全
 
-- mesh 会话不持久化:服务重启后节点回到"已登记未连接",需手动/后续自动重连;
+- 会话不持久化,但**自动重连**:服务重启后 MeshSyncService 按存储凭据指数
+  退避重连全部已登记节点(见上),事件桥自动续跑;
 - 凭据只在本机服务库内加密存储(DPAPI/CurrentUser,非 Windows 退化为 base64);
   hub 是凭据汇聚点,建议仅绑定内网/受信环境;
 - 跨节点**插件动作在 v1 禁用**(目标节点自行安装插件后从它自己的控制台操作)。
 
 ## 路线(后续候选)
 
-- 会话持久化/开机自动重连:节点会话存 home(加密)+ 启动恢复,事件桥自动续跑;
-- 远端设备操作增加 UI 级节点/设备上下文指示(顶栏显式工作区标签);
-- MCP 侧增加节点写工具(连/断、任务下发),需先落权限分级与审批。
+- 远端设备操作增加 UI 级更显式的工作区切换器(当前为顶栏工作区标签 + 设备下拉);
 
 (English summary: Workspace Mesh lets the home console register and connect
 multiple initialized Libra services (password login or lnk_* access-key
