@@ -65,7 +65,7 @@ export function Sidebar({
 
   return (
     <aside className="lw-sidebar">
-      <div className="flex h-full min-h-0 flex-col p-4">
+      <div className={`flex h-full min-h-0 flex-col ${collapsed ? 'px-2 py-4' : 'p-4'}`}>
         {/* Brand row */}
         <div
           className={`mb-4 flex min-h-10 items-center transition-all duration-300 ${
@@ -98,7 +98,7 @@ export function Sidebar({
             aria-label={t('nav.toggleSidebar')}
             variant="ghost"
             onPress={() => onToggle(!collapsed)}
-            className="shrink-0 rounded-[15px]"
+            className={`shrink-0 rounded-[15px] ${collapsed ? 'size-10' : ''}`}
           >
             {collapsed ? (
               <img
@@ -182,12 +182,12 @@ function DesktopNavItem({ item, collapsed }: { item: NavItem; collapsed: boolean
               <Button
                 isIconOnly
                 variant="ghost"
-                className={`rounded-[12px] transition-all duration-300 ${
+                className={`size-10 rounded-[12px] transition-all duration-300 ${
                   groupActive ? 'bg-accent-soft text-accent-soft-foreground' : ''
                 }`}
                 aria-label={label}
               >
-                <item.icon className="m-auto" />
+                <item.icon className="m-auto size-4.5" />
               </Button>
               <Dropdown.Popover>
                 <Dropdown.Menu aria-label={label} onAction={(key) => navigate(String(key))}>
@@ -295,11 +295,11 @@ function DesktopNavItem({ item, collapsed }: { item: NavItem; collapsed: boolean
           isIconOnly={collapsed}
           variant="ghost"
           className={`rounded-[12px] transition-all duration-300 ${
-            collapsed ? '' : 'flex-1 justify-start px-3'
+            collapsed ? 'size-10' : 'flex-1 justify-start px-3'
           } ${isActive ? 'bg-accent-soft text-accent-soft-foreground' : ''}`}
           onPress={() => navigate(item.to)}
         >
-          <item.icon className={collapsed ? 'm-auto' : 'shrink-0'} />
+          <item.icon className={collapsed ? 'm-auto size-4.5' : 'shrink-0'} />
           {!collapsed && (
             <span
               className={`overflow-hidden whitespace-nowrap transition-all duration-300 ${
