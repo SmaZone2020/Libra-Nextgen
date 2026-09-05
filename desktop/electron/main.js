@@ -213,7 +213,7 @@ function createTray() {
   const menu = Menu.buildFromTemplate([
     { label: 'Show Libra', click: () => showMainWindow() },
     { type: 'separator' },
-    { label: 'Check for Updates…', click: () => runManualUpdate() },
+    { label: 'Check for Updates…', click: () => runManualUpdate().catch(() => {}) },
     { label: 'Open Data Directory', click: () => osShell.openPath(userDataDir) },
     { label: 'Open Remote Entry…', click: () => openRemoteEntry() },
     { type: 'separator' },
@@ -248,15 +248,21 @@ async function restartLocalService() {
   }
 }
 
-async function runManualUpdate() {
+async function runManualUpdate(onProgress) {
   const busy = !mainWindow || !installedPayload;
   try {
-    const result = await updateServicePayload({ ...UPDATE_SOURCE, userDataDir, log: console.log });
+    const result = await updateServicePayload({
+      ...UPDATE_SOURCE,
+      userDataDir,
+      log: console.log,
+      onProgress: onProgress || null,
+    });
     if (!result) {
       if (mainWindow) { /* console banner reflects up-to-date state */ }
       return;
     }
     installedPayload = { ...result, rootDir: path.join(userDataDir, 'payload', 'latest') };
+    if (onProgress) onProgress({ phase: 'restart' });
     await service.stop();
     await service.start(installedPayload, userDataDir, startOptionsFor(installedPayload));
     const port = service.effectivePort ?? installedPayload.port;
@@ -266,6 +272,7 @@ async function runManualUpdate() {
     refreshAgentTemplates({ ...UPDATE_SOURCE, userDataDir }).catch(() => {});
   } catch (err) {
     dialog.showErrorBox('Update failed', err.message);
+    throw err;
   }
 }
 
@@ -444,9 +451,12 @@ ipcMain.handle('shell:get-app-info', () => ({
   payloadTag: installedPayload ? installedPayload.tag : null,
   rid: ridFor(process.platform, process.arch),
 }));
-ipcMain.handle('shell:run-update', async () => {
+ipcMain.handle('shell:run-update', async (event) => {
   try {
-    await runManualUpdate();
+    const send = (payload) => {
+      try { event.sender.send('shell:update-progress', payload); } catch { /* window gone */ }
+    };
+    await runManualUpdate(send);
     return { ok: true };
   } catch (err) {
     return { ok: false, error: err.message };

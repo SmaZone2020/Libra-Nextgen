@@ -26,4 +26,5 @@ contextBridge.exposeInMainWorld('libraDesktop', {
   setCloseBehavior: (value) => ipcRenderer.invoke('shell:set-close-behavior', value),
   getListenerConfig: () => ipcRenderer.invoke('shell:get-listener-config'),
   setListenerConfig: (settings) => ipcRenderer.invoke('shell:set-listener-config', settings),
+  onUpdateProgress: (cb) => subscribe('shell:update-progress', cb),
 });

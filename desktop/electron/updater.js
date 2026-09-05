@@ -52,7 +52,7 @@ function httpsGetJson(url, token) {
   });
 }
 
-function downloadTo(url, dest) {
+function downloadTo(url, dest, onProgress) {
   return new Promise((resolve, reject) => {
     fs.mkdirSync(path.dirname(dest), { recursive: true });
     const file = fs.createWriteStream(dest);
@@ -60,7 +60,7 @@ function downloadTo(url, dest) {
       if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
         res.resume();
         file.close(() => fs.unlinkSync(dest));
-        resolve(downloadTo(res.headers.location, dest));
+        resolve(downloadTo(res.headers.location, dest, onProgress));
         return;
       }
       if (res.statusCode !== 200) {
@@ -69,6 +69,13 @@ function downloadTo(url, dest) {
         reject(new Error(`download ${url} -> ${res.statusCode}`));
         return;
       }
+      const total = Number(res.headers['content-length'] || 0);
+      let received = 0;
+      if (onProgress && total > 0) onProgress({ received, total });
+      res.on('data', (chunk) => {
+        received += chunk.length;
+        if (onProgress && total > 0) onProgress({ received, total });
+      });
       res.pipe(file);
       file.on('finish', () => file.close(resolve));
     });
@@ -122,6 +129,7 @@ async function latestReleaseTag(owner, repo, token) {
 async function updateServicePayload({
   owner, repo, token, userDataDir, log = console.log,
   force = false, platform = process.platform, arch = process.arch,
+  onProgress = null,
 }) {
   const payloadRoot = path.join(userDataDir, 'payload');
   const latestDir = path.join(payloadRoot, 'latest');
@@ -138,12 +146,15 @@ async function updateServicePayload({
 
   const zipPath = path.join(downloads, zipName);
   log(`downloading ${zipName} (${latestTag}) ...`);
-  await downloadTo(zipUrl, zipPath);
+  onProgress && onProgress({ phase: 'download', received: 0, total: 0 });
+  await downloadTo(zipUrl, zipPath, (p) => onProgress && onProgress({ phase: 'download', ...p }));
+  onProgress && onProgress({ phase: 'verify' });
   const expected = await readSha256(shaUrl);
   await verifySha256(zipPath, expected);
   log('sha256 verified');
 
   // Atomic swap: latest -> .prev, then extract into a fresh latest.
+  onProgress && onProgress({ phase: 'install' });
   fs.rmSync(prevDir, { recursive: true, force: true });
   if (fs.existsSync(latestDir)) fs.renameSync(latestDir, prevDir);
   fs.mkdirSync(latestDir, { recursive: true });

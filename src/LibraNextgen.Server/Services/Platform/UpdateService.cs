@@ -103,7 +103,7 @@ public sealed class UpdateService
             var html = root.TryGetProperty("html_url", out var h) ? h.GetString() : null;
             var published = root.TryGetProperty("published_at", out var p) ? p.GetString() : null;
             var body = root.TryGetProperty("body", out var b) ? b.GetString() : null;
-            var preview = string.IsNullOrWhiteSpace(body) ? null : body.Length <= 600 ? body : body[..600] + "…";
+            var preview = string.IsNullOrWhiteSpace(body) ? null : body.Length <= 4000 ? body : body[..4000] + "…";
             return new ReleaseInfo(tag, html, published, preview);
         }
         catch (JsonException)
