@@ -115,7 +115,7 @@ export function Sidebar({
 
         {/* Navigation rail */}
         <motion.nav
-          className={`flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto overflow-x-hidden ${collapsed ? 'mt-4' : 'mt-3'}`}
+          className={`flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden ${collapsed ? 'mt-4' : 'mt-3'}`}
           transition={{ layout: { staggerChildren: 0.05 } }}
         >
           {sections.map((section, sectionIndex) => (
@@ -175,7 +175,7 @@ function DesktopNavItem({ item, collapsed }: { item: NavItem; collapsed: boolean
     const groupActive = childActive || location.pathname === item.to;
 
     return (
-      <div className="flex flex-col py-0.5">
+      <div className="my-0.5 flex flex-col">
         <motion.div layout className="flex items-center">
           {collapsed ? (
             <Dropdown>
@@ -294,7 +294,7 @@ function DesktopNavItem({ item, collapsed }: { item: NavItem; collapsed: boolean
   const isActive = selfActive;
   const label = t(item.label);
   return (
-    <motion.div layout className="flex items-center py-0.5">
+    <motion.div layout className="my-0.5 flex items-center">
       <Tooltip delay={0} isDisabled={!collapsed}>
         <Button
           isIconOnly={collapsed}
