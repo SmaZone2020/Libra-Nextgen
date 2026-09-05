@@ -36,11 +36,11 @@ const SHADOW_EXTRA_CSS = `
     height: 100%;
     width: 100%;
     min-height: 0;
-    font-family: monospace;
+    font-family: ui-monospace, "Cascadia Mono", Consolas, Menlo, monospace;
   }
   .xterm,
   .xterm * {
-    font-family: monospace !important;
+    font-family: ui-monospace, "Cascadia Mono", Consolas, Menlo, monospace !important;
   }
   .xterm,
   .xterm-viewport,
@@ -143,12 +143,15 @@ const TerminalView = forwardRef<TerminalHandle, Props>(function TerminalView(
     let ro: ResizeObserver | null = null;
     let themeObserver: MutationObserver | null = null;
 
+    // Modern mono stack (SF Mono / Cascadia / Consolas), identical on the
+    // canvas side and inside the shadow DOM so width measurement matches
+    // rendering exactly. xterm 6 no longer needs the generic fallback.
     const t = new Terminal({
       cursorBlink: true,
       cursorStyle: 'block',
       convertEol: true,
       allowTransparency: true,
-      fontFamily: 'monospace',
+      fontFamily: 'ui-monospace, "Cascadia Mono", Consolas, Menlo, monospace',
       fontSize: fontSizeRef.current,
       letterSpacing: 0,
       scrollback: 10000,
