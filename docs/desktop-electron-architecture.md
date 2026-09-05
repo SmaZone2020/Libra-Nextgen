@@ -196,6 +196,7 @@ Service 双存储实施全部完成并全量测试通过(基线 216/216,含 Mong
 | `3f84fc4` | P3:console desktop-only 存储设置 Tab(/api/system/storage + setStorageConfig 桥)与回退横幅;typecheck + 37 单测绿 |
 | `a9597e6` | P4:electron-builder 配置(electron-builder.yml:extraResources baseline-service/baseline-web;nsis/AppImage x64/arm64) |
 | `f749175` | P4:release-assets.yml electron 安装器 job(win/linux × x64/arm64 矩阵,per-OS runner,产物 libra-desktop-installer-*);**首次实测随下一个 tag 发布** |
+| `6a8bada` | P3:壳测试钩子(LIBRA_USER_DATA_DIR/LIBRA_SMOKE_EXIT_MS/加载日志/tray 容错);GUI 全流程冒烟需真实桌面会话(本 harness 无窗口会话,headless 契约已由 smoke-service.js 验证) |
 
 **余项(需环境/发布验证,非代码缺口)**:①下一次 tag 发布时验证四 RID 载荷 + electron 安装器产物的端到端(CI 首次实测);②有显示环境时的 Electron GUI 全流程冒烟(壳 → 本地 sqlite 服务 → console 存储切换);③Release 资产矩阵与文档一致性自检。
 
