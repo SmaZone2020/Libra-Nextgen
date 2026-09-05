@@ -27,6 +27,13 @@ export interface DesktopListenerSettings {
   bindLoopback: boolean;
 }
 
+/** Progress pushed by the desktop shell while an update downloads/installs. */
+export interface UpdateProgress {
+  phase: 'download' | 'verify' | 'install' | 'restart';
+  received?: number;
+  total?: number;
+}
+
 export interface LibraDesktopBridge {
   minimize: () => void;
   toggleMaximize: () => void;
@@ -44,6 +51,7 @@ export interface LibraDesktopBridge {
   setCloseBehavior?: (value: CloseBehavior) => Promise<boolean>;
   getListenerConfig?: () => Promise<DesktopListenerSettings>;
   setListenerConfig?: (settings: DesktopListenerSettings) => Promise<boolean>;
+  onUpdateProgress?: (cb: (progress: UpdateProgress) => void) => () => void;
 }
 
 declare global {

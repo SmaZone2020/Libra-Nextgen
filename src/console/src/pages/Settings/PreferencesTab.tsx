@@ -7,6 +7,8 @@ import i18n, { switchLang } from '../../i18n';
 import { EVENT_TYPE_IDS, getEnabledEventTypes, setEnabledEventTypes } from '../../utils/eventTypes';
 import { api } from '../../api/client';
 import { isLibraDesktopShell } from '../../desktop/DesktopTopBar';
+import { isUserSelectEnabled, setUserSelect } from '../../utils/userSelect';
+import CloseActionTab from './CloseActionTab';
 
 const NOTICE_SOUND_KEY = 'notice_sound';
 
@@ -22,6 +24,7 @@ export default function PreferencesTab() {
   const bridge = window.libraDesktop;
   const [lang, setLang] = useState(() => (i18n.language.startsWith('zh') ? 'zh' : 'en'));
   const [sound, setSound] = useState(() => localStorage.getItem(NOTICE_SOUND_KEY) !== 'false');
+  const [userSelect, setUserSelectState] = useState(isUserSelectEnabled());
   const [port, setPort] = useState('');
   const [portSaved, setPortSaved] = useState(false);
   const [portError, setPortError] = useState<string | null>(null);
@@ -74,6 +77,11 @@ export default function PreferencesTab() {
     localStorage.setItem(NOTICE_SOUND_KEY, String(checked));
   };
 
+  const handleUserSelect = (checked: boolean) => {
+    setUserSelectState(checked);
+    setUserSelect(checked);
+  };
+
   const savePort = async () => {
     const value = Number(port.trim());
     if (!Number.isInteger(value) || value < 1 || value > 65535) {
@@ -120,6 +128,28 @@ export default function PreferencesTab() {
           </Tabs>
         </div>
       </Card>
+
+      {/* Desktop shell: close-window action, same row style as the language picker. */}
+      {desktop && <CloseActionTab />}
+
+      {/* Desktop only: re-enable text selection (off by default everywhere). */}
+      {desktop && (
+        <Card className="p-6 space-y-6">
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <h3 className="font-semibold">{t('settings.userSelectTitle')}</h3>
+              <p className="text-sm text-default-500">{t('settings.userSelectDesc')}</p>
+            </div>
+            <Switch isSelected={userSelect} onChange={handleUserSelect}>
+              <Switch.Content>
+                <Switch.Control>
+                  <Switch.Thumb />
+                </Switch.Control>
+              </Switch.Content>
+            </Switch>
+          </div>
+        </Card>
+      )}
 
       <Card className="p-6 space-y-6">
         <div className="flex items-center justify-between gap-4">

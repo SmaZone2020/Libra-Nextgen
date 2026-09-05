@@ -114,7 +114,6 @@ export function RemoteNodeAgents({
         <h2 className="text-sm font-semibold text-neutral-600 dark:text-neutral-300">
           {t('agents.remoteTitle')}
         </h2>
-        <p className="mt-0.5 text-xs text-default-400">{t('agents.remoteHint')}</p>
       </div>
 
       {segments.map((seg) => (

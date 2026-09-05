@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Chip } from '@heroui/react';
+import { Button, Chip } from '@heroui/react';
 import { LogoGithub } from '@gravity-ui/icons';
 import Markdown from 'react-markdown';
 import { checkForUpdate, getUpdateStatus } from '../../api/system';
@@ -87,9 +87,18 @@ export default function AboutPage() {
         </div>
         <div className="flex flex-wrap items-center gap-3 pt-1">
           {status?.updateAvailable ? (
-            <Chip size="sm" variant="soft" color="warning">
-              {t('about.updateAvailable')} v{status.latestTag}
-            </Chip>
+            <>
+              <Chip size="sm" variant="soft" color="warning">
+                {t('about.updateAvailable')} v{status.latestTag}
+              </Chip>
+              <Button
+                size="sm"
+                variant="primary"
+                onPress={() => window.dispatchEvent(new Event('libra:open-update'))}
+              >
+                {t('update.now')}
+              </Button>
+            </>
           ) : status ? (
             <Chip size="sm" variant="soft" color="success">
               {t('about.upToDate')}

@@ -24,6 +24,7 @@ import { useRegisteredPlugins } from '../plugins/registry';
 import { resolvePluginIcon } from '../plugins/icons';
 import { getAccountMe } from '../api/account';
 import { NetworkOverlay } from '../components/NetworkOverlay';
+import { UpdatePrompter } from '../components/UpdatePrompter';
 import { EventViewer } from '../components/EventViewer';
 import type { UserPermissions } from '../types/models';
 import { sidebarSections, sidebarFootItems } from '../config/site';
@@ -131,6 +132,7 @@ export function AuthenticatedLayout({
       style={{ '--sidebar-w': `${sidebarWidth}px` } as React.CSSProperties}
     >
       <NetworkOverlay />
+      <UpdatePrompter />
       <Sidebar
         brand="Libra Next"
         collapsed={collapsed}

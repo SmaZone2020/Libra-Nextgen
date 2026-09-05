@@ -8,7 +8,6 @@ import { Button, Chip } from '@heroui/react';
 import {
   ChevronRight,
   Comments,
-  Frame,
   Globe,
   Key,
   Palette,
@@ -22,7 +21,6 @@ import { isLibraDesktopShell } from '../../desktop/DesktopTopBar';
 import AccountTab from './AccountTab';
 import PreferencesTab from './PreferencesTab';
 import AppearanceTab from './AppearanceTab';
-import CloseActionTab from './CloseActionTab';
 import RiskPolicyTab from './RiskPolicyTab';
 import McpTab from './McpTab';
 import SecurityTab from './SecurityTab';
@@ -56,14 +54,6 @@ export const SETTING_ROUTES: SettingRoute[] = [
     descKey: 'settings.appearanceDesc',
     icon: Palette,
     render: () => <AppearanceTab />,
-  },
-  {
-    id: 'windowBehavior',
-    labelKey: 'settings.closeActionTab',
-    descKey: 'settings.closeActionDesc',
-    icon: Frame,
-    desktopOnly: true,
-    render: () => <CloseActionTab />,
   },
   {
     id: 'mcp',
@@ -149,7 +139,7 @@ const SETTING_GROUPS: SettingGroup[] = [
   {
     key: 'general',
     labelKey: 'settings.section.general',
-    routeIds: ['preferences', 'appearance', 'windowBehavior', 'storage'],
+    routeIds: ['preferences', 'appearance', 'storage'],
   },
   {
     key: 'ai',

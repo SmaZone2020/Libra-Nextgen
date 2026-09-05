@@ -106,86 +106,68 @@ export default function NodesPage() {
   };
 
   return (
-    <div className="space-y-6">
-      {/* Local service — always present, one of the nodes by definition. */}
-      <section>
-        <h2 className="mb-3 text-sm font-semibold text-neutral-600 dark:text-neutral-300">
-          {t('nodes.localSection')}
+    <div className="space-y-3">
+      <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
+        <h2 className="text-sm font-semibold text-neutral-600 dark:text-neutral-300">
+          {t('nodes.remoteSection')}
         </h2>
-        <LocalNodeCard storeType={localStore} />
-      </section>
-
-      {/* Remote servers (admin-managed mesh). */}
-      <section>
-        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-          <h2 className="text-sm font-semibold text-neutral-600 dark:text-neutral-300">
-            {t('nodes.remoteSection')}
-          </h2>
-          {isAdmin && (
-            <Button size="sm" variant="primary" onPress={() => setAddOpen(true)}>
-              <PlugConnection className="size-4" />
-              {t('nodes.add')}
-            </Button>
-          )}
-        </div>
-
-        {!isAdmin ? (
-          <Card className="p-6 text-center text-sm text-default-500">
-            {t('nodes.remoteAdminOnly')}
-          </Card>
-        ) : nodes === null && !loadError ? (
-          <div className="flex items-center justify-center py-12">
-            <Spinner size="lg" />
-          </div>
-        ) : loadError && nodes === null ? (
-          <Card className="p-6 text-center">
-            <p className="text-sm text-danger">{t('nodes.loadFailed')}</p>
-            <Button size="sm" variant="ghost" className="mt-3" onPress={() => void refreshNodes()}>
-              {t('nodes.retry')}
-            </Button>
-          </Card>
-        ) : (
-          <>
-            {loadError && (
-              <p className="mb-2 text-xs text-danger">
-                {t('nodes.loadFailed')}: {loadError}
-              </p>
-            )}
-            {actionError && (
-              <p className="mb-2 text-xs text-danger" role="alert">
-                {actionError}
-              </p>
-            )}
-            {nodes!.length === 0 ? (
-              <Card className="p-10 text-center text-sm text-default-500">
-                <Server className="mx-auto mb-2 size-7 opacity-60" />
-                {t('nodes.empty')}
-              </Card>
-            ) : (
-              <div className="grid gap-4 grid-cols-[repeat(auto-fill,minmax(300px,1fr))]">
-                {nodes!.map((node) => (
-                  <RemoteNodeCard
-                    key={node.id}
-                    node={node}
-                    busy={busyId === node.id}
-                    onConnect={() =>
-                      runAction(node.id, () => connectMeshNode(node.id), () => void refreshNodes())
-                    }
-                    onDisconnect={() =>
-                      runAction(
-                        node.id,
-                        () => disconnectMeshNode(node.id),
-                        () => void refreshNodes(),
-                      )
-                    }
-                    onDelete={() => void handleDelete(node)}
-                  />
-                ))}
-              </div>
-            )}
-          </>
+        {isAdmin && (
+          <Button size="sm" variant="primary" onPress={() => setAddOpen(true)}>
+            <PlugConnection className="size-4" />
+            {t('nodes.add')}
+          </Button>
         )}
-      </section>
+      </div>
+
+      {/* One grid: the local service always sits first, remote nodes follow. */}
+      <div className="grid gap-4 grid-cols-[repeat(auto-fill,minmax(300px,1fr))]">
+        <LocalNodeCard storeType={localStore} />
+        {isAdmin &&
+          nodes?.map((node) => (
+            <RemoteNodeCard
+              key={node.id}
+              node={node}
+              busy={busyId === node.id}
+              onConnect={() =>
+                runAction(node.id, () => connectMeshNode(node.id), () => void refreshNodes())
+              }
+              onDisconnect={() =>
+                runAction(
+                  node.id,
+                  () => disconnectMeshNode(node.id),
+                  () => void refreshNodes(),
+                )
+              }
+              onDelete={() => void handleDelete(node)}
+            />
+          ))}
+      </div>
+
+      {!isAdmin ? (
+        <p className="text-xs text-default-400">{t('nodes.remoteAdminOnly')}</p>
+      ) : nodes === null && !loadError ? (
+        <div className="flex items-center justify-center py-10">
+          <Spinner size="lg" />
+        </div>
+      ) : loadError && nodes === null ? (
+        <Card className="p-6 text-center">
+          <p className="text-sm text-danger">{t('nodes.loadFailed')}</p>
+          <Button size="sm" variant="ghost" className="mt-3" onPress={() => void refreshNodes()}>
+            {t('nodes.retry')}
+          </Button>
+        </Card>
+      ) : nodes!.length === 0 ? (
+        <Card className="p-6 text-center text-sm text-default-500">
+          <Server className="mx-auto mb-2 size-6 opacity-60" />
+          {t('nodes.empty')}
+        </Card>
+      ) : null}
+
+      {(loadError || actionError) && isAdmin && nodes !== null && (
+        <p className="text-xs text-danger" role="alert">
+          {loadError ? `${t('nodes.loadFailed')}: ${loadError}` : actionError}
+        </p>
+      )}
 
       <AddNodeModal
         open={addOpen}

@@ -143,3 +143,13 @@ html {
     @apply bg-surface/40 dark:bg-surface/60 backdrop-blur;
   }
 }
+/* ---- Desktop 'allow text selection' preference -----------------------------
+ * Off by default: HeroUI/component rules set user-select:none for an app-like
+ * feel. When the preference is on, this root-scoped !important override lets
+ * users select and copy text everywhere (hostnames, addresses, logs...). */
+html.lw-user-select-enabled,
+html.lw-user-select-enabled body,
+html.lw-user-select-enabled * {
+  -webkit-user-select: text !important;
+  user-select: text !important;
+}

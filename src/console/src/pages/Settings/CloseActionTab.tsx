@@ -7,9 +7,9 @@ import type { CloseBehavior } from '../../desktop/DesktopTopBar';
 import { isLibraDesktopShell } from '../../desktop/DesktopTopBar';
 
 /**
- * Desktop-only window close behavior. Only meaningful inside the Libra
- * Desktop shell (it persists desktop.closeBehavior into libra.conf.json);
- * renders a fallback card in older shells without the capability.
+ * Desktop-only window close behavior, rendered inside Preferences with the
+ * same row layout as the language picker (label on the left, tabs on the
+ * right). Persists desktop.closeBehavior via the shell bridge.
  */
 export default function CloseActionTab() {
   const { t } = useTranslation();
@@ -35,13 +35,7 @@ export default function CloseActionTab() {
     };
   }, [desktop, bridge]);
 
-  if (!desktop || !bridge?.setCloseBehavior) {
-    return (
-      <Card className="p-6">
-        <p className="text-sm text-default-500">{t('settings.closeActionNotDesktop')}</p>
-      </Card>
-    );
-  }
+  if (!desktop || !bridge?.setCloseBehavior) return null;
 
   const handleChange = async (key: string | number) => {
     const next: CloseBehavior = key === 'tray' ? 'tray' : 'quit';
@@ -55,28 +49,17 @@ export default function CloseActionTab() {
   };
 
   return (
-    <div className="space-y-6">
-      <Card className="p-6 space-y-5">
-        <div>
-          <h3 className="font-semibold">{t('settings.closeActionTab')}</h3>
-          <p className="text-sm text-default-500">{t('settings.closeActionDesc')}</p>
-        </div>
-
+    <Card className="p-6">
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <h3 className="font-semibold">{t('settings.closeActionTab')}</h3>
         <Tabs selectedKey={behavior} onSelectionChange={(key) => void handleChange(key)}>
           <Tabs.List>
-            <Tabs.Tab id="quit" className="w-40">{t('settings.closeActionQuit')}<Tabs.Indicator /></Tabs.Tab>
-            <Tabs.Tab id="tray" className="w-40">{t('settings.closeActionTray')}<Tabs.Indicator /></Tabs.Tab>
+            <Tabs.Tab id="quit" className="w-36">{t('settings.closeActionQuit')}<Tabs.Indicator /></Tabs.Tab>
+            <Tabs.Tab id="tray" className="w-36">{t('settings.closeActionTray')}<Tabs.Indicator /></Tabs.Tab>
           </Tabs.List>
         </Tabs>
-
-        <p className="text-xs text-default-400">
-          {behavior === 'tray'
-            ? t('settings.closeActionNoteTray')
-            : t('settings.closeActionNoteQuit')}
-        </p>
-
-        {error && <p className="text-sm text-danger">{error}</p>}
-      </Card>
-    </div>
+      </div>
+      {error && <p className="mt-2 text-sm text-danger">{error}</p>}
+    </Card>
   );
 }

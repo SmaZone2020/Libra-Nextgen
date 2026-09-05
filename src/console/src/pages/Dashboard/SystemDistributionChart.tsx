@@ -98,7 +98,7 @@ export function SystemDistributionChart({ agents }: SystemDistributionChartProps
       <Card.Content>
         {total === 0 ? (
           <p className="text-sm text-default-500 py-10 text-center">
-            {t('dashboard.noAgents')}
+            {t('agents.noAgents')}
           </p>
         ) : (
           <>

@@ -38,7 +38,7 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
       className="lw-frame lw-frame--auth"
       data-wallpaper={isWallpaperEnabled(wallpaper) ? 'on' : 'off'}
     >
-      <div className="relative z-10 flex min-h-full flex-col items-center justify-center px-4 py-10">
+      <div className="relative z-10 flex min-h-full flex-col items-center justify-center px-4">
         <div className="mb-4 flex flex-col items-center justify-center">
           <img
             alt="icon"
