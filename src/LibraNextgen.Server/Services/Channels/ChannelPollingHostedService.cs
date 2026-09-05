@@ -94,6 +94,7 @@ public class ChannelPollingHostedService : BackgroundService
             }
         }
         var sessionExpiredLogged = false;
+        var lastInfoLogAt = DateTime.UtcNow;
 
         while (!ct.IsCancellationRequested)
         {
@@ -123,6 +124,24 @@ public class ChannelPollingHostedService : BackgroundService
                             _logger.LogWarning(ex, "Inbound handling failed (channel {Channel})", channel.Id);
                         }
                     }, ct);
+                }
+
+                // iLink getUpdates returns immediately — pace the loop so an
+                // idle channel polls every 2s instead of hammering the API
+                // back-to-back (Telegram long-polls inside its own adapter).
+                if (channel.ChannelType == AiChannelTypes.WechatClaw)
+                {
+                    try { await Task.Delay(TimeSpan.FromSeconds(2), ct); }
+                    catch (OperationCanceledException) { break; }
+                }
+
+                // Health line at most once per 30s: keeps a channel visible in
+                // the console log without spamming per-request lines.
+                if (DateTime.UtcNow - lastInfoLogAt >= TimeSpan.FromSeconds(30))
+                {
+                    lastInfoLogAt = DateTime.UtcNow;
+                    _logger.LogInformation("Polling {Channel} ({Type}) ok — cursor {Cursor}",
+                        channel.Id, channel.ChannelType, cursor);
                 }
             }
             catch (OperationCanceledException)

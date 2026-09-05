@@ -35,6 +35,9 @@ if (int.TryParse(Environment.GetEnvironmentVariable("LIBRA_START_DELAY_MS"), out
 builder.Logging.ClearProviders();
 builder.Logging.AddConsole();
 builder.Logging.AddDebug();
+// Per-request HTTP tracing at Information is pure noise for high-frequency
+// poll loops (wechat iLink / Telegram): keep warnings+ for HttpClient loggers.
+builder.Logging.AddFilter("System.Net.Http.HttpClient", LogLevel.Warning);
 
 // MongoDB
 builder.Services.Configure<MongoSettings>(builder.Configuration.GetSection(MongoSettings.SectionName));
