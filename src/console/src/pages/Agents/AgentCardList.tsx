@@ -3,16 +3,21 @@ import { Display } from '@gravity-ui/icons';
 import type { AgentListItem } from '../../types/models';
 import { AgentCard } from './AgentCard';
 
-/** Card list of agents with an empty state. */
+export type AgentListLayout = 'list' | 'grid';
+
+/** Card list of agents with an empty state. `grid` arranges the cards in the
+ *  same auto-fill grid used on the nodes page. */
 export function AgentCardList({
   agents,
   connectedId,
+  layout = 'list',
   onOpen,
   emptyLabel,
   onContextMenu,
 }: {
   agents: AgentListItem[];
   connectedId: string;
+  layout?: AgentListLayout;
   onOpen: (id: string) => void;
   /** Overrides the default "no agents" copy (e.g. "nothing matches the filter"). */
   emptyLabel?: string;
@@ -31,7 +36,13 @@ export function AgentCardList({
   }
 
   return (
-    <div className="space-y-2.5">
+    <div
+      className={
+        layout === 'grid'
+          ? 'grid gap-2.5 grid-cols-[repeat(auto-fill,minmax(300px,1fr))]'
+          : 'space-y-2.5'
+      }
+    >
       {agents.map((agent) => (
         <AgentCard
           key={agent.id}

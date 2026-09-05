@@ -4,7 +4,6 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ArrowUpRightFromSquare, Server } from '@gravity-ui/icons';
 import type { AgentListItem } from '../../types/models';
-import { getStoredUser } from '../../api/auth';
 import { listMeshNodes, meshNodeAgents, type MeshNode } from '../../api/mesh';
 import { AgentCard } from './AgentCard';
 
@@ -22,39 +21,33 @@ const STORE_LABEL: Record<string, string> = { sqlite: 'SQLite', mongo: 'MongoDB'
 
 /**
  * Poll connected mesh nodes and pull each one's agent list through the hub
- * proxy. Empty when the current user is not an admin or no node is connected.
+ * proxy. Visible to every authenticated user (web and desktop); managing the
+ * nodes themselves stays Admin-only on the server.
  */
 export function useRemoteAgentSegments(): RemoteAgentSegment[] {
-  const isAdmin = getStoredUser()?.role === 'Admin';
   const [segments, setSegments] = useState<RemoteAgentSegment[]>([]);
   const [nodes, setNodes] = useState<MeshNode[]>([]);
 
   const loadNodes = useCallback(async () => {
-    if (!isAdmin) return;
     try {
       setNodes(await listMeshNodes());
     } catch {
       /* transient mesh outage — keep the last known node set */
     }
-  }, [isAdmin]);
+  }, []);
 
   useEffect(() => {
-    if (!isAdmin) {
-      setSegments([]);
-      setNodes([]);
-      return;
-    }
     void loadNodes();
     const timer = setInterval(loadNodes, REFRESH_MS);
     return () => clearInterval(timer);
-  }, [isAdmin, loadNodes]);
+  }, [loadNodes]);
 
   const connectedNodes = useMemo(() => nodes.filter((n) => n.connected), [nodes]);
 
   // Pull agent lists whenever the connected-node set changes; a failing node
   // is dropped silently for that round and reappears once it responds again.
   useEffect(() => {
-    if (!isAdmin || connectedNodes.length === 0) {
+    if (connectedNodes.length === 0) {
       setSegments([]);
       return;
     }
@@ -86,7 +79,7 @@ export function useRemoteAgentSegments(): RemoteAgentSegment[] {
       cancelled = true;
       clearInterval(timer);
     };
-  }, [isAdmin, connectedNodes]);
+  }, [connectedNodes]);
 
   return segments;
 }

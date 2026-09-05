@@ -1,11 +1,22 @@
 'use client';
 
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button, Drawer } from '@heroui/react';
-import { Magnifier, SlidersVertical, Xmark } from '@gravity-ui/icons';
+import { LayoutCells, LayoutList, Magnifier, SlidersVertical, Xmark } from '@gravity-ui/icons';
 import type { AgentListItem } from '../../types/models';
 import { AgentCardList } from './AgentCardList';
+
+type LayoutKind = 'list' | 'grid';
+const LAYOUT_KEY = 'agents_layout';
+
+function readLayout(): LayoutKind {
+  try {
+    return localStorage.getItem(LAYOUT_KEY) === 'grid' ? 'grid' : 'list';
+  } catch {
+    return 'list';
+  }
+}
 
 type StatusFilter = 'all' | 'online' | 'offline';
 type OsFilter = 'all' | 'windows' | 'linux' | 'macos' | 'other';
@@ -114,8 +125,17 @@ export function AgentBrowser({
   const [os, setOs] = useState<OsFilter>(DEFAULTS.os);
   const [sortKind, setSortKind] = useState<SortKind>(DEFAULTS.sortKind);
   const [sortDir, setSortDir] = useState<SortDir>(DEFAULTS.sortDir);
+  const [layout, setLayout] = useState<LayoutKind>(readLayout);
   const [sheetOpen, setSheetOpen] = useState(false);
   const isDesktop = useIsDesktop();
+
+  const toggleLayout = () => {
+    setLayout((prev) => {
+      const next: LayoutKind = prev === 'list' ? 'grid' : 'list';
+      try { localStorage.setItem(LAYOUT_KEY, next); } catch { /* ignore */ }
+      return next;
+    });
+  };
 
   const activeFilterCount =
     (status !== DEFAULTS.status ? 1 : 0) +
@@ -300,11 +320,25 @@ export function AgentBrowser({
             </span>
           )}
         </Button>
+        {/* Layout toggle: vertical list ↔ card grid (mirrors the nodes page). */}
+        <Button
+          isIconOnly
+          aria-label={layout === 'grid' ? t('agents.layoutList') : t('agents.layoutGrid')}
+          aria-pressed={layout === 'grid'}
+          onPress={toggleLayout}
+          variant="secondary"
+          className={`size-10 shrink-0 rounded-[12px] ${
+            layout === 'grid' ? 'bg-accent text-accent-foreground shadow-sm' : 'text-neutral-600 dark:text-neutral-300'
+          }`}
+        >
+          {layout === 'grid' ? <LayoutCells className="size-4" /> : <LayoutList className="size-4" />}
+        </Button>
       </div>
 
       <AgentCardList
         agents={visibleAgents}
         connectedId={connectedId}
+        layout={layout}
         onOpen={onOpen}
         onContextMenu={onCardContextMenu}
         emptyLabel={agents.length > 0 ? t('agents.noMatch') : undefined}
