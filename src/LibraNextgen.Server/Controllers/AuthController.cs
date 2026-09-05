@@ -97,7 +97,7 @@ public class AuthController : ControllerBase
     }
 
     /// <summary>
-    /// Exchange a refresh token for a new JWT + rotated refresh token.
+    /// Exchange an access key for a new JWT + rotated refresh token.
     /// </summary>
     [HttpPost("refresh")]
     public async Task<IActionResult> Refresh([FromBody] RefreshRequest request)
@@ -108,9 +108,32 @@ public class AuthController : ControllerBase
 
         return Ok(response);
     }
+
+    /// <summary>
+    /// Exchange an access key (lnk_*) for a short-lived console JWT — the
+    /// authentication path used by remote mesh hubs.
+    /// </summary>
+    [HttpPost("key-exchange")]
+    [Microsoft.AspNetCore.RateLimiting.EnableRateLimiting("auth")]
+    public async Task<IActionResult> KeyExchange([FromBody] ExchangeKeyRequest request)
+    {
+        if (string.IsNullOrWhiteSpace(request.Key))
+            return BadRequest(new { error = "key is required" });
+
+        var response = await _authService.ExchangeAccessKeyAsync(request.Key.Trim());
+        if (response == null)
+            return Unauthorized(new { error = "Invalid access key" });
+
+        return Ok(response);
+    }
 }
 
 public class RefreshRequest
 {
     public string RefreshToken { get; set; } = string.Empty;
+}
+
+public class ExchangeKeyRequest
+{
+    public string Key { get; set; } = string.Empty;
 }

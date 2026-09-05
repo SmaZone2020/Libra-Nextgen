@@ -10,12 +10,45 @@ namespace LibraNextgen.Service.Services.Auth;
 public class AuthService
 {
     private readonly IStore<User> _users;
+    private readonly AccessKeyService _accessKeys;
     private readonly JwtSettings _jwtSettings;
 
-    public AuthService(IStore<User> users, JwtSettings jwtSettings)
+    public AuthService(IStore<User> users, AccessKeyService accessKeys, JwtSettings jwtSettings)
     {
         _users = users;
+        _accessKeys = accessKeys;
         _jwtSettings = jwtSettings;
+    }
+
+    /// <summary>
+    /// Exchange an access key (lnk_*) for a short-lived console JWT. Lets a
+    /// remote mesh hub authenticate to this server without an account
+    /// password. No refresh token is issued: the key stays the credential of
+    /// record and the hub simply re-exchanges it when the JWT nears expiry.
+    /// </summary>
+    public async Task<LoginResponse?> ExchangeAccessKeyAsync(string rawKey)
+    {
+        if (string.IsNullOrWhiteSpace(rawKey)) return null;
+
+        var key = await _accessKeys.ValidateAsync(rawKey);
+        if (key == null) return null;
+
+        var role = Enum.TryParse<UserRole>(key.Role, ignoreCase: true, out var parsed)
+            ? parsed
+            : UserRole.Operator;
+
+        var (token, expires) = JwtHelper.GenerateToken(
+            key.Id, key.Name, key.Role,
+            _jwtSettings.Rsa, _jwtSettings.Issuer, _jwtSettings.Audience,
+            _jwtSettings.TokenExpirationMinutes);
+
+        return new LoginResponse
+        {
+            Token = token,
+            ExpiresAt = expires,
+            Username = key.Name,
+            Role = role,
+        };
     }
 
     public async Task<LoginResponse?> LoginAsync(LoginRequest request, string ipAddress)
