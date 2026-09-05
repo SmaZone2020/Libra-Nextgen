@@ -138,7 +138,6 @@ export default function PreferencesTab() {
           <div className="flex items-center justify-between gap-4">
             <div>
               <h3 className="font-semibold">{t('settings.userSelectTitle')}</h3>
-              <p className="text-sm text-default-500">{t('settings.userSelectDesc')}</p>
             </div>
             <Switch isSelected={userSelect} onChange={handleUserSelect}>
               <Switch.Content>

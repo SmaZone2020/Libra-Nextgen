@@ -199,7 +199,6 @@ function LocalNodeCard({ storeType }: { storeType: 'sqlite' | 'mongo' | null }) 
             <Chip size="sm" variant="soft" color="success">{t('nodes.connected')}</Chip>
           </div>
           <p className="mt-1 truncate font-mono text-xs text-default-500">{origin}</p>
-          <p className="mt-0.5 text-xs text-default-400">{t('nodes.localDesc')}</p>
         </div>
         <StoreChip storeType={storeType} />
       </div>
@@ -374,8 +373,8 @@ function AddNodeModal({
 
             <Tabs selectedKey={kind} onSelectionChange={(key) => setKind(String(key) as 'password' | 'accessKey')}>
               <Tabs.List>
-                <Tabs.Tab id="password" className="w-40">{t('nodes.authPassword')}<Tabs.Indicator /></Tabs.Tab>
-                <Tabs.Tab id="accessKey" className="w-40">{t('nodes.authKey')}<Tabs.Indicator /></Tabs.Tab>
+                <Tabs.Tab id="password">{t('nodes.authPassword')}<Tabs.Indicator /></Tabs.Tab>
+                <Tabs.Tab id="accessKey">{t('nodes.authKey')}<Tabs.Indicator /></Tabs.Tab>
               </Tabs.List>
             </Tabs>
 
