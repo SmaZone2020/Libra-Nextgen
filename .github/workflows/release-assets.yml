@@ -108,7 +108,9 @@ jobs:
         shell: bash
         run: |
           mkdir -p assets
-          (cd src/console/dist && zip -qr ../../assets/libra-webapp-$TAG.zip .)
+          # src/console/dist is three levels under the workspace; use an
+          # absolute target so the zip lands in the workspace assets dir.
+          (cd src/console/dist && zip -qr "$GITHUB_WORKSPACE/assets/libra-webapp-$TAG.zip" .)
           cd assets
           sha256sum libra-webapp-$TAG.zip | awk '{print $1}' > libra-webapp-$TAG.zip.sha256
       - uses: actions/upload-artifact@v4
