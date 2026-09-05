@@ -117,12 +117,31 @@
   }
 }
 
-/* Mobile never shows the wallpaper chrome: the workspace covers the screen. */
+/* Mobile never shows the wallpaper chrome inside the authenticated shell:
+   the workspace covers the screen. Pre-auth frames (login) keep it. */
 @media (max-width: 639.98px) {
-  .lw-frame[data-wallpaper="on"]::before,
-  .lw-frame[data-wallpaper="on"]::after {
+  .lw-frame[data-wallpaper="on"]:not(.lw-frame--auth)::before,
+  .lw-frame[data-wallpaper="on"]:not(.lw-frame--auth)::after {
     display: none;
   }
+}
+
+/* Pre-auth screens (login/setup) share the same app-background system and add
+   the default blue / violet / amber bloom; an enabled wallpaper still shows
+   through on top of this layer, including on mobile. */
+.lw-frame--auth {
+  background:
+    radial-gradient(980px 660px at 84% -12%, oklch(0.63 0.15 262 / 0.17), transparent 62%),
+    radial-gradient(760px 540px at 4% 110%, oklch(0.55 0.17 292 / 0.14), transparent 64%),
+    radial-gradient(620px 420px at 58% 120%, oklch(0.84 0.13 84 / 0.09), transparent 60%),
+    linear-gradient(160deg, var(--lw-app-bg-top), var(--lw-app-bg-bottom));
+}
+.dark .lw-frame--auth {
+  background:
+    radial-gradient(1000px 700px at 86% -10%, oklch(0.61 0.15 262 / 0.22), transparent 62%),
+    radial-gradient(820px 580px at 2% 112%, oklch(0.54 0.17 292 / 0.18), transparent 64%),
+    radial-gradient(680px 460px at 60% 122%, oklch(0.86 0.15 85 / 0.08), transparent 60%),
+    linear-gradient(160deg, var(--lw-app-bg-top), var(--lw-app-bg-bottom));
 }
 
 /* Inside the workspace the color is plain theme text. */
