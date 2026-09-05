@@ -149,7 +149,6 @@
   flex-direction: column;
   width: var(--sidebar-w, 256px);
   overflow: hidden;
-  transition: width 0.3s ease-in-out;
 }
 @media (min-width: 640px) {
   .lw-sidebar { display: flex; }

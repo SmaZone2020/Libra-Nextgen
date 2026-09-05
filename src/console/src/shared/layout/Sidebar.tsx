@@ -68,31 +68,23 @@ export function Sidebar({
       <div className="flex h-full min-h-0 flex-col p-4">
         {/* Brand row */}
         <div
-          className={`mb-4 flex min-h-10 items-center transition-all duration-300 ${
+          className={`mb-4 flex min-h-10 items-center ${
             collapsed ? 'justify-center' : 'justify-between gap-2 pr-1 pl-1.5'
           }`}
         >
-          <AnimatePresence initial={false}>
-            {!collapsed && (
-              <motion.div
-                animate={{ opacity: 1, height: 'auto' }}
-                exit={{ opacity: 0, height: 0 }}
-                initial={{ opacity: 0, height: 0 }}
-                transition={{ duration: 0.3, ease: [0.25, 0.1, 0.25, 1] }}
-                className="flex min-w-0 items-center gap-2.5 overflow-hidden whitespace-nowrap"
-              >
-                <img
-                  alt="icon"
-                  className="size-9 pointer-events-none shrink-0 rounded-[10px] object-cover select-none dark:invert"
-                  loading="lazy"
-                  src="/images/icon2.webp"
-                />
-                <span className="libre truncate text-[21px] leading-none font-bold whitespace-nowrap text-neutral-900 dark:text-neutral-100">
-                  {brand}
-                </span>
-              </motion.div>
-            )}
-          </AnimatePresence>
+          {!collapsed && (
+            <div className="flex min-w-0 items-center gap-2.5 overflow-hidden whitespace-nowrap">
+              <img
+                alt="icon"
+                className="size-9 pointer-events-none shrink-0 rounded-[10px] object-cover select-none dark:invert"
+                loading="lazy"
+                src="/images/icon2.webp"
+              />
+              <span className="libre truncate text-[21px] leading-none font-bold whitespace-nowrap text-neutral-900 dark:text-neutral-100">
+                {brand}
+              </span>
+            </div>
+          )}
           <Button
             isIconOnly
             aria-label={t('nav.toggleSidebar')}
@@ -180,13 +172,13 @@ function DesktopNavItem({ item, collapsed }: { item: NavItem; collapsed: boolean
             <Dropdown>
               <Button
                 variant="ghost"
-                className={`relative shrink-0 justify-start overflow-visible rounded-[12px] p-0 transition-all duration-300 ${
+                className={`shrink-0 rounded-[12px] p-0 ${
                   groupActive ? 'bg-accent-soft text-accent-soft-foreground' : ''
                 }`}
                 style={{ width: 40, height: 40 }}
                 aria-label={label}
               >
-                <item.icon className="absolute top-1/2 left-1/2 size-4 -translate-x-1/2 -translate-y-1/2" />
+                <item.icon className="m-auto size-4" />
               </Button>
               <Dropdown.Popover>
                 <Dropdown.Menu aria-label={label} onAction={(key) => navigate(String(key))}>
@@ -206,14 +198,14 @@ function DesktopNavItem({ item, collapsed }: { item: NavItem; collapsed: boolean
             <Tooltip delay={0}>
               <Button
                 variant="ghost"
-                className={`flex-1 justify-start rounded-[12px] px-3 transition-all duration-300 ${
+                className={`flex-1 justify-start rounded-[12px] px-3 ${
                   groupActive ? 'bg-accent-soft text-accent-soft-foreground' : ''
                 }`}
                 onPress={handlePress}
               >
                 <item.icon className="shrink-0" />
                 <span
-                  className={`flex-1 overflow-hidden whitespace-nowrap text-left transition-all duration-300 ${
+                  className={`flex-1 overflow-hidden whitespace-nowrap text-left ${
                     groupActive ? 'font-semibold' : 'font-medium'
                   }`}
                   style={{ maxWidth: collapsed ? 0 : '14rem', opacity: collapsed ? 0 : 1 }}
@@ -292,27 +284,22 @@ function DesktopNavItem({ item, collapsed }: { item: NavItem; collapsed: boolean
       <Tooltip delay={0} isDisabled={!collapsed}>
         <Button
           variant="ghost"
-          className={`justify-start rounded-[12px] transition-all duration-300 ${
-            collapsed ? 'relative shrink-0 p-0 overflow-visible' : 'flex-1 px-3'
+          className={`justify-start rounded-[12px] ${
+            collapsed ? 'shrink-0 p-0' : 'flex-1 px-3'
           } ${isActive ? 'bg-accent-soft text-accent-soft-foreground' : ''}`}
           style={collapsed ? { width: 40, height: 40 } : undefined}
           onPress={() => navigate(item.to)}
         >
-          <item.icon
-            className={
-              collapsed
-                ? 'absolute top-1/2 left-1/2 size-4 -translate-x-1/2 -translate-y-1/2'
-                : 'shrink-0'
-            }
-          />
-          <span
-            className={`overflow-hidden whitespace-nowrap transition-all duration-300 ${
-              isActive ? 'font-semibold' : 'font-medium'
-            }`}
-            style={{ maxWidth: collapsed ? 0 : '14rem', opacity: collapsed ? 0 : 1 }}
-          >
-            {label}
-          </span>
+          <item.icon className={collapsed ? 'm-auto size-4' : 'shrink-0'} />
+          {!collapsed && (
+            <span
+              className={`overflow-hidden whitespace-nowrap ${
+                isActive ? 'font-semibold' : 'font-medium'
+              }`}
+            >
+              {label}
+            </span>
+          )}
         </Button>
         <Tooltip.Content placement="right">{label}</Tooltip.Content>
       </Tooltip>
