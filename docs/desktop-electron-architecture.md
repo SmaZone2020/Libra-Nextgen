@@ -176,3 +176,20 @@ HTTP/SSE/WS API 契约、JWT/RBAC、agent beacon 加密协议(RSA+AES-GCM+mallea
 3. 存储切换重启生效、数据不自动迁移、回退仅启动时刻(见 §3 边界);
 4. mac 平台 v1 不做;mac 全量 tier 需要 Apple 签名/公证,列入 v1.1(壳可用免签 + xattr 指引分发);
 5. 密钥/凭据落盘保护(connectString 明文、JWT 密钥非 Windows 裸存)后续随桌面场景评估。
+
+## 12. 实现状态(随提交更新,权威代码为准)
+
+Service 双存储实施全部完成并全量测试通过(基线 216/216,含 Mongo 集成测试):
+
+| 提交 | 内容 |
+|---|---|
+| `ba1edfb` | 本文档总纲 |
+| `8b4de06` | P0:`IStore<T>` + Mongo 适配(`Repository<T> : IStore<T>`)+ `UserConfigLoader` 骨架 |
+| `9156cf0` | P1 引擎:`SqliteDbContext`/`SqliteStore<T>`(JSON 文档表、内存求值)、`StoreModeResolver` + `MongoReachabilityProbe` |
+| `2cb655f` | P1 接线:启动解析/CLI 覆盖/探测/回退/exit、`RegisterStore<T>` 双注册、`DuplicateKeyException`、7 个核心服务迁 IStore、`SqliteModeBootTests`(sqlite 全栈 setup→login E2E) |
+| `efff8ab` | P1 完成:AgentComms/AgentTraffic/SessionKeyStore/RiskPolicy/Audit/Permission 迁 IStore;`GET /api/system/storage`;`StoreTtlCleanupService`(sqlite TTL);audit 搜索翻译实证(ToLower().Contains 可译,OrdinalIgnoreCase 不可译) |
+| `9ca25d3` | P2-1:PluginService/McpService/AiEventNotifier/AiEventSubscriptionController 迁 IStore;无 Repository-only 集合 |
+| P2-2(进行中) | AiService/AiChannelService(7 个 ai_* 集合)迁 IStore |
+
+**已知 SQLite 侧语义差异**(接受):唯一/partial-unique(TTL/用户名唯一/频道绑定唯一)依赖 Mongo 索引,SQLite 文档存储暂无提取列索引,靠服务层先查后写兜底;SQLite TTL 由 `StoreTtlCleanupService` 周期清理(traffic)。差异不影响 API 契约。
+
