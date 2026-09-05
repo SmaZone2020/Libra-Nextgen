@@ -214,7 +214,6 @@ export default {
         donateDesc: '使用微信或支付宝扫码赞赏，感谢支持 ☕',
       },
 
-      overviewDesc: '安全操作工作台 · 实时状态与最近活动',
       activityTitle: '最近活动',
       activityAll: '查看全部',
       activityCollapse: '收起',

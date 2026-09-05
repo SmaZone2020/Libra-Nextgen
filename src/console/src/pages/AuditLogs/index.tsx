@@ -2,7 +2,6 @@ import { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Chip, Tabs } from '@heroui/react';
 import { getAuditLogs } from '../../api/audit';
-import { Widget } from '../../components/widget';
 import { DataGrid } from '../../components/data-grid';
 import { SearchBar } from './SearchBar';
 import { Pagination } from './Pagination';
@@ -89,56 +88,48 @@ export default function AuditLogsPage() {
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
   return (
-    <div className="space-y-6">
-      <Widget>
-        <Widget.Header>
-          <Widget.Title>{t('audit.title')}</Widget.Title>
-        </Widget.Header>
-        <Widget.Content>
-          <SearchBar
-            value={search}
-            onChange={setSearch}
-            onSearch={handleSearch}
-            loading={loading}
-          />
+    <div className="flex min-w-0 flex-col gap-3">
+      <SearchBar
+        value={search}
+        onChange={setSearch}
+        onSearch={handleSearch}
+        loading={loading}
+      />
 
-          <Tabs
-            aria-label={t('audit.risk')}
-            selectedKey={riskFilter}
-            onSelectionChange={(key) => { setRiskFilter(String(key)); setPage(1); }}
-            className="my-4"
-          >
-            <Tabs.List>
-              <Tabs.Tab id="">{t('audit.riskAll')}<Tabs.Indicator /></Tabs.Tab>
-              <Tabs.Tab id="Safe"><span className="text-green-600">{t('riskLevel.Safe')}</span><Tabs.Indicator /></Tabs.Tab>
-              <Tabs.Tab id="Normal"><span className="text-blue-600">{t('riskLevel.Normal')}</span><Tabs.Indicator /></Tabs.Tab>
-              <Tabs.Tab id="Dangerous"><span className="text-orange-600">{t('riskLevel.Dangerous')}</span><Tabs.Indicator /></Tabs.Tab>
-              <Tabs.Tab id="Malicious"><span className="text-red-600">{t('riskLevel.Malicious')}</span><Tabs.Indicator /></Tabs.Tab>
-            </Tabs.List>
-          </Tabs>
+      <Tabs
+        aria-label={t('audit.risk')}
+        selectedKey={riskFilter}
+        onSelectionChange={(key) => { setRiskFilter(String(key)); setPage(1); }}
+      >
+        <Tabs.List>
+          <Tabs.Tab id="">{t('audit.riskAll')}<Tabs.Indicator /></Tabs.Tab>
+          <Tabs.Tab id="Safe"><span className="text-green-600">{t('riskLevel.Safe')}</span><Tabs.Indicator /></Tabs.Tab>
+          <Tabs.Tab id="Normal"><span className="text-blue-600">{t('riskLevel.Normal')}</span><Tabs.Indicator /></Tabs.Tab>
+          <Tabs.Tab id="Dangerous"><span className="text-orange-600">{t('riskLevel.Dangerous')}</span><Tabs.Indicator /></Tabs.Tab>
+          <Tabs.Tab id="Malicious"><span className="text-red-600">{t('riskLevel.Malicious')}</span><Tabs.Indicator /></Tabs.Tab>
+        </Tabs.List>
+      </Tabs>
 
-          <DataGrid
-            aria-label={t('audit.title')}
-            columns={columns}
-            data={logs}
-            getRowId={(l) => l.id}
-            renderEmptyState={() => (
-              <div className="flex justify-center py-8 text-default-500 text-sm">
-                {t('audit.noLogs')}
-              </div>
-            )}
-          />
+      <DataGrid
+        aria-label={t('audit.title')}
+        columns={columns}
+        data={logs}
+        getRowId={(l) => l.id}
+        renderEmptyState={() => (
+          <div className="flex justify-center py-8 text-default-500 text-sm">
+            {t('audit.noLogs')}
+          </div>
+        )}
+      />
 
-          <Pagination
-            page={page}
-            totalPages={totalPages}
-            total={total}
-            pageSize={pageSize}
-            loading={loading}
-            onPageChange={setPage}
-          />
-        </Widget.Content>
-      </Widget>
+      <Pagination
+        page={page}
+        totalPages={totalPages}
+        total={total}
+        pageSize={pageSize}
+        loading={loading}
+        onPageChange={setPage}
+      />
     </div>
   );
 }

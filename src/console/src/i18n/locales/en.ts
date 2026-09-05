@@ -215,7 +215,6 @@ export default {
         donateDesc: 'Scan with WeChat or Alipay to support us ☕',
       },
 
-      overviewDesc: 'Security operations workspace — live status and recent activity',
       activityTitle: 'Recent Activity',
       activityAll: 'View all',
       activityCollapse: 'Collapse',

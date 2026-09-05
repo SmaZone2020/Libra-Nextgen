@@ -163,13 +163,17 @@ export default function Dashboard() {
 
   return (
     <div className="flex min-w-0 flex-col gap-6 py-1 sm:gap-8 sm:py-2">
-      {/* Hero: the workspace greeting — data lives below, no stat cards. */}
-      <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
-        <div>
-          <h1 className="lw-hero-title">{t('pageMeta.dashboard.label')}</h1>
-          <p className="lw-hero-sub">{t('dashboard.overviewDesc')}</p>
+      {/* Typographic metric strip — part of the workspace, not cards. */}
+      <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-4">
+        <div className="lw-metrics" aria-label={t('pageMeta.dashboard.subtitle')}>
+          {metricItems.map((m) => (
+            <div key={m.key} className="lw-metric">
+              <span className="lw-metric-value">{m.value}</span>
+              <span className="lw-metric-label">{m.key}</span>
+            </div>
+          ))}
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex shrink-0 items-center gap-2 pb-0.5">
           <Button
             variant="ghost"
             size="sm"
@@ -189,16 +193,6 @@ export default function Dashboard() {
             <span className="hidden sm:inline">{t('dashboard.sponsor.upgrade')}</span>
           </Button>
         </div>
-      </div>
-
-      {/* Typographic metric strip — part of the workspace, not cards. */}
-      <div className="lw-metrics" aria-label={t('pageMeta.dashboard.subtitle')}>
-        {metricItems.map((m) => (
-          <div key={m.key} className="lw-metric">
-            <span className="lw-metric-value">{m.value}</span>
-            <span className="lw-metric-label">{m.key}</span>
-          </div>
-        ))}
       </div>
 
       <hr className="lw-divider" />
