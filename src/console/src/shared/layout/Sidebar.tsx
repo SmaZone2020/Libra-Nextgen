@@ -37,6 +37,8 @@ interface SidebarProps {
   brand?: string;
   collapsed: boolean;
   sections: SidebarSection[];
+  /** Pinned footer items rendered between the scroll rail and the user card. */
+  foot?: NavItem[];
   /** Signed-in user card pinned below the last section. */
   user?: SidebarUser | null;
   onLogout?: () => void;
@@ -57,6 +59,7 @@ export function Sidebar({
   brand = 'Libra Next',
   collapsed,
   sections,
+  foot,
   user,
   onLogout,
   onToggle,
@@ -126,6 +129,15 @@ export function Sidebar({
           ))}
         </nav>
 
+        {/* Pinned footer items — outside the scroll rail, above the user card. */}
+        {foot && foot.length > 0 && (
+          <div className="mt-2 w-full shrink-0">
+            {foot.map((item) => (
+              <DesktopNavItem key={item.label} item={item} collapsed={collapsed} />
+            ))}
+          </div>
+        )}
+
         {/* User card */}
         {user && (
           <div className="mt-2 w-full shrink-0 pt-3">
@@ -158,8 +170,13 @@ function DesktopNavItem({ item, collapsed }: { item: NavItem; collapsed: boolean
     const navigable = !!item.to;
     const handlePress = () => {
       if (collapsed) return;
-      if (navigable) navigate(item.to);
-      else setOpen((v) => !v);
+      if (navigable) {
+        navigate(item.to);
+        // Opening the group page also expands its children (when present).
+        if (item.children!.length > 0) setOpen(true);
+      } else {
+        setOpen((v) => !v);
+      }
     };
     const handleChevron = (e: MouseEvent) => {
       e.stopPropagation();

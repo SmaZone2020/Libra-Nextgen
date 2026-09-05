@@ -25,7 +25,7 @@ import { getAccountMe } from '../api/account';
 import { NetworkOverlay } from '../components/NetworkOverlay';
 import { EventViewer } from '../components/EventViewer';
 import type { UserPermissions } from '../types/models';
-import { sidebarSections } from '../config/site';
+import { sidebarSections, sidebarFootItems } from '../config/site';
 import { PageHeader } from './PageHeader';
 import { AgentSelector } from './AgentSelector';
 import { MobileTabBar } from './mobile/MobileTabBar';
@@ -114,6 +114,9 @@ export function AuthenticatedLayout({
     ),
   }));
 
+  // Pinned footer items (settings / about) — permission-filtered like sections.
+  const footItems = sidebarFootItems.filter((i) => canSee(i.to));
+
   // Route → display name for plugin page headers.
   const pluginLabels = new Map(registeredPlugins.map((p) => [p.route, p.manifest.name || p.pluginId]));
 
@@ -131,6 +134,7 @@ export function AuthenticatedLayout({
         brand="Libra Next"
         collapsed={collapsed}
         sections={finalSections}
+        foot={footItems}
         user={user}
         onLogout={onLogout}
         onToggle={onToggle}

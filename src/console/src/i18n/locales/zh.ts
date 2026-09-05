@@ -34,7 +34,6 @@ export default {
       section: {
         workspace: '工作区',
         operations: '运维',
-        system: '系统',
       },
     },
     pageMeta: {

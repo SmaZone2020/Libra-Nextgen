@@ -43,12 +43,13 @@ export const sidebarSections: SidebarSection[] = [
       { icon: Shield, to: '/audit', label: 'nav.auditLogs' },
     ],
   },
-  // System / account area pinned above the user card.
-  {
-    captionKey: 'nav.section.system',
-    items: [
-      { icon: Gear, to: '/settings', label: 'nav.settings' },
-      { icon: CircleInfo, to: '/about', label: 'nav.about' },
-    ],
-  },
+];
+
+/**
+ * Settings / About — rendered as a fixed footer block above the user card,
+ * OUTSIDE the scrollable navigation rail (they never scroll with sections).
+ */
+export const sidebarFootItems: NavItem[] = [
+  { icon: Gear, to: '/settings', label: 'nav.settings' },
+  { icon: CircleInfo, to: '/about', label: 'nav.about' },
 ];

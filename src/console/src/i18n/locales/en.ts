@@ -34,7 +34,6 @@ export default {
       section: {
         workspace: 'Workspace',
         operations: 'Operations',
-        system: 'System',
       },
     },
     pageMeta: {
