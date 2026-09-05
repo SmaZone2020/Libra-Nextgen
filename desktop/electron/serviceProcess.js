@@ -17,6 +17,7 @@
 const { spawn } = require('child_process');
 const net = require('net');
 const http = require('http');
+const fs = require('fs');
 const path = require('path');
 
 /** Ownership of the backend process on the target port. */
@@ -116,13 +117,29 @@ class ServiceProcess {
       }
       const env = { ...process.env, ...additions };
 
+      // Persist backend stdout/stderr to userData/logs/backend.log so server
+      // exceptions are diagnosable from the packaged app.
+      let logStream = null;
+      try {
+        const logDir = path.join(userDataDir, 'logs');
+        fs.mkdirSync(logDir, { recursive: true });
+        logStream = fs.createWriteStream(path.join(logDir, 'backend.log'), { flags: 'a' });
+      } catch {
+        logStream = null;
+      }
+      const logLine = (chunk) => {
+        if (logStream) logStream.write(String(chunk));
+      };
+
       this.log(`starting backend ${exe} on port ${spawnPort} ...`);
       this.child = spawn(exe, ['--user-data-dir', userDataDir], {
         cwd: payload.rootDir,
         windowsHide: true,
-        stdio: 'ignore',
+        stdio: logStream ? ['ignore', 'pipe', 'pipe'] : 'ignore',
         env,
       });
+      if (this.child.stdout && logStream) this.child.stdout.on('data', logLine);
+      if (this.child.stderr && logStream) this.child.stderr.on('data', logLine);
       this.child.on('exit', (code) => {
         if (this.child !== null && this.ownership !== BackendOwnership.Owned) {
           this.log(`backend exited with code ${code} before becoming ready`);
