@@ -175,7 +175,7 @@ function DesktopNavItem({ item, collapsed }: { item: NavItem; collapsed: boolean
     const groupActive = childActive || location.pathname === item.to;
 
     return (
-      <div className="flex flex-col">
+      <div className="flex flex-col py-0.5">
         <motion.div layout className="flex items-center">
           {collapsed ? (
             <Dropdown>
@@ -294,7 +294,7 @@ function DesktopNavItem({ item, collapsed }: { item: NavItem; collapsed: boolean
   const isActive = selfActive;
   const label = t(item.label);
   return (
-    <motion.div layout className="flex items-center">
+    <motion.div layout className="flex items-center py-0.5">
       <Tooltip delay={0} isDisabled={!collapsed}>
         <Button
           isIconOnly={collapsed}
