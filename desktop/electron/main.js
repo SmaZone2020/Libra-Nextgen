@@ -374,14 +374,7 @@ app.whenReady().then(async () => {
   }
 
   if (installedPayload) {
-    try {
-      await service.start(installedPayload, userDataDir, startOptionsFor(installedPayload));
-      targetUrl = `http://127.0.0.1:${service.effectivePort ?? installedPayload.port}/`;
-    } catch (err) {
-      console.error('failed to start local backend:', err.message);
-      // Fall through: the window will retry the previous target and land on
-      // boot.html if it never becomes reachable.
-    }
+    console.log('[shell] backend source:', installedPayload.baseline ? 'embedded baseline' : 'payload');
   } else {
     console.log('[shell] backend source: none (dev/demo URL)');
   }
@@ -393,7 +386,28 @@ app.whenReady().then(async () => {
     // still run (window + service are the critical path).
     console.log('[shell] tray unavailable:', err.message);
   }
+
+  // Create the window FIRST so a window always appears promptly, then bring
+  // the local backend up and navigate to it once it is ready.
   createWindow();
+
+  // Safety net: if the first page load stalls (no paint, no failure event)
+  // the window must still become visible instead of staying hidden.
+  const ensureVisible = setTimeout(() => {
+    if (mainWindow && !mainWindow.isVisible()) mainWindow.show();
+  }, 4000);
+  mainWindow?.once('closed', () => clearTimeout(ensureVisible));
+
+  if (installedPayload) {
+    try {
+      await service.start(installedPayload, userDataDir, startOptionsFor(installedPayload));
+      targetUrl = `http://127.0.0.1:${service.effectivePort ?? installedPayload.port}/`;
+      if (mainWindow && !mainWindow.isDestroyed()) mainWindow.loadURL(targetUrl);
+    } catch (err) {
+      console.error('failed to start local backend:', err.message);
+      showBootScreen(-1, `Local backend failed to start: ${err.message}`);
+    }
+  }
 
   // Headless/GUI smoke hook: exit automatically after N ms (LIBRA_SMOKE_EXIT_MS).
   const smokeExit = Number(process.env.LIBRA_SMOKE_EXIT_MS || 0);
