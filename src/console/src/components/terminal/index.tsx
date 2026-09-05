@@ -24,8 +24,7 @@ interface Props {
 }
 
 // Scoped CSS injected into the terminal's shadow root. The shadow boundary
-// keeps ALL app styles (Tailwind preflight, heroUI, the global proportional
-// "vivo Sans" reset) away from xterm's measurement + rendering.
+// keeps ALL app styles away from xterm's measurement + rendering.
 const SHADOW_EXTRA_CSS = `
   :host {
     display: block;
@@ -52,6 +51,8 @@ const SHADOW_EXTRA_CSS = `
     background-color: transparent !important;
   }
 `;
+
+type PendingOp = { type: 'clear' } | { type: 'write'; text: string };
 
 function resolveTerminalTheme(): ITheme {
   const dark = document.documentElement.classList.contains('dark');
@@ -89,6 +90,7 @@ const TerminalView = forwardRef<TerminalHandle, Props>(function TerminalView(
   const hostRef = useRef<HTMLDivElement>(null);
   const termRef = useRef<Terminal | null>(null);
   const fitRef = useRef<FitAddon | null>(null);
+  const pendingRef = useRef<PendingOp[]>([]);
   const disabledRef = useRef(disabled);
   disabledRef.current = disabled;
   const onInputRef = useRef(onInput);
@@ -98,12 +100,29 @@ const TerminalView = forwardRef<TerminalHandle, Props>(function TerminalView(
   const fontSizeRef = useRef(fontSize);
   fontSizeRef.current = fontSize;
 
+  const flushPending = (term: Terminal) => {
+    for (const op of pendingRef.current.splice(0)) {
+      if (op.type === 'clear') term.clear();
+      else if (op.text) term.write(op.text);
+    }
+  };
+
+  const enqueue = (op: PendingOp) => {
+    const term = termRef.current;
+    if (term) {
+      if (op.type === 'clear') term.clear();
+      else if (op.text) term.write(op.text);
+    } else {
+      pendingRef.current.push(op);
+    }
+  };
+
   useImperativeHandle(ref, () => ({
     write(text: string) {
-      if (text) termRef.current?.write(text);
+      if (text) enqueue({ type: 'write', text });
     },
     clear() {
-      termRef.current?.clear();
+      enqueue({ type: 'clear' });
     },
     focus() {
       termRef.current?.focus();
@@ -118,14 +137,13 @@ const TerminalView = forwardRef<TerminalHandle, Props>(function TerminalView(
       if (!term) return { cols: 80, rows: 24 };
       return { cols: term.cols, rows: term.rows };
     },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }), []);
 
   useEffect(() => {
     const host = hostRef.current;
     if (!host) return;
 
-    // Shadow DOM isolates xterm from every app stylesheet (fonts, preflight,
-    // component css). This reproduces the clean official-demo environment.
     const shadow = host.shadowRoot ?? host.attachShadow({ mode: 'open' });
     shadow.replaceChildren();
 
@@ -138,76 +156,103 @@ const TerminalView = forwardRef<TerminalHandle, Props>(function TerminalView(
     shadow.appendChild(box);
 
     let disposed = false;
+    let started = false;
+    let waitTries = 0;
     let term: Terminal | null = null;
     let fit: FitAddon | null = null;
     let ro: ResizeObserver | null = null;
     let themeObserver: MutationObserver | null = null;
 
-    // Modern mono stack (SF Mono / Cascadia / Consolas), identical on the
-    // canvas side and inside the shadow DOM so width measurement matches
-    // rendering exactly. xterm 6 no longer needs the generic fallback.
-    const t = new Terminal({
-      cursorBlink: true,
-      cursorStyle: 'block',
-      convertEol: true,
-      allowTransparency: true,
-      fontFamily: 'ui-monospace, "Cascadia Mono", Consolas, Menlo, monospace',
-      fontSize: fontSizeRef.current,
-      letterSpacing: 0,
-      scrollback: 10000,
-      theme: resolveTerminalTheme(),
-    });
-    const f = new FitAddon();
-    t.loadAddon(f);
-    t.loadAddon(new WebLinksAddon());
-    t.open(box);
-    term = t;
-    fit = f;
+    const createTerminal = () => {
+      const t = new Terminal({
+        cursorBlink: true,
+        cursorStyle: 'block',
+        convertEol: true,
+        allowTransparency: true,
+        fontFamily: 'ui-monospace, "Cascadia Mono", Consolas, Menlo, monospace',
+        fontSize: fontSizeRef.current,
+        letterSpacing: 0,
+        scrollback: 10000,
+        theme: resolveTerminalTheme(),
+      });
+      const f = new FitAddon();
+      t.loadAddon(f);
+      t.loadAddon(new WebLinksAddon());
+      t.open(box);
+      term = t;
+      fit = f;
+      termRef.current = t;
+      fitRef.current = f;
+      flushPending(t);
 
-    // Live theme switching for the parent app's light/dark toggle.
-    const applyTheme = () => {
-      if (termRef.current) {
-        try {
-          termRef.current.options.theme = resolveTerminalTheme();
-        } catch { /* keep previous theme */ }
+      // Live theme switching for the parent app's light/dark toggle.
+      const applyTheme = () => {
+        if (termRef.current) {
+          try {
+            termRef.current.options.theme = resolveTerminalTheme();
+          } catch { /* keep previous theme */ }
+        }
+      };
+      themeObserver = new MutationObserver(applyTheme);
+      themeObserver.observe(document.documentElement, {
+        attributes: true,
+        attributeFilter: ['class'],
+      });
+
+      t.onData((data) => {
+        if (disabledRef.current) return;
+        onInputRef.current?.(data);
+      });
+      t.onResize(({ cols, rows }) => onResizeRef.current?.(cols, rows));
+
+      let fitTries = 0;
+      const tryFit = () => {
+        if (disposed) return false;
+        // xterm defaults to 80x24, so cols>0 alone does NOT mean the container
+        // is measurable. Only treat the terminal as fitted once the box has a
+        // real size.
+        if (box.clientWidth === 0 || box.clientHeight === 0) {
+          if (fitTries++ < 60) setTimeout(tryFit, 100);
+          return false;
+        }
+        try { f.fit(); } catch { /* ignore */ }
+        if (t.cols > 0 && t.rows > 0) {
+          onResizeRef.current?.(t.cols, t.rows);
+          return true;
+        }
+        if (fitTries++ < 60) setTimeout(tryFit, 100);
+        return false;
+      };
+
+      requestAnimationFrame(tryFit);
+      setTimeout(tryFit, 0);
+
+      ro = new ResizeObserver(() => {
+        if (disposed) return;
+        try { f.fit(); } catch { /* ignore */ }
+        if (box.clientWidth > 0 && box.clientHeight > 0 && t.cols > 0 && t.rows > 0) {
+          onResizeRef.current?.(t.cols, t.rows);
+        }
+      });
+      ro.observe(box);
+    };
+
+    // Some mounts happen before layout gives the terminal a size (e.g. an
+    // agent is selected while already sitting on the Shell page). Wait for a
+    // measurable box instead of creating a blank 80x24 terminal forever.
+    const startWhenReady = () => {
+      if (disposed || started) return;
+      if (box.clientWidth > 0 && box.clientHeight > 0) {
+        started = true;
+        createTerminal();
+        return;
+      }
+      if (waitTries++ < 200) {
+        // 100ms * 200 = up to 20s for late layout (tab switch/animations).
+        setTimeout(startWhenReady, 100);
       }
     };
-    themeObserver = new MutationObserver(applyTheme);
-    themeObserver.observe(document.documentElement, {
-      attributes: true,
-      attributeFilter: ['class'],
-    });
-
-    t.onData((data) => {
-      if (disabledRef.current) return;
-      onInputRef.current?.(data);
-    });
-    t.onResize(({ cols, rows }) => onResizeRef.current?.(cols, rows));
-
-    let retries = 0;
-    const tryFit = () => {
-      if (disposed) return false;
-      try { f.fit(); } catch { /* may still be sizing */ }
-      if (t.cols > 0 && t.rows > 0) {
-        onResizeRef.current?.(t.cols, t.rows);
-        return true;
-      }
-      if (retries++ < 10) setTimeout(tryFit, 100);
-      return false;
-    };
-
-    requestAnimationFrame(tryFit);
-    setTimeout(tryFit, 0);
-
-    ro = new ResizeObserver(() => {
-      if (disposed) return;
-      try { f.fit(); } catch { /* ignore */ }
-      if (t.cols > 0 && t.rows > 0) onResizeRef.current?.(t.cols, t.rows);
-    });
-    ro.observe(box);
-
-    termRef.current = t;
-    fitRef.current = f;
+    startWhenReady();
 
     return () => {
       disposed = true;
