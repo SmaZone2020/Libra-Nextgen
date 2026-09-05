@@ -54,6 +54,42 @@ function loadPayloadManifest(userDataDir) {
   return null;
 }
 
+/** Listener port from the desktop libra.conf.json, if any (baseline fallback). */
+function configListenerPort(userDataDir) {
+  try {
+    const cfg = JSON.parse(fs.readFileSync(path.join(userDataDir, 'libra.conf.json'), 'utf8'));
+    const port = cfg && cfg.listener && cfg.listener.port;
+    return Number.isInteger(port) && port >= 1 && port <= 65535 ? port : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Embedded baseline payload (electron-builder extraResources):
+ * resources/baseline-service (raw self-contained publish dir) + baseline-web
+ * (console dist served via LIBRA_WEB_ROOT). Used when no userData payload is
+ * installed yet — the shell still runs a real local backend out of the box.
+ */
+function loadBaselinePayload(userDataDir) {
+  const serviceDir = path.join(process.resourcesPath, 'baseline-service');
+  const webDir = path.join(process.resourcesPath, 'baseline-web');
+  if (!fs.existsSync(serviceDir)) return null;
+
+  const exeName = fs.readdirSync(serviceDir).find((f) => /^LibraNextgen\.Server(\.exe)?$/i.test(f));
+  if (!exeName) return null;
+
+  return {
+    tag: 'baseline',
+    backend: exeName,
+    port: configListenerPort(userDataDir) ?? 5270,
+    webRoot: 'web',
+    rootDir: serviceDir,
+    baseline: true,
+    baselineWeb: fs.existsSync(webDir) ? webDir : null,
+  };
+}
+
 function getWindowOptions() {
   const common = {
     width: 1440,
@@ -118,11 +154,21 @@ function createTray() {
   });
 }
 
+/** Spawn options for a payload: baseline pins the port and points the server
+ * at the embedded console web (LIBRA_WEB_ROOT); payloads use defaults. */
+function startOptionsFor(payload) {
+  if (!payload || !payload.baseline) return undefined;
+  return {
+    pinPort: true,
+    extraEnv: payload.baselineWeb ? { LIBRA_WEB_ROOT: payload.baselineWeb } : {},
+  };
+}
+
 async function restartLocalService() {
   if (!installedPayload) return;
   try {
     await service.stop();
-    await service.start(installedPayload, userDataDir);
+    await service.start(installedPayload, userDataDir, startOptionsFor(installedPayload));
     const port = service.effectivePort ?? installedPayload.port;
     if (mainWindow && targetUrl.startsWith('http://127.0.0.1:')) mainWindow.loadURL(`http://127.0.0.1:${port}/`);
   } catch (err) {
@@ -140,7 +186,7 @@ async function runManualUpdate() {
     }
     installedPayload = { ...result, rootDir: path.join(userDataDir, 'payload', 'latest') };
     await service.stop();
-    await service.start(installedPayload, userDataDir);
+    await service.start(installedPayload, userDataDir, startOptionsFor(installedPayload));
     const port = service.effectivePort ?? installedPayload.port;
     targetUrl = `http://127.0.0.1:${port}/`;
     if (mainWindow) mainWindow.loadURL(targetUrl);
@@ -301,15 +347,28 @@ app.whenReady().then(async () => {
   // env override) for tests and portable setups; defaults to Electron's own.
   userDataDir = process.env.LIBRA_USER_DATA_DIR || app.getPath('userData');
   installedPayload = loadPayloadManifest(userDataDir);
+
+  // No userData payload yet -> use the embedded baseline service so an
+  // installed app still starts a local backend out of the box.
+  if (!installedPayload) {
+    const baseline = loadBaselinePayload(userDataDir);
+    if (baseline) {
+      console.log('[shell] backend source: embedded baseline');
+      installedPayload = baseline;
+    }
+  }
+
   if (installedPayload) {
     try {
-      await service.start(installedPayload, userDataDir);
+      await service.start(installedPayload, userDataDir, startOptionsFor(installedPayload));
       targetUrl = `http://127.0.0.1:${service.effectivePort ?? installedPayload.port}/`;
     } catch (err) {
       console.error('failed to start local backend:', err.message);
       // Fall through: the window will retry the previous target and land on
       // boot.html if it never becomes reachable.
     }
+  } else {
+    console.log('[shell] backend source: none (dev/demo URL)');
   }
 
   try {

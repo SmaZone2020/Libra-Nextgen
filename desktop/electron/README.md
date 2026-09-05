@@ -27,8 +27,8 @@ npm start            # 无 payload 时走 dev/demo 模式(LIBRA_CONSOLE_URL 或 
 
 ## 待办(联调前)
 
-- [ ] 真实 service 发布目录 + console dist 装入 extraResources(baseline)与 userData 载荷;
-- [ ] electron-builder 打包配置(win nsis / linux AppImage;mac v1 不做);
-- [ ] GUI 全流程冒烟(服务拉起→console→Check Update→存储切换重启);
-- [ ] console 侧 desktop-only 存储设置段与 /api/system/storage 回退横幅 UI;
+- [x] baseline-service/baseline-web 装入 extraResources,壳在无 userData 载荷时自动以
+      baseline 起本地后端(LIBRA_WEB_ROOT 指向内嵌 web);
+- [ ] GUI 全流程冒烟(壳 → 本地服务 → console → 存储切换)——安装包验证;
+- [ ] console 侧 desktop-only 存储设置段与 /api/system/storage 回退横幅 UI(已在 console 侧完成,待壳内联调);
 - [ ] 签名/公证策略(见架构文档 §11)。

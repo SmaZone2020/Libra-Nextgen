@@ -75,8 +75,11 @@ class ServiceProcess {
    * manifest port. Handles an externally-occupied port by falling back to a
    * free port and restarting there once via the LIBRA_LISTEN_PORT env.
    * payload = { backend: <exe name>, port, webRoot, rootDir }
+   * opts = { extraEnv, pinPort } — extraEnv is merged into the child env;
+   *   pinPort always sends LIBRA_LISTEN_PORT (used for the embedded baseline,
+   *   whose config-derived port must match what we probe).
    */
-  async start(payload, userDataDir) {
+  async start(payload, userDataDir, opts = {}) {
     await this.stop();
     this.effectivePort = payload.port;
 
@@ -107,9 +110,11 @@ class ServiceProcess {
     // Attempt 1 on the resolved port; if the child dies before becoming ready
     // (e.g. a racy bind conflict), retry once on the next free port.
     for (let attempt = 0; attempt < 2; attempt += 1) {
-      const env = spawnPort === payload.port
-        ? undefined
-        : { ...process.env, LIBRA_LISTEN_PORT: String(spawnPort) };
+      const additions = { ...(opts.extraEnv || {}) };
+      if (spawnPort !== payload.port || opts.pinPort) {
+        additions.LIBRA_LISTEN_PORT = String(spawnPort);
+      }
+      const env = { ...process.env, ...additions };
 
       this.log(`starting backend ${exe} on port ${spawnPort} ...`);
       this.child = spawn(exe, ['--user-data-dir', userDataDir], {
