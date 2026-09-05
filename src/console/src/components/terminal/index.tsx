@@ -23,8 +23,7 @@ interface Props {
 
 // Scoped CSS injected into the terminal's shadow root. The shadow boundary
 // keeps ALL app styles (Tailwind preflight, heroUI, the global proportional
-// "vivo Sans" reset) away from xterm's measurement + rendering — matching the
-// clean official demo page where the terminal renders correctly.
+// "vivo Sans" reset) away from xterm's measurement + rendering.
 const SHADOW_EXTRA_CSS = `
   :host {
     display: block;
@@ -35,49 +34,14 @@ const SHADOW_EXTRA_CSS = `
     height: 100%;
     width: 100%;
     min-height: 0;
-    font-family: monospace;
-    font-size: 14px;
-    line-height: 1.2;
-  }
-  .xterm,
-  .xterm * {
-    font-family: monospace !important;
-  }
-  .xterm,
-  .xterm-viewport,
-  .xterm-screen,
-  .xterm canvas {
-    background-color: transparent !important;
+    background: #111;
   }
 `;
 
-function resolveTerminalTheme(): ITheme {
-  const dark = document.documentElement.classList.contains('dark');
-  const foreground = dark ? '#d7dae0' : '#1f2329';
-  const accent = dark ? '#7aa2f7' : '#2563eb';
-  return {
-    background: 'transparent',
-    foreground,
-    cursor: accent,
-    cursorAccent: foreground,
-    selectionBackground: dark ? 'rgba(122, 162, 247, 0.32)' : 'rgba(37, 99, 235, 0.22)',
-    black: dark ? '#3b4252' : '#3f4653',
-    red: dark ? '#e06c75' : '#d64550',
-    green: dark ? '#98c379' : '#3d8f52',
-    yellow: dark ? '#e5c07b' : '#9c7c1f',
-    blue: dark ? '#61afef' : '#2563eb',
-    magenta: dark ? '#c678dd' : '#8b3fd4',
-    cyan: dark ? '#56b6c2' : '#0e7f94',
-    white: dark ? '#abb2bf' : '#4b5563',
-    brightBlack: dark ? '#636d83' : '#9aa3af',
-    brightRed: dark ? '#ff7a8a' : '#e5484d',
-    brightGreen: dark ? '#a6e3a1' : '#30a46c',
-    brightYellow: dark ? '#f2cc8f' : '#b5952a',
-    brightBlue: dark ? '#8ab4f8' : '#3b82f6',
-    brightMagenta: dark ? '#d29af0' : '#9f4bd4',
-    brightCyan: dark ? '#7dd3fc' : '#0aa2c0',
-    brightWhite: dark ? '#d8dee9' : '#1f2328',
-  };
+function resolveTerminalTheme(): ITheme | null {
+  // Temporarily disabled during font-spacing diagnosis: we run with xterm's
+  // default black theme exactly like the working standalone test page.
+  return null;
 }
 
 const TerminalView = forwardRef<TerminalHandle, Props>(function TerminalView(
@@ -137,19 +101,17 @@ const TerminalView = forwardRef<TerminalHandle, Props>(function TerminalView(
     let term: Terminal | null = null;
     let fit: FitAddon | null = null;
     let ro: ResizeObserver | null = null;
-    let themeObserver: MutationObserver | null = null;
 
+    // EXACT same options as the working standalone test page (terminal-test):
+    // xterm defaults for font/line-height/customGlyphs, black default theme,
+    // fontSize 14, explicit letterSpacing 0. No transparency yet — prove the
+    // spacing is fixed first, then re-add transparency as a separate step.
     const t = new Terminal({
       cursorBlink: true,
-      cursorStyle: 'block',
       convertEol: true,
-      allowTransparency: true,
-      fontFamily: 'monospace',
       fontSize: 14,
-      lineHeight: 1.2,
       letterSpacing: 0,
       scrollback: 10000,
-      theme: resolveTerminalTheme(),
     });
     const f = new FitAddon();
     t.loadAddon(f);
@@ -157,20 +119,6 @@ const TerminalView = forwardRef<TerminalHandle, Props>(function TerminalView(
     t.open(box);
     term = t;
     fit = f;
-
-    // Live theme switching for the parent app's light/dark toggle.
-    const applyTheme = () => {
-      if (termRef.current) {
-        try {
-          termRef.current.options.theme = resolveTerminalTheme();
-        } catch { /* keep previous theme */ }
-      }
-    };
-    themeObserver = new MutationObserver(applyTheme);
-    themeObserver.observe(document.documentElement, {
-      attributes: true,
-      attributeFilter: ['class'],
-    });
 
     t.onData((data) => {
       if (disabledRef.current) return;
@@ -206,7 +154,6 @@ const TerminalView = forwardRef<TerminalHandle, Props>(function TerminalView(
     return () => {
       disposed = true;
       ro?.disconnect();
-      themeObserver?.disconnect();
       term?.dispose();
       termRef.current = null;
       fitRef.current = null;
