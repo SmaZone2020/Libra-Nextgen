@@ -12,6 +12,7 @@ import {
   apiBase,
 } from '../api/client';
 import { consoleWs } from '../ws/consoleWs';
+import { isLibraDesktopShell } from '../desktop/DesktopTopBar';
 
 const RETRY_INTERVAL = 10_000;
 const MAX_RETRIES = 15;
@@ -33,7 +34,14 @@ export function NetworkOverlay({
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Backend address override form
+  // In the desktop shell the backend address is derived from the shell config
+  // (127.0.0.1:<configured port>), so the manual address form is pointless
+  // there — restarting the local service is the right recovery action.
+  const desktopShell = isLibraDesktopShell();
+  const bridge = window.libraDesktop;
+  const shellCanRestart = desktopShell && !!bridge?.restartService;
+
+  // Backend address override form (plain web deployments only)
   const [originDraft, setOriginDraft] = useState('');
   const [savingOrigin, setSavingOrigin] = useState(false);
   const [originError, setOriginError] = useState<string | null>(null);
@@ -152,33 +160,62 @@ export function NetworkOverlay({
         <h2 className="text-xl font-semibold text-neutral-900 dark:text-neutral-100 mb-2">{t('network.title')}</h2>
         <p className="text-sm text-neutral-500 mb-6">{t('network.desc')}</p>
 
-        {/* Change the backend address without leaving the page */}
-        <div className="mb-6 space-y-2 text-left">
-          <div className="text-xs font-medium text-neutral-400">{t('network.backend')}</div>
-          <div className="flex items-center gap-2">
-            <TextField
-              value={originDraft}
-              onChange={setOriginDraft}
-              variant="secondary"
-              className="min-w-0 flex-1"
-              aria-label={t('network.backend')}
-            >
-              <Input variant="secondary" placeholder="http://host:5270" />
-            </TextField>
-            <Button
-              variant="secondary"
-              size="lg"
-              className="shrink-0 rounded-[15px]"
-              isDisabled={savingOrigin || originDraft.trim() === getApiOrigin()}
-              onPress={() => void handleApplyOrigin()}
-            >
-              {savingOrigin ? t('common.loading') : t('network.apply')}
-            </Button>
+        {desktopShell ? (
+          <div className="mb-6 space-y-2 text-left">
+            <div className="text-xs font-medium text-neutral-400">{t('network.backend')}</div>
+            <p className="text-sm text-neutral-500">
+              <code className="font-mono">{getApiOrigin()}</code>
+            </p>
+            {shellCanRestart && (
+              <Button
+                variant="secondary"
+                size="lg"
+                className="mt-1 w-full rounded-[15px]"
+                isDisabled={savingOrigin}
+                onPress={async () => {
+                  setSavingOrigin(true);
+                  try {
+                    await bridge!.restartService?.();
+                    setSavingOrigin(false);
+                  } catch {
+                    setSavingOrigin(false);
+                  }
+                }}
+              >
+                <ArrowRotateLeft className="size-4" />
+                {savingOrigin ? t('common.loading') : t('network.restartLocal')}
+              </Button>
+            )}
           </div>
-          {originError && (
-            <p className="text-xs text-red-500" role="alert">{originError}</p>
-          )}
-        </div>
+        ) : (
+          /* Change the backend address without leaving the page (web only) */
+          <div className="mb-6 space-y-2 text-left">
+            <div className="text-xs font-medium text-neutral-400">{t('network.backend')}</div>
+            <div className="flex items-center gap-2">
+              <TextField
+                value={originDraft}
+                onChange={setOriginDraft}
+                variant="secondary"
+                className="min-w-0 flex-1"
+                aria-label={t('network.backend')}
+              >
+                <Input variant="secondary" placeholder="http://host:5270" />
+              </TextField>
+              <Button
+                variant="secondary"
+                size="lg"
+                className="shrink-0 rounded-[15px]"
+                isDisabled={savingOrigin || originDraft.trim() === getApiOrigin()}
+                onPress={() => void handleApplyOrigin()}
+              >
+                {savingOrigin ? t('common.loading') : t('network.apply')}
+              </Button>
+            </div>
+            {originError && (
+              <p className="text-xs text-red-500" role="alert">{originError}</p>
+            )}
+          </div>
+        )}
 
         {!gaveUp ? (
           <div className="space-y-2 mb-6">

@@ -10,7 +10,7 @@ const AGENT_ROUTES = new Set(['/agents', '/shell', '/files', '/system', '/others
 export function AgentSelector({ className }: { className?: string }) {
   const { t } = useTranslation();
   const { pathname } = useLocation();
-  const { agents, agentId, selectedAgent, remote, selectAgent, disconnect } = useAgent();
+  const { agents, agentId, selectedAgent, remote, selectAgent, clearRemote, disconnect } = useAgent();
 
   if (!AGENT_ROUTES.has(pathname) && !isPluginRoute(pathname)) return null;
 
@@ -26,6 +26,16 @@ export function AgentSelector({ className }: { className?: string }) {
 
   return (
     <div className={`flex items-center gap-2 sm:gap-3 ${className || ''}`}>
+      {remote && (
+        <button
+          type="button"
+          onClick={clearRemote}
+          title={`${t('agents.workspace')}: ${remote.nodeName} — ${t('agents.workspaceLeave')}`}
+          className="hidden max-w-[10rem] shrink-0 items-center gap-1 truncate rounded-full bg-accent-soft px-2.5 py-1 text-[11px] font-semibold text-accent-soft-foreground transition hover:bg-accent/15 sm:inline-flex"
+        >
+          {t('agents.workspace')} · {remote.nodeName}
+        </button>
+      )}
       <Dropdown>
         <Button
           variant="tertiary"

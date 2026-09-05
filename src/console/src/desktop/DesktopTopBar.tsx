@@ -22,6 +22,11 @@ export interface DesktopStorageSettings {
 
 export type CloseBehavior = 'quit' | 'tray';
 
+export interface DesktopListenerSettings {
+  port: number;
+  bindLoopback: boolean;
+}
+
 export interface LibraDesktopBridge {
   minimize: () => void;
   toggleMaximize: () => void;
@@ -37,6 +42,8 @@ export interface LibraDesktopBridge {
   restartService?: () => Promise<void>;
   getCloseBehavior?: () => Promise<CloseBehavior>;
   setCloseBehavior?: (value: CloseBehavior) => Promise<boolean>;
+  getListenerConfig?: () => Promise<DesktopListenerSettings>;
+  setListenerConfig?: (settings: DesktopListenerSettings) => Promise<boolean>;
 }
 
 declare global {

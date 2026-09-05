@@ -6,6 +6,7 @@ import { Check } from '@gravity-ui/icons';
 import i18n, { switchLang } from '../../i18n';
 import { EVENT_TYPE_IDS, getEnabledEventTypes, setEnabledEventTypes } from '../../utils/eventTypes';
 import { api } from '../../api/client';
+import { isLibraDesktopShell } from '../../desktop/DesktopTopBar';
 
 const NOTICE_SOUND_KEY = 'notice_sound';
 
@@ -17,6 +18,8 @@ interface ListenerInfo {
 
 export default function PreferencesTab() {
   const { t } = useTranslation();
+  const desktop = isLibraDesktopShell();
+  const bridge = window.libraDesktop;
   const [lang, setLang] = useState(() => (i18n.language.startsWith('zh') ? 'zh' : 'en'));
   const [sound, setSound] = useState(() => localStorage.getItem(NOTICE_SOUND_KEY) !== 'false');
   const [port, setPort] = useState('');
@@ -29,11 +32,23 @@ export default function PreferencesTab() {
 
   const loadListener = useCallback(async () => {
     try {
-      const res = await api.get<ListenerInfo>('/settings/listener');
-      setListener(res);
-      setPort(String(res.port));
+      if (desktop && bridge?.getListenerConfig) {
+        // The desktop shell owns libra.conf.json; read the listener there so
+        // the shown port matches what the service actually binds.
+        const conf = await bridge.getListenerConfig();
+        setListener({
+          host: conf.bindLoopback ? '127.0.0.1' : '0.0.0.0',
+          port: conf.port,
+          listenUrl: `http://${conf.bindLoopback ? '127.0.0.1' : '0.0.0.0'}:${conf.port}`,
+        });
+        setPort(String(conf.port));
+      } else {
+        const res = await api.get<ListenerInfo>('/settings/listener');
+        setListener(res);
+        setPort(String(res.port));
+      }
     } catch { /* ignore */ }
-  }, []);
+  }, [desktop, bridge]);
 
   useEffect(() => { loadListener(); }, [loadListener]);
 
@@ -67,6 +82,21 @@ export default function PreferencesTab() {
     }
     setPortError(null);
     try {
+      if (desktop && bridge?.setListenerConfig && bridge.getListenerConfig) {
+        // Shell path: write libra.conf.json and let the shell restart the
+        // service (keeps bindLoopback as-is).
+        const conf = await bridge.getListenerConfig();
+        await bridge.setListenerConfig({ port: value, bindLoopback: conf.bindLoopback });
+        setListener({
+          host: conf.bindLoopback ? '127.0.0.1' : '0.0.0.0',
+          port: value,
+          listenUrl: `http://${conf.bindLoopback ? '127.0.0.1' : '0.0.0.0'}:${value}`,
+        });
+        setPort(String(value));
+        setPortSaved(true);
+        setTimeout(() => setPortSaved(false), 2000);
+        return;
+      }
       const res = await api.put<ListenerInfo>('/settings/listener', { port: value });
       setListener(res);
       setPort(String(res.port));

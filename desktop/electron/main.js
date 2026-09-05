@@ -306,6 +306,35 @@ function showMainWindow() {
   mainWindow.focus();
 }
 
+/**
+ * Listener section the shell controls (port + loopback bind). Read from the
+ * shared libra.conf.json so the settings UI and the shell agree; the server
+ * applies it at startup (Program.cs desktop-listener override).
+ */
+function getListenerConfig() {
+  const cfg = readUserConfig(userDataDir);
+  const listener = cfg && cfg.listener;
+  return {
+    port: Number.isInteger(listener?.port) && listener.port >= 1 && listener.port <= 65535
+      ? listener.port
+      : 5270,
+    bindLoopback: listener ? listener.bindLoopback !== false : true,
+  };
+}
+
+/** Persist the listener section (merge) and restart the local service. */
+async function setListenerConfig(settings) {
+  const existing = readUserConfig(userDataDir) || { schemaVersion: 1 };
+  const port = Number(settings?.port);
+  existing.listener = {
+    port: Number.isInteger(port) && port >= 1 && port <= 65535 ? port : 5270,
+    bindLoopback: settings?.bindLoopback !== false,
+  };
+  writeUserConfig(userDataDir, existing);
+  await restartLocalService();
+  return true;
+}
+
 function showBootScreen(code, description) {
   const query = {
     target: encodeURIComponent(DEFAULT_URL),
@@ -440,6 +469,8 @@ ipcMain.handle('shell:set-close-behavior', (_event, value) => {
     return false;
   }
 });
+ipcMain.handle('shell:get-listener-config', () => getListenerConfig());
+ipcMain.handle('shell:set-listener-config', (_event, settings) => setListenerConfig(settings));
 
 app.whenReady().then(async () => {
   applyWindowChrome();
