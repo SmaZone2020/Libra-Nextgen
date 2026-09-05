@@ -1,0 +1,5 @@
+# Local electron-builder staging (per-RID publish dir + console dist).
+# These are copied in by release-assets.yml on CI and by local packaging
+# scripts; never commit them.
+baseline-service/
+baseline-web/

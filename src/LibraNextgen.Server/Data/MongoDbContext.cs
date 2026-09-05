@@ -11,17 +11,25 @@ public class MongoDbContext
     public IMongoDatabase Database { get; }
     public IMongoClient Client { get; }
 
+    // The check-then-register below is not atomic: xUnit runs test classes in
+    // parallel, and concurrent first touches used to double-register AccessKey
+    // (ArgumentException: An item with the same key has already been added).
+    private static readonly object ClassMapLock = new();
+
     static MongoDbContext()
     {
         // AccessKey previously stored the raw `Key`; the field was renamed to
         // KeyHash. Ignore extra elements so legacy documents still deserialize.
-        if (!BsonClassMap.IsClassMapRegistered(typeof(AccessKey)))
+        lock (ClassMapLock)
         {
-            BsonClassMap.RegisterClassMap<AccessKey>(cm =>
+            if (!BsonClassMap.IsClassMapRegistered(typeof(AccessKey)))
             {
-                cm.AutoMap();
-                cm.SetIgnoreExtraElements(true);
-            });
+                BsonClassMap.RegisterClassMap<AccessKey>(cm =>
+                {
+                    cm.AutoMap();
+                    cm.SetIgnoreExtraElements(true);
+                });
+            }
         }
     }
 
