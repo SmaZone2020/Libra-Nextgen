@@ -182,8 +182,9 @@ jobs:
 
       - name: Stamp app version from tag
         working-directory: desktop/electron
-        # --allow-same-version: repo version may already equal the tag.
-        run: npm version "$TAG" --no-git-tag-version --allow-same-version
+        # ${{ env.TAG }} (not $TAG) so it works under both bash and pwsh;
+        # --allow-same-version keeps the step idempotent.
+        run: npm version "${{ env.TAG }}" --no-git-tag-version --allow-same-version
 
       - name: Build installer (${{ matrix.os }} ${{ matrix.arch }})
         working-directory: desktop/electron
