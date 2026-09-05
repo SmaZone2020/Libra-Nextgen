@@ -1,9 +1,8 @@
 'use client';
 
-import { useMemo, useState } from 'react';
-import { AnimatePresence, motion } from 'motion/react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Button } from '@heroui/react';
+import { Button, Drawer } from '@heroui/react';
 import { Magnifier, SlidersVertical, Xmark } from '@gravity-ui/icons';
 import type { AgentListItem } from '../../types/models';
 import { AgentCardList } from './AgentCardList';
@@ -52,6 +51,51 @@ function registrationTime(a: AgentListItem): number {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
+/** Tracks Tailwind's `sm` breakpoint so the drawer can slide from the right edge on desktop. */
+function useIsDesktop(): boolean {
+  const query = '(min-width: 640px)';
+  const [isDesktop, setIsDesktop] = useState(() =>
+    typeof window !== 'undefined' ? window.matchMedia(query).matches : false,
+  );
+
+  useEffect(() => {
+    const mql = window.matchMedia(query);
+    const update = () => setIsDesktop(mql.matches);
+    update();
+    mql.addEventListener('change', update);
+    return () => mql.removeEventListener('change', update);
+  }, [query]);
+
+  return isDesktop;
+}
+
+/** Single-select option rendered as a HeroUI button; the active choice uses the solid accent fill. */
+function OptionChip({
+  active,
+  onPress,
+  children,
+}: {
+  active: boolean;
+  onPress: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <Button
+      size="sm"
+      variant={active ? 'primary' : 'ghost'}
+      aria-pressed={active}
+      onPress={onPress}
+      className={`h-8 shrink-0 rounded-[10px] px-3 text-[13px] transition-colors ${
+        active
+          ? 'font-semibold shadow-sm'
+          : 'font-medium text-neutral-600 hover:bg-black/[0.06] dark:text-neutral-300 dark:hover:bg-white/[0.1]'
+      }`}
+    >
+      {children}
+    </Button>
+  );
+}
+
 export function AgentBrowser({
   agents,
   connectedId,
@@ -71,6 +115,7 @@ export function AgentBrowser({
   const [sortKind, setSortKind] = useState<SortKind>(DEFAULTS.sortKind);
   const [sortDir, setSortDir] = useState<SortDir>(DEFAULTS.sortDir);
   const [sheetOpen, setSheetOpen] = useState(false);
+  const isDesktop = useIsDesktop();
 
   const activeFilterCount =
     (status !== DEFAULTS.status ? 1 : 0) +
@@ -125,17 +170,9 @@ export function AgentBrowser({
     setSortDir(DEFAULTS.sortDir);
   };
 
-  const chipBase =
-    'h-8 shrink-0 rounded-[10px] border px-3 text-[13px] font-medium transition-colors ' +
-    'border-black/[0.07] bg-black/[0.035] text-neutral-600 active:scale-[0.97] ' +
-    'dark:border-white/10 dark:bg-white/[0.06] dark:text-neutral-300';
-  const chipActive =
-    'border-transparent bg-accent-soft text-accent-soft-foreground';
-
   const sectionLabel = 'mb-2 text-[12px] font-semibold uppercase tracking-wide text-neutral-400 dark:text-neutral-500';
 
-  // Shared filter/sort body, mounted inside both the mobile bottom sheet and
-  // the desktop right-side drawer.
+  // Shared filter/sort body, mounted inside the responsive HeroUI drawer.
   const filterBody = (
     <>
       {/* Sorting: single-select across all three groups */}
@@ -143,43 +180,53 @@ export function AgentBrowser({
         <section>
           <p className={sectionLabel}>{t('agents.sortStatus')}</p>
           <div className="flex flex-wrap gap-2">
-            <button type="button" aria-pressed={sortKind === 'status' && sortDir === 'online'} onClick={() => handleSortPick('status', 'online')} className={`${chipBase} ${sortKind === 'status' && sortDir === 'online' ? chipActive : ''}`}>
+            <OptionChip
+              active={sortKind === 'status' && sortDir === 'online'}
+              onPress={() => handleSortPick('status', 'online')}
+            >
               {t('agents.onlineFirst')}
-            </button>
-            <button type="button" aria-pressed={sortKind === 'status' && sortDir === 'offline'} onClick={() => handleSortPick('status', 'offline')} className={`${chipBase} ${sortKind === 'status' && sortDir === 'offline' ? chipActive : ''}`}>
+            </OptionChip>
+            <OptionChip
+              active={sortKind === 'status' && sortDir === 'offline'}
+              onPress={() => handleSortPick('status', 'offline')}
+            >
               {t('agents.offlineFirst')}
-            </button>
+            </OptionChip>
           </div>
         </section>
         <section>
           <p className={sectionLabel}>{t('agents.sortOs')}</p>
           <div className="flex flex-wrap gap-2">
             {(['windows', 'linux', 'macos'] as const).map((fam) => (
-              <button
+              <OptionChip
                 key={fam}
-                type="button"
-                aria-pressed={sortKind === 'os' && sortDir === fam}
-                onClick={() => handleSortPick('os', fam)}
-                className={`${chipBase} ${sortKind === 'os' && sortDir === fam ? chipActive : ''}`}
+                active={sortKind === 'os' && sortDir === fam}
+                onPress={() => handleSortPick('os', fam)}
               >
                 {fam === 'windows'
                   ? t('agents.windowsFirst')
                   : fam === 'linux'
                     ? t('agents.linuxFirst')
                     : t('agents.macFirst')}
-              </button>
+              </OptionChip>
             ))}
           </div>
         </section>
         <section>
           <p className={sectionLabel}>{t('agents.sortRegistered')}</p>
           <div className="flex flex-wrap gap-2">
-            <button type="button" aria-pressed={sortKind === 'registered' && sortDir === 'newest'} onClick={() => handleSortPick('registered', 'newest')} className={`${chipBase} ${sortKind === 'registered' && sortDir === 'newest' ? chipActive : ''}`}>
+            <OptionChip
+              active={sortKind === 'registered' && sortDir === 'newest'}
+              onPress={() => handleSortPick('registered', 'newest')}
+            >
               {t('agents.registeredNewest')}
-            </button>
-            <button type="button" aria-pressed={sortKind === 'registered' && sortDir === 'oldest'} onClick={() => handleSortPick('registered', 'oldest')} className={`${chipBase} ${sortKind === 'registered' && sortDir === 'oldest' ? chipActive : ''}`}>
+            </OptionChip>
+            <OptionChip
+              active={sortKind === 'registered' && sortDir === 'oldest'}
+              onPress={() => handleSortPick('registered', 'oldest')}
+            >
               {t('agents.registeredOldest')}
-            </button>
+            </OptionChip>
           </div>
         </section>
       </div>
@@ -190,9 +237,9 @@ export function AgentBrowser({
           <p className={sectionLabel}>{t('agents.statusFilter')}</p>
           <div className="flex flex-wrap gap-2">
             {(['all', 'online', 'offline'] as const).map((k) => (
-              <button key={k} type="button" aria-pressed={status === k} onClick={() => setStatus(k)} className={`${chipBase} ${status === k ? chipActive : ''}`}>
+              <OptionChip key={k} active={status === k} onPress={() => setStatus(k)}>
                 {t(`agents.${k}`)}
-              </button>
+              </OptionChip>
             ))}
           </div>
         </section>
@@ -200,9 +247,9 @@ export function AgentBrowser({
           <p className={sectionLabel}>{t('agents.osFilter')}</p>
           <div className="flex flex-wrap gap-2">
             {(['all', 'windows', 'linux', 'macos', 'other'] as const).map((k) => (
-              <button key={k} type="button" aria-pressed={os === k} onClick={() => setOs(k)} className={`${chipBase} ${os === k ? chipActive : ''}`}>
+              <OptionChip key={k} active={os === k} onPress={() => setOs(k)}>
                 {t(`agents.osName.${k}`)}
-              </button>
+              </OptionChip>
             ))}
           </div>
         </section>
@@ -234,20 +281,25 @@ export function AgentBrowser({
             </button>
           )}
         </div>
-        <button
-          type="button"
+        <Button
+          isIconOnly
           aria-label={t('agents.filterSort')}
           aria-pressed={sheetOpen}
-          onClick={() => setSheetOpen(true)}
-          className="relative grid size-10 shrink-0 place-items-center rounded-[12px] border-0 bg-black/[0.045] text-neutral-600 transition active:scale-95 dark:bg-white/[0.07] dark:text-neutral-300"
+          onPress={() => setSheetOpen(true)}
+          variant="secondary"
+          className={`relative size-10 shrink-0 rounded-[12px] ${
+            activeFilterCount > 0
+              ? 'bg-accent text-accent-foreground shadow-sm'
+              : 'text-neutral-600 dark:text-neutral-300'
+          }`}
         >
           <SlidersVertical className="size-4" />
           {activeFilterCount > 0 && (
-            <span className="absolute -top-1 -right-1 grid h-4 min-w-4 place-items-center rounded-full bg-accent px-1 text-[10px] leading-none font-semibold text-accent-foreground">
+            <span className="absolute -top-1 -right-1 grid h-4 min-w-4 place-items-center rounded-full bg-accent-foreground px-1 text-[10px] leading-none font-semibold text-accent">
               {activeFilterCount}
             </span>
           )}
-        </button>
+        </Button>
       </div>
 
       <AgentCardList
@@ -258,109 +310,54 @@ export function AgentBrowser({
         emptyLabel={agents.length > 0 ? t('agents.noMatch') : undefined}
       />
 
-      {/* Filter & sort surfaces: bottom sheet on mobile, right drawer on desktop */}
-      <AnimatePresence>
-        {sheetOpen && (
-          <>
-            {/* Mobile bottom sheet */}
-            <div className="fixed inset-0 z-50 sm:hidden">
-              <motion.button
-                aria-label={t('common.close')}
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 0.18 }}
-                onClick={() => setSheetOpen(false)}
-                className="absolute inset-0 h-full w-full cursor-default bg-black/45 backdrop-blur-[2px]"
-              />
-              <motion.div
-                role="dialog"
-                aria-modal="true"
-                aria-label={t('agents.filterSort')}
-                initial={{ y: '100%' }}
-                animate={{ y: 0 }}
-                exit={{ y: '100%' }}
-                transition={{ type: 'spring', stiffness: 420, damping: 40 }}
-                className="absolute inset-x-0 bottom-0 max-h-[85vh] overflow-y-auto rounded-t-[22px] border-t border-black/5 bg-[var(--lw-workspace-solid)] px-4 pb-[env(safe-area-inset-bottom)] text-[var(--lw-text-strong)] shadow-[0_-16px_48px_-16px_rgba(0,0,0,0.35)] dark:border-white/5"
-              >
-                <div className="mx-auto mt-2.5 mb-1 h-1 w-9 rounded-full bg-black/10 dark:bg-white/15" />
-                <div className="flex items-center justify-between py-2">
-                  <h2 className="text-[15px] font-semibold">{t('agents.filterSort')}</h2>
-                  <div className="flex items-center gap-1">
-                    <Button size="sm" variant="ghost" className="h-8 rounded-[10px] text-[12.5px]" onPress={resetAll}>
-                      {t('agents.filterReset')}
-                    </Button>
-                    <button
-                      type="button"
-                      aria-label={t('common.close')}
-                      onClick={() => setSheetOpen(false)}
-                      className="grid size-8 place-items-center rounded-full text-neutral-400 hover:bg-black/5 dark:hover:bg-white/10"
-                    >
-                      <Xmark className="size-4" />
-                    </button>
-                  </div>
-                </div>
-
-                {filterBody}
-
-                <div className="sticky bottom-0 -mx-4 border-t border-black/5 bg-[var(--lw-workspace-solid)] px-4 pt-3 pb-3 dark:border-white/10">
-                  <Button variant="primary" className="h-11 w-full rounded-[12px]" onPress={() => setSheetOpen(false)}>
-                    {t('agents.filterDone')}
+      {/* Filter & sort drawer: bottom sheet on mobile, right drawer on desktop */}
+      <Drawer isOpen={sheetOpen} onOpenChange={setSheetOpen}>
+        <Drawer.Backdrop isDismissable variant="blur">
+          <Drawer.Content placement={isDesktop ? 'right' : 'bottom'}>
+            <Drawer.Dialog className="p-0">
+              {!isDesktop && <Drawer.Handle className="pt-2.5" />}
+              <Drawer.Header className="flex-row items-center justify-between gap-2 px-5 pt-5 pb-1">
+                <Drawer.Heading className="text-[15px] font-semibold">
+                  {t('agents.filterSort')}
+                </Drawer.Heading>
+                <div className="flex items-center gap-1">
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-8 rounded-[10px] text-[12.5px]"
+                    onPress={resetAll}
+                  >
+                    {t('agents.filterReset')}
+                  </Button>
+                  <Button
+                    isIconOnly
+                    size="sm"
+                    variant="ghost"
+                    slot="close"
+                    aria-label={t('common.close')}
+                    className="size-8 rounded-full text-neutral-400 hover:bg-black/5 dark:hover:bg-white/10"
+                  >
+                    <Xmark className="size-4" />
                   </Button>
                 </div>
-              </motion.div>
-            </div>
+              </Drawer.Header>
 
-            {/* Desktop right-side drawer */}
-            <div className="fixed inset-0 z-50 hidden sm:block">
-              <motion.button
-                aria-label={t('common.close')}
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 0.18 }}
-                onClick={() => setSheetOpen(false)}
-                className="absolute inset-0 h-full w-full cursor-default bg-black/40 backdrop-blur-[2px]"
-              />
-              <motion.aside
-                role="dialog"
-                aria-modal="true"
-                aria-label={t('agents.filterSort')}
-                initial={{ x: '100%' }}
-                animate={{ x: 0 }}
-                exit={{ x: '100%' }}
-                transition={{ type: 'spring', stiffness: 400, damping: 42 }}
-                className="absolute top-0 right-0 flex h-full w-[380px] max-w-[92vw] flex-col overflow-hidden border-l border-black/5 bg-[var(--lw-workspace-solid)] text-[var(--lw-text-strong)] shadow-[-28px_0_64px_-32px_rgba(0,0,0,0.45)] dark:border-white/10"
-              >
-                <div className="flex items-center justify-between px-5 pt-5 pb-1">
-                  <h2 className="text-[15px] font-semibold">{t('agents.filterSort')}</h2>
-                  <div className="flex items-center gap-1">
-                    <Button size="sm" variant="ghost" className="h-8 rounded-[10px] text-[12.5px]" onPress={resetAll}>
-                      {t('agents.filterReset')}
-                    </Button>
-                    <button
-                      type="button"
-                      aria-label={t('common.close')}
-                      onClick={() => setSheetOpen(false)}
-                      className="grid size-8 place-items-center rounded-full text-neutral-400 hover:bg-black/5 dark:hover:bg-white/10"
-                    >
-                      <Xmark className="size-4" />
-                    </button>
-                  </div>
-                </div>
+              <Drawer.Body className="m-0 px-5 pt-2 pb-0">{filterBody}</Drawer.Body>
 
-                <div className="min-h-0 flex-1 overflow-y-auto px-5">{filterBody}</div>
-
-                <div className="border-t border-black/5 px-5 py-3 dark:border-white/10">
-                  <Button variant="primary" className="h-10 w-full rounded-[10px]" onPress={() => setSheetOpen(false)}>
-                    {t('agents.filterDone')}
-                  </Button>
-                </div>
-              </motion.aside>
-            </div>
-          </>
-        )}
-      </AnimatePresence>
+              <Drawer.Footer className="mt-0 border-t border-black/5 px-5 py-3 dark:border-white/10">
+                <Button
+                  slot="close"
+                  variant="primary"
+                  fullWidth
+                  className="h-10 rounded-[10px]"
+                >
+                  {t('agents.filterDone')}
+                </Button>
+              </Drawer.Footer>
+            </Drawer.Dialog>
+          </Drawer.Content>
+        </Drawer.Backdrop>
+      </Drawer>
     </div>
   );
 }
