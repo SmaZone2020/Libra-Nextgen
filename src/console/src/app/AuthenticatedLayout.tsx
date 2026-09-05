@@ -133,8 +133,8 @@ export function AuthenticatedLayout({
       />
 
       <main className="relative z-10 flex h-full min-w-0 flex-col transition-all duration-300 sm:pl-[var(--sidebar-w)]">
-        {/* Floating workspace: the app's single main surface. */}
-        <div className="flex min-h-0 w-full flex-1 flex-col p-0 sm:p-4 sm:pb-4 lg:p-5 lg:pb-5">
+        {/* Workspace main surface: flush top/right/bottom, rounded top-left. */}
+        <div className="flex min-h-0 w-full flex-1 flex-col p-0">
           <section className="lw-workspace flex min-h-0 w-full flex-1 flex-col overflow-hidden">
             {/* Desktop-only header — lives INSIDE the workspace, no own panel. */}
             <header className="hidden shrink-0 items-center justify-between gap-4 px-4 pt-3.5 pb-1 sm:flex sm:px-6 lg:px-8 lg:pt-4">

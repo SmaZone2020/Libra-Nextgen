@@ -95,7 +95,7 @@
   );
 }
 
-/* ---- workspace: the one floating surface ----------------------------------- */
+/* ---- workspace: main surface ----------------------------------------------- */
 /* Mobile: flush to the screen edges — no radius, no shadow, no glass cost. */
 .lw-workspace {
   position: relative;
@@ -105,13 +105,13 @@
 }
 @media (min-width: 640px) {
   .lw-workspace {
-    border-radius: 24px;
+    /* Only the top-left corner is rounded; right and bottom edges sit flush. */
+    border-radius: 24px 0 0 0;
     background-color: color-mix(
       in oklab,
       var(--lw-workspace-solid) calc((1 - var(--lw-frost, 0)) * 100%),
       transparent
     );
-    box-shadow: var(--lw-workspace-shadow);
     backdrop-filter: blur(calc(var(--lw-frost, 0) * 36px)) saturate(1.12);
     -webkit-backdrop-filter: blur(calc(var(--lw-frost, 0) * 36px)) saturate(1.12);
   }
