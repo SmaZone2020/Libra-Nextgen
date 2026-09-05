@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { ComponentType, MouseEvent, ReactNode, SVGProps } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { LayoutSideContentLeft, ChevronDown } from '@gravity-ui/icons';
+import { ChevronDown, LayoutSideContentLeft } from '@gravity-ui/icons';
 import { Avatar, Button, Dropdown, Label, Tooltip } from '@heroui/react';
 import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate } from 'react-router-dom';
@@ -21,6 +21,13 @@ export interface NavItem {
   children?: NavChild[];
 }
 
+/** A caption-keyed block of the sidebar. Omit `captionKey` for the unlabeled
+ *  primary block (overview / agents / AI). */
+export interface SidebarSection {
+  captionKey?: string;
+  items: NavItem[];
+}
+
 export interface SidebarUser {
   username: string;
   role: string;
@@ -29,9 +36,8 @@ export interface SidebarUser {
 interface SidebarProps {
   brand?: string;
   collapsed: boolean;
-  items: NavItem[];
-  bottomItems?: NavItem[];
-  /** Signed-in user card pinned below the bottom nav section. */
+  sections: SidebarSection[];
+  /** Signed-in user card pinned below the last section. */
   user?: SidebarUser | null;
   onLogout?: () => void;
   onToggle: (v: boolean) => void;
@@ -42,154 +48,132 @@ function isLeafActive(item: NavItem, pathname: string): boolean {
   return item.to.length > 1 && pathname.startsWith(item.to + '/');
 }
 
-/** Recursively collect the routes contained by an item (incl. its children and
- *  the item's own `to` when it is a navigable group). */
-function collectRoutes(item: NavItem): string[] {
-  const routes: string[] = [];
-  if (item.to) routes.push(item.to);
-  if (item.children && item.children.length > 0) {
-    routes.push(...item.children.map((c) => c.to));
-  }
-  return routes;
-}
-
-/** True when any route inside the item matches the current pathname. */
-function isGroupActive(item: NavItem, pathname: string): boolean {
-  return collectRoutes(item).some((r) => r === pathname);
+/** Child rows only (dynamic plugin pages). */
+function isChildActive(children: NavChild[], pathname: string): boolean {
+  return children.some((c) => c.to === pathname || pathname.startsWith(c.to + '/'));
 }
 
 export function Sidebar({
-  brand = 'Libra Nextgen',
+  brand = 'Libra Next',
   collapsed,
-  items,
-  bottomItems,
+  sections,
   user,
   onLogout,
   onToggle,
 }: SidebarProps) {
+  const { t } = useTranslation();
+
   return (
-    <>
-      {/* Desktop sidebar */}
-      <aside
-        className={`fixed top-0 left-0 bottom-0 z-40 hidden sm:block
-        transition-all duration-300 ease-in-out bg-white border-r border-neutral-200 dark:bg-neutral-900 dark:border-neutral-800
-        ${collapsed ? 'w-18' : 'w-64'}`}
-      >
-        <div className="flex flex-col h-full p-4 overflow-hidden">
-          <div
-            className={`flex items-center mb-6 transition-all duration-300 ${
-              collapsed ? '' : 'justify-between'
-              //justify-center
-            }`}
-          >
-            <AnimatePresence initial={false}>
-              {!collapsed && (
-                <motion.div
-                  animate={{ opacity: 1, height: 'auto' }}
-                  exit={{ opacity: 0, height: 0 }}
-                  initial={{ opacity: 0, height: 0 }}
-                  transition={{ duration: 0.3, ease: [0.25, 0.1, 0.25, 1] }}
-                  className="flex items-center gap-2 overflow-hidden whitespace-nowrap"
-                >
-                  <img
-                    alt="icon"
-                    className="h-[50px] w-[50px] pointer-events-none object-cover select-none dark:invert"
-                    loading="lazy"
-                    src="/images/icon2.webp"
-                  />
-                  <span className="text-2xl font-bold whitespace-nowrap text-neutral-900 dark:text-neutral-100 libre">
-                    {brand}
-                  </span>
-                </motion.div>
-              )}
-            </AnimatePresence>
-              <Button
-                isIconOnly
-                aria-label="Toggle sidebar"
-                variant="ghost"
-                onPress={() => onToggle(!collapsed)}
-                className="absolute right-4 top-4 z-10 rounded-[15px]"
+    <aside className="lw-sidebar">
+      <div className="flex h-full min-h-0 flex-col p-4">
+        {/* Brand row */}
+        <div
+          className={`mb-4 flex min-h-10 items-center transition-all duration-300 ${
+            collapsed ? 'justify-center' : 'justify-between gap-2 pr-1 pl-1.5'
+          }`}
+        >
+          <AnimatePresence initial={false}>
+            {!collapsed && (
+              <motion.div
+                animate={{ opacity: 1, height: 'auto' }}
+                exit={{ opacity: 0, height: 0 }}
+                initial={{ opacity: 0, height: 0 }}
+                transition={{ duration: 0.3, ease: [0.25, 0.1, 0.25, 1] }}
+                className="flex min-w-0 items-center gap-2.5 overflow-hidden whitespace-nowrap"
               >
-                {collapsed ? (
-                  <img
-                    alt="icon"
-                    className="w-8 h-8 object-cover dark:invert"
-                    loading="lazy"
-                    src="/images/icon2.webp"
-                  />) : <LayoutSideContentLeft />}
-              </Button>
-          </div>
-
-          <motion.nav
-            className={`flex-1 flex flex-col gap-1 overflow-y-auto overflow-x-hidden ${collapsed ? 'mt-4' : ''}`}
-            transition={{ layout: { staggerChildren: 0.05 } }}
+                <img
+                  alt="icon"
+                  className="size-9 pointer-events-none shrink-0 rounded-[10px] object-cover select-none dark:invert"
+                  loading="lazy"
+                  src="/images/icon2.webp"
+                />
+                <span className="libre truncate text-[21px] leading-none font-bold whitespace-nowrap text-neutral-900 dark:text-neutral-100">
+                  {brand}
+                </span>
+              </motion.div>
+            )}
+          </AnimatePresence>
+          <Button
+            isIconOnly
+            aria-label={t('nav.toggleSidebar')}
+            variant="ghost"
+            onPress={() => onToggle(!collapsed)}
+            className="shrink-0 rounded-[15px]"
           >
-            {items.map((item) => (
-              <DesktopNavItem key={item.label} item={item} collapsed={collapsed} />
-            ))}
-          </motion.nav>
-
-          <motion.div
-            layout
-            className="pt-4 border-t border-neutral-200 dark:border-neutral-800 w-full space-y-2 overflow-y-auto overflow-x-hidden"
-          >
-            {bottomItems?.map((item) => (
-              <DesktopNavItem key={item.label} item={item} collapsed={collapsed} />
-            ))}
-          </motion.div>
-
-          {user && (
-            <div className="mt-2 pt-3 w-full shrink-0 border-t border-neutral-200 dark:border-neutral-800">
-              <SidebarUserCard user={user} collapsed={collapsed} onLogout={onLogout} />
-            </div>
-          )}
+            {collapsed ? (
+              <img
+                alt="icon"
+                className="size-8 object-cover dark:invert"
+                loading="lazy"
+                src="/images/icon2.webp"
+              />
+            ) : (
+              <LayoutSideContentLeft />
+            )}
+          </Button>
         </div>
-      </aside>
-    </>
+
+        {/* Navigation rail */}
+        <motion.nav
+          className={`flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto overflow-x-hidden ${collapsed ? 'mt-4' : 'mt-3'}`}
+          transition={{ layout: { staggerChildren: 0.05 } }}
+        >
+          {sections.map((section, sectionIndex) => (
+            <section
+              key={section.captionKey ?? `primary-${sectionIndex}`}
+              className={sectionIndex > 0 ? (collapsed ? 'mt-4' : 'mt-3') : ''}
+            >
+              {section.captionKey && !collapsed && (
+                <div className="lw-nav-caption">{t(section.captionKey)}</div>
+              )}
+              {section.items.map((item) => (
+                <DesktopNavItem key={item.label} item={item} collapsed={collapsed} />
+              ))}
+            </section>
+          ))}
+        </motion.nav>
+
+        {/* User card */}
+        {user && (
+          <div className="mt-2 w-full shrink-0 pt-3">
+            <SidebarUserCard user={user} collapsed={collapsed} onLogout={onLogout} />
+          </div>
+        )}
+      </div>
+    </aside>
   );
 }
 
-// 鈹€鈹€ Desktop item 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
+// ───── Desktop item ────────────────────────────────────────────────────────
 
 function DesktopNavItem({ item, collapsed }: { item: NavItem; collapsed: boolean }) {
   const { t } = useTranslation();
   const location = useLocation();
   const navigate = useNavigate();
   const hasChildren = !!item.children && item.children.length > 0;
-  const [open, setOpen] = useState(isGroupActive(item, location.pathname));
-  const groupActive = hasChildren && isGroupActive(item, location.pathname);
+  const childActive = hasChildren && isChildActive(item.children!, location.pathname);
+  const selfActive = !hasChildren && isLeafActive(item, location.pathname);
+  const [open, setOpen] = useState(childActive);
 
-  // Auto-expand when navigating to a route owned by this group (e.g. the
-  // navigable /plugins route or one of its children).
+  // Auto-expand when navigating to a route owned by this group.
   useEffect(() => {
-    if (isGroupActive(item, location.pathname)) {
-      setOpen(true);
-    }
-  }, [item, location.pathname]);
+    if (childActive) setOpen(true);
+  }, [childActive]);
 
   if (hasChildren) {
     const label = t(item.label);
-    // A "navigable" group navigates to item.to on body click; the chevron
-    // (nested inside the button, right side) toggles children. For a
-    // non-navigable group, the whole button toggles children.
     const navigable = !!item.to;
     const handlePress = () => {
-      if (collapsed) {
-        return;
-      }
-      if (navigable) {
-        if (item.to) navigate(item.to);
-      } else {
-        setOpen((v) => !v);
-      }
+      if (collapsed) return;
+      if (navigable) navigate(item.to);
+      else setOpen((v) => !v);
     };
     const handleChevron = (e: MouseEvent) => {
       e.stopPropagation();
-      if (collapsed) {
-        return;
-      }
-      setOpen((v) => !v);
+      if (!collapsed) setOpen((v) => !v);
     };
+    const groupActive = childActive || location.pathname === item.to;
+
     return (
       <div className="flex flex-col">
         <motion.div layout className="flex items-center">
@@ -204,10 +188,7 @@ function DesktopNavItem({ item, collapsed }: { item: NavItem; collapsed: boolean
                 <item.icon className="shrink-0" />
               </Button>
               <Dropdown.Popover>
-                <Dropdown.Menu
-                  aria-label={label}
-                  onAction={(key) => navigate(String(key))}
-                >
+                <Dropdown.Menu aria-label={label} onAction={(key) => navigate(String(key))}>
                   {item.children!.map((child) => {
                     const childLabel = t(child.label);
                     return (
@@ -250,7 +231,7 @@ function DesktopNavItem({ item, collapsed }: { item: NavItem; collapsed: boolean
                     transition={{ duration: 0.25, ease: 'easeInOut' }}
                     className="block"
                   >
-                    <ChevronDown className="w-4 h-4" />
+                    <ChevronDown className="size-4" />
                   </motion.span>
                 </span>
               </Button>
@@ -264,13 +245,13 @@ function DesktopNavItem({ item, collapsed }: { item: NavItem; collapsed: boolean
                 exit={{ width: 0, opacity: 0 }}
                 initial={{ width: 0, opacity: 0 }}
                 transition={{ duration: 0.2 }}
-                className="h-6 bg-blue-500 shrink-0 rounded-md"
+                className="h-6 shrink-0 rounded-md bg-blue-500"
               />
             )}
           </AnimatePresence>
         </motion.div>
 
-        {/* Children 鈥?animated collapse with a tree guide line */}
+        {/* Children — animated collapse with a tree guide line */}
         <AnimatePresence initial={false}>
           {open && !collapsed && (
             <motion.ul
@@ -281,12 +262,14 @@ function DesktopNavItem({ item, collapsed }: { item: NavItem; collapsed: boolean
               transition={{ duration: 0.25, ease: 'easeInOut' }}
               className="overflow-hidden"
             >
-              <div className="ml-[22px] pl-2 border-l border-neutral-200 dark:border-neutral-700 flex flex-col gap-0.5 py-1">
+              <div className="ml-[22px] flex flex-col gap-0.5 border-l border-neutral-200 py-1 pl-2 dark:border-neutral-700">
                 {item.children!.map((child) => {
-                  const isActive = location.pathname === child.to;
+                  const isActive =
+                    location.pathname === child.to ||
+                    (child.to.length > 1 && location.pathname.startsWith(child.to + '/'));
                   const childLabel = t(child.label);
                   return (
-                    <div key={child.to} className="flex mb-[2px] items-center">
+                    <div key={child.to} className="mb-[2px] flex items-center">
                       <Button
                         size="sm"
                         variant={isActive ? 'primary' : 'ghost'}
@@ -294,7 +277,7 @@ function DesktopNavItem({ item, collapsed }: { item: NavItem; collapsed: boolean
                         onPress={() => navigate(child.to)}
                       >
                         <child.icon className="ml-1 shrink-0" />
-                        <span className="text-[15px] truncate">{childLabel}</span>
+                        <span className="truncate text-[15px]">{childLabel}</span>
                       </Button>
                     </div>
                   );
@@ -308,7 +291,7 @@ function DesktopNavItem({ item, collapsed }: { item: NavItem; collapsed: boolean
   }
 
   // Leaf item
-  const isActive = isLeafActive(item, location.pathname);
+  const isActive = selfActive;
   const label = t(item.label);
   return (
     <motion.div layout className="flex items-center">
@@ -321,7 +304,7 @@ function DesktopNavItem({ item, collapsed }: { item: NavItem; collapsed: boolean
         >
           <item.icon className="shrink-0" />
           <span
-            className="overflow-hidden whitespace-nowrap transition-all duration-300 font-medium "
+            className="overflow-hidden whitespace-nowrap font-medium transition-all duration-300"
             style={{ maxWidth: collapsed ? 0 : '14rem', opacity: collapsed ? 0 : 1 }}
           >
             {label}
@@ -336,7 +319,7 @@ function DesktopNavItem({ item, collapsed }: { item: NavItem; collapsed: boolean
             exit={{ width: 0, opacity: 0 }}
             initial={{ width: 0, opacity: 0 }}
             transition={{ duration: 0.2 }}
-            className="h-6 bg-blue-500 shrink-0 rounded-md"
+            className="h-6 shrink-0 rounded-md bg-blue-500"
           />
         )}
       </AnimatePresence>
@@ -363,11 +346,11 @@ function SidebarUserCard({
         aria-label={user.username}
         className={collapsed
           ? 'rounded-[15px]'
-          : 'w-full h-auto min-h-10 justify-start gap-3 rounded-[15px] px-2 py-1.5'}
+          : 'h-auto min-h-10 w-full justify-start gap-3 rounded-[15px] px-2 py-1.5'}
       >
-      <Avatar>
-        <Avatar.Fallback delayMs={600}>{user.username.slice(0, 2).toUpperCase()}</Avatar.Fallback>
-      </Avatar>
+        <Avatar>
+          <Avatar.Fallback delayMs={600}>{initials}</Avatar.Fallback>
+        </Avatar>
         {!collapsed && (
           <span className="flex min-w-0 flex-1 flex-col items-start">
             <span className="max-w-full truncate text-sm font-medium leading-tight text-neutral-900 dark:text-neutral-100">
@@ -398,4 +381,3 @@ function SidebarUserCard({
     </Dropdown>
   );
 }
-

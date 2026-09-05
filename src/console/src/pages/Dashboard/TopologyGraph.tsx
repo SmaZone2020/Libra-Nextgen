@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef } from 'react';
 import * as echarts from 'echarts';
-import { Card } from '@heroui/react';
 import { useTranslation } from 'react-i18next';
 import type { AgentListItem } from '../../types/models';
 
@@ -144,30 +143,29 @@ export function TopologyGraph({ agents }: { agents: AgentListItem[] }) {
   const online = agents.filter((a) => a.status === 'Online').length;
 
   return (
-    <Card>
-      <Card.Header className="flex items-center justify-between">
-        <Card.Title className="text-base">{t('nav.topology.title')}</Card.Title>
-        <div className="flex items-center gap-3 text-xs text-neutral-400 mt-2">
+    <section className="lw-panel h-full w-full">
+      <div className="lw-panel-head">
+        <h3 className="lw-panel-title">{t('nav.topology.title')}</h3>
+        <div className="flex items-center gap-3 text-xs text-neutral-400">
           <span className="flex items-center gap-1.5">
-            <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block" />
+            <span className="inline-block size-2 rounded-full bg-emerald-500" />
             {t('nav.topology.online')} {online}
           </span>
           <span className="flex items-center gap-1.5">
-            <span className="w-2.5 h-2.5 rounded-full bg-neutral-500 inline-block" />
+            <span className="inline-block size-2 rounded-full bg-neutral-500" />
             {t('nav.topology.offline')} {agents.length - online}
           </span>
         </div>
-      </Card.Header>
-      <Card.Content className="pt-0">
+      </div>
+      <div className="lw-panel-body lw-panel-body--flush">
         {agents.length === 0 ? (
-          <div className="flex items-center justify-center h-[240px] text-neutral-500">
+          <div className="flex h-[220px] items-center justify-center text-neutral-500">
             {t('nav.topology.noAgents')}
           </div>
         ) : (
-          <div ref={ref} className="w-full h-[240px]" />
+          <div ref={ref} className="h-[220px] w-full" />
         )}
-      </Card.Content>
-      <Card.Footer className="flex items-center justify-end text-xs text-neutral-400"></Card.Footer>
-    </Card>
+      </div>
+    </section>
   );
 }

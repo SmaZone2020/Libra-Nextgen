@@ -1,6 +1,7 @@
 @import "tailwindcss";
 @import "@heroui/styles";
 @import "@css/components/index.css";
+@import "./workspace.css";
 
 @custom-variant dark (&:where(.dark, .dark *));
 

@@ -2,22 +2,37 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Button, Modal } from '@heroui/react';
+import { Heart, StarFill } from '@gravity-ui/icons';
 import { getAgentTraffic } from '../../api/agents';
 import { getTasks } from '../../api/tasks';
-import { StatsCards } from './StatsCards';
+import { getRecentEvents, type EventItem } from '../../api/events';
+import { consoleWs } from '../../ws/consoleWs';
 import { TrafficChart, RANGES } from './TrafficChart';
 import { SystemDistributionChart } from './SystemDistributionChart';
 import { TopologyGraph } from './TopologyGraph';
 import { useAgent } from '../../contexts/AgentContext';
+import { relativeTime } from '../../utils/relativeTime';
 import type { TimeRange } from './TrafficChart';
-import { Button, Card, Modal } from '@heroui/react';
-import { Heart, StarFill } from '@gravity-ui/icons';
 
 const GITHUB_REPO_URL = 'https://github.com/SmaZone2020/Libra-Nextgen';
 
+const KIND_DOT: Record<string, string> = {
+  agent: 'bg-emerald-500',
+  task: 'bg-sky-500',
+  operator: 'bg-amber-500',
+  shell: 'bg-violet-500',
+};
+
+interface Stat {
+  key: string;
+  value: number;
+  accent?: boolean;
+}
+
 export default function Dashboard() {
   const { t } = useTranslation();
-  // Use shared agent context (real-time via WebSocket)
+  // Shared agent context (real-time via WebSocket)
   const { agents } = useAgent();
 
   const [donateOpen, setDonateOpen] = useState(false);
@@ -26,18 +41,45 @@ export default function Dashboard() {
   const [agentHosts, setAgentHosts] = useState<Record<string, string>>({});
   const [range, setRange] = useState<TimeRange>('today');
   const [taskStats, setTaskStats] = useState({ tasks: 0, pending: 0 });
+  const [activity, setActivity] = useState<EventItem[]>([]);
+  const [activityExpanded, setActivityExpanded] = useState(false);
 
-  const rangeCfg = useMemo(() => RANGES.find(r => r.key === range)!, [range]);
+  const rangeCfg = useMemo(() => RANGES.find((r) => r.key === range)!, [range]);
 
-  // Compute stats from real-time agents
+  // Live stats from the real-time agent list
   const stats = useMemo(() => ({
     agents: agents.length,
-    online: agents.filter(a => a.status === 'Online').length,
+    online: agents.filter((a) => a.status === 'Online').length,
     tasks: taskStats.tasks,
     pending: taskStats.pending,
   }), [agents, taskStats]);
 
-  // Fetch tasks periodically
+  // Recent activity: last events first, mirroring the header event viewer.
+  useEffect(() => {
+    let cancelled = false;
+    getRecentEvents(30)
+      .then((r) => {
+        if (cancelled) return;
+        setActivity((prev) => {
+          const ids = new Set(prev.map((e) => e.id));
+          const fresh = (r.events ?? []).filter((e) => !ids.has(e.id));
+          return [...fresh, ...prev].slice(-40);
+        });
+      })
+      .catch(() => { /* ignore */ });
+    return () => { cancelled = true; };
+  }, []);
+
+  useEffect(() => {
+    const off = consoleWs.on('event.item', (msg) => {
+      const e = msg.data as unknown as EventItem;
+      if (!e?.id || !e?.text) return;
+      setActivity((prev) => (prev.some((x) => x.id === e.id) ? prev : [e, ...prev].slice(-40)));
+    });
+    return off;
+  }, []);
+
+  // Fetch task totals periodically
   useEffect(() => {
     let cancelled = false;
     async function fetchTasks() {
@@ -46,7 +88,7 @@ export default function Dashboard() {
         if (!cancelled) {
           setTaskStats({
             tasks: taskRes.total,
-            pending: taskRes.tasks?.filter((t: { status: string }) => t.status === 'Pending').length ?? 0,
+            pending: taskRes.tasks?.filter((x: { status: string }) => x.status === 'Pending').length ?? 0,
           });
         }
       } catch { /* ignore */ }
@@ -71,7 +113,7 @@ export default function Dashboard() {
         }
         setAgentHosts(hosts);
 
-        const ids = [...new Set(records.map(r => r.agentId))];
+        const ids = [...new Set(records.map((r) => r.agentId))];
         setAgentIds(ids);
 
         const bucketMs = rangeCfg.bucketMs;
@@ -94,11 +136,11 @@ export default function Dashboard() {
         for (const id of ids) zeroFill[id] = 0;
 
         const chartData: Record<string, number | string>[] = [];
-        for (let t = startBucket; t <= endBucket; t += bucketMs) {
+        for (let time = startBucket; time <= endBucket; time += bucketMs) {
           chartData.push({
-            time: fmt(new Date(t)),
+            time: fmt(new Date(time)),
             ...zeroFill,
-            ...(buckets.get(t) ?? {}),
+            ...(buckets.get(time) ?? {}),
           });
         }
         setTrafficData(chartData);
@@ -110,71 +152,104 @@ export default function Dashboard() {
     return () => { cancelled = true; clearInterval(timer); };
   }, [rangeCfg]);
 
+  const metricItems: Stat[] = useMemo(() => [
+    { key: t('dashboard.totalAgents'), value: stats.agents },
+    { key: t('dashboard.online'), value: stats.online },
+    { key: t('dashboard.totalTasks'), value: stats.tasks },
+    { key: t('dashboard.pending'), value: stats.pending },
+  ], [stats, t]);
+
+  const visibleActivity = activityExpanded ? activity : activity.slice(0, 6);
+
   return (
-    <div className="space-y-6">
-      <div className="grid gap-3 lg:grid-cols-[minmax(0,450px)_minmax(0,1fr)_minmax(0,1fr)]">
-        <Card className="relative flex sm:h-full h-[180px] w-full flex-col overflow-hidden border border-accent/20 bg-linear-to-br from-accent/12 via-surface to-surface-secondary shadow-lg shadow-accent/10 dark:border-accent/30 dark:from-accent/20 dark:via-surface dark:to-accent/8 dark:shadow-accent/5">
-          <div
-            aria-hidden="true"
-            className="pointer-events-none absolute -top-12 -right-12 size-40 rounded-full bg-accent/20 blur-3xl dark:bg-accent/30"
-          />
-          <div
-            aria-hidden="true"
-            className="pointer-events-none absolute -bottom-8 -left-8 size-28 rounded-full bg-accent/10 blur-2xl dark:bg-accent/20"
-          />
-          <Card.Header className="relative gap-3">
-            <div className="flex items-start gap-3">
-              <div className="flex size-32 shrink-0 items-center justify-center">
-                <img
-                  alt="icon"
-                  className="pointer-events-none h-full w-full object-cover select-none dark:invert"
-                  loading="lazy"
-                  src="/images/icon2.webp"
-                />
-              </div>
-              <div className="flex flex-col gap-1">
-                <div>
-                  <Card.Title>{t('dashboard.sponsor.title')}</Card.Title>
-                  <Card.Description>
-                    {t('dashboard.sponsor.description')}
-                    <div className="absolute right-0 sm:-bottom-12 -bottom-4 space-x-2">
-                      <Button
-                        variant="secondary"
-                        isIconOnly
-                        className="transition-all duration-200 hover:w-26 overflow-hidden group rounded-[15px]"
-                        onPress={() => window.open(GITHUB_REPO_URL, '_blank', 'noopener,noreferrer')}
-                      >
-                        <StarFill className='size-5 text-[#E3B341]'/>
-                        <span className="ml-1 hidden group-hover:block transition-opacity duration-200 whitespace-nowrap">{t('dashboard.sponsor.star')}</span>
-                      </Button>
-                      <Button
-                        variant="secondary"
-                        isIconOnly
-                        className="transition-all duration-200 hover:w-28 overflow-hidden group rounded-[15px]"
-                        onPress={() => setDonateOpen(true)}
-                      >
-                        <Heart className='size-5 text-[#FF4BBE]'/>
-                        <span className="ml-1 hidden group-hover:block transition-opacity duration-200 whitespace-nowrap">{t('dashboard.sponsor.upgrade')}</span>
-                      </Button>
-                    </div>
-                  </Card.Description>
-                </div>
-              </div>
-            </div>
-          </Card.Header>
-        </Card>
-        <StatsCards
-          stats={stats}
-          compact
-          minimalOnMobile
-          className="min-w-0 lg:col-span-2"
-        />
+    <div className="flex min-w-0 flex-col gap-6 py-1 sm:gap-8 sm:py-2">
+      {/* Hero: the workspace greeting — data lives below, no stat cards. */}
+      <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
+        <div>
+          <h1 className="lw-hero-title">{t('pageMeta.dashboard.label')}</h1>
+          <p className="lw-hero-sub">{t('dashboard.overviewDesc')}</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-8 gap-1.5 rounded-[10px] text-[12.5px] text-neutral-500 dark:text-neutral-400"
+            onPress={() => window.open(GITHUB_REPO_URL, '_blank', 'noopener,noreferrer')}
+          >
+            <StarFill className="size-4 text-[#E3B341]" />
+            <span className="hidden sm:inline">{t('dashboard.sponsor.star')}</span>
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-8 gap-1.5 rounded-[10px] text-[12.5px] text-neutral-500 dark:text-neutral-400"
+            onPress={() => setDonateOpen(true)}
+          >
+            <Heart className="size-4 text-[#FF4BBE]" />
+            <span className="hidden sm:inline">{t('dashboard.sponsor.upgrade')}</span>
+          </Button>
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-        <SystemDistributionChart agents={agents} />
+      {/* Typographic metric strip — part of the workspace, not cards. */}
+      <div className="lw-metrics" aria-label={t('pageMeta.dashboard.subtitle')}>
+        {metricItems.map((m) => (
+          <div key={m.key} className="lw-metric">
+            <span className="lw-metric-value">{m.value}</span>
+            <span className="lw-metric-label">{m.key}</span>
+          </div>
+        ))}
+      </div>
+
+      <hr className="lw-divider" />
+
+      {/* Recent activity */}
+      <section>
+        <div className="mb-1 flex items-baseline justify-between gap-4">
+          <h2 className="lw-section-title">{t('dashboard.activityTitle')}</h2>
+          {activity.length > 6 && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 rounded-[9px] text-[12px]"
+              onPress={() => setActivityExpanded((v) => !v)}
+            >
+              {activityExpanded ? t('dashboard.activityCollapse') : t('dashboard.activityAll')}
+            </Button>
+          )}
+        </div>
+        {visibleActivity.length === 0 ? (
+          <p className="py-4 text-[13px] text-neutral-400 dark:text-neutral-500">
+            {t('dashboard.activityEmpty')}
+          </p>
+        ) : (
+          <div className="mt-2">
+            {visibleActivity.map((e) => {
+              const rel = relativeTime(e.ts);
+              return (
+                <div key={e.id} className="lw-activity-row">
+                  <span
+                    aria-hidden="true"
+                    className={`mt-[7px] size-1.5 shrink-0 rounded-full ${KIND_DOT[e.kind] ?? 'bg-neutral-400'}`}
+                  />
+                  <span className="min-w-0 flex-1 truncate">{e.text}</span>
+                  <span className="lw-activity-time">
+                    {rel ? t(rel.key, { count: rel.count }) : ''}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </section>
+
+      {/* Session / system visuals — inner panels, one level under the workspace. */}
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-5 lg:gap-5">
+        <div className="min-w-0 lg:col-span-2">
+          <SystemDistributionChart agents={agents} />
+        </div>
         {/* Session topology is desktop-only; mobile stays light. */}
-        <div className="hidden sm:block">
+        <div className="hidden min-w-0 sm:block lg:col-span-3">
           <TopologyGraph agents={agents} />
         </div>
       </div>

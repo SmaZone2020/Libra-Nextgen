@@ -48,10 +48,10 @@ export function PageHeader({ pluginLabels }: { pluginLabels: Map<string, string>
       initial={{ opacity: 0, x: 16 }}
       transition={{ duration: 0.25, ease: 'easeOut' }}
     >
-      <h1 className="mt-0.5 text-xl font-semibold tracking-normal text-neutral-950 dark:text-neutral-50">
+      <h1 className="text-[20px] font-semibold leading-tight tracking-tight text-neutral-950 lg:text-[22px] dark:text-neutral-50">
         {pluginName ? pluginName : t(keys![0])}
       </h1>
-      <p className="mt-0.5 text-sm text-neutral-600 dark:text-neutral-400">
+      <p className="mt-1 text-[12.5px] text-neutral-500 dark:text-neutral-400">
         {location.pathname !== '/plugins'
           ? ""
             : pluginName

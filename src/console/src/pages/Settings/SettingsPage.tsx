@@ -10,6 +10,7 @@ import {
   Comments,
   Globe,
   Key,
+  Palette,
   Person,
   ShieldKeyhole,
   SlidersVertical,
@@ -19,6 +20,7 @@ import { getStoredUser } from '../../api/auth';
 import type { ReactNode } from 'react';
 import AccountTab from './AccountTab';
 import PreferencesTab from './PreferencesTab';
+import AppearanceTab from './AppearanceTab';
 import RiskPolicyTab from './RiskPolicyTab';
 import McpTab from './McpTab';
 import SecurityTab from './SecurityTab';
@@ -42,6 +44,13 @@ export const SETTING_ROUTES: SettingRoute[] = [
     descKey: 'settings.preferencesDesc',
     icon: SlidersVertical,
     render: () => <PreferencesTab />,
+  },
+  {
+    id: 'appearance',
+    labelKey: 'settings.appearanceTab',
+    descKey: 'settings.appearanceDesc',
+    icon: Palette,
+    render: () => <AppearanceTab />,
   },
   {
     id: 'mcp',

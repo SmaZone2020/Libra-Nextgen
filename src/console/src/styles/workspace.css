@@ -1,0 +1,541 @@
+/* ============================================================================
+ * Libra Workspace — desktop-app spatial layer
+ * ----------------------------------------------------------------------------
+ * Spatial contract (mirrors a Codex-style desktop workbench):
+ *
+ *   .lw-frame        one full-screen app background (never a white panel)
+ *   .lw-frame::before  wallpaper image (blurred, user-tunable)
+ *   .lw-frame::after   readability veil (theme-tinted, user-tunable)
+ *   .lw-sidebar      navigation layer sitting ON the background, no border
+ *   .lw-workspace    the single large floating rounded main surface
+ *
+ * Every tunable value is driven by --lw-* custom properties. Runtime values
+ * (wallpaper url / blur / veil / frost) are written by utils/wallpaper.ts;
+ * this file only provides fallbacks so the layout works without a wallpaper.
+ *
+ * Radius ladder (three explicit levels, never uniform):
+ *   Workspace 24px  ->  Panel 18px  ->  Control/input 10px
+ * ========================================================================== */
+
+/* ---- palette (light) ----------------------------------------------------- */
+:root {
+  --lw-app-bg-top: oklch(0.953 0.006 253);
+  --lw-app-bg-bottom: oklch(0.99 0.002 253);
+  --lw-app-glow-a: oklch(0.6 0.13 255 / 0.08);
+  --lw-app-glow-b: oklch(0.74 0.08 235 / 0.06);
+  --lw-workspace-solid: oklch(0.999 0.001 253);
+  --lw-panel-solid: oklch(0.983 0.003 253);
+  --lw-panel-inset: oklch(0.968 0.004 253);
+  --lw-sep: oklch(0.9 0.006 253 / 0.85);
+  --lw-veil-color: oklch(0.948 0.005 253);
+  --lw-text-strong: oklch(0.27 0.02 258);
+  --lw-text-soft: oklch(0.46 0.014 255);
+  --lw-shadow-soft: 0 1px 2px oklch(0.2 0.02 260 / 0.05), 0 14px 34px -18px oklch(0.25 0.03 260 / 0.18);
+  --lw-workspace-shadow: 0 1px 1px oklch(0.15 0.02 260 / 0.05),
+    0 18px 44px -20px oklch(0.3 0.04 260 / 0.24);
+}
+
+/* ---- palette (dark) ------------------------------------------------------- */
+.dark {
+  --lw-app-bg-top: oklch(0.178 0.009 258);
+  --lw-app-bg-bottom: oklch(0.12 0.006 260);
+  --lw-app-glow-a: oklch(0.6 0.15 255 / 0.11);
+  --lw-app-glow-b: oklch(0.58 0.1 290 / 0.08);
+  --lw-workspace-solid: oklch(0.215 0.008 258);
+  --lw-panel-solid: oklch(0.258 0.01 258);
+  --lw-panel-inset: oklch(0.29 0.012 258);
+  --lw-sep: oklch(0.95 0.008 258 / 0.09);
+  --lw-veil-color: oklch(0.115 0.006 258);
+  --lw-text-strong: oklch(0.945 0.007 250);
+  --lw-text-soft: oklch(0.66 0.01 250);
+  --lw-shadow-soft: 0 1px 0 oklch(1 0 0 / 0.03), 0 16px 36px -20px oklch(0 0 0 / 0.6);
+  --lw-workspace-shadow: 0 1px 0 oklch(1 0 0 / 0.05), 0 22px 60px -22px oklch(0 0 0 / 0.75);
+}
+
+/* ---- app frame: full-bleed background ------------------------------------- */
+.lw-frame {
+  position: relative;
+  isolation: isolate;
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
+  background:
+    radial-gradient(1300px 820px at 84% -14%, var(--lw-app-glow-a), transparent 62%),
+    radial-gradient(980px 760px at -10% 112%, var(--lw-app-glow-b), transparent 58%),
+    linear-gradient(155deg, var(--lw-app-bg-top) 0%, var(--lw-app-bg-bottom) 100%);
+}
+
+/* Wallpaper layer. Rendered only while wallpaper is enabled. */
+.lw-frame[data-wallpaper="on"]::before {
+  content: "";
+  position: absolute;
+  inset: -3%;
+  z-index: 0;
+  pointer-events: none;
+  background-image: var(--lw-wall-img, none);
+  background-position: center;
+  background-size: cover;
+  background-repeat: no-repeat;
+  opacity: var(--lw-wall-opacity, 1);
+  filter: blur(var(--lw-wall-blur, 0px));
+  will-change: filter;
+}
+
+/* Readability veil between wallpaper and UI (theme-tinted, tunable). */
+.lw-frame[data-wallpaper="on"]::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background: color-mix(
+    in oklab,
+    var(--lw-veil-color) calc(var(--lw-veil-opacity, 0.55) * 100%),
+    transparent
+  );
+}
+
+/* ---- workspace: the one floating surface ----------------------------------- */
+/* Mobile: flush to the screen edges — no radius, no shadow, no glass cost. */
+.lw-workspace {
+  position: relative;
+  border-radius: 0;
+  background-color: var(--lw-workspace-solid);
+  color: var(--lw-text-strong);
+}
+@media (min-width: 640px) {
+  .lw-workspace {
+    border-radius: 24px;
+    background-color: color-mix(
+      in oklab,
+      var(--lw-workspace-solid) calc((1 - var(--lw-frost, 0)) * 100%),
+      transparent
+    );
+    box-shadow: var(--lw-workspace-shadow);
+    backdrop-filter: blur(calc(var(--lw-frost, 0) * 36px)) saturate(1.12);
+    -webkit-backdrop-filter: blur(calc(var(--lw-frost, 0) * 36px)) saturate(1.12);
+  }
+}
+
+/* Mobile never shows the wallpaper chrome: the workspace covers the screen. */
+@media (max-width: 639.98px) {
+  .lw-frame[data-wallpaper="on"]::before,
+  .lw-frame[data-wallpaper="on"]::after {
+    display: none;
+  }
+}
+
+/* Inside the workspace the color is plain theme text. */
+.lw-workspace-body {
+  color: var(--lw-text-strong);
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in oklab, var(--lw-text-soft) 35%, transparent) transparent;
+}
+.lw-workspace-body::-webkit-scrollbar { width: 5px; height: 5px; }
+.lw-workspace-body::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--lw-text-soft) 35%, transparent);
+}
+.lw-workspace-body::-webkit-scrollbar-track { background: transparent; }
+
+/* ---- sidebar: navigation layer on the background --------------------------- */
+.lw-sidebar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  z-index: 30;
+  display: none;
+  flex-direction: column;
+  width: var(--sidebar-w, 256px);
+  overflow: hidden;
+  transition: width 0.3s ease-in-out;
+}
+@media (min-width: 640px) {
+  .lw-sidebar { display: flex; }
+}
+
+.lw-nav-section {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.lw-nav-caption {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 15px 12px 7px;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.13em;
+  line-height: 1;
+  text-transform: uppercase;
+  color: color-mix(in oklab, var(--lw-text-soft) 82%, transparent);
+  white-space: nowrap;
+}
+.lw-nav-caption::after {
+  content: "";
+  height: 1px;
+  flex: 1;
+  min-width: 8px;
+  margin-left: 2px;
+  background: color-mix(in oklab, var(--lw-text-soft) 16%, transparent);
+}
+
+.lw-nav-row {
+  position: relative;
+  display: flex;
+  width: 100%;
+  height: 34px;
+  align-items: center;
+  gap: 11px;
+  padding: 0 11px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: color-mix(in oklab, var(--lw-text-strong) 76%, transparent);
+  font-size: 13.5px;
+  font-weight: 500;
+  letter-spacing: 0.005em;
+  text-align: left;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+.lw-nav-row:hover {
+  background: color-mix(in oklab, var(--lw-text-strong) 6%, transparent);
+  color: var(--lw-text-strong);
+}
+.lw-nav-row:focus-visible {
+  outline: 2px solid color-mix(in oklab, var(--color-accent, #2563eb) 55%, transparent);
+  outline-offset: 1px;
+}
+.lw-nav-row[aria-current="true"] {
+  background: color-mix(in oklab, var(--color-accent, #2563eb) 11%, transparent);
+  color: color-mix(in oklab, var(--color-accent, #2563eb) 76%, var(--lw-text-strong) 24%);
+  font-weight: 550;
+}
+.lw-nav-row[aria-current="true"] .lw-nav-dot {
+  opacity: 1;
+  transform: translateX(0);
+}
+
+.lw-nav-ico {
+  display: grid;
+  flex: none;
+  width: 18px;
+  height: 18px;
+  place-items: center;
+  opacity: 0.92;
+}
+.lw-nav-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.lw-nav-dot {
+  flex: none;
+  width: 5px;
+  height: 5px;
+  margin-right: 1px;
+  border-radius: 999px;
+  background: var(--color-accent, #2563eb);
+  opacity: 0;
+  transform: translateX(-4px);
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+.lw-nav-chevron {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  margin-right: -6px;
+  border-radius: 7px;
+  color: color-mix(in oklab, var(--lw-text-soft) 80%, transparent);
+  cursor: pointer;
+}
+.lw-nav-chevron:hover {
+  background: color-mix(in oklab, var(--lw-text-strong) 8%, transparent);
+}
+
+/* Nested rows (dynamic plugin pages). */
+.lw-nav-sub {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 2px 0 2px 16px;
+  margin-left: 15px;
+  border-left: 1px solid color-mix(in oklab, var(--lw-text-soft) 20%, transparent);
+}
+.lw-nav-subrow {
+  display: flex;
+  width: 100%;
+  height: 31px;
+  align-items: center;
+  gap: 9px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: color-mix(in oklab, var(--lw-text-strong) 64%, transparent);
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.lw-nav-subrow:hover {
+  background: color-mix(in oklab, var(--lw-text-strong) 6%, transparent);
+  color: var(--lw-text-strong);
+}
+.lw-nav-subrow[aria-current="true"] {
+  background: color-mix(in oklab, var(--color-accent, #2563eb) 10%, transparent);
+  color: color-mix(in oklab, var(--color-accent, #2563eb) 76%, var(--lw-text-strong) 24%);
+}
+
+/* Rail (collapsed) rows: icon only, centered. */
+.lw-nav-row--rail {
+  justify-content: center;
+  padding: 0;
+  height: 40px;
+}
+.lw-nav-row--rail .lw-nav-label,
+.lw-nav-row--rail .lw-nav-dot,
+.lw-nav-row--rail .lw-nav-chevron { display: none; }
+
+/* User card pinned at the sidebar bottom. */
+.lw-user-button {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 10px;
+  border: 0;
+  border-radius: 12px;
+  background: color-mix(in oklab, var(--lw-text-strong) 3.5%, transparent);
+  padding: 6px 8px;
+  text-align: left;
+  cursor: pointer;
+}
+.lw-user-button:hover {
+  background: color-mix(in oklab, var(--lw-text-strong) 7%, transparent);
+}
+
+/* ---- generic inner panel (radius level 2: 18px) ---------------------------- */
+.lw-panel {
+  border-radius: 18px;
+  background: var(--lw-panel-solid);
+  box-shadow: var(--lw-shadow-soft);
+  min-width: 0;
+  color: var(--lw-text-strong);
+}
+.lw-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 15px 18px 0;
+}
+.lw-panel-title {
+  font-size: 13px;
+  font-weight: 650;
+  letter-spacing: 0.01em;
+  color: var(--lw-text-strong);
+}
+.lw-panel-body {
+  padding: 12px 18px 18px;
+}
+.lw-panel-body--flush {
+  padding-top: 0;
+}
+.lw-panel-body--tight {
+  padding-top: 6px;
+}
+
+/* ---- page typography blocks (dashboard overview) --------------------------- */
+.lw-hero-title {
+  font-size: clamp(24px, 2.4vw, 30px);
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+  color: var(--lw-text-strong);
+}
+.lw-hero-sub {
+  margin-top: 5px;
+  font-size: 13.5px;
+  color: var(--lw-text-soft);
+}
+.lw-section-title {
+  font-size: 14.5px;
+  font-weight: 650;
+  letter-spacing: -0.005em;
+  color: var(--lw-text-strong);
+}
+.lw-section-sub {
+  font-size: 12px;
+  color: var(--lw-text-soft);
+}
+.lw-divider {
+  height: 1px;
+  border: 0;
+  background: var(--lw-sep);
+}
+
+.lw-metrics {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: clamp(28px, 5vw, 64px);
+  row-gap: 20px;
+}
+.lw-metric { display: flex; flex-direction: column; gap: 4px; }
+.lw-metric-value {
+  font-size: clamp(27px, 2.8vw, 36px);
+  font-weight: 620;
+  letter-spacing: -0.025em;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  color: var(--lw-text-strong);
+}
+.lw-metric-label {
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  color: var(--lw-text-soft);
+}
+
+/* Activity stream rows: borderless list, hairline separators only. */
+.lw-activity-row {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 9px 2px;
+  font-size: 13.5px;
+}
+.lw-activity-row + .lw-activity-row {
+  border-top: 1px solid color-mix(in oklab, var(--lw-text-soft) 14%, transparent);
+}
+.lw-activity-time {
+  flex: none;
+  font-size: 11px;
+  color: var(--lw-text-soft);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- wallpaper picker (settings) ------------------------------------------- */
+.lw-wall-opt {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  border-radius: 12px;
+  border: 1px solid color-mix(in oklab, var(--lw-text-soft) 22%, transparent);
+  background: var(--lw-panel-inset);
+  cursor: pointer;
+  padding: 0;
+}
+.lw-wall-opt img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.lw-wall-opt[aria-pressed="true"] {
+  outline: 2px solid var(--color-accent, #2563eb);
+  outline-offset: 2px;
+  border-color: transparent;
+}
+.lw-wall-opt--none {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--lw-text-soft);
+  font-size: 12px;
+}
+.lw-wall-opt--none[aria-pressed="true"] {
+  background: color-mix(in oklab, var(--color-accent, #2563eb) 8%, transparent);
+}
+
+/* ---- range slider (control level, radius 10px visual system) ---------------- */
+.lw-range-row { display: flex; align-items: center; gap: 14px; }
+.lw-range-label {
+  flex: 1;
+  font-size: 13px;
+  font-weight: 550;
+  color: var(--lw-text-strong);
+}
+.lw-range-value {
+  min-width: 42px;
+  text-align: right;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--lw-text-soft);
+}
+.lw-range {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 5px;
+  border-radius: 999px;
+  outline: none;
+  background: linear-gradient(
+    to right,
+    var(--color-accent, #2563eb) 0%,
+    var(--color-accent, #2563eb) var(--lw-range-pct, 50%),
+    color-mix(in oklab, var(--lw-text-soft) 22%, transparent) var(--lw-range-pct, 50%),
+    color-mix(in oklab, var(--lw-text-soft) 22%, transparent) 100%
+  );
+  cursor: pointer;
+}
+.lw-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 17px;
+  height: 17px;
+  border-radius: 999px;
+  border: 2.5px solid var(--color-accent, #2563eb);
+  background: var(--lw-workspace-solid);
+  box-shadow: 0 1px 4px oklch(0 0 0 / 0.25);
+  transition: transform 0.15s ease;
+}
+.lw-range::-webkit-slider-thumb:hover { transform: scale(1.12); }
+.lw-range::-moz-range-thumb {
+  width: 13px;
+  height: 13px;
+  border-radius: 999px;
+  border: 2.5px solid var(--color-accent, #2563eb);
+  background: var(--lw-workspace-solid);
+  box-shadow: 0 1px 4px oklch(0 0 0 / 0.25);
+}
+.lw-range:disabled { opacity: 0.45; cursor: not-allowed; }
+
+/* Live preview panel behind the settings card mirrors the app background. */
+.lw-preview-scene {
+  position: relative;
+  overflow: hidden;
+  border-radius: 18px;
+  background:
+    radial-gradient(600px 400px at 85% -20%, var(--lw-app-glow-a), transparent 60%),
+    linear-gradient(155deg, var(--lw-app-bg-top), var(--lw-app-bg-bottom));
+}
+.lw-preview-scene::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image: var(--lw-wall-img, none);
+  background-position: center;
+  background-size: cover;
+  filter: blur(var(--lw-wall-blur, 0px));
+  opacity: var(--lw-wall-opacity, 1);
+}
+.lw-preview-scene::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: color-mix(
+    in oklab,
+    var(--lw-veil-color) calc(var(--lw-veil-opacity, 0.55) * 100%),
+    transparent
+  );
+}

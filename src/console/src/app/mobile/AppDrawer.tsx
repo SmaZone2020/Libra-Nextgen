@@ -2,16 +2,17 @@ import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { AnimatePresence, motion } from 'motion/react';
-import { sidebarItems } from '../../config/site';
+import { sidebarSections } from '../../config/site';
 import { useRegisteredPlugins } from '../../plugins/registry';
 import { resolvePluginIcon } from '../../plugins/icons';
 import { canSeeRoute } from '../../utils/permissions';
 import { AppGridSection } from './AppGridSection';
 import type { DrawerItem } from './AppGridItem';
+import type { NavItem } from '../../shared/layout/Sidebar';
 import type { UserPermissions } from '../../types/models';
 
-/** Feishu-style app drawer for mobile: features + plugins modules on top of
- *  each other. Tapping a tile opens the app and closes the drawer. */
+/** Feishu-style app drawer for mobile: workspace + operations modules on top
+ *  of each other. Tapping a tile opens the app and closes the drawer. */
 export function AppDrawer({
   open,
   onClose,
@@ -24,14 +25,25 @@ export function AppDrawer({
   const { t } = useTranslation();
   const navigate = useNavigate();
 
-  const featuresGroup = sidebarItems.find((i) => i.label === 'nav.features');
-  const featureItems = useMemo<DrawerItem[]>(
-    () =>
-      (featuresGroup?.children ?? [])
-        .filter((c) => canSeeRoute(permissions, c.to))
-        .map((c) => ({ id: c.to, label: t(c.label), icon: c.icon })),
+  const workspaceSection = sidebarSections.find((s) => s.captionKey === 'nav.section.workspace');
+  const operationsSection = sidebarSections.find((s) => s.captionKey === 'nav.section.operations');
+
+  const toDrawerItems = useMemo(() => {
+    return (items: NavItem[]): DrawerItem[] =>
+      items
+        .filter((i) => canSeeRoute(permissions, i.to))
+        .map((i) => ({ id: i.to, label: t(i.label), icon: i.icon }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [featuresGroup, permissions],
+  }, [permissions]);
+
+  const workspaceItems = useMemo(
+    () => (workspaceSection ? toDrawerItems(workspaceSection.items) : []),
+    [workspaceSection, toDrawerItems],
+  );
+
+  const operationsItems = useMemo(
+    () => (operationsSection ? toDrawerItems(operationsSection.items) : []),
+    [operationsSection, toDrawerItems],
   );
 
   const pluginsVisible = canSeeRoute(permissions, '/plugins');
@@ -85,8 +97,23 @@ export function AppDrawer({
             </p>
 
             <div className="space-y-5">
-              <AppGridSection title={t('nav.features')} items={featureItems} onOpen={handleOpen} />
-              <AppGridSection title={t('nav.plugins')} items={pluginItems} onOpen={handleOpen} />
+              {workspaceItems.length > 0 && (
+                <AppGridSection
+                  title={t('nav.section.workspace')}
+                  items={workspaceItems}
+                  onOpen={handleOpen}
+                />
+              )}
+              {operationsItems.length > 0 && (
+                <AppGridSection
+                  title={t('nav.section.operations')}
+                  items={operationsItems}
+                  onOpen={handleOpen}
+                />
+              )}
+              {pluginItems.length > 0 && (
+                <AppGridSection title={t('nav.plugins')} items={pluginItems} onOpen={handleOpen} />
+              )}
             </div>
           </motion.div>
         </div>

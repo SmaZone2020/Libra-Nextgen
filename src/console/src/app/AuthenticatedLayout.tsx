@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Routes, Route, useLocation } from 'react-router-dom';
 import { AnimatePresence, motion } from 'motion/react';
-import { Sidebar, type NavItem } from '../shared/layout/Sidebar';
+import { Sidebar, type NavItem, type SidebarSection } from '../shared/layout/Sidebar';
 import Dashboard from '../pages/Dashboard';
 import AgentsPage from '../pages/Agents';
 import AgentDetailPage from '../pages/Agents/AgentDetailPage';
@@ -22,12 +22,13 @@ import { getAccountMe } from '../api/account';
 import { NetworkOverlay } from '../components/NetworkOverlay';
 import { EventViewer } from '../components/EventViewer';
 import type { UserPermissions } from '../types/models';
-import { sidebarItems, sidebarBottomItems } from '../config/site';
+import { sidebarSections } from '../config/site';
 import { PageHeader } from './PageHeader';
 import { AgentSelector } from './AgentSelector';
 import { MobileTabBar } from './mobile/MobileTabBar';
 import { AppDrawer } from './mobile/AppDrawer';
 import MePage from '../pages/Me';
+import { isWallpaperEnabled, useWallpaperPrefs } from '../utils/wallpaper';
 
 const pageTransition = {
   duration: 0.3,
@@ -52,6 +53,7 @@ export function AuthenticatedLayout({
   const [appsOpen, setAppsOpen] = useState(false);
   const sidebarWidth = collapsed ? SIDEBAR_W.collapsed : SIDEBAR_W.expanded;
   const registeredPlugins = useRegisteredPlugins();
+  const wallpaper = useWallpaperPrefs();
 
   useEffect(() => {
     getAccountMe()
@@ -73,22 +75,25 @@ export function AuthenticatedLayout({
   const NO_PADDING_ROUTES = new Set(['/shell']);
   const FULL_HEIGHT_ROUTES = new Set(['/shell']);
   const isAiRoute = location.pathname === '/ai' || location.pathname.startsWith('/ai/');
-  const visibleItems = sidebarItems
-    .map((item): NavItem | null => {
-      if (item.children && item.children.length > 0) {
-        const children = item.children.filter((c) => canSee(c.to));
-        if (children.length === 0) return null;
-        return { ...item, children };
-      }
-      // Plugins manager group (placeholder children) is filled below.
-      if (item.label === 'nav.pluginManager') {
-        if (!canSee(item.to)) return null;
-        return item;
-      }
-      if (!canSee(item.to)) return null;
-      return item;
+
+  // Permission-filter every section; plugin-manager children are filled below.
+  const visibleSections = sidebarSections
+    .map((section): SidebarSection | null => {
+      const items = section.items
+        .map((item): NavItem | null => {
+          if (item.children && item.children.length > 0) {
+            const children = item.children.filter((c) => canSee(c.to));
+            if (children.length === 0 && !canSee(item.to)) return null;
+            return { ...item, children };
+          }
+          if (!canSee(item.to)) return null;
+          return item;
+        })
+        .filter((i): i is NavItem => i !== null);
+      if (items.length === 0) return null;
+      return { ...section, items };
     })
-    .filter((i): i is NavItem => i !== null);
+    .filter((s): s is SidebarSection => s !== null);
 
   // Fill the plugin-manager group children with enabled plugin pages.
   const pluginChildren: NavItem['children'] = registeredPlugins.map((p) => ({
@@ -96,87 +101,98 @@ export function AuthenticatedLayout({
     to: p.route,
     label: p.manifest.name || p.pluginId,
   }));
-  const finalItems = visibleItems.map((item) =>
-    item.label === 'nav.pluginManager'
-      ? { ...item, children: pluginChildren }
-      : item,
-  );
-
-  const visibleBottom = sidebarBottomItems.filter((i) => canSee(i.to));
+  const finalSections = visibleSections.map((section) => ({
+    ...section,
+    items: section.items.map((item) =>
+      item.label === 'nav.pluginManager'
+        ? { ...item, children: pluginChildren }
+        : item,
+    ),
+  }));
 
   // Route → display name for plugin page headers.
   const pluginLabels = new Map(registeredPlugins.map((p) => [p.route, p.manifest.name || p.pluginId]));
 
+  const isFullHeight = FULL_HEIGHT_ROUTES.has(location.pathname) || isAiRoute;
+  const isPadded = !NO_PADDING_ROUTES.has(location.pathname) && !isAiRoute;
+
   return (
-    <div className="h-screen overflow-hidden bg-neutral-50 dark:bg-neutral-950">
+    <div
+      className="lw-frame"
+      data-wallpaper={isWallpaperEnabled(wallpaper) ? 'on' : 'off'}
+      style={{ '--sidebar-w': `${sidebarWidth}px` } as React.CSSProperties}
+    >
       <NetworkOverlay />
       <Sidebar
         brand="Libra Next"
         collapsed={collapsed}
-        items={finalItems}
-        bottomItems={visibleBottom}
+        sections={finalSections}
         user={user}
         onLogout={onLogout}
         onToggle={onToggle}
       />
 
-      <main
-        className="sm:pl-[var(--sidebar-w)] flex h-full min-w-0 flex-col transition-all duration-300"
-        style={{ '--sidebar-w': `${sidebarWidth}px` } as React.CSSProperties}
-      >
-        {/* Desktop-only header; mobile has no top bar. */}
-        <header className="hidden shrink-0 items-center justify-between border-b border-neutral-200 bg-white px-4 py-3 sm:flex dark:bg-neutral-900 dark:border-neutral-800 sm:px-6 lg:px-8">
-          <PageHeader pluginLabels={pluginLabels} />
-          <div className="flex items-center gap-3">
-            <EventViewer />
-            <AgentSelector />
-          </div>
-        </header>
+      <main className="relative z-10 flex h-full min-w-0 flex-col transition-all duration-300 sm:pl-[var(--sidebar-w)]">
+        {/* Floating workspace: the app's single main surface. */}
+        <div className="flex min-h-0 w-full flex-1 flex-col p-0 sm:p-4 sm:pb-4 lg:p-5 lg:pb-5">
+          <section className="lw-workspace flex min-h-0 w-full flex-1 flex-col overflow-hidden">
+            {/* Desktop-only header — lives INSIDE the workspace, no own panel. */}
+            <header className="hidden shrink-0 items-center justify-between gap-4 px-4 pt-3.5 pb-1 sm:flex sm:px-6 lg:px-8 lg:pt-4">
+              <PageHeader pluginLabels={pluginLabels} />
+              <div className="flex items-center gap-2.5">
+                <EventViewer />
+                <AgentSelector />
+              </div>
+            </header>
 
-        <div
-          className={`${FULL_HEIGHT_ROUTES.has(location.pathname) || isAiRoute ? 'flex min-h-0 flex-1 flex-col overflow-hidden' : 'min-h-0 flex-1 overflow-y-auto'} ${
-            NO_PADDING_ROUTES.has(location.pathname) || isAiRoute
-              ? 'pb-24 sm:pb-0'
-              : 'px-4 pt-6 pb-24 sm:px-6 sm:pb-6 lg:px-8'
-          }`}
-        >
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={isAiRoute ? 'ai' : location.pathname}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -12 }}
-              initial={{ opacity: 0, y: 12 }}
-              transition={pageTransition}
-              className={FULL_HEIGHT_ROUTES.has(location.pathname) || isAiRoute ? 'flex min-h-0 flex-1 flex-col' : ''}
+            <div
+              className={`lw-workspace-body flex min-h-0 flex-1 flex-col ${
+                isFullHeight ? 'overflow-hidden' : 'overflow-y-auto'
+              } ${
+                isPadded
+                  ? 'px-3 pt-2 pb-24 sm:px-5 sm:pt-3 sm:pb-6 lg:px-7'
+                  : 'pb-24 sm:pb-0'
+              }`}
             >
-              <Routes location={location}>
-                <Route path="/" element={<Dashboard />} />
-                <Route path="/agents" element={<AgentsPage />} />
-                <Route path="/agents/:agentId" element={<AgentDetailPage />} />
-                <Route path="/shell" element={<ShellPage />} />
-                <Route path="/files" element={<FileManager />} />
-                <Route path="/audit" element={<AuditLogsPage />} />
-                <Route path="/system" element={<SystemPage />} />
-                <Route path="/othersoft" element={<SoftwareDataPage />} />
-                <Route path="/proxy" element={<ProxyBrowserPage />} />
-                <Route path="/builder" element={<BuilderPage />} />
-                <Route path="/ai" element={<AiPage />} />
-                <Route path="/ai/:sessionId" element={<AiPage />} />
-                <Route path="/settings" element={<SettingsPage />} />
-                <Route path="/settings/:settingId" element={<SettingDetail />} />
-                <Route path="/plugins" element={<PluginsPage />} />
-                <Route path="/about" element={<AboutPage />} />
-                <Route
-                  path="/me"
-                  element={<MePage user={user} permissions={permissions} onLogout={onLogout} />}
-                />
-                {registeredPlugins.map((p) => {
-                  const Page = p.Page;
-                  return <Route key={p.pluginId} path={p.route} element={<Page />} />;
-                })}
-              </Routes>
-            </motion.div>
-          </AnimatePresence>
+              <AnimatePresence mode="wait">
+                <motion.div
+                  key={isAiRoute ? 'ai' : location.pathname}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -12 }}
+                  initial={{ opacity: 0, y: 12 }}
+                  transition={pageTransition}
+                  className={isFullHeight ? 'flex min-h-0 flex-1 flex-col' : 'flex flex-col'}
+                >
+                  <Routes location={location}>
+                    <Route path="/" element={<Dashboard />} />
+                    <Route path="/agents" element={<AgentsPage />} />
+                    <Route path="/agents/:agentId" element={<AgentDetailPage />} />
+                    <Route path="/shell" element={<ShellPage />} />
+                    <Route path="/files" element={<FileManager />} />
+                    <Route path="/audit" element={<AuditLogsPage />} />
+                    <Route path="/system" element={<SystemPage />} />
+                    <Route path="/othersoft" element={<SoftwareDataPage />} />
+                    <Route path="/proxy" element={<ProxyBrowserPage />} />
+                    <Route path="/builder" element={<BuilderPage />} />
+                    <Route path="/ai" element={<AiPage />} />
+                    <Route path="/ai/:sessionId" element={<AiPage />} />
+                    <Route path="/settings" element={<SettingsPage />} />
+                    <Route path="/settings/:settingId" element={<SettingDetail />} />
+                    <Route path="/plugins" element={<PluginsPage />} />
+                    <Route path="/about" element={<AboutPage />} />
+                    <Route
+                      path="/me"
+                      element={<MePage user={user} permissions={permissions} onLogout={onLogout} />}
+                    />
+                    {registeredPlugins.map((p) => {
+                      const Page = p.Page;
+                      return <Route key={p.pluginId} path={p.route} element={<Page />} />;
+                    })}
+                  </Routes>
+                </motion.div>
+              </AnimatePresence>
+            </div>
+          </section>
         </div>
 
         {/* Mobile floating bottom navigation */}

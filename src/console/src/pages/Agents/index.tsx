@@ -1,12 +1,12 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
-import { Button, Tabs } from '@heroui/react';
+import { Tabs } from '@heroui/react';
 import { getAgents, getAgent, deleteAgent } from '../../api/agents';
 import { createTask } from '../../api/tasks';
 import { AgentTable } from './AgentTable';
 import { AgentDetailModal } from './AgentDetailModal';
-import { AgentCardList } from './AgentCardList';
+import { MobileAgentBrowser } from './MobileAgentBrowser';
 import { MobileBuilderEntry } from './MobileBuilderEntry';
 import { useAgent } from '../../contexts/AgentContext';
 import { useDialog } from '../../hooks/useDialog';
@@ -99,23 +99,10 @@ export default function AgentsPage() {
     <div className="space-y-3">
       <MobileBuilderEntry />
 
-      {/* Mobile: filter chips + card list */}
-      <div className="space-y-3 sm:hidden">
-        <div className="flex gap-2">
-          {(['all', 'online', 'offline'] as const).map((k) => (
-            <Button
-              key={k}
-              size="sm"
-              variant={tab === k ? 'secondary' : 'ghost'}
-              className="flex-1 rounded-full"
-              onPress={() => setTab(k)}
-            >
-              {t(`agents.${k}`)}
-            </Button>
-          ))}
-        </div>
-        <AgentCardList
-          agents={agents}
+      {/* Mobile: search + filter/sort drawer + card list */}
+      <div className="sm:hidden">
+        <MobileAgentBrowser
+          agents={allAgents}
           connectedId={agentId}
           onOpen={(id) => navigate(`/agents/${id}`)}
         />

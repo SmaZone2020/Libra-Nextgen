@@ -8,10 +8,13 @@ export function AgentCardList({
   agents,
   connectedId,
   onOpen,
+  emptyLabel,
 }: {
   agents: AgentListItem[];
   connectedId: string;
   onOpen: (id: string) => void;
+  /** Overrides the default "no agents" copy (e.g. "nothing matches the filter"). */
+  emptyLabel?: string;
 }) {
   const { t } = useTranslation();
 
@@ -19,7 +22,7 @@ export function AgentCardList({
     return (
       <div className="flex flex-col items-center gap-2 rounded-2xl border border-dashed border-neutral-300 py-10 text-neutral-400 dark:border-neutral-700">
         <Display className="size-8" />
-        <p className="text-sm">{t('agents.noAgents')}</p>
+        <p className="text-sm">{emptyLabel ?? t('agents.noAgents')}</p>
       </div>
     );
   }

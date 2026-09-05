@@ -5,9 +5,11 @@ import { App } from './app/App';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { toastQueue } from './components/toast-queue';
 import { initTheme } from './utils/theme';
+import { initWallpaper } from './utils/wallpaper';
 import './styles/app.css';
 
 initTheme();
+initWallpaper();
 
 createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
