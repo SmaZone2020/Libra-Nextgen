@@ -187,7 +187,7 @@ function DesktopNavItem({ item, collapsed }: { item: NavItem; collapsed: boolean
                 }`}
                 aria-label={label}
               >
-                <item.icon className="shrink-0" />
+                <item.icon className="m-auto" />
               </Button>
               <Dropdown.Popover>
                 <Dropdown.Menu aria-label={label} onAction={(key) => navigate(String(key))}>
@@ -299,7 +299,7 @@ function DesktopNavItem({ item, collapsed }: { item: NavItem; collapsed: boolean
           } ${isActive ? 'bg-accent-soft text-accent-soft-foreground' : ''}`}
           onPress={() => navigate(item.to)}
         >
-          <item.icon className="shrink-0" />
+          <item.icon className={collapsed ? 'm-auto' : 'shrink-0'} />
           {!collapsed && (
             <span
               className={`overflow-hidden whitespace-nowrap transition-all duration-300 ${
