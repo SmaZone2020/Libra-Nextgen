@@ -39,19 +39,24 @@ public class MeshNodesController : ControllerBase
     private string UserId => User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "";
     private string UserName => User.FindFirst(ClaimTypes.Name)?.Value ?? "";
 
-    private object ToDto(MeshNode n) => new
+    private object ToDto(MeshNode n)
     {
-        id = n.Id,
-        name = n.Name,
-        origin = n.Origin,
-        authKind = n.AuthKind,
-        username = n.AuthKind == MeshAuthKind.Password ? n.Username : null,
-        createdAt = n.CreatedAt,
-        updatedAt = n.UpdatedAt,
-        lastConnectedAt = n.LastConnectedAt,
-        lastError = n.LastError,
-        connected = _sessions.GetSession(n.Id) != null,
-    };
+        var session = _sessions.GetSession(n.Id);
+        return new
+        {
+            id = n.Id,
+            name = n.Name,
+            origin = n.Origin,
+            authKind = n.AuthKind,
+            username = n.AuthKind == MeshAuthKind.Password ? n.Username : null,
+            createdAt = n.CreatedAt,
+            updatedAt = n.UpdatedAt,
+            lastConnectedAt = n.LastConnectedAt,
+            lastError = n.LastError,
+            connected = session != null,
+            storageType = session?.StorageType,
+        };
+    }
 
     [HttpGet]
     public async Task<IActionResult> List(CancellationToken ct)
@@ -146,6 +151,7 @@ public class MeshNodesController : ControllerBase
         {
             connected = true,
             expiresAt = result.ExpiresAt,
+            storageType = result.StorageType,
         });
     }
 

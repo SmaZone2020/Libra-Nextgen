@@ -7,13 +7,18 @@ using LibraNextgen.Common.Models;
 namespace LibraNextgen.Service.Services.Mesh;
 
 /// <summary>Live node session handed to callers that proxy to the node.</summary>
-public sealed record NodeSession(string Token, DateTime ExpiresAt, DateTime ConnectedAt);
+public sealed record NodeSession(
+    string Token,
+    DateTime ExpiresAt,
+    DateTime ConnectedAt,
+    string? StorageType);
 
 /// <summary>Outcome of a node connect attempt.</summary>
-public sealed record NodeConnectResult(bool Ok, string? Error, DateTime? ExpiresAt)
+public sealed record NodeConnectResult(bool Ok, string? Error, DateTime? ExpiresAt, string? StorageType)
 {
-    public static NodeConnectResult Success(DateTime expiresAt) => new(true, null, expiresAt);
-    public static NodeConnectResult Fail(string error) => new(false, error, null);
+    public static NodeConnectResult Success(DateTime expiresAt, string? storageType) =>
+        new(true, null, expiresAt, storageType);
+    public static NodeConnectResult Fail(string error) => new(false, error, null, null);
 }
 
 /// <summary>
@@ -27,7 +32,7 @@ public class MeshSessionManager
     /// <summary>Re-connect when the JWT is closer to expiry than this.</summary>
     private static readonly TimeSpan ExpiryMargin = TimeSpan.FromMinutes(2);
 
-    private sealed record StoredSession(string Token, DateTime ExpiresAt, DateTime ConnectedAt);
+    private sealed record StoredSession(string Token, DateTime ExpiresAt, DateTime ConnectedAt, string? StorageType);
 
     private readonly ConcurrentDictionary<string, StoredSession> _sessions = new();
     private readonly IHttpClientFactory _http;
@@ -44,7 +49,7 @@ public class MeshSessionManager
     {
         if (_sessions.TryGetValue(nodeId, out var s)
             && s.ExpiresAt > DateTime.UtcNow.Add(ExpiryMargin))
-            return new NodeSession(s.Token, s.ExpiresAt, s.ConnectedAt);
+            return new NodeSession(s.Token, s.ExpiresAt, s.ConnectedAt, s.StorageType);
         return null;
     }
 
@@ -87,8 +92,12 @@ public class MeshSessionManager
                     DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal, out var parsed))
                 expiresAt = parsed;
 
-            _sessions[node.Id] = new StoredSession(token, expiresAt, DateTime.UtcNow);
-            return NodeConnectResult.Success(expiresAt);
+            // Best-effort probe of the node's store type (SQLite / MongoDB) so
+            // the hub can badge each node; a failed probe never fails connect.
+            var storageType = await ProbeStorageTypeAsync(client, node.Origin, token, ct);
+
+            _sessions[node.Id] = new StoredSession(token, expiresAt, DateTime.UtcNow, storageType);
+            return NodeConnectResult.Success(expiresAt, storageType);
         }
         catch (OperationCanceledException)
         {
@@ -119,5 +128,28 @@ public class MeshSessionManager
         }
         catch (JsonException) { /* non-JSON error body */ }
         return null;
+    }
+
+    private static async Task<string?> ProbeStorageTypeAsync(
+        HttpClient client, string origin, string token, CancellationToken ct)
+    {
+        try
+        {
+            using var probe = new HttpRequestMessage(HttpMethod.Get, $"{origin}/api/system/storage");
+            probe.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+            using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            cts.CancelAfter(TimeSpan.FromSeconds(8));
+            using var resp = await client.SendAsync(probe, cts.Token);
+            if (!resp.IsSuccessStatusCode) return null;
+            var text = await resp.Content.ReadAsStringAsync(cts.Token);
+            using var doc = JsonDocument.Parse(text);
+            if (doc.RootElement.TryGetProperty("dbType", out var db) && db.GetString() is { } kind)
+                return kind.Equals("sqlite", StringComparison.OrdinalIgnoreCase) ? "sqlite" : "mongo";
+            return null;
+        }
+        catch (Exception)
+        {
+            return null; // probe is best-effort; the session itself stays valid
+        }
     }
 }
