@@ -434,8 +434,15 @@ public class AgentCommsController : ControllerBase
         if (responsePlain == null)
             return BadRequest(new { error = "no response" });
 
+        // Module/beat responses travel as an SSE-style stream. Reverse proxies
+        // and NAT tunnels (nginx, frp HTTP/HTTPS lines) must NOT buffer these
+        // responses — buffering/truncation is a common cause of "downloaded
+        // payload is not a valid ELF" and "agent did not respond in time".
+        Response.Headers["X-Accel-Buffering"] = "no";
+        Response.Headers.CacheControl = "no-store";
+
         var encrypted = CryptoHelper.EncryptPayload(responsePlain, key!);
-        var chunks = ChunkString(encrypted, 60 * 1024);
+        var chunks = ChunkString(encrypted, 1024 * 1024);
         var sb = new StringBuilder();
         var completionId = "chatcmpl-" + Guid.NewGuid().ToString("N")[..24];
         var model = profile is ConfigurableProfile cp2 && cp2.Config.AiModels.Count > 0
@@ -484,6 +491,8 @@ public class AgentCommsController : ControllerBase
         Response.Headers.ContentType = "text/event-stream";
         Response.Headers.CacheControl = "no-cache";
         Response.Headers.Connection = "keep-alive";
+        // Keep reverse-proxied tunnel connections streaming without buffering.
+        Response.Headers["X-Accel-Buffering"] = "no";
 
         // A live SSE connection is proof the agent process is alive — keep the
         // agent seen so transient heartbeat failures don't knock it offline.
