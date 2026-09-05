@@ -117,22 +117,101 @@ jobs:
           path: assets
           retention-days: 1
 
-  # TODO(electron): installer job wiring. Sources live in desktop/electron/
-  # (electron-builder, nsis win-x64/arm64, AppImage linux-x64/arm64). Each
-  # installer embeds, as extraResources, the matching RID service publish dir
-  # (baseline-service) and the console dist (baseline-web); payload updates
-  # then arrive through libra-desktop-{rid} zips above. Needs per-OS runners
-  # (windows-latest / ubuntu-24.04) and, for arm64 win, electron-builder arch
-  # flags. Reuse the webapp build + dotnet publish steps of this file.
+  electron:
+    name: electron installers (${{ matrix.os }}-${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: windows-latest
+            os: win
+            arch: x64
+            rid: win-x64
+          - runner: windows-latest
+            os: win
+            arch: arm64
+            rid: win-arm64
+          - runner: ubuntu-24.04
+            os: linux
+            arch: x64
+            rid: linux-x64
+          - runner: ubuntu-24.04
+            os: linux
+            arch: arm64
+            rid: linux-arm64
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: desktop/electron/package-lock.json
+
+      - name: Build console SPA (baseline-web)
+        working-directory: src/console
+        run: |
+          npm ci
+          npm run build
+
+      - name: Publish server ${{ matrix.rid }} (baseline-service)
+        run: |
+          dotnet publish src/LibraNextgen.Server/LibraNextgen.Server.csproj \
+            -c Release -r ${{ matrix.rid }} --self-contained \
+            -p:PublishSingleFile=true -p:DebugType=None -p:DebugSymbols=false \
+            -p:EnableCompressionInSingleFile=true \
+            -o desktop/baseline-service
+
+      - name: Stage baseline-web
+        shell: bash
+        run: |
+          rm -rf desktop/baseline-web
+          cp -a src/console/dist desktop/baseline-web
+
+      - name: Install shell dependencies
+        working-directory: desktop/electron
+        run: npm ci
+
+      - name: Build installer (${{ matrix.os }} ${{ matrix.arch }})
+        working-directory: desktop/electron
+        shell: bash
+        run: |
+          if [ "${{ matrix.os }}" = "win" ]; then
+            npx electron-builder --win nsis --${{ matrix.arch }}
+          else
+            npx electron-builder --linux AppImage --${{ matrix.arch }}
+          fi
+
+      - name: Collect installer artifact
+        shell: bash
+        run: |
+          mkdir -p release-installers
+          if [ "${{ matrix.os }}" = "win" ]; then
+            mv desktop/electron/release/*Setup*.exe release-installers/libra-desktop-installer-${{ matrix.os }}-${{ matrix.arch }}.exe
+          else
+            mv desktop/electron/release/*.AppImage release-installers/libra-desktop-installer-${{ matrix.os }}-${{ matrix.arch }}.AppImage
+          fi
+          ls -la release-installers
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-assets-electron-${{ matrix.os }}-${{ matrix.arch }}
+          path: release-installers
+          retention-days: 1
 
   attach:
     name: Attach to release
-    needs: [assets, webapp]
+    needs: [assets, webapp, electron]
     if: always()
     runs-on: ubuntu-latest
     steps:
       - name: Abort when any job failed
-        if: needs.assets.result != 'success' || needs.webapp.result != 'success'
+        if: needs.assets.result != 'success' || needs.webapp.result != 'success' || needs.electron.result != 'success'
         run: |
           echo "asset build failed - nothing published"
           exit 1
@@ -156,4 +235,5 @@ jobs:
             release-assets/libra-service-*.zip.sha256
             release-assets/libra-webapp-*.zip
             release-assets/libra-webapp-*.zip.sha256
+            release-assets/libra-desktop-installer-*
           fail_on_unmatched_files: true
