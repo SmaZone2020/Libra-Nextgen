@@ -118,8 +118,21 @@
       var(--lw-workspace-solid) calc((1 - var(--lw-frost, 0)) * 100%),
       transparent
     );
+    /* Left-edge depth: a crisp 1px seam plus a soft shadow spilling onto the
+       app background, so the workspace reads as a raised surface next to the
+       sidebar instead of a flat rectangle. */
+    box-shadow:
+      -18px 0 42px -26px oklch(0.25 0.03 260 / 0.22),
+      -2px 0 6px -3px oklch(0.2 0.03 260 / 0.08),
+      -1px 0 0 oklch(0.15 0.02 260 / 0.05);
     backdrop-filter: blur(calc(var(--lw-frost, 0) * 36px)) saturate(1.12);
     -webkit-backdrop-filter: blur(calc(var(--lw-frost, 0) * 36px)) saturate(1.12);
+  }
+  .dark .lw-workspace {
+    box-shadow:
+      -24px 0 56px -28px oklch(0 0 0 / 0.75),
+      -2px 0 8px -4px oklch(0 0 0 / 0.55),
+      -1px 0 0 oklch(1 0 0 / 0.06);
   }
 }
 
