@@ -11,6 +11,16 @@
   font-family: "JetBrainsMono", "LibraTermCJK", ui-monospace, monospace !important;
 }
 
+/* Transparent terminal surface: xterm ships a black default for the viewport
+   and canvas, so override it explicitly — the shell should melt into the
+   workspace instead of painting a black box. */
+.xterm,
+.xterm-viewport,
+.xterm-screen,
+.xterm canvas {
+  background-color: transparent !important;
+}
+
 @font-face {
   font-family: 'JetBrainsMono';
   src: url('../assets/fonts/JetBrainsMono/JetBrainsMono-Thin.woff2') format('woff2');
