@@ -1,9 +1,9 @@
 import { useEffect, useRef, forwardRef, useImperativeHandle } from 'react';
-import { Terminal } from 'xterm';
-import type { ITheme } from 'xterm';
+import { Terminal } from '@xterm/xterm';
+import type { ITheme } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { WebLinksAddon } from '@xterm/addon-web-links';
-import xtermCss from 'xterm/css/xterm.css?inline';
+import xtermCss from '@xterm/xterm/css/xterm.css?inline';
 
 export interface TerminalHandle {
   write(text: string): void;
@@ -19,6 +19,8 @@ interface Props {
   onInput?: (data: string) => void;
   onResize?: (cols: number, rows: number) => void;
   disabled?: boolean;
+  /** Font size in px; applied live (2-96 recommended). */
+  fontSize?: number;
 }
 
 // Scoped CSS injected into the terminal's shadow root. The shadow boundary
@@ -34,18 +36,51 @@ const SHADOW_EXTRA_CSS = `
     height: 100%;
     width: 100%;
     min-height: 0;
-    background: #111;
+    font-family: monospace;
+  }
+  .xterm,
+  .xterm * {
+    font-family: monospace !important;
+  }
+  .xterm,
+  .xterm-viewport,
+  .xterm-screen,
+  .xterm canvas {
+    background-color: transparent !important;
   }
 `;
 
-function resolveTerminalTheme(): ITheme | null {
-  // Temporarily disabled during font-spacing diagnosis: we run with xterm's
-  // default black theme exactly like the working standalone test page.
-  return null;
+function resolveTerminalTheme(): ITheme {
+  const dark = document.documentElement.classList.contains('dark');
+  const foreground = dark ? '#d7dae0' : '#1f2329';
+  const accent = dark ? '#7aa2f7' : '#2563eb';
+  return {
+    background: 'transparent',
+    foreground,
+    cursor: accent,
+    cursorAccent: foreground,
+    selectionBackground: dark ? 'rgba(122, 162, 247, 0.32)' : 'rgba(37, 99, 235, 0.22)',
+    black: dark ? '#3b4252' : '#3f4653',
+    red: dark ? '#e06c75' : '#d64550',
+    green: dark ? '#98c379' : '#3d8f52',
+    yellow: dark ? '#e5c07b' : '#9c7c1f',
+    blue: dark ? '#61afef' : '#2563eb',
+    magenta: dark ? '#c678dd' : '#8b3fd4',
+    cyan: dark ? '#56b6c2' : '#0e7f94',
+    white: dark ? '#abb2bf' : '#4b5563',
+    brightBlack: dark ? '#636d83' : '#9aa3af',
+    brightRed: dark ? '#ff7a8a' : '#e5484d',
+    brightGreen: dark ? '#a6e3a1' : '#30a46c',
+    brightYellow: dark ? '#f2cc8f' : '#b5952a',
+    brightBlue: dark ? '#8ab4f8' : '#3b82f6',
+    brightMagenta: dark ? '#d29af0' : '#9f4bd4',
+    brightCyan: dark ? '#7dd3fc' : '#0aa2c0',
+    brightWhite: dark ? '#d8dee9' : '#1f2328',
+  };
 }
 
 const TerminalView = forwardRef<TerminalHandle, Props>(function TerminalView(
-  { className, style, onInput, onResize, disabled },
+  { className, style, onInput, onResize, disabled, fontSize = 14 },
   ref,
 ) {
   const hostRef = useRef<HTMLDivElement>(null);
@@ -57,6 +92,8 @@ const TerminalView = forwardRef<TerminalHandle, Props>(function TerminalView(
   onInputRef.current = onInput;
   const onResizeRef = useRef(onResize);
   onResizeRef.current = onResize;
+  const fontSizeRef = useRef(fontSize);
+  fontSizeRef.current = fontSize;
 
   useImperativeHandle(ref, () => ({
     write(text: string) {
@@ -101,17 +138,18 @@ const TerminalView = forwardRef<TerminalHandle, Props>(function TerminalView(
     let term: Terminal | null = null;
     let fit: FitAddon | null = null;
     let ro: ResizeObserver | null = null;
+    let themeObserver: MutationObserver | null = null;
 
-    // EXACT same options as the working standalone test page (terminal-test):
-    // xterm defaults for font/line-height/customGlyphs, black default theme,
-    // fontSize 14, explicit letterSpacing 0. No transparency yet — prove the
-    // spacing is fixed first, then re-add transparency as a separate step.
     const t = new Terminal({
       cursorBlink: true,
+      cursorStyle: 'block',
       convertEol: true,
-      fontSize: 14,
+      allowTransparency: true,
+      fontFamily: 'monospace',
+      fontSize: fontSizeRef.current,
       letterSpacing: 0,
       scrollback: 10000,
+      theme: resolveTerminalTheme(),
     });
     const f = new FitAddon();
     t.loadAddon(f);
@@ -119,6 +157,20 @@ const TerminalView = forwardRef<TerminalHandle, Props>(function TerminalView(
     t.open(box);
     term = t;
     fit = f;
+
+    // Live theme switching for the parent app's light/dark toggle.
+    const applyTheme = () => {
+      if (termRef.current) {
+        try {
+          termRef.current.options.theme = resolveTerminalTheme();
+        } catch { /* keep previous theme */ }
+      }
+    };
+    themeObserver = new MutationObserver(applyTheme);
+    themeObserver.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['class'],
+    });
 
     t.onData((data) => {
       if (disabledRef.current) return;
@@ -154,12 +206,27 @@ const TerminalView = forwardRef<TerminalHandle, Props>(function TerminalView(
     return () => {
       disposed = true;
       ro?.disconnect();
+      themeObserver?.disconnect();
       term?.dispose();
       termRef.current = null;
       fitRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Live font-size changes: update xterm and re-fit to reflow the rows.
+  useEffect(() => {
+    const term = termRef.current;
+    const fit = fitRef.current;
+    if (!term || !fit) return;
+    try {
+      term.options.fontSize = fontSizeRef.current;
+    } catch { /* ignore */ }
+    requestAnimationFrame(() => {
+      try { fit.fit(); } catch { /* ignore */ }
+      if (term.cols > 0 && term.rows > 0) onResizeRef.current?.(term.cols, term.rows);
+    });
+  }, [fontSize]);
 
   return (
     <div

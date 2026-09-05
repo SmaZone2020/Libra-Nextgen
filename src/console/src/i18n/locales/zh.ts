@@ -301,6 +301,7 @@ export default {
       banner: 'Libra-Nextgen CMD 会话（任务模式）\r\n输入命令后回车执行，↑/↓ 切换历史，Ctrl+C 清空输入。\r\n',
       prompt: '$ {{cmd}}',
       clear: '清空',
+      fontSize: '终端字号',
       timeout: '任务超时未完成',
       error: '[error] {{msg}}',
     },

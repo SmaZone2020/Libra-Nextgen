@@ -302,6 +302,7 @@ export default {
       banner: 'Libra-Nextgen CMD session (task mode)\r\nType a command and press Enter; Arrow Up/Down scrolls history; Ctrl+C clears input.\r\n',
       prompt: '$ {{cmd}}',
       clear: 'Clear',
+      fontSize: 'Terminal font size',
       timeout: 'Task timed out',
       error: '[error] {{msg}}',
     },

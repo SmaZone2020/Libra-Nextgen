@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { NumberField } from '@heroui/react';
 import Terminal from '../../components/terminal';
 import type { TerminalHandle } from '../../components/terminal';
 import { createTask, getTask } from '../../api/tasks';
@@ -8,6 +9,8 @@ import { AgentRequired } from '../../components/AgentRequired';
 import { unwrapTaskOutput } from './taskOutput';
 
 const MAX_HISTORY = 100;
+const FONT_MIN = 2;
+const FONT_MAX = 96;
 
 /** Number of terminal cells a BMP character occupies (CJK/fullwidth = 2). */
 function cellWidth(ch: string): number {
@@ -39,6 +42,7 @@ export default function ShellPage() {
   const { agentId, selectedAgent } = useAgent();
   const termRef = useRef<TerminalHandle>(null);
   const [running, setRunning] = useState(false);
+  const [fontSize, setFontSize] = useState(14);
   const inputBufRef = useRef('');
   const cursorRef = useRef(0);
   const historyRef = useRef<string[]>([]);
@@ -267,23 +271,51 @@ export default function ShellPage() {
 
       {agentId && (
         <div className="flex min-h-0 min-w-0 flex-1 flex-col px-2.5 pb-1 sm:px-4 sm:pb-2">
-          {/* Transparent integrated-terminal toolbar */}
-          <div className="flex h-8 shrink-0 items-center gap-2.5 text-[var(--lw-terminal-fg)]">
-            <span
-              aria-hidden="true"
-              className={`size-1.5 shrink-0 rounded-full ${isOnline ? 'bg-emerald-500' : 'bg-neutral-400'}`}
-            />
-            <span className="min-w-0 truncate font-mono text-[12px] font-medium opacity-80">
-              {hostLabel}
-            </span>
-            <span className="font-mono text-[10px] uppercase tracking-wider opacity-40">cmd</span>
-            <button
-              type="button"
-              onClick={clearScreen}
-              className="ml-auto rounded-[8px] px-2 py-1 font-mono text-[11px] opacity-60 transition-opacity hover:opacity-100"
-            >
-              {t('shell.clear')}
-            </button>
+          {/* Integrated terminal toolbar: name | font size | clear */}
+          <div className="grid h-9 shrink-0 grid-cols-[1fr_auto_1fr] items-center gap-3 text-[var(--lw-terminal-fg)]">
+            <div className="flex min-w-0 items-center gap-2.5">
+              <span
+                aria-hidden="true"
+                className={`size-1.5 shrink-0 rounded-full ${isOnline ? 'bg-emerald-500' : 'bg-neutral-400'}`}
+              />
+              <span className="min-w-0 truncate font-mono text-[12px] font-medium opacity-80">
+                {hostLabel}
+              </span>
+              <span className="font-mono text-[10px] uppercase tracking-wider opacity-40">cmd</span>
+            </div>
+
+            {/* Centered font-size stepper */}
+            <div className="flex items-center gap-1.5">
+              <NumberField
+                aria-label={t('shell.fontSize')}
+                value={fontSize}
+                onChange={(v) => setFontSize(Math.max(FONT_MIN, Math.min(FONT_MAX, Math.round(Number(v ?? fontSize)))))}
+                minValue={FONT_MIN}
+                maxValue={FONT_MAX}
+                step={1}
+              >
+                <NumberField.Group className="flex items-center gap-0.5 rounded-[9px] bg-black/[0.05] px-1 py-0.5 dark:bg-white/[0.1]">
+                  <NumberField.DecrementButton className="grid h-6 w-6 place-items-center rounded-[7px] text-[14px] opacity-60 transition hover:opacity-100 hover:bg-black/10 dark:hover:bg-white/15">
+                    −
+                  </NumberField.DecrementButton>
+                  <NumberField.Input className="w-8 bg-transparent text-center font-mono text-[12px] tabular-nums outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none" />
+                  <NumberField.IncrementButton className="grid h-6 w-6 place-items-center rounded-[7px] text-[14px] opacity-60 transition hover:opacity-100 hover:bg-black/10 dark:hover:bg-white/15">
+                    +
+                  </NumberField.IncrementButton>
+                </NumberField.Group>
+              </NumberField>
+              <span className="font-mono text-[11px] opacity-45">px</span>
+            </div>
+
+            <div className="flex items-center justify-end">
+              <button
+                type="button"
+                onClick={clearScreen}
+                className="rounded-[8px] px-2 py-1 font-mono text-[11px] opacity-60 transition-opacity hover:opacity-100"
+              >
+                {t('shell.clear')}
+              </button>
+            </div>
           </div>
 
           <Terminal
@@ -291,6 +323,7 @@ export default function ShellPage() {
             ref={termRef}
             className="w-full flex-1"
             disabled={!agentId}
+            fontSize={fontSize}
             onInput={handleInput}
           />
         </div>
