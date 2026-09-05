@@ -24,6 +24,13 @@ public enum UserRole
     Admin
 }
 
+/// <summary>Credential flavor used to authenticate against a mesh node.</summary>
+public enum MeshAuthKind
+{
+    Password,
+    AccessKey
+}
+
 public enum CommandType
 {
     Shell,
