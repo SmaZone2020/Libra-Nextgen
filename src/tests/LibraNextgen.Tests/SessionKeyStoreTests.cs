@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Options;
 using LibraNextgen.Service.Configuration;
 using LibraNextgen.Service.Data;
+using LibraNextgen.Service.Models;
 using LibraNextgen.Service.Services.Agents;
 using Xunit;
 
@@ -18,7 +19,10 @@ public class SessionKeyStoreTests
             DatabaseName = $"libra_test_{Guid.NewGuid():N}",
             ConnectTimeoutSeconds = 1,
         };
-        return new SessionKeyStore(new MongoDbContext(Options.Create(settings)));
+        var context = new MongoDbContext(Options.Create(settings));
+        return new SessionKeyStore(
+            new Repository<SessionKey>(context, "session_keys"),
+            new Repository<SessionTokenDoc>(context, "session_tokens"));
     }
 
     [Fact]

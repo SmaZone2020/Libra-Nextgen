@@ -1,4 +1,5 @@
 using LibraNextgen.Service.Data;
+using LibraNextgen.Service.Services.Platform;
 using Xunit;
 
 namespace LibraNextgen.Tests;
@@ -204,5 +205,24 @@ public class SqliteStoreTests : IDisposable
         await _store.InsertAsync(Doc("a"));
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
             _store.UpdateByIdAsync("a", new[] { new FieldUpdate("NoSuchField", 1) }));
+    }
+
+    [Fact]
+    public async Task PurgeOlderThan_DeletesOnlyStaleDocs()
+    {
+        var now = DateTime.UtcNow;
+        await _store.InsertManyAsync(new[]
+        {
+            Doc("old1", createdAt: now.AddDays(-10)),
+            Doc("old2", createdAt: now.AddDays(-20)),
+            Doc("new1", createdAt: now),
+        });
+
+        var purged = await StoreTtlCleanupService.PurgeOlderThanAsync(_store, d => d.CreatedAt, now.AddDays(-5));
+
+        Assert.Equal(2, purged);
+        Assert.Null(await _store.GetByIdAsync("old1"));
+        Assert.Null(await _store.GetByIdAsync("old2"));
+        Assert.NotNull(await _store.GetByIdAsync("new1"));
     }
 }

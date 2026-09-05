@@ -1,6 +1,5 @@
 using LibraNextgen.Common.Models;
 using LibraNextgen.Service.Data;
-using MongoDB.Driver;
 
 namespace LibraNextgen.Service.Services.Platform;
 
@@ -10,17 +9,17 @@ namespace LibraNextgen.Service.Services.Platform;
 /// </summary>
 public class RiskPolicyService
 {
-    private readonly IMongoCollection<RiskPolicy> _collection;
+    private readonly IStore<RiskPolicy> _store;
     private volatile Dictionary<string, RiskLevel> _cache = RiskActions.DefaultMappings();
 
-    public RiskPolicyService(MongoDbContext context)
+    public RiskPolicyService(IStore<RiskPolicy> store)
     {
-        _collection = context.GetCollection<RiskPolicy>("risk_policy");
+        _store = store;
     }
 
     public async Task LoadAsync(CancellationToken ct = default)
     {
-        var policy = await _collection.Find(FilterDefinition<RiskPolicy>.Empty).FirstOrDefaultAsync(ct);
+        var policy = await _store.FirstOrDefaultAsync(_ => true, ct);
         if (policy != null)
         {
             _cache = Merge(policy.Mappings);
@@ -39,18 +38,27 @@ public class RiskPolicyService
     public async Task SaveAsync(Dictionary<string, RiskLevel> mappings, CancellationToken ct = default)
     {
         var sanitized = Merge(mappings);
-        var policy = await _collection.Find(FilterDefinition<RiskPolicy>.Empty).FirstOrDefaultAsync(ct);
+        var policy = await _store.FirstOrDefaultAsync(_ => true, ct);
 
         if (policy == null)
         {
-            await _collection.InsertOneAsync(new RiskPolicy { Mappings = sanitized }, cancellationToken: ct);
+            try
+            {
+                await _store.InsertAsync(new RiskPolicy { Mappings = sanitized }, ct);
+            }
+            catch (DuplicateKeyException)
+            {
+                // Concurrent first-save: fall through to the update path.
+                var concurrent = await _store.FirstOrDefaultAsync(_ => true, ct);
+                if (concurrent != null)
+                    await _store.UpdateByIdAsync(concurrent.Id,
+                        new[] { new FieldUpdate(nameof(RiskPolicy.Mappings), sanitized) }, ct);
+            }
         }
         else
         {
-            await _collection.UpdateOneAsync(
-                Builders<RiskPolicy>.Filter.Eq(p => p.Id, policy.Id),
-                Builders<RiskPolicy>.Update.Set(p => p.Mappings, sanitized),
-                cancellationToken: ct);
+            await _store.UpdateByIdAsync(policy.Id,
+                new[] { new FieldUpdate(nameof(RiskPolicy.Mappings), sanitized) }, ct);
         }
 
         _cache = sanitized;

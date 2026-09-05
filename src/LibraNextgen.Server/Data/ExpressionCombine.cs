@@ -20,6 +20,17 @@ public static class ExpressionCombine
             Expression.AndAlso(left.Body, rightBody), parameter);
     }
 
+    /// <summary>Combine two predicates over the same parameter with ||.</summary>
+    public static Expression<Func<T, bool>> OrElse<T>(
+        Expression<Func<T, bool>> left,
+        Expression<Func<T, bool>> right)
+    {
+        var parameter = left.Parameters[0];
+        var rightBody = new ParameterReplacer(parameter).Visit(right.Body);
+        return Expression.Lambda<Func<T, bool>>(
+            Expression.OrElse(left.Body, rightBody), parameter);
+    }
+
     private sealed class ParameterReplacer(ParameterExpression replacement) : ExpressionVisitor
     {
         protected override Expression VisitParameter(ParameterExpression node) =>

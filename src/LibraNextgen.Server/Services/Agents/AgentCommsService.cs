@@ -3,23 +3,22 @@ using LibraNextgen.Common.Profiles;
 using LibraNextgen.Common.Protocol;
 using LibraNextgen.Service.Data;
 using LibraNextgen.Service.Profiles;
-using MongoDB.Driver;
 using TaskStatus = LibraNextgen.Common.Models.TaskStatus;
 
 namespace LibraNextgen.Service.Services.Agents;
 
 public class AgentCommsService
 {
-    private readonly Repository<Agent> _agents;
-    private readonly Repository<TrafficRecord> _traffic;
+    private readonly IStore<Agent> _agents;
+    private readonly IStore<TrafficRecord> _traffic;
     private readonly TaskService _taskService;
     private readonly ProfileService _profileService;
     private readonly AgentTrafficService _trafficAccumulator;
     private readonly SessionKeyStore _sessionKeys;
 
     public AgentCommsService(
-        Repository<Agent> agents,
-        Repository<TrafficRecord> traffic,
+        IStore<Agent> agents,
+        IStore<TrafficRecord> traffic,
         TaskService taskService,
         ProfileService profileService,
         AgentTrafficService trafficAccumulator,
@@ -88,23 +87,23 @@ public class AgentCommsService
 
         if (existing != null)
         {
-            var ub = Builders<Agent>.Update;
-            var updates = new List<UpdateDefinition<Agent>>
+            var updates = new List<FieldUpdate>
             {
-                ub.Set(a => a.Status, AgentStatus.Online),
-                ub.Set(a => a.LastSeen, DateTime.UtcNow),
-                ub.Set(a => a.IpAddress, clientIp),
-                ub.Set(a => a.Pid, request.Pid),
-                ub.Set(a => a.IsElevated, request.IsElevated),
-                ub.Set(a => a.OsVersion, request.OsVersion),
-                ub.Set(a => a.Arch, request.Arch),
-                ub.Set(a => a.ProcessName, request.ProcessName),
-                ub.Set(a => a.PublicKey, request.PublicKey),
-                ub.Set(a => a.Hwid, hwid),
-                ub.Set(a => a.HeartbeatInterval, heartbeatIntervalSeconds)
+                new(nameof(Agent.Status), AgentStatus.Online),
+                new(nameof(Agent.LastSeen), DateTime.UtcNow),
+                new(nameof(Agent.IpAddress), clientIp),
+                new(nameof(Agent.Pid), request.Pid),
+                new(nameof(Agent.IsElevated), request.IsElevated),
+                new(nameof(Agent.OsVersion), request.OsVersion),
+                new(nameof(Agent.Arch), request.Arch),
+                new(nameof(Agent.ProcessName), request.ProcessName),
+                new(nameof(Agent.PublicKey), request.PublicKey),
+                new(nameof(Agent.Hwid), hwid),
+                new(nameof(Agent.HeartbeatInterval), heartbeatIntervalSeconds),
             };
-            if (request.Hardware != null) updates.Add(ub.Set(a => a.Hardware, request.Hardware));
-            await _agents.UpdateAsync(existing.Id, Builders<Agent>.Update.Combine(updates));
+            if (request.Hardware != null)
+                updates.Add(new FieldUpdate(nameof(Agent.Hardware), request.Hardware));
+            await _agents.UpdateByIdAsync(existing.Id, updates);
             existing.PublicKey = request.PublicKey;
             existing.Hardware = request.Hardware;
             return existing;
@@ -154,10 +153,11 @@ public class AgentCommsService
     /// </summary>
     public async Task TouchLastSeenAsync(string agentId)
     {
-        var update = Builders<Agent>.Update
-            .Set(a => a.LastSeen, DateTime.UtcNow)
-            .Set(a => a.Status, AgentStatus.Online);
-        await _agents.UpdateAsync(agentId, update);
+        await _agents.UpdateByIdAsync(agentId, new[]
+        {
+            new FieldUpdate(nameof(Agent.LastSeen), DateTime.UtcNow),
+            new FieldUpdate(nameof(Agent.Status), AgentStatus.Online),
+        });
     }
 
     public void RecordTraffic(string agentId, string hostname, long bytesReceived, long bytesSent)

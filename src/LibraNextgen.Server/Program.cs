@@ -73,6 +73,10 @@ if (useSqlite)
     builder.Services.AddSingleton(_ => new SqliteDbContext(sqliteDbPath));
 }
 
+// Exposed to /api/system/storage so the console can render the effective
+// store and the mongo-fallback banner (docs/desktop-electron-architecture.md §3).
+builder.Services.AddSingleton<StoreResolution>(_ => resolution);
+
 // Beacon authentication (shared secret injected at build time)
 builder.Services.Configure<BeaconSettings>(builder.Configuration.GetSection(BeaconSettings.SectionName));
 
@@ -110,12 +114,13 @@ RegisterStore<User>(builder.Services, "users");
 RegisterStore<MalleableProfileConfig>(builder.Services, "profiles");
 RegisterStore<AccessKey>(builder.Services, "access_keys");
 RegisterStore<BuildTrafficLists>(builder.Services, "build_lists");
+RegisterStore<TrafficRecord>(builder.Services, "traffic");
+RegisterStore<AuditLog>(builder.Services, "audit_logs");
+RegisterStore<RiskPolicy>(builder.Services, "risk_policy");
+RegisterStore<SessionKey>(builder.Services, "session_keys");
+RegisterStore<SessionTokenDoc>(builder.Services, "session_tokens");
 
-// Not yet migrated to IStore<T>: audit logs, traffic and plugins stay Mongo-backed.
-builder.Services.AddSingleton<Repository<AuditLog>>(sp =>
-    new Repository<AuditLog>(sp.GetRequiredService<MongoDbContext>(), "audit_logs"));
-builder.Services.AddSingleton<Repository<TrafficRecord>>(sp =>
-    new Repository<TrafficRecord>(sp.GetRequiredService<MongoDbContext>(), "traffic"));
+// Not yet migrated to IStore<T>: plugins stay Mongo-backed.
 builder.Services.AddSingleton<Repository<PluginRecord>>(sp =>
     new Repository<PluginRecord>(sp.GetRequiredService<MongoDbContext>(), "plugins"));
 builder.Services.AddScoped<BuildListService>();
@@ -159,6 +164,11 @@ builder.Services.AddSingleton<UpdateService>();
 builder.Services.AddSingleton<BuilderBuildService>();
 builder.Services.AddScoped<PluginService>();
 builder.Services.AddHostedService<HeartbeatMonitor>();
+
+// SQLite has no TTL indexes; a periodic purge stands in for Mongo's
+// ExpireAfter (traffic retention). Mongo mode keeps its TTL indexes.
+if (useSqlite)
+    builder.Services.AddHostedService<StoreTtlCleanupService>();
 
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddMcpServer()

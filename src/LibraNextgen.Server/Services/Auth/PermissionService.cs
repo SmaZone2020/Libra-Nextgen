@@ -1,23 +1,25 @@
 using System.Collections.Concurrent;
 using LibraNextgen.Common.Models;
 using LibraNextgen.Service.Data;
-using MongoDB.Driver;
 
 namespace LibraNextgen.Service.Services.Auth;
 
 /// <summary>
 /// Caches per-user permissions and evaluates action-level access. Admins always
 /// have full access; Operators are restricted to their configured allowed pages
-/// and actions.
+/// and actions. The public API stays synchronous (it is called from middleware
+/// and controllers on the hot path); the first cache miss per user performs a
+/// blocking store read, which is safe in ASP.NET Core (no sync context) and
+/// happens at most once per user per process.
 /// </summary>
 public class PermissionService
 {
     private readonly ConcurrentDictionary<string, UserPermissions> _cache = new();
-    private readonly IMongoCollection<User> _users;
+    private readonly IStore<User> _users;
 
-    public PermissionService(MongoDbContext context)
+    public PermissionService(IStore<User> users)
     {
-        _users = context.GetCollection<User>("users");
+        _users = users;
     }
 
     public UserPermissions GetPermissions(string userId)
@@ -25,7 +27,7 @@ public class PermissionService
         if (_cache.TryGetValue(userId, out var cached))
             return cached;
 
-        var user = _users.Find(Builders<User>.Filter.Eq(u => u.Id, userId)).FirstOrDefault();
+        var user = _users.GetByIdAsync(userId).GetAwaiter().GetResult();
         var permissions = user?.Permissions ?? new UserPermissions { FullAccess = false };
 
         _cache[userId] = permissions;

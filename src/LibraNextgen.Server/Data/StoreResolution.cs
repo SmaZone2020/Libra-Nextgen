@@ -9,7 +9,7 @@ public enum StoreKind
 }
 
 /// <summary>Outcome of the startup store resolution (docs/desktop-electron-architecture.md §3).</summary>
-public readonly record struct StoreResolution(
+public sealed record StoreResolution(
     StoreKind Requested,
     StoreKind Effective,
     string? FallbackReason,

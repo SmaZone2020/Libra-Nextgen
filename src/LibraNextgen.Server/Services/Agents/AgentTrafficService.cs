@@ -4,7 +4,7 @@ using LibraNextgen.Service.Data;
 namespace LibraNextgen.Service.Services.Agents;
 
 /// <summary>
-/// Accumulates per-agent traffic bytes in memory and flushes to MongoDB periodically.
+/// Accumulates per-agent traffic bytes in memory and flushes to the active store periodically.
 /// Singleton — all WS/HTTP/SSE paths feed into this, then it batch-writes to DB.
 /// </summary>
 public class AgentTrafficService
@@ -52,7 +52,7 @@ public class AgentTrafficService
     }
 
     /// <summary>
-    /// Flushes accumulated traffic to MongoDB and returns a snapshot for broadcast.
+    /// Flushes accumulated traffic to the active store and returns a snapshot for broadcast.
     /// </summary>
     public async Task<Dictionary<string, (long Received, long Sent)>> FlushAsync()
     {
@@ -66,7 +66,7 @@ public class AgentTrafficService
         }
 
         using var scope = _scopeFactory.CreateScope();
-        var trafficRepo = scope.ServiceProvider.GetRequiredService<Repository<TrafficRecord>>();
+        var trafficStore = scope.ServiceProvider.GetRequiredService<IStore<TrafficRecord>>();
 
         var records = snapshot.Select(kv => new TrafficRecord
         {
@@ -76,7 +76,7 @@ public class AgentTrafficService
             BytesSent = kv.Value.BytesSent
         }).ToList();
 
-        await trafficRepo.InsertManyAsync(records);
+        await trafficStore.InsertManyAsync(records);
 
         return snapshot.ToDictionary(
             kv => kv.Key,
