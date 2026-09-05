@@ -65,7 +65,7 @@ export function Sidebar({
 
   return (
     <aside className="lw-sidebar">
-      <div className={`flex h-full min-h-0 flex-col ${collapsed ? 'px-2 py-4' : 'p-4'}`}>
+      <div className="flex h-full min-h-0 flex-col p-4">
         {/* Brand row */}
         <div
           className={`mb-4 flex min-h-10 items-center transition-all duration-300 ${
@@ -114,9 +114,8 @@ export function Sidebar({
         </div>
 
         {/* Navigation rail */}
-        <motion.nav
+        <nav
           className={`flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden ${collapsed ? 'mt-4' : 'mt-3'}`}
-          transition={{ layout: { staggerChildren: 0.05 } }}
         >
           {sections.map((section, sectionIndex) => (
             <section
@@ -131,7 +130,7 @@ export function Sidebar({
               ))}
             </section>
           ))}
-        </motion.nav>
+        </nav>
 
         {/* User card */}
         {user && (
@@ -176,18 +175,17 @@ function DesktopNavItem({ item, collapsed }: { item: NavItem; collapsed: boolean
 
     return (
       <div className="my-0.5 flex flex-col">
-        <motion.div layout className={`flex items-center ${collapsed ? 'justify-center' : ''}`}>
+        <div className="flex items-center">
           {collapsed ? (
             <Dropdown>
               <Button
-                isIconOnly
                 variant="ghost"
-                className={`size-10 rounded-[12px] transition-all duration-300 ${
+                className={`h-10 flex-1 justify-start rounded-[12px] px-[11px] transition-all duration-300 ${
                   groupActive ? 'bg-accent-soft text-accent-soft-foreground' : ''
                 }`}
                 aria-label={label}
               >
-                <item.icon className="m-auto size-4.5" />
+                <item.icon className="shrink-0" />
               </Button>
               <Dropdown.Popover>
                 <Dropdown.Menu aria-label={label} onAction={(key) => navigate(String(key))}>
@@ -240,7 +238,7 @@ function DesktopNavItem({ item, collapsed }: { item: NavItem; collapsed: boolean
               <Tooltip.Content placement="right">{label}</Tooltip.Content>
             </Tooltip>
           )}
-        </motion.div>
+        </div>
 
         {/* Children — animated collapse with a tree guide line */}
         <AnimatePresence initial={false}>
@@ -289,30 +287,28 @@ function DesktopNavItem({ item, collapsed }: { item: NavItem; collapsed: boolean
   const isActive = selfActive;
   const label = t(item.label);
   return (
-    <motion.div layout className={`my-0.5 flex items-center ${collapsed ? 'justify-center' : ''}`}>
+    <div className="my-0.5 flex items-center">
       <Tooltip delay={0} isDisabled={!collapsed}>
         <Button
-          isIconOnly={collapsed}
           variant="ghost"
-          className={`rounded-[12px] transition-all duration-300 ${
-            collapsed ? 'size-10' : 'flex-1 justify-start px-3'
+          className={`flex-1 justify-start rounded-[12px] transition-all duration-300 ${
+            collapsed ? 'h-10 px-[11px]' : 'px-3'
           } ${isActive ? 'bg-accent-soft text-accent-soft-foreground' : ''}`}
           onPress={() => navigate(item.to)}
         >
-          <item.icon className={collapsed ? 'm-auto size-4.5' : 'shrink-0'} />
-          {!collapsed && (
-            <span
-              className={`overflow-hidden whitespace-nowrap transition-all duration-300 ${
-                isActive ? 'font-semibold' : 'font-medium'
-              }`}
-            >
-              {label}
-            </span>
-          )}
+          <item.icon className="shrink-0" />
+          <span
+            className={`overflow-hidden whitespace-nowrap transition-all duration-300 ${
+              isActive ? 'font-semibold' : 'font-medium'
+            }`}
+            style={{ maxWidth: collapsed ? 0 : '14rem', opacity: collapsed ? 0 : 1 }}
+          >
+            {label}
+          </span>
         </Button>
         <Tooltip.Content placement="right">{label}</Tooltip.Content>
       </Tooltip>
-    </motion.div>
+    </div>
   );
 }
 
