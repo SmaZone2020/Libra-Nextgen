@@ -210,6 +210,163 @@ public class MeshNodesController : ControllerBase
         }
     }
 
+    // ── Generic console-API relay (cross-node operations) ──────────────────
+    //
+    // Console feature calls that target a remote agent (files, shell/tasks,
+    // software data, proxy, tokens, per-agent system info) are transparently
+    // forwarded through the node session. Management surfaces (mesh, plugins,
+    // ai, auth, account, access-keys, audit, settings, events, builder...) are
+    // intentionally NOT in the whitelist: plugins stay home-only by product
+    // decision (v1), the rest are hub-local by nature.
+
+    private static readonly HashSet<string> RelayAllowedFirstSegments = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "agents", "tasks", "files", "othersoft", "proxy", "token", "system",
+    };
+
+    private static readonly HashSet<string> SystemAdminSegments = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "storage", "listener",
+    };
+
+    private bool TryRelayPath(string relayPath, out string error)
+    {
+        error = "";
+        if (string.IsNullOrWhiteSpace(relayPath) || relayPath.Length > 500)
+        {
+            error = "relay path is required (<= 500 chars)";
+            return false;
+        }
+
+        var segments = relayPath.Split('/', StringSplitOptions.RemoveEmptyEntries);
+        if (segments.Length == 0 || !RelayAllowedFirstSegments.Contains(segments[0]))
+        {
+            error = $"relay path '{relayPath}' is not allowed";
+            return false;
+        }
+
+        if (segments.Any(s => s is ".." or "." || s.Contains('\\')))
+        {
+            error = "relay path contains invalid segments";
+            return false;
+        }
+
+        // Per-agent system endpoints (/system/{agentId}/...) relay; hub-local
+        // system administration (/system/storage, /system/listener) never does.
+        if (segments[0].Equals("system", StringComparison.OrdinalIgnoreCase)
+            && (segments.Length < 2 || SystemAdminSegments.Contains(segments[1])))
+        {
+            error = $"relay path '{relayPath}' targets hub-local system administration";
+            return false;
+        }
+
+        return true;
+    }
+
+    [HttpGet("{id}/relay/{**relayPath}")]
+    public Task<IActionResult> RelayGet(string id, string relayPath, CancellationToken ct)
+        => RelayAsync(id, relayPath, HttpMethod.Get, ct);
+
+    [HttpPost("{id}/relay/{**relayPath}")]
+    public Task<IActionResult> RelayPost(string id, string relayPath, CancellationToken ct)
+        => RelayAsync(id, relayPath, HttpMethod.Post, ct);
+
+    [HttpPut("{id}/relay/{**relayPath}")]
+    public Task<IActionResult> RelayPut(string id, string relayPath, CancellationToken ct)
+        => RelayAsync(id, relayPath, HttpMethod.Put, ct);
+
+    [HttpDelete("{id}/relay/{**relayPath}")]
+    public Task<IActionResult> RelayDelete(string id, string relayPath, CancellationToken ct)
+        => RelayAsync(id, relayPath, HttpMethod.Delete, ct);
+
+    private async Task<IActionResult> RelayAsync(
+        string id, string relayPath, HttpMethod method, CancellationToken ct)
+    {
+        if (!TryRelayPath(relayPath, out var pathError))
+            return BadRequest(new { error = pathError });
+
+        var node = await _nodes.GetAsync(id, ct);
+        if (node == null) return NotFound(new { error = "mesh node not found" });
+
+        var session = _sessions.GetSession(id);
+        if (session is null)
+            return Conflict(new { error = "mesh node is not connected (connect first)" });
+
+        byte[]? body = null;
+        if (method != HttpMethod.Get && (Request.ContentLength is > 0 or null))
+        {
+            using var ms = new MemoryStream();
+            await Request.Body.CopyToAsync(ms, ct);
+            if (ms.Length > 0) body = ms.ToArray();
+        }
+
+        try
+        {
+            var target = $"{node.Origin}/api/{relayPath}{Request.QueryString}";
+            using var client = _http.CreateClient();
+            client.Timeout = TimeSpan.FromSeconds(60);
+
+            using var req = new HttpRequestMessage(method, target);
+            req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", session.Token);
+            req.Headers.TryAddWithoutValidation("Accept", "application/json");
+            if (body is not null && body.Length > 0)
+                req.Content = new ByteArrayContent(body);
+            if (body is not null)
+                req.Content!.Headers.TryAddWithoutValidation("Content-Type", Request.ContentType ?? "application/json");
+
+            using var resp = await client.SendAsync(req, ct);
+            var text = await resp.Content.ReadAsStringAsync(ct);
+            if (!resp.IsSuccessStatusCode)
+            {
+                var remoteError = ExtractJsonError(text);
+                return StatusCode(StatusCodes.Status502BadGateway,
+                    new { error = remoteError ?? $"node returned HTTP {(int)resp.StatusCode}" });
+            }
+
+            if (resp.StatusCode == System.Net.HttpStatusCode.NoContent)
+                return NoContent();
+
+            if (string.IsNullOrWhiteSpace(text))
+                return Ok();
+
+            return StatusCode((int)resp.StatusCode, ParseJsonOrRaw(text));
+        }
+        catch (OperationCanceledException)
+        {
+            return StatusCode(StatusCodes.Status504GatewayTimeout, new { error = "node relay timed out" });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Mesh relay failed for node {NodeId} ({Method} {Path})", id, method, relayPath);
+            return StatusCode(StatusCodes.Status502BadGateway, new { error = ex.Message });
+        }
+    }
+
+    private static object ParseJsonOrRaw(string text)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(text);
+            return doc.RootElement.Clone();
+        }
+        catch (JsonException)
+        {
+            return text;
+        }
+    }
+
+    private static string? ExtractJsonError(string text)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(text);
+            if (doc.RootElement.TryGetProperty("error", out var e) && e.GetString() is { Length: > 0 } msg)
+                return msg.Length > 300 ? msg[..300] : msg;
+        }
+        catch (JsonException) { /* non-JSON error body */ }
+        return null;
+    }
+
     private void PushEvent(string text)
     {
         try

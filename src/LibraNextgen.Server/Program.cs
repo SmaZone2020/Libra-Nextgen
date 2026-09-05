@@ -187,6 +187,7 @@ builder.Services.AddSingleton<AuditService>();
 builder.Services.AddScoped<AccessKeyService>();
 builder.Services.AddScoped<MeshNodeService>();
 builder.Services.AddSingleton<MeshSessionManager>();
+builder.Services.AddHostedService<MeshSyncService>();
 builder.Services.AddSingleton<TemplateManagerService>();
 builder.Services.AddSingleton<UpdateService>();
 builder.Services.AddSingleton<BuilderBuildService>();
