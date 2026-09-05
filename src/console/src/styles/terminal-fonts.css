@@ -158,7 +158,10 @@
 
 @font-face {
   font-family: 'LibraTermCJK';
-  src: local('Noto Sans Mono CJK SC'), local('Sarasa Mono SC'), local('NSimSun');
+  src: local('Noto Sans Mono CJK SC'), local('Sarasa Mono SC'),
+    local('NSimSun'), local('SimSun'),
+    local('Microsoft YaHei UI'), local('Microsoft YaHei'),
+    local('PingFang SC'), local('Hiragino Sans GB');
   font-display: swap;
   unicode-range: U+2E80-2FFF, U+3000-303F, U+3040-30FF, U+3100-312F, U+3200-32FF,
     U+3400-4DBF, U+4E00-9FFF, U+A000-A48F, U+A960-A97F, U+AC00-D7AF, U+F900-FAFF,

@@ -9,15 +9,38 @@ import { unwrapTaskOutput } from './taskOutput';
 
 const MAX_HISTORY = 100;
 
-/** Shell page: a task-mode CMD console presented like an integrated terminal
- *  panel (VSCode/Codex style): fixed cmd mode, live history via ArrowUp/Down,
- *  theme-aware surface and a slim toolbar. */
+/** Number of terminal cells a BMP character occupies (CJK/fullwidth = 2). */
+function cellWidth(ch: string): number {
+  const c = ch.codePointAt(0) ?? 0;
+  const wide =
+    (c >= 0x1100 && c <= 0x115f) ||
+    c === 0x2329 || c === 0x232a ||
+    (c >= 0x2e80 && c <= 0xa4cf && c !== 0x303f) ||
+    (c >= 0xac00 && c <= 0xd7a3) ||
+    (c >= 0xf900 && c <= 0xfaff) ||
+    (c >= 0xfe10 && c <= 0xfe19) ||
+    (c >= 0xfe30 && c <= 0xfe6f) ||
+    (c >= 0xff00 && c <= 0xff60) ||
+    (c >= 0xffe0 && c <= 0xffe6);
+  return wide ? 2 : 1;
+}
+
+function cellsOf(text: string): number {
+  let n = 0;
+  for (const ch of text) n += cellWidth(ch);
+  return n;
+}
+
+/** Shell page: task-mode CMD console in the style of an integrated terminal.
+ *  Buffer model supports in-line editing (←/→/Home/End/Delete/Backspace),
+ *  history navigation (↑/↓) and paste at the cursor position. */
 export default function ShellPage() {
   const { t } = useTranslation();
   const { agentId, selectedAgent } = useAgent();
   const termRef = useRef<TerminalHandle>(null);
   const [running, setRunning] = useState(false);
   const inputBufRef = useRef('');
+  const cursorRef = useRef(0);
   const historyRef = useRef<string[]>([]);
   const historyCursorRef = useRef(0);
   const draftRef = useRef('');
@@ -25,7 +48,6 @@ export default function ShellPage() {
   const hostLabel = selectedAgent?.hostname || agentId.slice(0, 8) || 'agent';
   const isOnline = selectedAgent?.status === 'Online';
 
-  /** Prompt shown while waiting for input: "Libra-<deviceName> $ " */
   const promptText = useMemo(
     () => `Libra-${hostLabel} $ `,
     [hostLabel],
@@ -35,15 +57,21 @@ export default function ShellPage() {
     termRef.current?.write(text.replace(/\n/g, '\r\n'));
   }, []);
 
+  /** Redraw prompt + text and park the cursor at `pos` (in characters). */
+  const redrawLine = useCallback((text: string, pos: number) => {
+    const term = termRef.current;
+    if (!term) return;
+    term.write('\r\x1b[2K');
+    term.write(promptText + text);
+    const right = cellsOf(text.slice(pos));
+    if (right > 0) term.write(`\x1b[${right}D`);
+  }, [promptText]);
+
   const renderPrompt = useCallback(() => {
     print(`\r\n${promptText}`);
+    cursorRef.current = 0;
+    inputBufRef.current = '';
   }, [print, promptText]);
-
-  const paintLine = useCallback((text: string) => {
-    // Clear the whole current line (prompt + typed text) and redraw it.
-    termRef.current?.write('\r\x1b[2K');
-    termRef.current?.write(promptText + text);
-  }, [promptText]);
 
   const resetHistoryCursor = useCallback(() => {
     historyCursorRef.current = historyRef.current.length;
@@ -66,13 +94,62 @@ export default function ShellPage() {
     historyCursorRef.current = next;
     const text = next === max ? draftRef.current : history[next] ?? '';
     inputBufRef.current = text;
-    paintLine(text);
-  }, [paintLine, running]);
+    cursorRef.current = text.length;
+    redrawLine(text, text.length);
+  }, [redrawLine, running]);
 
   const clearScreen = useCallback(() => {
     termRef.current?.clear();
+    inputBufRef.current = '';
+    cursorRef.current = 0;
     termRef.current?.write(promptText);
   }, [promptText]);
+
+  const insertText = useCallback((chunk: string) => {
+    if (!chunk) return;
+    const text = inputBufRef.current;
+    const pos = cursorRef.current;
+    const next = text.slice(0, pos) + chunk + text.slice(pos);
+    inputBufRef.current = next;
+    cursorRef.current = pos + chunk.length;
+    redrawLine(next, pos + chunk.length);
+  }, [redrawLine]);
+
+  const deleteBefore = useCallback(() => {
+    const text = inputBufRef.current;
+    const pos = cursorRef.current;
+    if (pos <= 0) return;
+    const next = text.slice(0, pos - 1) + text.slice(pos);
+    inputBufRef.current = next;
+    cursorRef.current = pos - 1;
+    redrawLine(next, pos - 1);
+  }, [redrawLine]);
+
+  const deleteAtCursor = useCallback(() => {
+    const text = inputBufRef.current;
+    const pos = cursorRef.current;
+    if (pos >= text.length) return;
+    const next = text.slice(0, pos) + text.slice(pos + 1);
+    inputBufRef.current = next;
+    redrawLine(next, pos);
+  }, [redrawLine]);
+
+  /** Move the cursor without redrawing the whole line. */
+  const moveCursor = useCallback((deltaCells: number) => {
+    const term = termRef.current;
+    if (!term || deltaCells === 0) return;
+    if (deltaCells < 0) term.write(`\x1b[${-deltaCells}D`);
+    else term.write(`\x1b[${deltaCells}C`);
+  }, []);
+
+  const setCursor = useCallback((pos: number) => {
+    const text = inputBufRef.current;
+    const clamped = Math.max(0, Math.min(text.length, pos));
+    const from = cursorRef.current;
+    if (clamped === from) return;
+    moveCursor(cellsOf(text.slice(Math.min(from, clamped), Math.max(from, clamped))) * (clamped > from ? 1 : -1));
+    cursorRef.current = clamped;
+  }, [moveCursor]);
 
   const execute = useCallback(async (cmd: string) => {
     if (!agentId || !cmd.trim() || running) return;
@@ -107,7 +184,7 @@ export default function ShellPage() {
   }, [agentId, running, print, renderPrompt, t]);
 
   const handleInput = useCallback((data: string) => {
-    // History navigation — xterm delivers arrows as escape sequences.
+    // History navigation.
     if (data === '\x1b[A' || data === '\x1bOA') {
       moveHistory(-1);
       return;
@@ -116,12 +193,19 @@ export default function ShellPage() {
       moveHistory(1);
       return;
     }
-    // Ignore other cursor/control escape sequences (left/right/home/end…).
+    // Cursor keys.
+    if (data === '\x1b[D' || data === '\x1bOD') { setCursor(cursorRef.current - 1); return; }
+    if (data === '\x1b[C' || data === '\x1bOC') { setCursor(cursorRef.current + 1); return; }
+    if (data === '\x1b[H' || data === '\x1b[1~') { setCursor(0); return; }
+    if (data === '\x1b[F' || data === '\x1b[4~') { setCursor(inputBufRef.current.length); return; }
+    if (data === '\x1b[3~') { deleteAtCursor(); return; }
+    // Other escape sequences (PgUp/PgDn/Alt…): ignore.
     if (data.startsWith('\x1b[') || data.startsWith('\x1bO')) return;
 
     if (data === '\r' || data === '\n' || data === '\r\n') {
       const cmd = inputBufRef.current;
       inputBufRef.current = '';
+      cursorRef.current = 0;
       print('\r\n');
       if (!cmd.trim()) {
         renderPrompt();
@@ -142,32 +226,31 @@ export default function ShellPage() {
       return;
     }
     if (data === '\x7f' || data === '\b') {
-      // backspace
-      if (inputBufRef.current.length > 0) {
-        inputBufRef.current = inputBufRef.current.slice(0, -1);
-        termRef.current?.write('\b \b');
-      }
+      deleteBefore();
       return;
     }
+    // Ctrl+A / Ctrl+E — jump to line start / end.
+    if (data === '\x01') { setCursor(0); return; }
+    if (data === '\x05') { setCursor(inputBufRef.current.length); return; }
     if (data === '\x03') {
       inputBufRef.current = '';
+      cursorRef.current = 0;
       print('^C');
       resetHistoryCursor();
       renderPrompt();
       return;
     }
     if (data.length > 1) {
-      // Paste support: xterm delivers pasted text as one chunk. Strip newlines
-      // (buffer is a single command line), echo it and wait for Enter.
-      const clean = data.replace(/[\r\n]+/g, ' ');
-      inputBufRef.current += clean;
-      termRef.current?.write(clean);
+      // Paste support: strip newlines and insert at the cursor.
+      insertText(data.replace(/[\r\n]+/g, ' '));
       return;
     }
     if (data.length !== 1 || data.charCodeAt(0) < 0x20) return;
-    inputBufRef.current += data;
-    termRef.current?.write(data);
-  }, [clearScreen, execute, moveHistory, print, renderPrompt, resetHistoryCursor, running]);
+    insertText(data);
+  }, [
+    clearScreen, deleteAtCursor, deleteBefore, execute, insertText,
+    moveHistory, print, renderPrompt, resetHistoryCursor, running, setCursor,
+  ]);
 
   useEffect(() => {
     if (agentId) {
@@ -179,28 +262,25 @@ export default function ShellPage() {
   }, [agentId, print, renderPrompt, resetHistoryCursor, t]);
 
   return (
-    <div className="flex h-full min-h-0 w-full flex-1 flex-col gap-3">
+    <div className="flex h-full min-h-0 w-full flex-1 flex-col">
       {!agentId && <AgentRequired />}
 
       {agentId && (
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-[16px] border border-black/[0.07] shadow-[0_18px_44px_-26px_rgba(0,0,0,0.4)] dark:border-white/10">
-          {/* Integrated terminal toolbar */}
-          <div
-            className="flex h-9 shrink-0 items-center gap-2.5 border-b border-black/[0.06] px-3.5 dark:border-white/[0.08]"
-            style={{ backgroundColor: 'var(--lw-terminal-bg)', color: 'var(--lw-terminal-fg)' }}
-          >
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+          {/* Transparent integrated-terminal toolbar */}
+          <div className="flex h-8 shrink-0 items-center gap-2.5 px-3.5 text-[var(--lw-terminal-fg)]">
             <span
               aria-hidden="true"
-              className={`size-2 shrink-0 rounded-full ${isOnline ? 'bg-emerald-500' : 'bg-neutral-500'}`}
+              className={`size-1.5 shrink-0 rounded-full ${isOnline ? 'bg-emerald-500' : 'bg-neutral-400'}`}
             />
-            <span className="min-w-0 truncate font-mono text-[12px] font-medium">
+            <span className="min-w-0 truncate font-mono text-[12px] font-medium opacity-80">
               {hostLabel}
             </span>
-            <span className="text-[11px] opacity-45">cmd</span>
+            <span className="font-mono text-[10px] uppercase tracking-wider opacity-40">cmd</span>
             <button
               type="button"
               onClick={clearScreen}
-              className="ml-auto rounded-[8px] px-2 py-1 text-[11px] opacity-70 transition-opacity hover:opacity-100"
+              className="ml-auto rounded-[8px] px-2 py-1 font-mono text-[11px] opacity-60 transition-opacity hover:opacity-100"
             >
               {t('shell.clear')}
             </button>

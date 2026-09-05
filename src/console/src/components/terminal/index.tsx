@@ -42,14 +42,15 @@ function cssVar(name: string, fallback: string): string {
 
 function resolveTerminalTheme(): ITheme {
   const dark = document.documentElement.classList.contains('dark');
-  const background = cssVar('--lw-terminal-bg', dark ? '#1b1f27' : '#f4f6f9');
   const foreground = cssVar('--lw-terminal-fg', dark ? '#e6e9ee' : '#23272e');
   const accent = cssVar('--color-accent', dark ? '#7aa2f7' : '#2563eb');
   return {
-    background,
+    // Transparent background: the terminal melts into the workspace surface
+    // (and any wallpaper / frost behind it) instead of painting its own box.
+    background: 'transparent',
     foreground,
     cursor: accent,
-    cursorAccent: background,
+    cursorAccent: foreground,
     selectionBackground: dark ? 'rgba(122, 162, 247, 0.32)' : 'rgba(37, 99, 235, 0.24)',
     // Subtle, theme-matched ANSI set (calm blues/purples, softened yellow/red)
     // — closer to Codex/VSCode "One Dark"-ish terminals than the raw neon set.
