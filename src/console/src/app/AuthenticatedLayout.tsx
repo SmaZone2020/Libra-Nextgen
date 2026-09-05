@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react';
 import { Routes, Route, useLocation } from 'react-router-dom';
 import { AnimatePresence, motion } from 'motion/react';
+import { useTranslation } from 'react-i18next';
+import { Button } from '@heroui/react';
+import { AntennaSignal } from '@gravity-ui/icons';
 import { Sidebar, type NavItem, type SidebarSection } from '../shared/layout/Sidebar';
 import Dashboard from '../pages/Dashboard';
 import AgentsPage from '../pages/Agents';
@@ -48,6 +51,7 @@ export function AuthenticatedLayout({
   onToggle: (v: boolean) => void;
   onLogout: () => void;
 }) {
+  const { t } = useTranslation();
   const location = useLocation();
   const [permissions, setPermissions] = useState<UserPermissions | null>(null);
   const [appsOpen, setAppsOpen] = useState(false);
@@ -141,8 +145,20 @@ export function AuthenticatedLayout({
             <header className="hidden shrink-0 items-center justify-between gap-4 px-4 pt-3.5 pb-1 sm:flex sm:px-6 lg:px-8 lg:pt-4">
               <PageHeader pluginLabels={pluginLabels} />
               <div className="flex items-center gap-2.5">
-                <EventViewer />
                 <AgentSelector />
+                <EventViewer />
+                {/* AI subscription trigger: rightmost, opens the Ai page modal. */}
+                {isAiRoute && (
+                  <Button
+                    isIconOnly
+                    size="sm"
+                    variant="ghost"
+                    aria-label={t('ai.eventSub')}
+                    onPress={() => window.dispatchEvent(new Event('libra:ai-open-events'))}
+                  >
+                    <AntennaSignal className="size-4.5" />
+                  </Button>
+                )}
               </div>
             </header>
 

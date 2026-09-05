@@ -79,6 +79,14 @@ export default function AiPage() {
   const [streamError, setStreamError] = useState<string | null>(null);
   const [eventSubOpen, setEventSubOpen] = useState(false);
 
+  // The desktop subscription trigger lives in the workspace header; it opens
+  // this modal through a tiny custom event (page-local state stays here).
+  useEffect(() => {
+    const open = () => setEventSubOpen(true);
+    window.addEventListener('libra:ai-open-events', open);
+    return () => window.removeEventListener('libra:ai-open-events', open);
+  }, []);
+
   const [prefProviderId, setPrefProviderId] = useState<string | null>(() =>
     localStorage.getItem('ai.prefProviderId'),
   );
@@ -623,13 +631,8 @@ export default function AiPage() {
           </Button>
         </div>
 
-        {/* Desktop: event subscription trigger on the right */}
-        <div className="hidden w-full shrink-0 px-4 pt-4 md:flex">
-          <Button variant="secondary" className="ml-auto text-foreground" onPress={() => setEventSubOpen(true)}>
-            <AntennaSignal />
-            Submit
-          </Button>
-        </div>
+        {/* Desktop: subscription trigger now lives in the workspace header
+            (top-right), so no in-page toolbar is rendered here. */}
         <ChatConversation className="min-h-0 flex-1 pt-4 scrollbar-thin scrollbar-track-default-200 scrollbar-thumb-default-300 dark:scrollbar-track-default-800 dark:scrollbar-thumb-default-600">
           <ChatConversation.Content className={`flex flex-col ${!session?.messages.length ? 'h-full' : ''}`}>
             <div className="m-auto flex w-full sm:w-[80%] flex-col gap-6 px-4 pb-4">
