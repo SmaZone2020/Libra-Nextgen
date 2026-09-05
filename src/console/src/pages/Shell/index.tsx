@@ -321,7 +321,7 @@ export default function ShellPage() {
           <Terminal
             key={agentId}
             ref={termRef}
-            className="w-full flex-1"
+            className="w-full flex-1 mt-2"
             disabled={!agentId}
             fontSize={fontSize}
             onInput={handleInput}
