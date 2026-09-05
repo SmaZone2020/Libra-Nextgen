@@ -95,7 +95,7 @@ function loadBaselinePayload(userDataDir) {
 function productIconPath() {
   const packaged = path.join(process.resourcesPath, 'branding', 'icon.png');
   if (fs.existsSync(packaged)) return packaged;
-  const dev = path.join(__dirname, '..', '..', 'assets', 'branding', 'icon2.png');
+  const dev = path.join(__dirname, '..', '..', 'assets', 'branding', 'icon2-app.png');
   return fs.existsSync(dev) ? dev : null;
 }
 
