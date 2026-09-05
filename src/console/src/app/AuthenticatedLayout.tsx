@@ -133,8 +133,9 @@ export function AuthenticatedLayout({
       />
 
       <main className="relative z-10 flex h-full min-w-0 flex-col transition-all duration-300 sm:pl-[var(--sidebar-w)]">
-        {/* Workspace main surface: flush top/right/bottom, rounded top-left. */}
-        <div className="flex min-h-0 w-full flex-1 flex-col p-0">
+        {/* Workspace main surface: right/bottom flush, top inset with the
+            rounded top-left corner; mobile stays fully flush. */}
+        <div className="flex min-h-0 w-full flex-1 flex-col pt-0 sm:pt-3 lg:pt-4">
           <section className="lw-workspace flex min-h-0 w-full flex-1 flex-col overflow-hidden">
             {/* Desktop-only header — lives INSIDE the workspace, no own panel. */}
             <header className="hidden shrink-0 items-center justify-between gap-4 px-4 pt-3.5 pb-1 sm:flex sm:px-6 lg:px-8 lg:pt-4">
