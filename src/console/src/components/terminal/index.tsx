@@ -104,10 +104,11 @@ const TerminalView = forwardRef<TerminalHandle, Props>(function TerminalView(
     let ro: ResizeObserver | null = null;
     let themeObserver: MutationObserver | null = null;
 
-    // Explicit pure-default monospace. This is critical: the app's global
-    // font reset (`* { font-family: "vivo Sans" … }`) is proportional, and
-    // xterm reads the DOM element's computed font when no fontFamily is set —
-    // proportional glyphs drawn into mono cells overlap ("MA" collisions).
+    // Explicit pure-default monospace, identical for canvas measurement and
+    // DOM text: xterm compensates each DOM character with letter-spacing, and
+    // any divergence between the measured font and the rendered font makes
+    // glyphs overlap (e.g. "MA"). The global "vivo Sans" reset is excluded
+    // from .xterm via a high-specificity CSS rule.
     const t = new Terminal({
       cursorBlink: true,
       cursorStyle: 'block',
