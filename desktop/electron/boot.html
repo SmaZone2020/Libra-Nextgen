@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <title>Libra Console</title>
+  <style>
+    :root { color-scheme: dark; }
+    * { box-sizing: border-box; }
+    html, body { height: 100%; margin: 0; overflow: hidden; }
+    body {
+      font-family: "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;
+      background: #0b0f14;
+      color: #d8dee6;
+    }
+
+    #titlebar {
+      position: fixed;
+      inset: 0 0 auto 0;
+      height: 40px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: transparent;
+      user-select: none;
+      -webkit-app-region: drag;
+    }
+    #titlebar .app {
+      padding: 0 14px;
+      font-size: 12px;
+      color: #64707d;
+      pointer-events: none;
+    }
+
+    .win-controls {
+      display: flex;
+      height: 100%;
+      -webkit-app-region: no-drag;
+    }
+    .win-btn {
+      width: 46px;
+      height: 100%;
+      border: 0;
+      background: transparent;
+      color: #d8dee6;
+      display: grid;
+      place-items: center;
+      padding: 0;
+      cursor: default;
+      opacity: 0.55;
+    }
+    .win-btn:hover { background: rgba(255, 255, 255, 0.1); opacity: 1; }
+    .win-btn--close:hover { background: #e81123; color: #fff; opacity: 1; }
+    .win-btn svg { display: block; }
+
+    #card {
+      height: 100%;
+      display: grid;
+      place-items: center;
+      padding-top: 40px;
+    }
+    .box {
+      max-width: 480px;
+      padding: 28px 32px;
+      border: 1px solid #26303c;
+      border-radius: 12px;
+      background: #11161d;
+      text-align: center;
+    }
+    .box h1 { margin: 0 0 10px; font-size: 18px; }
+    .box p { margin: 0 0 10px; line-height: 1.6; color: #9aa7b4; }
+    .box code { padding: 2px 8px; border-radius: 4px; background: #1a222c; color: #7ec8ff; }
+    .box .detail { margin: 8px 0 18px; font-size: 12px; color: #64707d; word-break: break-all; }
+    .box button {
+      padding: 8px 24px;
+      border: 0;
+      border-radius: 6px;
+      background: #2563eb;
+      color: #fff;
+      font-size: 14px;
+      cursor: pointer;
+    }
+    .box button:hover { background: #1d4ed8; }
+  </style>
+</head>
+<body>
+  <header id="titlebar">
+    <div class="app" id="targetLabel"></div>
+    <div class="win-controls">
+      <button class="win-btn" id="btn-min" title="最小化" aria-label="最小化">
+        <svg width="10" height="10" viewBox="0 0 10 10"><path d="M0 5.5h10" stroke="currentColor" stroke-width="1"/></svg>
+      </button>
+      <button class="win-btn" id="btn-max" title="最大化" aria-label="最大化">
+        <svg width="10" height="10" viewBox="0 0 10 10"><rect x="0.5" y="0.5" width="9" height="9" fill="none" stroke="currentColor" stroke-width="1"/></svg>
+      </button>
+      <button class="win-btn win-btn--close" id="btn-close" title="关闭" aria-label="关闭">
+        <svg width="10" height="10" viewBox="0 0 10 10"><path d="M0.5 0.5l9 9M9.5 0.5l-9 9" stroke="currentColor" stroke-width="1"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <div id="card">
+    <div class="box">
+      <h1>无法连接控制台服务</h1>
+      <p>请确认 <code id="targetText"></code> 上的服务已启动,然后点击重试。</p>
+      <div class="detail" id="detailText"></div>
+      <button id="btn-retry">重试</button>
+    </div>
+  </div>
+
+  <script>
+    const params = new URLSearchParams(location.search);
+    const target = params.get('target') || '';
+    document.getElementById('targetLabel').textContent = 'Libra Console · ' + target;
+    document.getElementById('targetText').textContent = target;
+    document.getElementById('detailText').textContent = params.get('detail')
+      ? '失败原因: ' + params.get('detail')
+      : '';
+
+    const bridge = window.libraDesktop;
+    document.getElementById('btn-min').addEventListener('click', () => bridge.minimize());
+    document.getElementById('btn-max').addEventListener('click', () => bridge.toggleMaximize());
+    document.getElementById('btn-close').addEventListener('click', () => bridge.close());
+    document.getElementById('btn-retry').addEventListener('click', () => bridge.retry());
+    document.getElementById('titlebar').addEventListener('dblclick', (e) => {
+      if (e.target.closest('.win-controls')) return;
+      bridge.toggleMaximize();
+    });
+  </script>
+</body>
+</html>

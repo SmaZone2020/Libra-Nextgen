@@ -1,0 +1,18 @@
+{
+  "name": "libra-desktop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Electron shell for Libra-Nextgen: spawns the bundled local .NET service (SQLite/Mongo dual store) and loads the console; manual payload updates from GitHub Releases, silent web refresh, tray.",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "typecheck": "node --check main.js && node --check preload.js && node --check serviceProcess.js && node --check updater.js"
+  },
+  "license": "UNLICENSED",
+  "dependencies": {
+    "extract-zip": "^2.0.1"
+  },
+  "devDependencies": {
+    "electron": "^44.2.0"
+  }
+}
