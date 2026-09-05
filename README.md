@@ -45,6 +45,16 @@ Agent 通过 beacon HTTP(S) 与 SSE 事件流与服务器通信，全链路 AES-
 
 ## 快速开始
 
+### 直接下载（最快捷，无需任何依赖）
+
+不需要 MongoDB、.NET、Node 或 Docker：到
+[GitHub Releases](https://github.com/SmaZone2020/Libra-Nextgen/releases/latest)
+下载对应平台的 **Libra Desktop 安装包**（Windows NSIS / Linux AppImage），安装后自带
+SQLite 后端 + 控制台，打开即用（首次运行在 `/setup` 创建管理员即可；本地自带"检查更新"）。
+
+同一页面也提供仅后端（`libra-service-*`）、仅前端（`libra-webapp-*`）、Agent 模板与
+桌面包资产，资产矩阵见 [desktop/README.md](desktop/README.md)。
+
 ### Docker 一键部署（推荐，linux/amd64）
 
 内网 HTTP 与公网 HTTPS（TLS）均可部署，控制台与 Agent 走同一入口；见[部署手册 §6.2](docs/deployment.md)。

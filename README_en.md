@@ -45,6 +45,19 @@ Agents communicate with the server over beacon HTTP(S) and SSE event streams, wi
 
 ## Getting Started
 
+### Direct download (fastest — no dependencies at all)
+
+No MongoDB, .NET, Node or Docker needed: grab the **Libra Desktop installer** for
+your platform from the
+[GitHub Releases](https://github.com/SmaZone2020/Libra-Nextgen/releases/latest)
+(Windows NSIS / Linux AppImage). It bundles a SQLite backend + console and works
+out of the box — the first run creates the admin at `/setup`, and built-in
+update checks keep it current.
+
+The same page also carries backend-only (`libra-service-*`), frontend-only
+(`libra-webapp-*`), agent-template and desktop-payload assets — see the asset
+matrix in [desktop/README.md](desktop/README.md).
+
 ### Docker one-command deployment (recommended, linux/amd64)
 
 Works for both intranet HTTP and public HTTPS (TLS) — the console and agents share one entry point; see [§6.2 of the deployment manual](docs/en/deployment.md).

@@ -122,8 +122,9 @@ HTTP/SSE/WS API 契约、JWT/RBAC、agent beacon 加密协议(RSA+AES-GCM+mallea
 - React 19 SPA 与云端**共用同一份代码与产物**,无 UI 改动;远程模式 = 运行时 origin 切换(既有能力);
 - 新增(desktop-only,检测桌面壳存在才渲染,浏览器/云部署自动隐藏):
   1. **存储设置段**:Tabs 选择 SQLite / MongoDB(无后缀)+ 连接串 + [应用](写入 config → 重启 service → console 自动重连);
-  2. **关闭窗口动作**:Tabs 选择 退出服务 / 缩放到托盘图标 → 写入 `desktop.closeBehavior`(见 §3),立即生效无需重启;
-  3. Check Update 入口、数据目录入口、版本显示。
+  2. **首选项(桌面)**:关闭窗口动作(退出服务 / 缩放到托盘,语言选择同款行样式,写入 `desktop.closeBehavior`,立即生效)+ **启用用户选择**(默认禁用,开启后根级 `user-select:text !important` 覆盖组件库的禁止选择,可复制主机名/地址/日志);
+  3. **新版本提醒模态**(全局):登录后静默检查(`/api/system/update/status`,服务端 15min 缓存 + GitHub Release 日志),有新版且未“跳过此版本”时弹窗——显示版本号/发布日期/更新日志,按钮 稍后更新 / 跳过此版本 / 现在更新;桌面端下载经 `shell:update-progress` 实时推送进度(下载/校验/安装/重启),完成后自动换装重启并重载页面;About 页“现在更新”可手动强制触发;浏览器环境给发布页引导;
+  4. Check Update 入口、数据目录入口、版本显示。
 - 更新通道:web 产物随每个 release 出 `libra-webapp-{tag}.zip`;Electron 静默下载校验后写 `userData/web`(目录原子换名,无需重启 service);失败/缺失 → `LIBRA_WEB_ROOT` 指向内嵌 baseline-web。
 
 ## 7. Electron 壳
@@ -131,7 +132,7 @@ HTTP/SSE/WS API 契约、JWT/RBAC、agent beacon 加密协议(RSA+AES-GCM+mallea
 - 工程落点(建议):`desktop/electron/`(TypeScript,electron-builder),与 .NET sidecar 同仓;
 - 职责:spawn/探测/接管本地 service(沿用现 BackendProcess 语义:已活端口 → External 接管不重复拉起)、PayloadManager(SHA-256 强制,校验失败拒绝并保留旧版)、Updater、托盘(Show Libra/Quit;`desktop.closeBehavior=tray` 时窗口隐藏到托盘)、远程模式、存储切换编排、窗口关闭行为(quit/tray);
 - 更新流:
-  1. **service**:用户点 Check Update → 查 GitHub Releases 最新 tag → 与本机 version.json 比对 → 下载本平台 `libra-desktop-{rid}-{tag}.zip`(service+web+version.json)→ 校验 → 停旧 service → 原子换入 `payload/latest`(旧版移入 `.prev`)→ 重启;启动探测失败自动回滚 `.prev`;
+  1. **service**:console 新版本提醒“现在更新”/托盘 Check Update → 查 GitHub Releases 最新 tag → 与本机 version.json 比对 → 下载本平台 `libra-desktop-{rid}-{tag}.zip`(service+web+version.json,`content-length` 实时进度经 `shell:update-progress` 推送)→ 校验 → 停旧 service → 原子换入 `payload/latest`(旧版移入 `.prev`)→ 重启并重载页面;启动探测失败自动回滚 `.prev`;
   2. **web**:静默(启动后后台),失败回退内嵌 baseline-web;
   3. agent 模板:`libra-agent-tpl-*.zip` 种子内置 + Check Update 同 tag 刷新到 `templates/`,Builder(template 模式)直接读缓存,免 GitHub 依赖(离线桌面场景可用;模板平台键注意 **win 桌面是 `x64`**);
   4. 壳自身不自更新(与现状一致,版本迭代靠换装);
