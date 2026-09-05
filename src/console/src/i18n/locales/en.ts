@@ -229,7 +229,6 @@ export default {
       remoteAdminOnly: 'Only admins can manage remote node connections.',
       loadFailed: 'Failed to load nodes',
       retry: 'Retry',
-      empty: 'No remote server nodes connected yet — add one to get started.',
       deleteConfirm: 'Delete node “{{name}}”? This only removes the local registration; the remote service is untouched.',
       localName: 'Local service',
       localBadge: 'Local',

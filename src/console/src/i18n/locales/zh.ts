@@ -228,7 +228,6 @@ export default {
       remoteAdminOnly: '仅管理员可管理远程节点连接。',
       loadFailed: '节点列表加载失败',
       retry: '重试',
-      empty: '还没有连接任何远程服务器节点，点击右上角添加。',
       deleteConfirm: '确定删除节点「{{name}}」？该操作仅移除本机注册，不影响远端服务。',
       localName: '本机服务',
       localBadge: '本机',

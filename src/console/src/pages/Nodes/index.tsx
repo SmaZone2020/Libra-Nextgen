@@ -156,11 +156,6 @@ export default function NodesPage() {
             {t('nodes.retry')}
           </Button>
         </Card>
-      ) : nodes!.length === 0 ? (
-        <Card className="p-6 text-center text-sm text-default-500">
-          <Server className="mx-auto mb-2 size-6 opacity-60" />
-          {t('nodes.empty')}
-        </Card>
       ) : null}
 
       {(loadError || actionError) && isAdmin && nodes !== null && (
