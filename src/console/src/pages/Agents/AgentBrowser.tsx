@@ -86,7 +86,7 @@ export function AgentBrowser({
     if (q) {
       list = list.filter((a) =>
         [a.hostname, a.ipAddress, a.osVersion, a.userName, a.geo?.region ?? '']
-          .some((f) => f.toLowerCase().includes(q)),
+          .some((f) => (f ?? '').toLowerCase().includes(q)),
       );
     }
     if (list.length < 2) return list;
