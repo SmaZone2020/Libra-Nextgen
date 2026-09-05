@@ -33,6 +33,14 @@ builder.Services.AddSingleton<MongoDbContext>();
 builder.Services.AddSingleton<ServerKeyService>();
 builder.Services.AddSingleton<MongoIndexBuilder>();
 
+// Desktop user config (libra.conf.json under --user-data-dir or the OS
+// application-data default). Absent in cloud deployments, where appsettings
+// and env vars keep driving behavior unchanged. P0 only loads and exposes it;
+// effective store selection activates once the SQLite adapter lands (P1).
+var userConfig = UserConfigLoader.TryLoad(builder.Configuration, out var userConfigPath);
+if (userConfig is not null)
+    builder.Services.AddSingleton(new UserConfigSource(userConfigPath!, userConfig));
+
 // Beacon authentication (shared secret injected at build time)
 builder.Services.Configure<BeaconSettings>(builder.Configuration.GetSection(BeaconSettings.SectionName));
 
@@ -359,6 +367,14 @@ catch (Exception ex)
 {
     var logger = app.Services.GetRequiredService<ILoggerFactory>().CreateLogger("Startup");
     logger.LogWarning(ex, "MongoDB index initialization failed — continuing without indexes.");
+}
+
+if (userConfig is not null)
+{
+    var userCfgLog = app.Services.GetRequiredService<ILoggerFactory>().CreateLogger("UserConfig");
+    userCfgLog.LogInformation(
+        "User config loaded from {ConfigPath}: mode={StoreMode} (store selection activates with the SQLite adapter)",
+        userConfigPath, userConfig.Storage.Mode);
 }
 
 app.Run();
