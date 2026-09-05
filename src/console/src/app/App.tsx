@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import type { ReactNode } from 'react';
 import { BrowserRouter } from 'react-router-dom';
 import LoginPage from '../pages/Login';
 import SetupPage from '../pages/Setup';
@@ -10,6 +11,7 @@ import { NetworkOverlay } from '../components/NetworkOverlay';
 import { AgreementModal } from '../components/AgreementModal';
 import { AgentProvider } from '../contexts/AgentContext';
 import { AuthenticatedLayout, SIDEBAR_W } from './AuthenticatedLayout';
+import { DesktopTopBar } from '../desktop/DesktopTopBar';
 import '../i18n';
 
 const AUTO_COLLAPSE_CONTENT_MIN = 640;
@@ -118,11 +120,28 @@ export function App() {
     return () => setOnAuthFailed(null);
   }, []);
 
+  // The desktop shell top bar overlaps only the console's empty top margin.
+  // Behind the authenticated layout that margin starts after the sidebar, so
+  // shift the strip to the right of it (mobile <640px hides the sidebar).
+  const inDesktopLayout =
+    !!user &&
+    agreedAt !== null &&
+    agreedAt !== undefined &&
+    backendReachable !== false &&
+    typeof window !== 'undefined' &&
+    window.innerWidth >= 640;
+  const sidebarLeft = inDesktopLayout
+    ? collapsed
+      ? SIDEBAR_W.collapsed
+      : SIDEBAR_W.expanded
+    : 0;
+
+  let view: ReactNode;
   if (backendReachable === false) {
     // Backend is down from the very start: show the disconnect page (with the
     // backend-address editor) instead of a blank/Loading screen. On recovery
     // we reboot the boot flow so setup/login state is evaluated fresh.
-    return (
+    view = (
       <div className="min-h-screen bg-neutral-50 dark:bg-neutral-950">
         <NetworkOverlay
           initiallyOffline
@@ -130,45 +149,47 @@ export function App() {
         />
       </div>
     );
-  }
-
-  if (!user) {
+  } else if (!user) {
     if (checking) {
-      return (
+      view = (
         <div className="min-h-screen flex items-center justify-center">
           <div className="text-neutral-500">Loading...</div>
         </div>
       );
+    } else if (needsSetup) {
+      view = <SetupPage onSetup={(username, role) => handleLogin(username, role)} />;
+    } else {
+      view = <LoginPage onLogin={handleLogin} />;
     }
-    if (needsSetup) {
-      return <SetupPage onSetup={(username, role) => handleLogin(username, role)} />;
-    }
-    return <LoginPage onLogin={handleLogin} />;
-  }
-
-  // Agreement gate: block the whole console until the account accepts the
-  // authorized-use agreement. Declining forces a logout.
-  if (agreedAt === null) {
-    return <AgreementModal onAccept={handleAcceptAgreement} onDecline={handleLogout} />;
-  }
-  if (agreedAt === undefined) {
-    return (
+  } else if (agreedAt === null) {
+    // Agreement gate: block the whole console until the account accepts the
+    // authorized-use agreement. Declining forces a logout.
+    view = <AgreementModal onAccept={handleAcceptAgreement} onDecline={handleLogout} />;
+  } else if (agreedAt === undefined) {
+    view = (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-neutral-500">Loading...</div>
       </div>
     );
+  } else {
+    view = (
+      <BrowserRouter>
+        <AgentProvider>
+          <AuthenticatedLayout
+            user={user}
+            collapsed={collapsed}
+            onToggle={handleToggle}
+            onLogout={handleLogout}
+          />
+        </AgentProvider>
+      </BrowserRouter>
+    );
   }
 
   return (
-    <BrowserRouter>
-      <AgentProvider>
-        <AuthenticatedLayout
-          user={user}
-          collapsed={collapsed}
-          onToggle={handleToggle}
-          onLogout={handleLogout}
-        />
-      </AgentProvider>
-    </BrowserRouter>
+    <>
+      <DesktopTopBar sidebarLeft={sidebarLeft} />
+      {view}
+    </>
   );
 }

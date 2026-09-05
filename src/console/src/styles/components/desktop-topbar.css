@@ -1,0 +1,72 @@
+/* Desktop shell chrome for the Electron wrapper.
+   Only rendered when the console is opened with the LibraDesktop UA token
+   (see demo/main.js DESKTOP_TOKEN); plain browsers never see these rules. */
+
+.libra-topbar {
+  position: fixed;
+  top: 0;
+  right: 0;
+  display: flex;
+  justify-content: flex-end;
+  background: transparent;
+  -webkit-app-region: drag;
+  user-select: none;
+  -webkit-user-select: none;
+  z-index: 45; /* above page headers, below menus/modals/toasts */
+}
+
+.libra-topbar__controls {
+  display: flex;
+  height: 100%;
+  -webkit-app-region: no-drag;
+}
+
+.libra-tb-btn {
+  width: 46px;
+  height: 100%;
+  border: 0;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  background: transparent;
+  color: inherit;
+  cursor: default;
+  opacity: 0.55;
+}
+
+.libra-tb-btn svg {
+  display: block;
+}
+
+.libra-tb-btn:hover {
+  background: rgba(0, 0, 0, 0.08);
+  opacity: 1;
+}
+
+.dark .libra-tb-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.libra-tb-btn:active {
+  background: rgba(0, 0, 0, 0.14);
+}
+
+.dark .libra-tb-btn:active {
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.libra-tb-btn--close:hover,
+.libra-tb-btn--close:active {
+  background: #e81123;
+  color: #fff;
+  opacity: 1;
+}
+
+/* Swap maximize / restore glyphs with the window state. */
+.libra-topbar[data-maximized="true"] .icon-max {
+  display: none;
+}
+
+.libra-topbar:not([data-maximized="true"]) .icon-restore {
+  display: none;
+}

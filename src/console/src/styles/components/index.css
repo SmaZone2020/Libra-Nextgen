@@ -25,6 +25,7 @@
 @import "./composed-chart.css";
 @import "./context-menu.css";
 @import "./data-grid.css";
+@import "./desktop-topbar.css";
 @import "./drop-zone.css";
 @import "./emoji-picker.css";
 @import "./emoji-reaction-button.css";
