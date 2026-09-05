@@ -25,14 +25,20 @@ public class SettingsController : ControllerBase
             "Libra-Nextgen",
             "settings.json");
 
-    private static async Task PersistAsync(CancellationToken ct)
+    /// <summary>
+    /// Persist the CURRENT in-memory values. The historical bug: the caller
+    /// modified its ListenerSettings/SecuritySettings instance but Persist
+    /// re-loaded them from disk, so saves silently wrote the old values back.
+    /// </summary>
+    private static async Task PersistAsync(
+        ListenerSettings listener, SecuritySettings security, CancellationToken ct)
     {
         var dir = Path.GetDirectoryName(SettingsFilePath)!;
         Directory.CreateDirectory(dir);
         var doc = new
         {
-            listener = ListenerSettingsLoader.Load(),
-            security = SecuritySettingsLoader.Load(),
+            listener,
+            security,
         };
         await System.IO.File.WriteAllTextAsync(
             SettingsFilePath,
@@ -66,7 +72,7 @@ public class SettingsController : ControllerBase
 
         try
         {
-            await PersistAsync(ct);
+            await PersistAsync(settings, SecuritySettingsLoader.Load(), ct);
         }
         catch (Exception ex)
         {
@@ -119,7 +125,7 @@ public class SettingsController : ControllerBase
 
         try
         {
-            await PersistAsync(ct);
+            await PersistAsync(ListenerSettingsLoader.Load(), settings, ct);
         }
         catch (Exception ex)
         {

@@ -22,6 +22,13 @@ using LibraNextgen.Service.Controllers;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Self-restart support: a relaunched process waits this long before binding
+// so the previous instance (still holding the listen port) has time to stop
+// gracefully. Set only by the restart path below.
+if (int.TryParse(Environment.GetEnvironmentVariable("LIBRA_START_DELAY_MS"), out var startDelayMs)
+    && startDelayMs > 0)
+    Thread.Sleep(Math.Min(startDelayMs, 30_000));
+
 // Drop the Windows EventLog provider: it is disposed during host shutdown, and a
 // background task (Telegram/IM receiver) logging at that moment crashes the whole
 // process via Logger.ThrowLoggingError. Console output is all the server needs.
@@ -361,6 +368,9 @@ SettingsController.RebindListeners = (listenUrl, ct) =>
             };
             foreach (var arg in Environment.GetCommandLineArgs().Skip(1))
                 psi.ArgumentList.Add(arg);
+            // Give the old instance time to release the listen port before the
+            // relaunched process binds it (avoids an address-in-use crash).
+            psi.Environment["LIBRA_START_DELAY_MS"] = "1500";
             Process.Start(psi);
         }
         catch (Exception ex)
