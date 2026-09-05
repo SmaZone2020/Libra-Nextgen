@@ -1,5 +1,6 @@
 import { useEffect, useRef, forwardRef, useImperativeHandle } from 'react';
 import { Terminal } from 'xterm';
+import type { ITheme } from 'xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { WebLinksAddon } from '@xterm/addon-web-links';
 import 'xterm/css/xterm.css';
@@ -26,6 +27,50 @@ interface Props {
 /** Default: JetBrains Mono (bundled) for modern monospace Latin, with CJK
  *  routed to a monospace CJK font (2 cells). */
 const DEFAULT_FONT = '"JetBrainsMono", "LibraTermCJK", ui-monospace, monospace';
+
+// VS Code-like terminal palette. Colors resolve from the app's live design
+// tokens so the terminal follows the light/dark theme (and wallpaper frost)
+// instead of being a permanently dark box.
+function cssVar(name: string, fallback: string): string {
+  try {
+    const value = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+    return value || fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function resolveTerminalTheme(): ITheme {
+  const dark = document.documentElement.classList.contains('dark');
+  const background = cssVar('--lw-terminal-bg', dark ? '#1b1f27' : '#f4f6f9');
+  const foreground = cssVar('--lw-terminal-fg', dark ? '#e6e9ee' : '#23272e');
+  const accent = cssVar('--color-accent', dark ? '#7aa2f7' : '#2563eb');
+  return {
+    background,
+    foreground,
+    cursor: accent,
+    cursorAccent: background,
+    selectionBackground: dark ? 'rgba(122, 162, 247, 0.32)' : 'rgba(37, 99, 235, 0.24)',
+    // Subtle, theme-matched ANSI set (calm blues/purples, softened yellow/red)
+    // — closer to Codex/VSCode "One Dark"-ish terminals than the raw neon set.
+    black: dark ? '#3b4252' : '#3f4653',
+    red: dark ? '#e06c75' : '#d64550',
+    green: dark ? '#98c379' : '#3d8f52',
+    yellow: dark ? '#e5c07b' : '#9c7c1f',
+    blue: dark ? '#61afef' : '#2563eb',
+    magenta: dark ? '#c678dd' : '#8b3fd4',
+    cyan: dark ? '#56b6c2' : '#0e7f94',
+    white: dark ? '#abb2bf' : '#4b5563',
+    brightBlack: dark ? '#636d83' : '#9aa3af',
+    brightRed: dark ? '#ff7a8a' : '#e5484d',
+    brightGreen: dark ? '#a6e3a1' : '#30a46c',
+    brightYellow: dark ? '#f2cc8f' : '#b5952a',
+    brightBlue: dark ? '#8ab4f8' : '#3b82f6',
+    brightMagenta: dark ? '#d29af0' : '#9f4bd4',
+    brightCyan: dark ? '#7dd3fc' : '#0aa2c0',
+    brightWhite: dark ? '#d8dee9' : '#1f2328',
+  };
+}
 
 const TerminalView = forwardRef<TerminalHandle, Props>(function TerminalView(
   { className, style, onInput, onResize, disabled, fontFamily },
@@ -76,6 +121,7 @@ const TerminalView = forwardRef<TerminalHandle, Props>(function TerminalView(
     let term: Terminal | null = null;
     let fit: FitAddon | null = null;
     let ro: ResizeObserver | null = null;
+    let themeObserver: MutationObserver | null = null;
 
     // Create the terminal synchronously so the ref is usable immediately
     // (shell output arriving before webfonts finish is not lost). Cell size
@@ -83,12 +129,13 @@ const TerminalView = forwardRef<TerminalHandle, Props>(function TerminalView(
     const FONT = fontFamilyRef.current ?? DEFAULT_FONT;
     const t = new Terminal({
       cursorBlink: true,
+      cursorStyle: 'block',
       convertEol: true,
       fontFamily: FONT,
       fontSize: 13,
-      lineHeight: 1.0,
+      lineHeight: 1.15,
       scrollback: 10000,
-      theme: { background: '#1a1b1e' },
+      theme: resolveTerminalTheme(),
     });
     const f = new FitAddon();
     t.loadAddon(f);
@@ -96,6 +143,21 @@ const TerminalView = forwardRef<TerminalHandle, Props>(function TerminalView(
     t.open(container);
     term = t;
     fit = f;
+
+    // Live theme switching: re-resolve colors whenever the document theme
+    // class changes (light <-> dark) — also fires on first connection.
+    const applyTheme = () => {
+      if (termRef.current) {
+        try {
+          termRef.current.options.theme = resolveTerminalTheme();
+        } catch { /* keep previous theme on invalid colors */ }
+      }
+    };
+    themeObserver = new MutationObserver(applyTheme);
+    themeObserver.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['class'],
+    });
 
     t.onData((data) => {
       if (disabledRef.current) return;
@@ -153,6 +215,7 @@ const TerminalView = forwardRef<TerminalHandle, Props>(function TerminalView(
     return () => {
       disposed = true;
       ro?.disconnect();
+      themeObserver?.disconnect();
       term?.dispose();
       termRef.current = null;
       fitRef.current = null;
@@ -163,11 +226,10 @@ const TerminalView = forwardRef<TerminalHandle, Props>(function TerminalView(
   return (
     <div
       ref={containerRef}
-      className={`${className} overflow-hidden`}
-      style={{ ...style, height: '90vh' }}
+      className={`min-h-0 overflow-hidden ${className ?? ''}`}
+      style={style}
     />
   );
 });
 
 export default TerminalView;
-

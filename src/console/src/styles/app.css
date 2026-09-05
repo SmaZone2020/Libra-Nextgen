@@ -114,10 +114,6 @@ html {
   display: none;
 }
 
-.xterm-viewport,.xterm-screen{
-  height: 90vh;
-}
-
 /* ---- Global slim scrollbars ------------------------------------------------
  * Every scroll container gets a quiet, theme-aware thin scrollbar instead of
  * the chunky OS default. Firefox uses the native thin variant with a matching

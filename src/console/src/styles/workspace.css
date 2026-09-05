@@ -33,6 +33,9 @@
   --lw-shadow-soft: 0 1px 2px oklch(0.2 0.02 260 / 0.05), 0 14px 34px -18px oklch(0.25 0.03 260 / 0.18);
   --lw-workspace-shadow: 0 1px 1px oklch(0.15 0.02 260 / 0.05),
     0 18px 44px -20px oklch(0.3 0.04 260 / 0.24);
+  /* Integrated terminal surface (light) — consumed by xterm + its toolbar. */
+  --lw-terminal-bg: oklch(0.964 0.004 253);
+  --lw-terminal-fg: oklch(0.29 0.02 258);
 }
 
 /* ---- palette (dark) ------------------------------------------------------- */
@@ -50,6 +53,9 @@
   --lw-text-soft: oklch(0.66 0.01 250);
   --lw-shadow-soft: 0 1px 0 oklch(1 0 0 / 0.03), 0 16px 36px -20px oklch(0 0 0 / 0.6);
   --lw-workspace-shadow: 0 1px 0 oklch(1 0 0 / 0.05), 0 22px 60px -22px oklch(0 0 0 / 0.75);
+  /* Integrated terminal surface (dark). */
+  --lw-terminal-bg: oklch(0.17 0.008 258);
+  --lw-terminal-fg: oklch(0.94 0.008 250);
 }
 
 /* ---- app frame: full-bleed background ------------------------------------- */
