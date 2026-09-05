@@ -4,7 +4,6 @@ using System.IO.Compression;
 using System.Text.Json;
 using LibraNextgen.Service.Data;
 using LibraNextgen.Service.Models;
-using MongoDB.Driver;
 
 namespace LibraNextgen.Service.Services.Plugins;
 
@@ -20,7 +19,7 @@ namespace LibraNextgen.Service.Services.Plugins;
 /// </summary>
 public class PluginService
 {
-    private readonly Repository<PluginRecord> _plugins;
+    private readonly IStore<PluginRecord> _plugins;
     private readonly ILogger<PluginService> _logger;
 
     /// <summary>Root directory where plugin packages are extracted.</summary>
@@ -35,7 +34,7 @@ public class PluginService
     /// import/enable so the action gateway does not re-read disk per request.</summary>
     private static readonly ConcurrentDictionary<string, string> ScriptCache = new();
 
-    public PluginService(Repository<PluginRecord> plugins, ILogger<PluginService> logger)
+    public PluginService(IStore<PluginRecord> plugins, ILogger<PluginService> logger)
     {
         _plugins = plugins;
         _logger = logger;
@@ -178,26 +177,18 @@ public class PluginService
 
         if (existing != null)
         {
-            existing.Name = meta.Name;
-            existing.Version = meta.Version;
-            existing.Author = meta.Author;
-            existing.Description = meta.Description;
-            existing.Entry = meta.Entry;
-            existing.I18n = meta.I18n;
-            existing.Actions = meta.Actions;
-            existing.UpdatedAt = now;
-            existing.Enabled = enableOnImport;
-            await _plugins.UpdateAsync(existing.Id,
-                Builders<PluginRecord>.Update
-                    .Set(p => p.Name, meta.Name)
-                    .Set(p => p.Version, meta.Version)
-                    .Set(p => p.Author, meta.Author)
-                    .Set(p => p.Description, meta.Description)
-                    .Set(p => p.Entry, meta.Entry)
-                    .Set(p => p.I18n, meta.I18n)
-                    .Set(p => p.Actions, meta.Actions)
-                    .Set(p => p.UpdatedAt, now)
-                    .Set(p => p.Enabled, enableOnImport), ct);
+            await _plugins.UpdateByIdAsync(existing.Id, new[]
+            {
+                new FieldUpdate(nameof(PluginRecord.Name), meta.Name),
+                new FieldUpdate(nameof(PluginRecord.Version), meta.Version),
+                new FieldUpdate(nameof(PluginRecord.Author), meta.Author),
+                new FieldUpdate(nameof(PluginRecord.Description), meta.Description),
+                new FieldUpdate(nameof(PluginRecord.Entry), meta.Entry),
+                new FieldUpdate(nameof(PluginRecord.I18n), meta.I18n),
+                new FieldUpdate(nameof(PluginRecord.Actions), meta.Actions),
+                new FieldUpdate(nameof(PluginRecord.UpdatedAt), now),
+                new FieldUpdate(nameof(PluginRecord.Enabled), enableOnImport),
+            }, ct);
         }
         else
         {
@@ -307,16 +298,17 @@ public class PluginService
         var existing = await _plugins.GetByIdAsync(id, ct);
         if (existing == null) return null;
 
-        var update = Builders<PluginRecord>.Update
-            .Set(p => p.Name, meta.Name)
-            .Set(p => p.Version, meta.Version)
-            .Set(p => p.Author, meta.Author)
-            .Set(p => p.Description, meta.Description)
-            .Set(p => p.Entry, meta.Entry)
-            .Set(p => p.I18n, meta.I18n)
-            .Set(p => p.Actions, meta.Actions)
-            .Set(p => p.UpdatedAt, DateTime.UtcNow.ToString("o"));
-        await _plugins.UpdateAsync(id, update, ct);
+        await _plugins.UpdateByIdAsync(id, new[]
+        {
+            new FieldUpdate(nameof(PluginRecord.Name), meta.Name),
+            new FieldUpdate(nameof(PluginRecord.Version), meta.Version),
+            new FieldUpdate(nameof(PluginRecord.Author), meta.Author),
+            new FieldUpdate(nameof(PluginRecord.Description), meta.Description),
+            new FieldUpdate(nameof(PluginRecord.Entry), meta.Entry),
+            new FieldUpdate(nameof(PluginRecord.I18n), meta.I18n),
+            new FieldUpdate(nameof(PluginRecord.Actions), meta.Actions),
+            new FieldUpdate(nameof(PluginRecord.UpdatedAt), DateTime.UtcNow.ToString("o")),
+        }, ct);
 
         if (existing.Enabled) StageModules(existing);
         return await _plugins.GetByIdAsync(id, ct);
@@ -349,8 +341,8 @@ public class PluginService
         var existing = await _plugins.GetByIdAsync(id, ct);
         if (existing == null) return null;
 
-        await _plugins.UpdateAsync(id,
-            Builders<PluginRecord>.Update.Set(p => p.Enabled, enabled), ct);
+        await _plugins.UpdateByIdAsync(id,
+            new[] { new FieldUpdate(nameof(PluginRecord.Enabled), enabled) }, ct);
         InvalidateScriptCache(existing.PluginId);
 
         if (enabled) StageModules(existing);

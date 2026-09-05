@@ -3,7 +3,6 @@ using LibraNextgen.Common.Models;
 using LibraNextgen.Service.Data;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using MongoDB.Driver;
 
 namespace LibraNextgen.Service.Controllers;
 
@@ -17,19 +16,16 @@ public class AiEventSubscriptionController : ControllerBase
     private static readonly string[] ValidEvents =
         { AiEventNotifier.EvtAgentOnline, AiEventNotifier.EvtAgentOffline };
 
-    private readonly MongoDbContext _db;
+    private readonly IStore<AiEventSubscription> _subs;
     private readonly AiService _ai;
     private readonly AiChannelService _channels;
 
-    public AiEventSubscriptionController(MongoDbContext db, AiService ai, AiChannelService channels)
+    public AiEventSubscriptionController(IStore<AiEventSubscription> subs, AiService ai, AiChannelService channels)
     {
-        _db = db;
+        _subs = subs;
         _ai = ai;
         _channels = channels;
     }
-
-    private IMongoCollection<AiEventSubscription> Subs =>
-        _db.GetCollection<AiEventSubscription>("ai_event_subscriptions");
 
     private string UserId => User.FindFirst(ClaimTypes.NameIdentifier)?.Value
         ?? User.FindFirst("sub")?.Value
@@ -38,8 +34,10 @@ public class AiEventSubscriptionController : ControllerBase
 
     [HttpGet]
     public async Task<IActionResult> List(CancellationToken ct)
-        => Ok(await Subs.Find(FilterDefinition<AiEventSubscription>.Empty)
-            .Sort(Builders<AiEventSubscription>.Sort.Descending(s => s.CreatedAt)).ToListAsync(ct));
+    {
+        var all = await _subs.GetAllAsync(ct);
+        return Ok(all.OrderByDescending(s => s.CreatedAt).ToList());
+    }
 
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] AiEventSubscriptionReq req, CancellationToken ct)
@@ -76,15 +74,15 @@ public class AiEventSubscriptionController : ControllerBase
             CreatedBy = UserId,
             CreatedByName = UserName,
         };
-        await Subs.InsertOneAsync(sub, cancellationToken: ct);
+        await _subs.InsertAsync(sub, ct);
         return Ok(sub);
     }
 
     [HttpDelete("{id}")]
     public async Task<IActionResult> Delete(string id, CancellationToken ct)
     {
-        var r = await Subs.DeleteOneAsync(x => x.Id == id, ct);
-        return r.DeletedCount > 0 ? Ok(new { deleted = true }) : NotFound(new { error = "subscription not found" });
+        var deleted = await _subs.DeleteAsync(id, ct);
+        return deleted > 0 ? Ok(new { deleted = true }) : NotFound(new { error = "subscription not found" });
     }
 }
 

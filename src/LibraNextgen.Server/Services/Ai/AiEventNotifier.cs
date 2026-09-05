@@ -4,7 +4,6 @@ using System.Text.Json.Nodes;
 using LibraNextgen.Common.Models;
 using LibraNextgen.Common.Protocol;
 using LibraNextgen.Service.Data;
-using MongoDB.Driver;
 
 namespace LibraNextgen.Service.Services.Ai;
 
@@ -17,26 +16,23 @@ public class AiEventNotifier
 
     private static readonly TimeSpan RunTimeout = TimeSpan.FromSeconds(90);
 
-    private readonly MongoDbContext _db;
+    private readonly IStore<AiEventSubscription> _subs;
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly ILogger<AiEventNotifier> _logger;
 
-    public AiEventNotifier(MongoDbContext db, IServiceScopeFactory scopeFactory, ILogger<AiEventNotifier> logger)
+    public AiEventNotifier(IStore<AiEventSubscription> subs, IServiceScopeFactory scopeFactory, ILogger<AiEventNotifier> logger)
     {
-        _db = db;
+        _subs = subs;
         _scopeFactory = scopeFactory;
         _logger = logger;
     }
-
-    private IMongoCollection<AiEventSubscription> Subs =>
-        _db.GetCollection<AiEventSubscription>("ai_event_subscriptions");
 
     public Task NotifyAsync(string agentId, string hostname, string ipAddress, string eventType, CancellationToken ct = default)
         => Task.Run(async () =>
         {
             try
             {
-                var subs = await Subs.Find(x => x.Events.Contains(eventType)).ToListAsync(ct);
+                var subs = await _subs.FindAsync(x => x.Events.Contains(eventType), ct);
                 if (subs.Count == 0) return;
                 foreach (var sub in subs)
                 {

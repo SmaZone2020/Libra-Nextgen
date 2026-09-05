@@ -3,23 +3,23 @@ using System.Reflection;
 using LibraNextgen.Common.Models;
 using LibraNextgen.Service.Data;
 using ModelContextProtocol.Server;
-using MongoDB.Driver;
 
 namespace LibraNextgen.Service.Services.Plugins;
 
 public sealed record McpToolInfo(string Name, string Description);
 
 /// <summary>
-/// Holds the MCP server enabled flag and enumerates the registered MCP tools.
+/// Holds the MCP server enabled flag (persisted as a single config document)
+/// and enumerates the registered MCP tools.
 /// </summary>
 public class McpService
 {
-    private readonly IMongoCollection<McpConfig> _collection;
+    private readonly IStore<McpConfig> _store;
     private volatile bool _enabled = true;
 
-    public McpService(MongoDbContext context)
+    public McpService(IStore<McpConfig> store)
     {
-        _collection = context.GetCollection<McpConfig>("mcp_config");
+        _store = store;
     }
 
     public bool Enabled => _enabled;
@@ -28,7 +28,7 @@ public class McpService
     {
         try
         {
-            var config = await _collection.Find(FilterDefinition<McpConfig>.Empty).FirstOrDefaultAsync(ct);
+            var config = await _store.FirstOrDefaultAsync(_ => true, ct);
             _enabled = config?.Enabled ?? true;
         }
         catch
@@ -41,17 +41,26 @@ public class McpService
     public async Task SetEnabledAsync(bool enabled, CancellationToken ct = default)
     {
         _enabled = enabled;
-        var config = await _collection.Find(FilterDefinition<McpConfig>.Empty).FirstOrDefaultAsync(ct);
+        var config = await _store.FirstOrDefaultAsync(_ => true, ct);
         if (config == null)
         {
-            await _collection.InsertOneAsync(new McpConfig { Enabled = enabled }, cancellationToken: ct);
+            try
+            {
+                await _store.InsertAsync(new McpConfig { Enabled = enabled }, ct);
+            }
+            catch (DuplicateKeyException)
+            {
+                // Concurrent first-save: another writer created the document.
+                var concurrent = await _store.FirstOrDefaultAsync(_ => true, ct);
+                if (concurrent is not null)
+                    await _store.UpdateByIdAsync(concurrent.Id,
+                        new[] { new FieldUpdate(nameof(McpConfig.Enabled), enabled) }, ct);
+            }
         }
         else
         {
-            await _collection.UpdateOneAsync(
-                Builders<McpConfig>.Filter.Eq(c => c.Id, config.Id),
-                Builders<McpConfig>.Update.Set(c => c.Enabled, enabled),
-                cancellationToken: ct);
+            await _store.UpdateByIdAsync(config.Id,
+                new[] { new FieldUpdate(nameof(McpConfig.Enabled), enabled) }, ct);
         }
     }
 

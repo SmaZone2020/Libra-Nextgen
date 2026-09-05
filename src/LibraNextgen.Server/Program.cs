@@ -120,9 +120,9 @@ RegisterStore<RiskPolicy>(builder.Services, "risk_policy");
 RegisterStore<SessionKey>(builder.Services, "session_keys");
 RegisterStore<SessionTokenDoc>(builder.Services, "session_tokens");
 
-// Not yet migrated to IStore<T>: plugins stay Mongo-backed.
-builder.Services.AddSingleton<Repository<PluginRecord>>(sp =>
-    new Repository<PluginRecord>(sp.GetRequiredService<MongoDbContext>(), "plugins"));
+RegisterStore<PluginRecord>(builder.Services, "plugins");
+RegisterStore<McpConfig>(builder.Services, "mcp_config");
+RegisterStore<AiEventSubscription>(builder.Services, "ai_event_subscriptions");
 builder.Services.AddScoped<BuildListService>();
 builder.Services.AddSingleton<AiService>();
 
