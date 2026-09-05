@@ -84,6 +84,18 @@ builder.Services.Configure<AiSettings>(builder.Configuration.GetSection(AiSettin
 builder.Services.AddSingleton<AiPromptFileLoader>();
 
 var listenerSettings = ListenerSettingsLoader.Load();
+
+// Desktop libra.conf.json listener section is authoritative for the local
+// shell (loopback binding + manifest port) unless LIBRA_LISTEN_PORT is set
+// explicitly for debugging/ops.
+if (resolvedConfig?.Listener is { } desktopListener)
+{
+    if (desktopListener.Port is >= 1 and <= 65535
+        && Environment.GetEnvironmentVariable("LIBRA_LISTEN_PORT") is null)
+        listenerSettings.Port = desktopListener.Port;
+    listenerSettings.BindLoopbackOnly = desktopListener.BindLoopback;
+}
+
 builder.WebHost.ConfigureKestrel(options =>
 {
     if (listenerSettings.BindLoopbackOnly)
