@@ -174,3 +174,4 @@ src/console/pnpm-workspace.yaml
 *.key
 /Libra-Plugin-Template
 /demo
+/scripts
