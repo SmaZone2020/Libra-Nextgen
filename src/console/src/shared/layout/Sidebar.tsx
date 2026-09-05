@@ -181,8 +181,10 @@ function DesktopNavItem({ item, collapsed }: { item: NavItem; collapsed: boolean
             <Dropdown>
               <Button
                 isIconOnly
-                variant={groupActive ? 'primary' : 'ghost'}
-                className={`transition-all duration-300 ${groupActive ? 'rounded-[15px]' : ''}`}
+                variant="ghost"
+                className={`rounded-[12px] transition-all duration-300 ${
+                  groupActive ? 'bg-accent-soft text-accent-soft-foreground' : ''
+                }`}
                 aria-label={label}
               >
                 <item.icon className="shrink-0" />
@@ -204,13 +206,17 @@ function DesktopNavItem({ item, collapsed }: { item: NavItem; collapsed: boolean
           ) : (
             <Tooltip delay={0}>
               <Button
-                variant={groupActive ? 'primary' : 'ghost'}
-                className={`flex-1 justify-start px-3 mr-1 transition-all duration-300 ${groupActive ? 'rounded-[15px]' : ''}`}
+                variant="ghost"
+                className={`flex-1 justify-start rounded-[12px] px-3 transition-all duration-300 ${
+                  groupActive ? 'bg-accent-soft text-accent-soft-foreground' : ''
+                }`}
                 onPress={handlePress}
               >
                 <item.icon className="shrink-0" />
                 <span
-                  className="overflow-hidden whitespace-nowrap transition-all duration-300 font-medium flex-1 text-left"
+                  className={`flex-1 overflow-hidden whitespace-nowrap text-left transition-all duration-300 ${
+                    groupActive ? 'font-semibold' : 'font-medium'
+                  }`}
                   style={{ maxWidth: collapsed ? 0 : '14rem', opacity: collapsed ? 0 : 1 }}
                 >
                   {label}
@@ -218,11 +224,7 @@ function DesktopNavItem({ item, collapsed }: { item: NavItem; collapsed: boolean
                 <span
                   onClick={handleChevron}
                   onPointerDown={(e) => e.stopPropagation()}
-                  className={`shrink-0 -mr-1 ml-1 rounded p-0.5 cursor-pointer ${
-                    groupActive
-                      ? 'text-white'
-                      : 'text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-300'
-                  }`}
+                  className="ml-1 shrink-0 cursor-pointer rounded p-0.5 text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-300"
                   aria-label={t('nav.toggleGroup')}
                   role="button"
                 >
@@ -238,17 +240,6 @@ function DesktopNavItem({ item, collapsed }: { item: NavItem; collapsed: boolean
               <Tooltip.Content placement="right">{label}</Tooltip.Content>
             </Tooltip>
           )}
-          <AnimatePresence>
-            {groupActive && !collapsed && (
-              <motion.div
-                animate={{ width: 8, opacity: 1 }}
-                exit={{ width: 0, opacity: 0 }}
-                initial={{ width: 0, opacity: 0 }}
-                transition={{ duration: 0.2 }}
-                className="h-6 shrink-0 rounded-md bg-blue-500"
-              />
-            )}
-          </AnimatePresence>
         </motion.div>
 
         {/* Children — animated collapse with a tree guide line */}
@@ -272,12 +263,16 @@ function DesktopNavItem({ item, collapsed }: { item: NavItem; collapsed: boolean
                     <div key={child.to} className="mb-[2px] flex items-center">
                       <Button
                         size="sm"
-                        variant={isActive ? 'primary' : 'ghost'}
-                        className={`flex-1 justify-start px-2 mr-1 transition-all duration-200 ${isActive ? 'rounded-[12px]' : ''}`}
+                        variant="ghost"
+                        className={`flex-1 justify-start rounded-[10px] px-2 transition-all duration-200 ${
+                          isActive ? 'bg-accent-soft text-accent-soft-foreground' : ''
+                        }`}
                         onPress={() => navigate(child.to)}
                       >
                         <child.icon className="ml-1 shrink-0" />
-                        <span className="truncate text-[15px]">{childLabel}</span>
+                        <span className={`truncate text-[15px] ${isActive ? 'font-semibold' : 'font-medium'}`}>
+                          {childLabel}
+                        </span>
                       </Button>
                     </div>
                   );
@@ -298,13 +293,17 @@ function DesktopNavItem({ item, collapsed }: { item: NavItem; collapsed: boolean
       <Tooltip delay={0} isDisabled={!collapsed}>
         <Button
           isIconOnly={collapsed}
-          variant={isActive ? 'primary' : 'ghost'}
-          className={`flex-1 justify-start px-3 mr-1 transition-all duration-300 ${isActive ? 'rounded-[15px]' : ''}`}
+          variant="ghost"
+          className={`flex-1 justify-start rounded-[12px] px-3 transition-all duration-300 ${
+            isActive ? 'bg-accent-soft text-accent-soft-foreground' : ''
+          }`}
           onPress={() => navigate(item.to)}
         >
           <item.icon className="shrink-0" />
           <span
-            className="overflow-hidden whitespace-nowrap font-medium transition-all duration-300"
+            className={`overflow-hidden whitespace-nowrap transition-all duration-300 ${
+              isActive ? 'font-semibold' : 'font-medium'
+            }`}
             style={{ maxWidth: collapsed ? 0 : '14rem', opacity: collapsed ? 0 : 1 }}
           >
             {label}
@@ -312,17 +311,6 @@ function DesktopNavItem({ item, collapsed }: { item: NavItem; collapsed: boolean
         </Button>
         <Tooltip.Content placement="right">{label}</Tooltip.Content>
       </Tooltip>
-      <AnimatePresence>
-        {isActive && (
-          <motion.div
-            animate={{ width: 8, opacity: 1 }}
-            exit={{ width: 0, opacity: 0 }}
-            initial={{ width: 0, opacity: 0 }}
-            transition={{ duration: 0.2 }}
-            className="h-6 shrink-0 rounded-md bg-blue-500"
-          />
-        )}
-      </AnimatePresence>
     </motion.div>
   );
 }
