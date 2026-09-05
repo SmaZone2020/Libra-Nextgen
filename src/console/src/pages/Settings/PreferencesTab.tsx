@@ -4,7 +4,6 @@ import { Button, Card, Input, Label, ListBox, Modal, Surface, Switch, Tabs, Text
 import type { Selection } from '@heroui/react';
 import { Check } from '@gravity-ui/icons';
 import i18n, { switchLang } from '../../i18n';
-import { getStoredTheme, applyTheme, type ThemePreference } from '../../utils/theme';
 import { EVENT_TYPE_IDS, getEnabledEventTypes, setEnabledEventTypes } from '../../utils/eventTypes';
 import { api } from '../../api/client';
 
@@ -19,7 +18,6 @@ interface ListenerInfo {
 export default function PreferencesTab() {
   const { t } = useTranslation();
   const [lang, setLang] = useState(() => (i18n.language.startsWith('zh') ? 'zh' : 'en'));
-  const [theme, setTheme] = useState<ThemePreference>(getStoredTheme());
   const [sound, setSound] = useState(() => localStorage.getItem(NOTICE_SOUND_KEY) !== 'false');
   const [port, setPort] = useState('');
   const [portSaved, setPortSaved] = useState(false);
@@ -56,12 +54,6 @@ export default function PreferencesTab() {
     switchLang(next);
   };
 
-  const handleTheme = (key: string) => {
-    const next = key as ThemePreference;
-    setTheme(next);
-    applyTheme(next);
-  };
-
   const handleSound = (checked: boolean) => {
     setSound(checked);
     localStorage.setItem(NOTICE_SOUND_KEY, String(checked));
@@ -87,24 +79,13 @@ export default function PreferencesTab() {
 
   return (
     <div className="space-y-6">
-      <Card className="p-6 space-y-6">
+      <Card className="p-6">
         <div className="flex items-center justify-between gap-4">
           <h3 className="font-semibold">{t('settings.language')}</h3>
           <Tabs selectedKey={lang} onSelectionChange={(key) => handleLang(String(key))}>
             <Tabs.List>
               <Tabs.Tab id="zh" className="w-30">简体中文<Tabs.Indicator /></Tabs.Tab>
               <Tabs.Tab id="en" className="w-30">English<Tabs.Indicator /></Tabs.Tab>
-            </Tabs.List>
-          </Tabs>
-        </div>
-
-        <div className="flex items-center justify-between gap-4">
-          <h3 className="font-semibold">{t('settings.theme')}</h3>
-          <Tabs selectedKey={theme} onSelectionChange={(key) => handleTheme(String(key))}>
-            <Tabs.List>
-              <Tabs.Tab id="light">{t('settings.themeLight')}<Tabs.Indicator /></Tabs.Tab>
-              <Tabs.Tab id="dark">{t('settings.themeDark')}<Tabs.Indicator /></Tabs.Tab>
-              <Tabs.Tab id="system">{t('settings.themeSystem')}<Tabs.Indicator /></Tabs.Tab>
             </Tabs.List>
           </Tabs>
         </div>

@@ -1,10 +1,10 @@
 'use client';
 
 import { useState } from 'react';
+import type { ComponentType, ReactNode, SVGProps } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
-import { Chip, Tabs } from '@heroui/react';
-import type { ComponentType, SVGProps } from 'react';
+import { Button, Chip } from '@heroui/react';
 import {
   ChevronRight,
   Comments,
@@ -17,7 +17,6 @@ import {
   Sparkles,
 } from '@gravity-ui/icons';
 import { getStoredUser } from '../../api/auth';
-import type { ReactNode } from 'react';
 import AccountTab from './AccountTab';
 import PreferencesTab from './PreferencesTab';
 import AppearanceTab from './AppearanceTab';
@@ -84,19 +83,19 @@ export const SETTING_ROUTES: SettingRoute[] = [
     render: () => <SecurityTab />,
   },
   {
-    id: 'accessKeys',
-    labelKey: 'settings.accessKeysTab',
-    descKey: 'settings.accessKeysDesc',
-    icon: Key,
-    render: () => <AccessKeysTab />,
-  },
-  {
     id: 'account',
     labelKey: 'settings.accountTab',
     descKey: 'settings.accountDesc',
     icon: Person,
     adminOnly: true,
     render: () => <AccountTab />,
+  },
+  {
+    id: 'accessKeys',
+    labelKey: 'settings.accessKeysTab',
+    descKey: 'settings.accessKeysDesc',
+    icon: Key,
+    render: () => <AccessKeysTab />,
   },
   {
     id: 'riskPolicy',
@@ -113,6 +112,32 @@ export function getVisibleSettingRoutes(): SettingRoute[] {
   return SETTING_ROUTES.filter((r) => !r.adminOnly || isAdmin);
 }
 
+// Captioned groups for the desktop-wide rail, mirroring the sidebar's
+// section structure. Mobile keeps the flat route list.
+interface SettingGroup {
+  key: string;
+  labelKey: string;
+  routeIds: string[];
+}
+
+const SETTING_GROUPS: SettingGroup[] = [
+  {
+    key: 'general',
+    labelKey: 'settings.section.general',
+    routeIds: ['preferences', 'appearance'],
+  },
+  {
+    key: 'ai',
+    labelKey: 'settings.section.ai',
+    routeIds: ['mcp', 'ai', 'channels'],
+  },
+  {
+    key: 'account',
+    labelKey: 'settings.section.account',
+    routeIds: ['security', 'account', 'accessKeys', 'riskPolicy'],
+  },
+];
+
 export default function SettingsPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -120,6 +145,9 @@ export default function SettingsPage() {
   const [activeId, setActiveId] = useState<string>('preferences');
 
   const visibleRoutes = SETTING_ROUTES.filter((r) => !r.adminOnly || isAdmin);
+  const routeById = new Map(visibleRoutes.map((r) => [r.id, r]));
+  const activeRoute =
+    visibleRoutes.find((r) => r.id === activeId) ?? visibleRoutes[0] ?? null;
 
   return (
     <div className="space-y-3">
@@ -151,30 +179,54 @@ export default function SettingsPage() {
         </div>
       </div>
 
-      {/* 桌面端：Tabs 竖排切换 */}
+      {/* 桌面端宽屏：侧边栏式分组导航 —— 分组标题、分割线与导航行
+          完全复用侧边栏的 lw-nav-caption / Button 行样式。 */}
       <div className="hidden sm:block">
-        <Tabs
-          orientation="vertical"
-          selectedKey={activeId}
-          onSelectionChange={(key) => setActiveId(String(key))}
-          className="items-start"
-        >
-          <Tabs.ListContainer className="flex justify-center h-auto self-start">
-            <Tabs.List aria-label={t('settings.tabsLabel')} className="my-0 px-2 w-35">
-              {visibleRoutes.map((route) => (
-                <Tabs.Tab key={route.id} id={route.id}>
-                  {t(route.labelKey)}
-                  <Tabs.Indicator />
-                </Tabs.Tab>
-              ))}
-            </Tabs.List>
-          </Tabs.ListContainer>
-          {visibleRoutes.map((route) => (
-            <Tabs.Panel key={route.id} id={route.id}>
-              {route.render()}
-            </Tabs.Panel>
-          ))}
-        </Tabs>
+        <div className="flex items-start gap-6">
+          <nav
+            aria-label={t('settings.tabsLabel')}
+            className="w-56 shrink-0 self-stretch border-r border-default-200/70 pr-5 dark:border-default-800"
+          >
+            {SETTING_GROUPS.map((group) => {
+              const routes = group.routeIds
+                .map((id) => routeById.get(id))
+                .filter((r): r is SettingRoute => !!r);
+              if (routes.length === 0) return null;
+              return (
+                <div key={group.key} className="flex flex-col">
+                  <div className="lw-nav-caption">{t(group.labelKey)}</div>
+                  {routes.map((route) => {
+                    const Icon = route.icon;
+                    const isActive = activeId === route.id;
+                    return (
+                      <div key={route.id} className="my-0.5 flex items-center">
+                        <Button
+                          variant="ghost"
+                          aria-current={isActive}
+                          onPress={() => setActiveId(route.id)}
+                          className={`w-full justify-start rounded-[12px] px-3 ${
+                            isActive ? 'bg-accent-soft text-accent-soft-foreground' : ''
+                          }`}
+                        >
+                          <Icon className="size-4 shrink-0" />
+                          <span
+                            className={`overflow-hidden whitespace-nowrap ${
+                              isActive ? 'font-semibold' : 'font-medium'
+                            }`}
+                          >
+                            {t(route.labelKey)}
+                          </span>
+                        </Button>
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })}
+          </nav>
+
+          <div className="min-w-0 flex-1">{activeRoute && activeRoute.render()}</div>
+        </div>
       </div>
     </div>
   );

@@ -835,6 +835,11 @@ export default {
     },
     settings: {
       tabsLabel: '设置选项',
+      section: {
+        general: '通用',
+        ai: 'AI',
+        account: '账户与安全',
+      },
       accessKeysTab: '访问密钥',
       accountTab: '账户管理',
       preferencesTab: '首选项',
@@ -842,9 +847,9 @@ export default {
       securityRoutes: '设置',
       securityBack: '返回设置',
       securityRoutesDesc: '选择一项进入对应设置',
-      preferencesDesc: '语言、主题、提示音与事件流',
+      preferencesDesc: '语言、提示音与事件流',
       appearanceTab: '外观',
-      appearanceDesc: '背景壁纸、界面模糊与透明度',
+      appearanceDesc: '主题、背景壁纸、界面模糊与透明度',
       wallpaper: {
         title: '背景壁纸',
         desc: '让工作台悬浮在一张可调壁纸上：选择内置或自定义图片，再调节模糊、遮罩与界面透明度。',

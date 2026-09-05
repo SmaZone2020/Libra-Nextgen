@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { CSSProperties, ChangeEvent } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Button, Card } from '@heroui/react';
+import { Button, Card, Tabs } from '@heroui/react';
 import { Check, Picture, Xmark } from '@gravity-ui/icons';
 import {
   WALLPAPER_BLUR_MAX,
@@ -16,6 +16,7 @@ import {
   resetWallpaperPrefs,
   type WallpaperPrefs,
 } from '../../utils/wallpaper';
+import { applyTheme, getStoredTheme, type ThemePreference } from '../../utils/theme';
 
 const FROST_SCALE_MAX = Math.round(WALLPAPER_FROST_MAX * 100);
 
@@ -108,6 +109,14 @@ export default function AppearanceTab() {
   const previewRef = useRef<HTMLDivElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
+  const [theme, setTheme] = useState<ThemePreference>(() => getStoredTheme());
+
+  const handleTheme = (key: string) => {
+    const next = key as ThemePreference;
+    setTheme(next);
+    applyTheme(next);
+  };
+
   const enabled = isWallpaperEnabled(prefs);
 
   // Live preview mirrors the same CSS variables the app frame consumes.
@@ -157,6 +166,19 @@ export default function AppearanceTab() {
   return (
     <div className="space-y-6">
       <Card className="p-6">
+        <div className="flex items-center justify-between gap-4">
+          <h3 className="font-semibold">{t('settings.theme')}</h3>
+          <Tabs selectedKey={theme} onSelectionChange={(key) => handleTheme(String(key))}>
+            <Tabs.List>
+              <Tabs.Tab id="light">{t('settings.themeLight')}<Tabs.Indicator /></Tabs.Tab>
+              <Tabs.Tab id="dark">{t('settings.themeDark')}<Tabs.Indicator /></Tabs.Tab>
+              <Tabs.Tab id="system">{t('settings.themeSystem')}<Tabs.Indicator /></Tabs.Tab>
+            </Tabs.List>
+          </Tabs>
+        </div>
+      </Card>
+
+      <Card className="p-6">
         <div className="flex items-start justify-between gap-4">
           <div>
             <h3 className="font-semibold">{t('settings.wallpaper.title')}</h3>
@@ -181,9 +203,6 @@ export default function AppearanceTab() {
         <div className="flex items-center justify-between gap-4">
           <div>
             <h3 className="font-semibold">{t('settings.wallpaper.source')}</h3>
-            <p className="mt-1 text-sm text-default-500">
-              {t('settings.appearanceDesc')}
-            </p>
           </div>
           <span className="rounded-full bg-default/10 px-3 py-1 text-xs font-medium text-foreground">
             {selectedLabel}

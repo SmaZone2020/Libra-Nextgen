@@ -836,6 +836,11 @@ export default {
     },
     settings: {
       tabsLabel: 'Settings options',
+      section: {
+        general: 'General',
+        ai: 'AI',
+        account: 'Account & Security',
+      },
       accessKeysTab: 'Access Keys',
       accountTab: 'Account',
       preferencesTab: 'Preferences',
@@ -843,9 +848,9 @@ export default {
       securityRoutes: 'Settings',
       securityBack: 'Back to settings',
       securityRoutesDesc: 'Choose an item to open its settings',
-      preferencesDesc: 'Language, theme, sound and event feed',
+      preferencesDesc: 'Language, sound and event feed',
       appearanceTab: 'Appearance',
-      appearanceDesc: 'Background wallpaper, blur and translucency',
+      appearanceDesc: 'Theme, wallpaper, blur and translucency',
       wallpaper: {
         title: 'Background Wallpaper',
         desc: 'Float the workbench over a tunable wallpaper: pick a bundled or custom image, then adjust blur, dimming and UI translucency.',
