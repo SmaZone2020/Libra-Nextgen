@@ -66,10 +66,14 @@ var useSqlite = resolution.Effective == StoreKind.Sqlite;
 if (useSqlite)
 {
     var configDir = userConfigPath is not null ? Path.GetDirectoryName(userConfigPath) : null;
-    var sqliteDbPath = resolvedConfig!.Storage.DbPath
-        ?? (configDir is not null
+    // A configured-but-empty dbPath (e.g. the shell's default config carries
+    // "dbPath":"") must resolve to the default location, not Path.GetFullPath("").
+    var configuredDbPath = resolvedConfig!.Storage.DbPath;
+    var sqliteDbPath = string.IsNullOrWhiteSpace(configuredDbPath)
+        ? (configDir is not null
             ? Path.Combine(configDir, "data", "libra.db")
-            : Path.Combine(AppContext.BaseDirectory, "data", "libra.db"));
+            : Path.Combine(AppContext.BaseDirectory, "data", "libra.db"))
+        : configuredDbPath;
     builder.Services.AddSingleton(_ => new SqliteDbContext(sqliteDbPath));
 }
 
