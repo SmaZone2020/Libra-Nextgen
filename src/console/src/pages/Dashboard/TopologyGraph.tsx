@@ -92,7 +92,7 @@ export function TopologyGraph({ agents }: { agents: AgentListItem[] }) {
         scaleLimit: { min: 0.8, max: 4.5 },
         data: [],
         edges: [],
-        force: { repulsion: 320, edgeLength: 120, gravity: 0.06 },
+        force: { repulsion: 110, edgeLength: 64, gravity: 0.18 },
         label: { show: true, position: 'bottom', fontSize: 11, color: '#9ca3af' },
         emphasis: { focus: 'adjacency' },
       }],
