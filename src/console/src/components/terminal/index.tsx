@@ -45,7 +45,10 @@ const SHADOW_EXTRA_CSS = `
   .xterm,
   .xterm-viewport,
   .xterm-screen,
-  .xterm canvas {
+  .xterm canvas,
+  .xterm-rows,
+  .xterm-rows * {
+    background: transparent !important;
     background-color: transparent !important;
   }
 `;
@@ -55,7 +58,7 @@ function resolveTerminalTheme(): ITheme {
   const foreground = dark ? '#d7dae0' : '#1f2329';
   const accent = dark ? '#7aa2f7' : '#2563eb';
   return {
-    background: 'transparent',
+    background: 'rgba(0,0,0,0)',
     foreground,
     cursor: accent,
     cursorAccent: foreground,
@@ -80,7 +83,7 @@ function resolveTerminalTheme(): ITheme {
 }
 
 const TerminalView = forwardRef<TerminalHandle, Props>(function TerminalView(
-  { className, style, onInput, onResize, disabled, fontSize = 14 },
+  { className, style, onInput, onResize, disabled, fontSize = 18 },
   ref,
 ) {
   const hostRef = useRef<HTMLDivElement>(null);

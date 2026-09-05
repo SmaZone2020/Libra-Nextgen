@@ -285,7 +285,7 @@ export default function ShellPage() {
             </div>
 
             {/* Centered font-size stepper */}
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-1.5 my-1">
               <NumberField
                 aria-label={t('shell.fontSize')}
                 value={fontSize}
@@ -298,7 +298,7 @@ export default function ShellPage() {
                   <NumberField.DecrementButton className="grid h-6 w-6 place-items-center rounded-[7px] text-[14px] opacity-60 transition hover:opacity-100 hover:bg-black/10 dark:hover:bg-white/15">
                     −
                   </NumberField.DecrementButton>
-                  <NumberField.Input className="w-8 bg-transparent text-center font-mono text-[12px] tabular-nums outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none" />
+                  <NumberField.Input className="w-12 bg-transparent text-center font-mono text-[12px] tabular-nums outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none" />
                   <NumberField.IncrementButton className="grid h-6 w-6 place-items-center rounded-[7px] text-[14px] opacity-60 transition hover:opacity-100 hover:bg-black/10 dark:hover:bg-white/15">
                     +
                   </NumberField.IncrementButton>
