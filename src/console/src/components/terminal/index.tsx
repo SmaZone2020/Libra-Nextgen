@@ -20,43 +20,22 @@ interface Props {
   onInput?: (data: string) => void;
   onResize?: (cols: number, rows: number) => void;
   disabled?: boolean;
-  /** Font family stack; default is JetBrains Mono (Latin) + CJK fallback. */
-  fontFamily?: string;
 }
 
-/** Default font stack: native Windows/macOS monospace first (Cascadia Mono /
- *  Consolas / SF Mono — always available, exactly one cell per ASCII glyph,
- *  no webfont loading race), bundled JetBrains Mono as a lighter cross-platform
- *  option, and a CJK font at the end (2 cells per glyph). */
-const DEFAULT_FONT =
-  '"Cascadia Mono", Consolas, ui-monospace, "JetBrainsMono", "LibraTermCJK", monospace';
-
-// VS Code-like terminal palette. Colors resolve from the app's live design
-// tokens so the terminal follows the light/dark theme (and wallpaper frost)
-// instead of being a permanently dark box.
-function cssVar(name: string, fallback: string): string {
-  try {
-    const value = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
-    return value || fallback;
-  } catch {
-    return fallback;
-  }
-}
-
+/** Theme for the integrated terminal: fully transparent surface so the
+ *  terminal melts into the workspace, with theme-aware foreground/cursor.
+ *  Font stays at xterm's built-in default (browser monospace) — no custom
+ *  webfont stack that could race or fall back into wrong-width glyphs. */
 function resolveTerminalTheme(): ITheme {
   const dark = document.documentElement.classList.contains('dark');
-  const foreground = cssVar('--lw-terminal-fg', dark ? '#e6e9ee' : '#23272e');
-  const accent = cssVar('--color-accent', dark ? '#7aa2f7' : '#2563eb');
+  const foreground = dark ? '#d7dae0' : '#1f2329';
+  const accent = dark ? '#7aa2f7' : '#2563eb';
   return {
-    // Transparent background: the terminal melts into the workspace surface
-    // (and any wallpaper / frost behind it) instead of painting its own box.
     background: 'transparent',
     foreground,
     cursor: accent,
     cursorAccent: foreground,
-    selectionBackground: dark ? 'rgba(122, 162, 247, 0.32)' : 'rgba(37, 99, 235, 0.24)',
-    // Subtle, theme-matched ANSI set (calm blues/purples, softened yellow/red)
-    // — closer to Codex/VSCode "One Dark"-ish terminals than the raw neon set.
+    selectionBackground: dark ? 'rgba(122, 162, 247, 0.32)' : 'rgba(37, 99, 235, 0.22)',
     black: dark ? '#3b4252' : '#3f4653',
     red: dark ? '#e06c75' : '#d64550',
     green: dark ? '#98c379' : '#3d8f52',
@@ -77,7 +56,7 @@ function resolveTerminalTheme(): ITheme {
 }
 
 const TerminalView = forwardRef<TerminalHandle, Props>(function TerminalView(
-  { className, style, onInput, onResize, disabled, fontFamily },
+  { className, style, onInput, onResize, disabled },
   ref,
 ) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -92,8 +71,6 @@ const TerminalView = forwardRef<TerminalHandle, Props>(function TerminalView(
   onInputRef.current = onInput;
   const onResizeRef = useRef(onResize);
   onResizeRef.current = onResize;
-  const fontFamilyRef = useRef(fontFamily);
-  fontFamilyRef.current = fontFamily;
 
   useImperativeHandle(ref, () => ({
     write(text: string) {
@@ -127,15 +104,15 @@ const TerminalView = forwardRef<TerminalHandle, Props>(function TerminalView(
     let ro: ResizeObserver | null = null;
     let themeObserver: MutationObserver | null = null;
 
-    // Create the terminal synchronously so the ref is usable immediately
-    // (shell output arriving before webfonts finish is not lost). Cell size
-    // is re-measured once the bundled font is ready.
-    const FONT = fontFamilyRef.current ?? DEFAULT_FONT;
+    // Explicit pure-default monospace. This is critical: the app's global
+    // font reset (`* { font-family: "vivo Sans" … }`) is proportional, and
+    // xterm reads the DOM element's computed font when no fontFamily is set —
+    // proportional glyphs drawn into mono cells overlap ("MA" collisions).
     const t = new Terminal({
       cursorBlink: true,
       cursorStyle: 'block',
       convertEol: true,
-      fontFamily: FONT,
+      fontFamily: 'monospace',
       fontSize: 13,
       lineHeight: 1.15,
       scrollback: 10000,
@@ -149,7 +126,7 @@ const TerminalView = forwardRef<TerminalHandle, Props>(function TerminalView(
     fit = f;
 
     // Live theme switching: re-resolve colors whenever the document theme
-    // class changes (light <-> dark) — also fires on first connection.
+    // class changes (light <-> dark).
     const applyTheme = () => {
       if (termRef.current) {
         try {
@@ -185,26 +162,8 @@ const TerminalView = forwardRef<TerminalHandle, Props>(function TerminalView(
       return false;
     };
 
-    // Fit once after layout settles, then again once the webfont is loaded.
-    // fonts.ready alone does NOT force-load an unused webfont, so explicitly
-    // load a Latin sample first — otherwise xterm measures a fallback cell
-    // width (7px) and then renders the wider JetBrains glyphs (7.8px) into
-    // those cells, which visually misaligns letters like a/w/m.
     requestAnimationFrame(tryFit);
     setTimeout(tryFit, 0);
-    const fontSample = 'WmsXZ012aA';
-    Promise.all([
-      document.fonts.load(`13px ${FONT}`, fontSample),
-      document.fonts.load('13px "JetBrainsMono"', fontSample),
-      document.fonts.ready,
-    ])
-      .catch(() => { /* fallback fonts still fine */ })
-      .then(() => {
-        if (disposed) return;
-        // Force xterm to re-measure the cell now that the real font is ready.
-        t.options.fontFamily = FONT;
-        tryFit();
-      });
 
     ro = new ResizeObserver(() => {
       if (disposed) return;

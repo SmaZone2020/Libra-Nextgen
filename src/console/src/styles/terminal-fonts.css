@@ -1,180 +1,18 @@
-/* Terminal fonts: JetBrains Mono (Latin) + monospace CJK fallback.
-   xterm requires a monospace font and renders CJK as 2 cells; the CJK
-   fallback (NSimSun / Sarasa / Noto Sans Mono CJK) keeps Chinese aligned. */
-
-/* Ensure the xterm renderer always uses the monospace stack. The global
-   `* { font-family: ... }` reset in app.css targets every descendant too,
-   so we must cover the whole xterm subtree (.xterm-rows renders the text),
-   not just the root element. */
-.xterm,
-.xterm * {
-  font-family: "Cascadia Mono", Consolas, ui-monospace, "JetBrainsMono",
-    "LibraTermCJK", monospace !important;
+/* Terminal surface rules only — no custom webfonts.
+   Fonts stay at pure browser monospace on purpose. The root .xterm element
+   MUST carry an explicit monospace family: xterm falls back to the DOM
+   element's computed font when none is set, and the app's global proportional
+   font reset ("vivo Sans") would otherwise make glyphs overlap in cells. */
+.xterm {
+  font-family: ui-monospace, "Cascadia Mono", Consolas, monospace !important;
 }
 
 /* Transparent terminal surface: xterm ships a black default for the viewport
-   and canvas, so override it explicitly — the shell should melt into the
-   workspace instead of painting a black box. */
+   and canvas, so override it explicitly — the shell melts into the workspace
+   instead of painting a black box. */
 .xterm,
 .xterm-viewport,
 .xterm-screen,
 .xterm canvas {
   background-color: transparent !important;
-}
-
-@font-face {
-  font-family: 'JetBrainsMono';
-  src: url('../assets/fonts/JetBrainsMono/JetBrainsMono-Thin.woff2') format('woff2');
-  font-weight: 100;
-  font-style: normal;
-  font-display: swap;
-  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
-    U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
-}
-@font-face {
-  font-family: 'JetBrainsMono';
-  src: url('../assets/fonts/JetBrainsMono/JetBrainsMono-ExtraLight.woff2') format('woff2');
-  font-weight: 200;
-  font-style: normal;
-  font-display: swap;
-  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
-    U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
-}
-@font-face {
-  font-family: 'JetBrainsMono';
-  src: url('../assets/fonts/JetBrainsMono/JetBrainsMono-Light.woff2') format('woff2');
-  font-weight: 300;
-  font-style: normal;
-  font-display: swap;
-  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
-    U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
-}
-@font-face {
-  font-family: 'JetBrainsMono';
-  src: url('../assets/fonts/JetBrainsMono/JetBrainsMono-Regular.woff2') format('woff2');
-  font-weight: 400;
-  font-style: normal;
-  font-display: swap;
-  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
-    U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
-}
-@font-face {
-  font-family: 'JetBrainsMono';
-  src: url('../assets/fonts/JetBrainsMono/JetBrainsMono-Medium.woff2') format('woff2');
-  font-weight: 500;
-  font-style: normal;
-  font-display: swap;
-  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
-    U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
-}
-@font-face {
-  font-family: 'JetBrainsMono';
-  src: url('../assets/fonts/JetBrainsMono/JetBrainsMono-SemiBold.woff2') format('woff2');
-  font-weight: 600;
-  font-style: normal;
-  font-display: swap;
-  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
-    U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
-}
-@font-face {
-  font-family: 'JetBrainsMono';
-  src: url('../assets/fonts/JetBrainsMono/JetBrainsMono-Bold.woff2') format('woff2');
-  font-weight: 700;
-  font-style: normal;
-  font-display: swap;
-  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
-    U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
-}
-@font-face {
-  font-family: 'JetBrainsMono';
-  src: url('../assets/fonts/JetBrainsMono/JetBrainsMono-ExtraBold.woff2') format('woff2');
-  font-weight: 800;
-  font-style: normal;
-  font-display: swap;
-  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
-    U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
-}
-@font-face {
-  font-family: 'JetBrainsMono';
-  src: url('../assets/fonts/JetBrainsMono/JetBrainsMono-ThinItalic.woff2') format('woff2');
-  font-weight: 100;
-  font-style: italic;
-  font-display: swap;
-  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
-    U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
-}
-@font-face {
-  font-family: 'JetBrainsMono';
-  src: url('../assets/fonts/JetBrainsMono/JetBrainsMono-ExtraLightItalic.woff2') format('woff2');
-  font-weight: 200;
-  font-style: italic;
-  font-display: swap;
-  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
-    U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
-}
-@font-face {
-  font-family: 'JetBrainsMono';
-  src: url('../assets/fonts/JetBrainsMono/JetBrainsMono-LightItalic.woff2') format('woff2');
-  font-weight: 300;
-  font-style: italic;
-  font-display: swap;
-  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
-    U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
-}
-@font-face {
-  font-family: 'JetBrainsMono';
-  src: url('../assets/fonts/JetBrainsMono/JetBrainsMono-Italic.woff2') format('woff2');
-  font-weight: 400;
-  font-style: italic;
-  font-display: swap;
-  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
-    U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
-}
-@font-face {
-  font-family: 'JetBrainsMono';
-  src: url('../assets/fonts/JetBrainsMono/JetBrainsMono-MediumItalic.woff2') format('woff2');
-  font-weight: 500;
-  font-style: italic;
-  font-display: swap;
-  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
-    U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
-}
-@font-face {
-  font-family: 'JetBrainsMono';
-  src: url('../assets/fonts/JetBrainsMono/JetBrainsMono-SemiBoldItalic.woff2') format('woff2');
-  font-weight: 600;
-  font-style: italic;
-  font-display: swap;
-  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
-    U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
-}
-@font-face {
-  font-family: 'JetBrainsMono';
-  src: url('../assets/fonts/JetBrainsMono/JetBrainsMono-BoldItalic.woff2') format('woff2');
-  font-weight: 700;
-  font-style: italic;
-  font-display: swap;
-  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
-    U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
-}
-@font-face {
-  font-family: 'JetBrainsMono';
-  src: url('../assets/fonts/JetBrainsMono/JetBrainsMono-ExtraBoldItalic.woff2') format('woff2');
-  font-weight: 800;
-  font-style: italic;
-  font-display: swap;
-  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
-    U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
-}
-
-@font-face {
-  font-family: 'LibraTermCJK';
-  src: local('Noto Sans Mono CJK SC'), local('Sarasa Mono SC'),
-    local('NSimSun'), local('SimSun'),
-    local('Microsoft YaHei UI'), local('Microsoft YaHei'),
-    local('PingFang SC'), local('Hiragino Sans GB');
-  font-display: swap;
-  unicode-range: U+2E80-2FFF, U+3000-303F, U+3040-30FF, U+3100-312F, U+3200-32FF,
-    U+3400-4DBF, U+4E00-9FFF, U+A000-A48F, U+A960-A97F, U+AC00-D7AF, U+F900-FAFF,
-    U+FE30-FE4F, U+FF00-FFEF;
 }
