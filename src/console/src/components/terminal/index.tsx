@@ -104,18 +104,15 @@ const TerminalView = forwardRef<TerminalHandle, Props>(function TerminalView(
     let ro: ResizeObserver | null = null;
     let themeObserver: MutationObserver | null = null;
 
-    // Explicit pure-default monospace, identical for canvas measurement and
-    // DOM text: xterm compensates each DOM character with letter-spacing, and
-    // any divergence between the measured font and the rendered font makes
-    // glyphs overlap (e.g. "MA"). The global "vivo Sans" reset is excluded
-    // from .xterm via a high-specificity CSS rule.
+    // Official-demo-minimal configuration. Font stays at xterm's built-in
+    // default ("courier-new, courier, monospace") — no custom stacks. The
+    // only additions are a transparent background (with allowTransparency,
+    // xterm v5 paints black otherwise) and theme colors.
     const t = new Terminal({
       cursorBlink: true,
       cursorStyle: 'block',
       convertEol: true,
-      fontFamily: 'monospace',
-      fontSize: 13,
-      lineHeight: 1.15,
+      allowTransparency: true,
       scrollback: 10000,
       theme: resolveTerminalTheme(),
     });

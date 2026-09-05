@@ -1,14 +1,12 @@
 /* Terminal surface rules only — no custom webfonts.
-   Fonts stay at pure browser monospace on purpose. The root .xterm element
-   AND every descendant MUST carry the SAME generic 'monospace' that xterm
-   uses for canvas measurement. The app's global font reset is
-   `* { font-family: "vivo Sans", ... }` (proportional); if it leaks into
-   .xterm-rows, xterm's per-char letter-spacing compensation computes wrong
-   values and glyphs overlap. `html` prefix keeps specificity above `*`
-   regardless of CSS order. */
+   Font matches xterm's official built-in default exactly
+   ("courier-new, courier, monospace"). The app's global font reset is
+   `* { font-family: "vivo Sans", ... }` (proportional); it must never leak
+   into .xterm-rows, so keep the same family on the DOM side that xterm uses
+   for its width measurement. `html` prefix beats `*` regardless of order. */
 html .xterm,
 html .xterm * {
-  font-family: monospace !important;
+  font-family: "courier-new", courier, monospace !important;
 }
 
 /* Transparent terminal surface: xterm ships a black default for the viewport
