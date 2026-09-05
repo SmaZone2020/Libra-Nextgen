@@ -4,8 +4,8 @@ export default {
       dashboard: '概览',
       agents: '设备',
       shell: '终端',
-      explorer: '文件',
-      system: '系统',
+      explorer: '文件磁盘',
+      system: '系统信息',
       auditLogs: '审计',
       softwareData: '软件数据',
       proxyBrowser: '代理浏览',
@@ -215,8 +215,7 @@ export default {
       },
 
       activityTitle: '最近活动',
-      activityAll: '查看全部',
-      activityCollapse: '收起',
+      activityClear: '清空',
       activityEmpty: '暂无活动，等待 Agent 事件…',
     },
     agents: {

@@ -216,8 +216,7 @@ export default {
       },
 
       activityTitle: 'Recent Activity',
-      activityAll: 'View all',
-      activityCollapse: 'Collapse',
+      activityClear: 'Clear',
       activityEmpty: 'No activity yet, waiting for agent events…',
     },
     agents: {

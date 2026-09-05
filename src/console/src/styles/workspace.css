@@ -427,12 +427,13 @@
   color: var(--lw-text-soft);
 }
 
-/* Activity stream rows: borderless list, hairline separators only. */
+/* Activity stream rows: borderless list, hairline separators only. Fixed
+   40px row height so the 3-row scroll window tiles exactly. */
 .lw-activity-row {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: 10px;
-  padding: 9px 2px;
+  height: 40px;
   font-size: 13.5px;
 }
 .lw-activity-row + .lw-activity-row {
@@ -443,6 +444,12 @@
   font-size: 11px;
   color: var(--lw-text-soft);
   font-variant-numeric: tabular-nums;
+}
+/* Shows exactly three 40px rows; older entries scroll. */
+.lw-activity-scroll {
+  max-height: 120px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 /* ---- wallpaper picker (settings) ------------------------------------------- */

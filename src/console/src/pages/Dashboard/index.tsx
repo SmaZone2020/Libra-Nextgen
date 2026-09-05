@@ -42,7 +42,6 @@ export default function Dashboard() {
   const [range, setRange] = useState<TimeRange>('today');
   const [taskStats, setTaskStats] = useState({ tasks: 0, pending: 0 });
   const [activity, setActivity] = useState<EventItem[]>([]);
-  const [activityExpanded, setActivityExpanded] = useState(false);
 
   const rangeCfg = useMemo(() => RANGES.find((r) => r.key === range)!, [range]);
 
@@ -159,8 +158,6 @@ export default function Dashboard() {
     { key: t('dashboard.pending'), value: stats.pending },
   ], [stats, t]);
 
-  const visibleActivity = activityExpanded ? activity : activity.slice(0, 6);
-
   return (
     <div className="flex min-w-0 flex-col gap-6 py-1 sm:gap-8 sm:py-2">
       {/* Typographic metric strip — part of the workspace, not cards. */}
@@ -199,38 +196,40 @@ export default function Dashboard() {
       <section className="lw-panel">
         <div className="lw-panel-head">
           <h2 className="lw-panel-title">{t('dashboard.activityTitle')}</h2>
-          {activity.length > 6 && (
+          {activity.length > 0 && (
             <Button
               variant="ghost"
               size="sm"
-              className="h-7 rounded-[9px] text-[12px]"
-              onPress={() => setActivityExpanded((v) => !v)}
+              className="h-7 rounded-[9px] px-2 text-[12px] text-neutral-400 hover:text-danger dark:text-neutral-500"
+              onPress={() => setActivity([])}
             >
-              {activityExpanded ? t('dashboard.activityCollapse') : t('dashboard.activityAll')}
+              {t('dashboard.activityClear')}
             </Button>
           )}
         </div>
         <div className="lw-panel-body lw-panel-body--tight">
-          {visibleActivity.length === 0 ? (
+          {activity.length === 0 ? (
             <p className="py-4 text-[13px] text-neutral-400 dark:text-neutral-500">
               {t('dashboard.activityEmpty')}
             </p>
           ) : (
-            visibleActivity.map((e) => {
-              const rel = relativeTime(e.ts);
-              return (
-                <div key={e.id} className="lw-activity-row">
-                  <span
-                    aria-hidden="true"
-                    className={`mt-[7px] size-1.5 shrink-0 rounded-full ${KIND_DOT[e.kind] ?? 'bg-neutral-400'}`}
-                  />
-                  <span className="min-w-0 flex-1 truncate">{e.text}</span>
-                  <span className="lw-activity-time">
-                    {rel ? t(rel.key, { count: rel.count }) : ''}
-                  </span>
-                </div>
-              );
-            })
+            <div className="lw-activity-scroll">
+              {activity.map((e) => {
+                const rel = relativeTime(e.ts);
+                return (
+                  <div key={e.id} className="lw-activity-row">
+                    <span
+                      aria-hidden="true"
+                      className={`size-1.5 shrink-0 rounded-full ${KIND_DOT[e.kind] ?? 'bg-neutral-400'}`}
+                    />
+                    <span className="min-w-0 flex-1 truncate">{e.text}</span>
+                    <span className="lw-activity-time">
+                      {rel ? t(rel.key, { count: rel.count }) : ''}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
           )}
         </div>
       </section>
