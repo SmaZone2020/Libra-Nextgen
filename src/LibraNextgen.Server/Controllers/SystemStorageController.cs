@@ -6,8 +6,7 @@ namespace LibraNextgen.Service.Controllers;
 
 /// <summary>
 /// Reports which store the service is actually running on. The console reads
-/// this to show the storage switcher and the "fell back to SQLite" banner
-/// when requested != effective (docs/desktop-electron-architecture.md §3).
+/// this to render the storage switcher (docs/desktop-electron-architecture.md §3).
 /// </summary>
 [ApiController]
 [Route("api/system")]

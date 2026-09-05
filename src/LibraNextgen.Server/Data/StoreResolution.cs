@@ -27,7 +27,10 @@ public interface IMongoReachabilityProbe
 /// Decides which store the service runs on before the DI container is built:
 /// no user config file (cloud deployment) means Mongo exactly as today, never
 /// an exit; a desktop config selects sqlite directly or mongo after a startup
-/// probe with optional fallback to sqlite (docs/desktop-electron-architecture.md §3).
+/// probe. When a configured mongo store is unreachable the service exits with
+/// an error — falling back to sqlite was removed by product decision, so a
+/// silent store switch can never hide a broken MongoDB setup
+/// (docs/desktop-electron-architecture.md §3).
 /// </summary>
 public sealed class StoreModeResolver
 {
@@ -54,11 +57,8 @@ public sealed class StoreModeResolver
         if (reachable)
             return new StoreResolution(requested, StoreKind.Mongo, null, false, null);
 
-        if (userConfig.Storage.Fallback)
-            return new StoreResolution(requested, StoreKind.Sqlite, "mongo_unreachable", false, null);
-
         return new StoreResolution(
             requested, StoreKind.Mongo, "mongo_unreachable", true,
-            "MongoDB unreachable at startup and fallback is disabled (libra.conf.json storage.fallback=false).");
+            "MongoDB unreachable at startup and fallback to SQLite was removed; set storage.mode=sqlite to run on the local store.");
     }
 }

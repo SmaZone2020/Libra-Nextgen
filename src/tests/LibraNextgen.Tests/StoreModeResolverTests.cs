@@ -20,9 +20,9 @@ public class StoreModeResolverTests
         }
     }
 
-    private static UserConfig Config(string mode, bool fallback = true) => new()
+    private static UserConfig Config(string mode) => new()
     {
-        Storage = new UserStorageConfig { Mode = mode, Fallback = fallback },
+        Storage = new UserStorageConfig { Mode = mode },
     };
 
     private static Task<StoreResolution> Resolve(UserConfig? config, FakeProbe probe)
@@ -65,25 +65,15 @@ public class StoreModeResolverTests
     }
 
     [Fact]
-    public async Task ConfigMongo_Unreachable_WithFallback_FallsBackToSqlite()
+    public async Task ConfigMongo_Unreachable_RequestsExit_NeverSilentlySwitchesToSqlite()
     {
         var probe = new FakeProbe(false);
-        var resolution = await Resolve(Config("mongo", fallback: true), probe);
+        var resolution = await Resolve(Config("mongo"), probe);
 
         Assert.Equal(StoreKind.Mongo, resolution.Requested);
-        Assert.Equal(StoreKind.Sqlite, resolution.Effective);
-        Assert.Equal("mongo_unreachable", resolution.FallbackReason);
-        Assert.False(resolution.ExitRequested);
-    }
-
-    [Fact]
-    public async Task ConfigMongo_Unreachable_WithoutFallback_RequestsExit()
-    {
-        var probe = new FakeProbe(false);
-        var resolution = await Resolve(Config("mongo", fallback: false), probe);
-
         Assert.Equal(StoreKind.Mongo, resolution.Effective);
         Assert.True(resolution.ExitRequested);
+        Assert.Equal("mongo_unreachable", resolution.FallbackReason);
         Assert.NotNull(resolution.Error);
     }
 }

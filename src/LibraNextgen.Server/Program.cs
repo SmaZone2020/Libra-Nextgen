@@ -36,7 +36,7 @@ builder.Services.AddSingleton<MongoIndexBuilder>();
 
 // Desktop user config (libra.conf.json under --user-data-dir or the OS
 // application-data default), optionally overridden by CLI flags
-// (--store/--connect/--dbpath/--fallback) for portable launches. Absent in
+// (--store/--connect/--dbpath) for portable launches. Absent in
 // cloud deployments -> Mongo exactly as before: no probe, no exit.
 var userConfig = UserConfigLoader.TryLoad(builder.Configuration, out var userConfigPath);
 var resolvedConfig = UserConfigLoader.MergeOverrides(userConfig, builder.Configuration);
@@ -49,8 +49,9 @@ var mongoConnectString = builder.Configuration["connect"]
     ?? "mongodb://localhost:27017";
 
 // Startup store decision (docs/desktop-electron-architecture.md §3): sqlite
-// config -> sqlite; mongo config -> reachability probe with optional fallback
-// to sqlite; no config (cloud) -> mongo, never probing or exiting.
+// config -> sqlite; mongo config -> reachability probe, and an unreachable
+// MongoDB exits with an error (fallback to sqlite removed); no config
+// (cloud) -> mongo, never probing or exiting.
 var resolution = new StoreModeResolver(new MongoReachabilityProbe(mongoConnectString))
     .ResolveAsync(resolvedConfig)
     .GetAwaiter()
@@ -79,7 +80,7 @@ if (useSqlite)
 }
 
 // Exposed to /api/system/storage so the console can render the effective
-// store and the mongo-fallback banner (docs/desktop-electron-architecture.md §3).
+// store (docs/desktop-electron-architecture.md §3).
 builder.Services.AddSingleton<StoreResolution>(_ => resolution);
 
 // Beacon authentication (shared secret injected at build time)

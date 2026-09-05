@@ -33,12 +33,8 @@ public sealed class UserStorageConfig
     public string? ConnectString { get; set; }
 
     /// <summary>SQLite database file path; empty = &lt;userDataDir&gt;/data/libra.db.
-    /// Always held (also in mongo mode) as the fallback store.</summary>
+    /// Always held (also in mongo mode) so the path is a single source.</summary>
     public string? DbPath { get; set; }
-
-    /// <summary>When mongo is unreachable at startup: true = fall back to
-    /// sqlite and keep serving; false = exit with an error code.</summary>
-    public bool Fallback { get; set; } = true;
 }
 
 public sealed class UserListenerConfig
@@ -114,9 +110,9 @@ public static class UserConfigLoader
     }
 
     /// <summary>
-    /// Overlay CLI override keys (--store/--connect/--dbpath/--fallback) on top
-    /// of the loaded file config. Returns null only when neither a file config
-    /// nor any override key exists (pure cloud launch). A missing file with
+    /// Overlay CLI override keys (--store/--connect/--dbpath) on top of the
+    /// loaded file config. Returns null only when neither a file config nor
+    /// any override key exists (pure cloud launch). A missing file with
     /// overrides behaves like a desktop config (sqlite default) so portable
     /// launches can run without writing libra.conf.json.
     /// </summary>
@@ -125,8 +121,7 @@ public static class UserConfigLoader
         var store = cli["store"];
         var connect = cli["connect"];
         var dbPath = cli["dbpath"];
-        var fallback = cli["fallback"];
-        if (store is null && connect is null && dbPath is null && fallback is null)
+        if (store is null && connect is null && dbPath is null)
             return baseConfig;
 
         var config = baseConfig ?? new UserConfig();
@@ -136,8 +131,6 @@ public static class UserConfigLoader
             config.Storage.ConnectString = connect;
         if (dbPath is not null)
             config.Storage.DbPath = dbPath;
-        if (fallback is not null && bool.TryParse(fallback, out var fallbackEnabled))
-            config.Storage.Fallback = fallbackEnabled;
         return config;
     }
 }
