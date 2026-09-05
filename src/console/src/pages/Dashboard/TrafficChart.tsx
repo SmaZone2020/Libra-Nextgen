@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Button, Tabs } from '@heroui/react';
+import { Button, Card, Tabs } from '@heroui/react';
 import { ComposedChart } from '../../components/composed-chart';
 import { ChartTooltip } from '../../components/chart-tooltip';
 
@@ -63,12 +63,12 @@ export function TrafficChart({ trafficData, agentIds, agentHosts, range, onRange
   }, []);
 
   return (
-    <section className="lw-panel w-full">
-      <div className="lw-panel-head">
-        <h3 className="lw-panel-title">{t('dashboard.traffic')}</h3>
-      </div>
+    <Card className="w-full">
+      <Card.Header className="flex-row items-center justify-between gap-3">
+        <Card.Title className="font-semibold">{t('dashboard.traffic')}</Card.Title>
+      </Card.Header>
       {/* Tabs 与图表横向排列：左侧竖排时间范围 Tabs，右侧图表 */}
-      <div className="lw-panel-body--tight lw-panel-body flex flex-row items-stretch gap-4">
+      <Card.Content className="flex-row items-stretch gap-4">
         <Tabs
           selectedKey={range}
           orientation="vertical"
@@ -158,7 +158,7 @@ export function TrafficChart({ trafficData, agentIds, agentHosts, range, onRange
             })}
           </div>
         </div>
-      </div>
-    </section>
+      </Card.Content>
+    </Card>
   );
 }

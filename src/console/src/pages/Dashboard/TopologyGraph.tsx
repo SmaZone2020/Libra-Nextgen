@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef } from 'react';
 import * as echarts from 'echarts';
 import { useTranslation } from 'react-i18next';
+import { Card } from '@heroui/react';
 import type { AgentListItem } from '../../types/models';
 
 const LOGO_BASE = `${import.meta.env.BASE_URL}icon/`;
@@ -85,6 +86,7 @@ export function TopologyGraph({ agents }: { agents: AgentListItem[] }) {
         },
       },
       series: [{
+        height: '360px',
         type: 'graph',
         layout: 'force',
         roam: true,
@@ -143,9 +145,9 @@ export function TopologyGraph({ agents }: { agents: AgentListItem[] }) {
   const online = agents.filter((a) => a.status === 'Online').length;
 
   return (
-    <section className="lw-panel h-full w-full">
-      <div className="lw-panel-head">
-        <h3 className="lw-panel-title">{t('nav.topology.title')}</h3>
+    <Card className="h-full w-full">
+      <Card.Header className="flex-row items-center justify-between gap-3">
+        <Card.Title className="font-semibold">{t('nav.topology.title')}</Card.Title>
         <div className="flex items-center gap-3 text-xs text-neutral-400">
           <span className="flex items-center gap-1.5">
             <span className="inline-block size-2 rounded-full bg-emerald-500" />
@@ -156,16 +158,16 @@ export function TopologyGraph({ agents }: { agents: AgentListItem[] }) {
             {t('nav.topology.offline')} {agents.length - online}
           </span>
         </div>
-      </div>
-      <div className="lw-panel-body lw-panel-body--flush">
+      </Card.Header>
+      <Card.Content className="pt-0">
         {agents.length === 0 ? (
-          <div className="flex h-[220px] items-center justify-center text-neutral-500">
+          <div className="flex h-[280px] items-center justify-center text-neutral-500">
             {t('nav.topology.noAgents')}
           </div>
         ) : (
-          <div ref={ref} className="h-[220px] w-full" />
+          <div ref={ref} className="h-[280px] w-full" />
         )}
-      </div>
-    </section>
+      </Card.Content>
+    </Card>
   );
 }

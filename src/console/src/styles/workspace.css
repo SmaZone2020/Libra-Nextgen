@@ -24,7 +24,6 @@
   --lw-app-glow-a: oklch(0.6 0.13 255 / 0.08);
   --lw-app-glow-b: oklch(0.74 0.08 235 / 0.06);
   --lw-workspace-solid: oklch(0.999 0.001 253);
-  --lw-panel-solid: oklch(0.983 0.003 253);
   --lw-panel-inset: oklch(0.968 0.004 253);
   --lw-sep: oklch(0.9 0.006 253 / 0.85);
   --lw-veil-color: oklch(0.948 0.005 253);
@@ -45,7 +44,6 @@
   --lw-app-glow-a: oklch(0.6 0.15 255 / 0.11);
   --lw-app-glow-b: oklch(0.58 0.1 290 / 0.08);
   --lw-workspace-solid: oklch(0.215 0.008 258);
-  --lw-panel-solid: oklch(0.258 0.01 258);
   --lw-panel-inset: oklch(0.29 0.012 258);
   --lw-sep: oklch(0.95 0.008 258 / 0.09);
   --lw-veil-color: oklch(0.115 0.006 258);
@@ -112,7 +110,7 @@
 @media (min-width: 640px) {
   .lw-workspace {
     /* Only the top-left corner is rounded; right and bottom edges sit flush. */
-    border-radius: 24px 0 0 0;
+    border-radius: 28px 0 0 0;
     background-color: color-mix(
       in oklab,
       var(--lw-workspace-solid) calc((1 - var(--lw-frost, 0)) * 100%),
@@ -380,37 +378,6 @@
 }
 .lw-user-button:hover {
   background: color-mix(in oklab, var(--lw-text-strong) 7%, transparent);
-}
-
-/* ---- generic inner panel (radius level 2: 18px) ---------------------------- */
-.lw-panel {
-  border-radius: 18px;
-  background: var(--lw-panel-solid);
-  box-shadow: var(--lw-shadow-soft);
-  min-width: 0;
-  color: var(--lw-text-strong);
-}
-.lw-panel-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 15px 18px 0;
-}
-.lw-panel-title {
-  font-size: 13px;
-  font-weight: 650;
-  letter-spacing: 0.01em;
-  color: var(--lw-text-strong);
-}
-.lw-panel-body {
-  padding: 12px 18px 18px;
-}
-.lw-panel-body--flush {
-  padding-top: 0;
-}
-.lw-panel-body--tight {
-  padding-top: 6px;
 }
 
 /* ---- page typography blocks (dashboard overview) --------------------------- */

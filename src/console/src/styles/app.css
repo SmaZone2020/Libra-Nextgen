@@ -137,3 +137,9 @@ html {
 *::-webkit-scrollbar-thumb:hover {
   background: color-mix(in oklab, var(--color-muted, #737373) 52%, transparent);
 }
+
+@layer components {
+  .card {
+    @apply bg-surface/40 dark:bg-surface/60 backdrop-blur;
+  }
+}

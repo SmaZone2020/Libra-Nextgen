@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Card } from '@heroui/react';
 import { PieChart } from '../../components/pie-chart';
 import { ChartTooltip } from '../../components/chart-tooltip';
 import type { AgentListItem } from '../../types/models';
@@ -90,11 +91,11 @@ export function SystemDistributionChart({ agents }: SystemDistributionChartProps
   const total = useMemo(() => agents.length, [agents]);
 
   return (
-    <section className="lw-panel h-full w-full">
-      <div className="lw-panel-head">
-        <h3 className="lw-panel-title">{t('dashboard.systemDistribution')}</h3>
-      </div>
-      <div className="lw-panel-body lw-panel-body--tight">
+    <Card className="h-full w-full">
+      <Card.Header className="flex-row items-center justify-between gap-3">
+        <Card.Title className="font-semibold">{t('dashboard.systemDistribution')}</Card.Title>
+      </Card.Header>
+      <Card.Content>
         {total === 0 ? (
           <p className="text-sm text-default-500 py-10 text-center">
             {t('dashboard.noAgents')}
@@ -167,7 +168,7 @@ export function SystemDistributionChart({ agents }: SystemDistributionChartProps
             </div>
           </>
         )}
-      </div>
-    </section>
+      </Card.Content>
+    </Card>
   );
 }

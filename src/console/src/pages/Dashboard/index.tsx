@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Button, Modal } from '@heroui/react';
+import { Button, Card, Modal } from '@heroui/react';
 import { Heart, StarFill } from '@gravity-ui/icons';
 import { getAgentTraffic } from '../../api/agents';
 import { getTasks } from '../../api/tasks';
@@ -193,9 +193,9 @@ export default function Dashboard() {
       </div>
 
       {/* Recent activity — an inner panel like the charts. */}
-      <section className="lw-panel">
-        <div className="lw-panel-head">
-          <h2 className="lw-panel-title">{t('dashboard.activityTitle')}</h2>
+      <Card className="w-full">
+        <Card.Header className="flex-row items-center justify-between gap-3">
+          <Card.Title className="font-semibold">{t('dashboard.activityTitle')}</Card.Title>
           {activity.length > 0 && (
             <Button
               variant="ghost"
@@ -206,8 +206,8 @@ export default function Dashboard() {
               {t('dashboard.activityClear')}
             </Button>
           )}
-        </div>
-        <div className="lw-panel-body lw-panel-body--tight">
+        </Card.Header>
+        <Card.Content>
           {activity.length === 0 ? (
             <p className="py-4 text-[13px] text-neutral-400 dark:text-neutral-500">
               {t('dashboard.activityEmpty')}
@@ -231,8 +231,8 @@ export default function Dashboard() {
               })}
             </div>
           )}
-        </div>
-      </section>
+        </Card.Content>
+      </Card>
 
       {/* Session / system visuals — inner panels, one level under the workspace. */}
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-5 lg:gap-5">
