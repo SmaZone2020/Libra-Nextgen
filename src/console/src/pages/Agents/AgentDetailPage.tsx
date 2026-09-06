@@ -101,7 +101,6 @@ export default function AgentDetailPage() {
       [t('agents.process'), `${detail.processName} (PID ${detail.pid})`],
       [t('agents.elevated'), detail.isElevated ? t('common.yes') : t('common.no')],
       [t('agents.firstSeen'), new Date(detail.firstSeen).toLocaleString()],
-      [t('agents.lastSeen'), relativeTime(t, liveAgent?.lastSeen ?? detail.lastSeen)],
       [t('agents.heartbeat'), `${detail.heartbeatInterval}s`],
     );
     if (detail.geo) {

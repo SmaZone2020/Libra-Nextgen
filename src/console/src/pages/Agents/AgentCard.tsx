@@ -32,23 +32,20 @@ export function AgentCard({
 
   const action = isOnline && connected && onDisconnect
     ? (
-      <Button size="sm" variant="ghost" onPress={onDisconnect}>
+      <Button isIconOnly size="sm" variant="ghost" aria-label={t('common.disconnect')} onPress={onDisconnect}>
         <Xmark className="size-4" />
-        {t('common.disconnect')}
       </Button>
     )
     : isOnline && !connected && onConnect
       ? (
-        <Button size="sm" variant="primary" onPress={onConnect}>
+        <Button isIconOnly size="sm" variant="primary" aria-label={t('common.connect')} onPress={onConnect}>
           <PlugConnection className="size-4" />
-          {t('common.connect')}
         </Button>
       )
       : !isOnline && onConnect
         ? (
-          <Button size="sm" variant="primary" isDisabled>
+          <Button isIconOnly size="sm" variant="ghost" aria-label={t('common.connect')} isDisabled>
             <PlugConnection className="size-4" />
-            {t('common.connect')}
           </Button>
         )
         : null;
@@ -110,7 +107,7 @@ export function AgentCard({
               <span className={`font-medium ${tone.text}`}>{statusLabel(t, agent.status)}</span>
               <span className="text-neutral-400 dark:text-neutral-500">·</span>
               <span className="truncate text-neutral-500 dark:text-neutral-400">
-                {t('agents.lastSeen')} {relativeTime(t, agent.lastSeen)}
+                {relativeTime(t, agent.lastSeen)}
               </span>
             </div>
           </div>

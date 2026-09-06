@@ -71,7 +71,7 @@ export function Sidebar({
       <div className="flex h-full min-h-0 flex-col p-4">
         {/* Brand row */}
         <div
-          className={`mb-4 flex min-h-10 items-center ${
+          className={`flex min-h-10 items-center ${
             collapsed ? 'justify-center' : 'justify-between gap-2 pr-1 pl-1.5'
           }`}
         >

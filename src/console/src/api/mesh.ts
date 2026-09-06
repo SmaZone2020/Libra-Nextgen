@@ -9,7 +9,6 @@ export interface MeshNode {
   username?: string | null;
   createdAt: string;
   updatedAt?: string | null;
-  lastConnectedAt?: string | null;
   lastError?: string | null;
   connected: boolean;
   /** SQLite / MongoDB of the node service, known once connected. */

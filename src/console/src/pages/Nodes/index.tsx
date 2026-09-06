@@ -240,11 +240,6 @@ function RemoteNodeCard({
               {node.lastError}
             </p>
           )}
-          {node.lastConnectedAt && !node.connected && (
-            <p className="mt-0.5 text-xs text-default-400">
-              {t('nodes.lastConnectedAt')}: {new Date(node.lastConnectedAt).toLocaleString()}
-            </p>
-          )}
         </div>
         <StoreChip storeType={node.storageType ?? null} connected={node.connected} />
       </div>
