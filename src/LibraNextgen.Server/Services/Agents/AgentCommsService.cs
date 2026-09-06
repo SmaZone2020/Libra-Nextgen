@@ -87,6 +87,8 @@ public class AgentCommsService
 
         if (existing != null)
         {
+            var intervalMs = HeartbeatTiming.ResolveIntervalMs(request, heartbeatIntervalSeconds);
+            var intervalSeconds = (int)Math.Ceiling(intervalMs / 1_000.0);
             var updates = new List<FieldUpdate>
             {
                 new(nameof(Agent.Status), AgentStatus.Online),
@@ -99,16 +101,28 @@ public class AgentCommsService
                 new(nameof(Agent.ProcessName), request.ProcessName),
                 new(nameof(Agent.PublicKey), request.PublicKey),
                 new(nameof(Agent.Hwid), hwid),
-                new(nameof(Agent.HeartbeatInterval), heartbeatIntervalSeconds),
+                new(nameof(Agent.HeartbeatInterval), intervalSeconds),
+                new(nameof(Agent.HeartbeatIntervalMs), intervalMs),
             };
             if (request.Hardware != null)
                 updates.Add(new FieldUpdate(nameof(Agent.Hardware), request.Hardware));
             await _agents.UpdateByIdAsync(existing.Id, updates);
+            existing.Status = AgentStatus.Online;
+            existing.IpAddress = clientIp;
+            existing.Pid = request.Pid;
+            existing.IsElevated = request.IsElevated;
+            existing.OsVersion = request.OsVersion;
+            existing.Arch = request.Arch;
+            existing.ProcessName = request.ProcessName;
             existing.PublicKey = request.PublicKey;
             existing.Hardware = request.Hardware;
+            existing.Hwid = hwid;
+            existing.HeartbeatInterval = intervalSeconds;
+            existing.HeartbeatIntervalMs = intervalMs;
             return existing;
         }
 
+        var heartbeatIntervalMs = HeartbeatTiming.ResolveIntervalMs(request, heartbeatIntervalSeconds);
         var agent = new Agent
         {
             Hostname = request.Hostname,
@@ -122,7 +136,8 @@ public class AgentCommsService
             PublicKey = request.PublicKey,
             Hardware = request.Hardware,
             Hwid = hwid,
-            HeartbeatInterval = heartbeatIntervalSeconds,
+            HeartbeatInterval = (int)Math.Ceiling(heartbeatIntervalMs / 1_000.0),
+            HeartbeatIntervalMs = heartbeatIntervalMs,
             Status = AgentStatus.Online
         };
         await _agents.InsertAsync(agent);
@@ -204,6 +219,7 @@ public class RegisterRequest
     public string? BeaconSecret { get; set; }
     public HardwareInfo? Hardware { get; set; }
     public bool HasSessionKey { get; set; }
+    public long? HeartbeatIntervalMs { get; set; }
 }
 
 public class HeartbeatResponse

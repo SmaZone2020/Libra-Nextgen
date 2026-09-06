@@ -107,6 +107,7 @@ impl AgentEngine {
                 &self.config.beacon_secret,
                 &hw_json,
                 self.crypto.session_key().is_some(),
+                self.config.heartbeat_interval_ms,
             )
             .await?;
 

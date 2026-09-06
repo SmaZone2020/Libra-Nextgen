@@ -697,6 +697,7 @@ public class AgentCommsController : ControllerBase
     private async Task<object> BuildRegisterResponseAsync(
         Agent agent, RegisterRequest request, string? sessionKey, string sessionToken, IMalleableProfile profile)
     {
+        var heartbeatIntervalMs = HeartbeatTiming.GetIntervalMs(agent);
         return new
         {
             agent_id = agent.Id,
@@ -705,11 +706,11 @@ public class AgentCommsController : ControllerBase
             heartbeat_url = profile.GetHeartbeatUrl("/api/beacon"),
             result_url = profile.GetResultUrl("/api/beacon"),
             ws_url = profile.GetWebSocketUrl(""),
-            heartbeat_interval = profile.HeartbeatIntervalSeconds,
+            heartbeat_interval = HeartbeatTiming.GetIntervalSeconds(agent),
             jitter = profile.JitterPercent,
-            heartbeat_interval_ms = profile.HeartbeatIntervalSeconds * 1000,
+            heartbeat_interval_ms = heartbeatIntervalMs,
             jitter_percent = profile.JitterPercent,
-            profile = BuildTransformJson(profile)
+            profile = BuildTransformJson(profile, heartbeatIntervalMs)
         };
     }
 
@@ -724,7 +725,7 @@ public class AgentCommsController : ControllerBase
         return ("d", "ts", "r", "sign", "sid");
     }
 
-    private static object BuildTransformJson(IMalleableProfile profile)
+    private static object BuildTransformJson(IMalleableProfile profile, long? heartbeatIntervalMs = null)
     {
         if (profile is ConfigurableProfile cp)
         {
@@ -741,7 +742,7 @@ public class AgentCommsController : ControllerBase
                 userAgents = c.UserAgents,
                 paddingMin = c.PaddingMin,
                 paddingMax = c.PaddingMax,
-                heartbeatIntervalMs = c.HeartbeatIntervalSeconds * 1000,
+                heartbeatIntervalMs = heartbeatIntervalMs ?? (long)c.HeartbeatIntervalSeconds * 1000,
                 jitterPercent = c.JitterPercent,
                 aiPath = c.AiPath,
                 aiModels = c.AiModels,
@@ -760,7 +761,7 @@ public class AgentCommsController : ControllerBase
             userAgents = Array.Empty<string>(),
             paddingMin = 0,
             paddingMax = 64,
-            heartbeatIntervalMs = 10000,
+            heartbeatIntervalMs = heartbeatIntervalMs ?? 10000,
             jitterPercent = 0.2,
             aiPath = "/v1/chat/completions",
             aiModels = new[] { "gpt-4o-mini", "gpt-4o", "gpt-4.1-mini" },

@@ -15,6 +15,7 @@ public class Agent
     public DateTime FirstSeen { get; set; } = DateTime.UtcNow;
     public DateTime LastSeen { get; set; } = DateTime.UtcNow;
     public int HeartbeatInterval { get; set; } = 30;
+    public long HeartbeatIntervalMs { get; set; }
     public bool WsNeeded { get; set; }
     public string? Hwid { get; set; }
     public string? PublicKey { get; set; }

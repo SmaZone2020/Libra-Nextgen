@@ -112,8 +112,9 @@ innocuous-looking public paths to the real beacon controllers:
 
 The Agent generates an ephemeral RSA-2048 keypair, collects
 `hostname / userName / osVersion / arch / processName / pid / isElevated /
-publicKey / hardware`, and registers via one of three modes (request fields are
-camelCase):
+publicKey / hardware`, and appends the build-injected `heartbeatIntervalMs`
+(its self-declared heartbeat interval in milliseconds). It then registers via
+one of three modes (request fields are camelCase):
 
 **Mode A — loader / hybrid envelope (build-injected `server_public_key`, the
 recommended new path)**
@@ -139,7 +140,8 @@ POST {server}/api/beacon/register
 Content-Type: application/json
 
 { "hostname":"…","userName":"…","osVersion":"…","arch":"…",
-  "publicKey":"<SPKI DER b64>","beaconSecret":"","hardware":{…},"hasSessionKey":false }
+  "publicKey":"<SPKI DER b64>","beaconSecret":"","hardware":{…},
+  "hasSessionKey":false,"heartbeatIntervalMs":3000 }
 ```
 
 This endpoint also accepts `{"payload": "<AES-GCM(pre-session key, register JSON)>"}`.
@@ -159,7 +161,7 @@ RSA-OAEP-protected, so an on-path observer cannot decrypt it):
   "session_key": "<RSA-OAEP(AES-256 session key) b64>",   // empty when hasSessionKey=true
   "session_token": "<opaque session token>",              // on-wire identity; rotates per registration
   "ws_url": "ws://…/ws/chat",      // Console-only, Agent ignores
-  "heartbeat_interval_ms": 60000,
+  "heartbeat_interval_ms": 60000,       // echoes the agent-reported interval (profile value for legacy agents)
   "jitter_percent": 0.2,
   "profile": { /* ProfileTransform, below */ }
 }
@@ -247,16 +249,21 @@ The decrypted `hb` response is:
 { "status": "ok", "pendingTask": { /* AgentTask, §2.7 */ } }  // one pending task
 ```
 
-- Interval/jitter follow the registration response: active profile default
-  `heartbeatIntervalMs = 60000` (legacy fallback 10000). Jitter
-  (`x86_style_jitter`, `libra-engine/src/config.rs`): with probability 1/12 the
-  interval is stretched to 1.5–3×; otherwise randomized within
-  ±`base*jitterPercent`; floor 500 ms.
+- The heartbeat interval is self-declared at registration
+  (`heartbeatIntervalMs`, build-injected). The server stores it, echoes it back,
+  and uses `declared interval + 5 s` as that agent's offline timeout. Legacy
+  agents that do not report one fall back to the active profile's interval.
+  Jitter still follows the registration response `jitterPercent`.
+- The agent-side built-in fallback when no registration response is received is
+  10000 ms. Jitter (`x86_style_jitter`,
+  `libra-engine/src/config.rs`): with probability 1/12 the interval is stretched
+  to 1.5–3×; otherwise randomized within ±`base*jitterPercent`; floor 500 ms.
 - Heartbeat and SSE run concurrently and do not block each other. **A task may
   arrive either as heartbeat `pendingTask` or via SSE at any time**; the agent
   dedups by task id (in-memory set, cap 512).
 - The SSE connection itself proves liveness: the server sends a keepalive
-  (`: ping`) every 30 s and refreshes lastSeen.
+  (`: ping`) every 30 s and refreshes lastSeen; while the SSE/WS channel is
+  still online a late heartbeat is never treated as offline.
 
 ### 2.7 AgentTask contract (all camelCase)
 

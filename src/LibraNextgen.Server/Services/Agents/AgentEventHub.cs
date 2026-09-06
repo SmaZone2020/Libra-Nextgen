@@ -21,6 +21,9 @@ public class AgentEventHub
 
     public void Unsubscribe(string agentId) => _channels.TryRemove(agentId, out _);
 
+    /// <summary>Whether an SSE event stream for this agent is currently open.</summary>
+    public bool IsSubscribed(string agentId) => _channels.ContainsKey(agentId);
+
     public void Push(string agentId, string op, object? data)
     {
         if (_channels.TryGetValue(agentId, out var ch))

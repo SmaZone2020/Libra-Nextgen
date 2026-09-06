@@ -40,6 +40,12 @@ impl ConfigManager {
             if !ic.beacon_secret.is_empty() {
                 cfg.beacon_secret = ic.beacon_secret;
             }
+            if ic.heartbeat_interval_ms > 0 {
+                cfg.heartbeat_interval_ms = ic.heartbeat_interval_ms;
+            }
+            if ic.jitter_percent > 0.0 {
+                cfg.jitter_percent = ic.jitter_percent;
+            }
             cfg.user_agents = ic.user_agents;
             cfg.extra_headers = ic.extra_headers;
             cfg.path_suffixes = ic.path_suffixes;

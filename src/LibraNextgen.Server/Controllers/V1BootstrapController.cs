@@ -94,7 +94,8 @@ public class V1BootstrapController : ControllerBase
             return Unauthorized(new { error = "invalid beacon secret" });
 
         var clientIp = HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
-        var agent = await _commsService.HandleRegisterAsync(request, clientIp);
+        var profile = await _commsService.GetActiveProfileAsync();
+        var agent = await _commsService.HandleRegisterAsync(request, clientIp, profile.HeartbeatIntervalSeconds);
         if (agent == null)
             return StatusCode(500, new { error = "registration failed" });
 
@@ -103,16 +104,17 @@ public class V1BootstrapController : ControllerBase
         var sessionKey = _commsService.EstablishSessionKey(agent.Id, request.PublicKey, request.HasSessionKey);
         var sessionToken = _commsService.IssueSessionToken(agent.Id);
 
-        var profile = await _commsService.GetActiveProfileAsync();
+        var heartbeatIntervalMs = HeartbeatTiming.GetIntervalMs(agent);
         var response = new
         {
             agent_id = agent.Id,
             session_key = sessionKey,
             session_token = sessionToken,
             ws_url = profile.GetWebSocketUrl(""),
-            heartbeat_interval_ms = profile.HeartbeatIntervalSeconds * 1000,
+            heartbeat_interval = HeartbeatTiming.GetIntervalSeconds(agent),
+            heartbeat_interval_ms = heartbeatIntervalMs,
             jitter_percent = profile.JitterPercent,
-            profile = BuildTransformJson(profile)
+            profile = BuildTransformJson(profile, heartbeatIntervalMs)
         };
         return Ok(response);
     }
@@ -210,7 +212,7 @@ public class V1BootstrapController : ControllerBase
     private bool IsSecretValid(string? provided) =>
         string.Equals(provided, _beaconSettings.Secret, StringComparison.Ordinal);
 
-    private static object BuildTransformJson(IMalleableProfile profile)
+    private static object BuildTransformJson(IMalleableProfile profile, long? heartbeatIntervalMs = null)
     {
         if (profile is ConfigurableProfile cp)
         {
@@ -228,7 +230,7 @@ public class V1BootstrapController : ControllerBase
                 extraHeaders = c.CustomHeaders.Select(h => $"{h.Key}: {h.Value}").ToList(),
                 paddingMin = c.PaddingMin,
                 paddingMax = c.PaddingMax,
-                heartbeatIntervalMs = c.HeartbeatIntervalSeconds * 1000,
+                heartbeatIntervalMs = heartbeatIntervalMs ?? (long)c.HeartbeatIntervalSeconds * 1000,
                 jitterPercent = c.JitterPercent,
                 aiPath = c.AiPath,
                 aiModels = c.AiModels,
@@ -248,7 +250,7 @@ public class V1BootstrapController : ControllerBase
             extraHeaders = new[] { "Accept: application/json, text/plain, */*", "Accept-Language: zh-CN,zh;q=0.9,en;q=0.8" },
             paddingMin = 0,
             paddingMax = 64,
-            heartbeatIntervalMs = 10000,
+            heartbeatIntervalMs = heartbeatIntervalMs ?? 10000,
             jitterPercent = 0.2,
             aiPath = "/v1/chat/completions",
             aiModels = new[] { "gpt-4o-mini", "gpt-4o", "gpt-4.1-mini" },

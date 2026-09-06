@@ -98,6 +98,7 @@ Console/插件/MCP ──(REST,带 JWT)──▶ Server 创建 Task
 
 Agent 启动后生成本次运行的临时 RSA-2048 密钥对,采集
 `hostname / userName / osVersion / arch / processName / pid / isElevated / publicKey / hardware`,
+并附上构建期注入的 `heartbeatIntervalMs`(Agent 自报心跳间隔,毫秒),
 按构建期配置选择三种模式之一(请求体字段一律 camelCase):
 
 **模式 A —— loader/混合信封(有构建期注入的 `server_public_key`,推荐新路径)**
@@ -122,7 +123,8 @@ POST {server}/api/beacon/register
 Content-Type: application/json
 
 { "hostname":"...","userName":"...","osVersion":"...","arch":"...",
-  "publicKey":"<SPKI DER b64>","beaconSecret":"","hardware":{...},"hasSessionKey":false }
+  "publicKey":"<SPKI DER b64>","beaconSecret":"","hardware":{...},
+  "hasSessionKey":false,"heartbeatIntervalMs":3000 }
 ```
 
 该端点同样接受 `{"payload": "<AES-GCM(pre-session key, 注册JSON)>"}` 的加密单字段形式。
@@ -142,7 +144,7 @@ Content-Type: application/json
   "session_key": "<RSA-OAEP(AES-256会话密钥) b64>",  // hasSessionKey=true 时为空
   "session_token": "<不透明会话token>",              // 后续上线标识,每次注册轮换
   "ws_url": "ws://…/ws/chat",                        // 仅 Console 用,Agent 忽略
-  "heartbeat_interval_ms": 60000,                    // 心跳间隔提示
+  "heartbeat_interval_ms": 60000,                    // 回显 Agent 注册时自报的心跳间隔(旧 Agent 回退 profile 值)
   "jitter_percent": 0.2,                             // 抖动提示
   "profile": { /* ProfileTransform,见下 */ }
 }
@@ -228,12 +230,16 @@ Agent 侧把各块 `delta.content` **拼接**成完整密文再解密。
 { "status": "ok", "pendingTask": { /* AgentTask, §2.7 */ } }   // 有一个待办
 ```
 
-- 心跳间隔/抖动以注册响应为准:激活 profile 默认 `heartbeatIntervalMs = 60000`
-  (旧内置回退值 10000);抖动算法 `x86_style_jitter`(`libra-engine/src/config.rs`):
+- 心跳间隔在注册时由 Agent 自报(`heartbeatIntervalMs`,毫秒,构建期注入);Server 存下该值、
+  回显给 Agent,并按「自报间隔 + 5s」作为该 Agent 的下线超时。旧 Agent 未上报时回退到
+  profile 的心跳间隔。抖动仍以注册响应 `jitterPercent` 为准。
+- Agent 端收不到注册响应时的内置回退间隔为 10000ms;抖动算法
+  `x86_style_jitter`(`libra-engine/src/config.rs`):
   以 1/12 概率把间隔拉长到 1.5–3 倍,否则在 ±`base*jitterPercent` 内随机;下限 500ms。
 - SSE 连接与心跳并发存在,互不阻塞;**任务既可能随心跳 `pendingTask` 返回,
   也可能随时经 SSE 推送**,Agent 按 taskId 去重(内存去重集合,上限 512 条)。
-- SSE 连接本身就是「进程存活」证明:服务端 30s 一次 keepalive(`: ping`)并刷新 lastSeen。
+- SSE 连接本身就是「进程存活」证明:服务端 30s 一次 keepalive(`: ping`)并刷新 lastSeen;
+  只要 SSE/WS 仍在线,心跳晚到也不会被判定离线。
 
 ### 2.7 AgentTask(任务契约,全字段 camelCase)
 

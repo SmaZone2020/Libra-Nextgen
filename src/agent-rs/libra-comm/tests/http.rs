@@ -119,6 +119,7 @@ async fn register_plaintext_parses_outcome() {
         assert_eq!(body["osVersion"], "Windows 11");
         assert_eq!(body["arch"], "x64");
         assert_eq!(body["pid"].as_i64().unwrap() > 0, true);
+        assert_eq!(body["heartbeatIntervalMs"], 30_000);
         (
             200,
             json!({
@@ -160,6 +161,7 @@ async fn register_plaintext_parses_outcome() {
             "",
             "{}",
             false,
+            30_000,
         )
         .await
         .expect("register ok");
@@ -200,6 +202,7 @@ async fn register_envelope_encrypted_with_pre_session_key() {
             .expect("register data json");
         assert_eq!(data["hostname"], "enc-host");
         assert_eq!(data["publicKey"], "enc-pub");
+        assert_eq!(data["heartbeatIntervalMs"], 15_000);
         (
             200,
             json!({ "agent_id": "agent-enc", "session_token": "tok-enc" }).to_string(),
@@ -209,7 +212,7 @@ async fn register_envelope_encrypted_with_pre_session_key() {
     let mut comm = HttpCommunicator::new(&server.addr, "/api/v1/reg", "/hb", "/res");
     let out = comm
         .register(
-            "enc-host", "enc-user", "os", "x64", "enc-pub", SECRET, "{}", false,
+            "enc-host", "enc-user", "os", "x64", "enc-pub", SECRET, "{}", false, 15_000,
         )
         .await
         .expect("register ok");
