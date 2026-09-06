@@ -82,9 +82,19 @@ export default function AgentsPage() {
     navigate(`/agents/${id}`);
   };
 
-  // A remote-device click selects that node agent (hub relay) and opens its
-  // details; subsequent terminal/files/etc. operate through the relay.
-  const handleOpenRemote = (segment: RemoteAgentSegment, agent: AgentListItem) => {
+  // A remote-device card body (only after it is connected) opens its details;
+  // connecting is an explicit card-button action so browsing never changes the
+  // active device behind the user's back.
+  const openRemoteDetail = (segment: RemoteAgentSegment, agent: AgentListItem) => {
+    if (typeof window !== 'undefined' && window.matchMedia('(min-width: 640px)').matches) {
+      openDetail(agent.id);
+      return;
+    }
+    navigate(`/agents/${agent.id}`);
+  };
+
+  const handleConnectRemote = (segment: RemoteAgentSegment, agent: AgentListItem) => {
+    if (agent.status !== 'Online') return;
     const selection: RemoteAgentSelection = {
       nodeId: segment.nodeId,
       nodeName: segment.nodeName,
@@ -92,12 +102,7 @@ export default function AgentsPage() {
       agent,
     };
     selectNodeAgent(selection);
-
-    if (typeof window !== 'undefined' && window.matchMedia('(min-width: 640px)').matches) {
-      openDetail(agent.id);
-      return;
-    }
-    navigate(`/agents/${agent.id}`);
+    openRemoteDetail(segment, agent);
   };
 
   // Right-click on a card remembers the target agent for the context menu.
@@ -109,6 +114,12 @@ export default function AgentsPage() {
     const id = contextAgentRef.current;
     if (remote) clearRemote(); // local context-menu actions always target home
     if (id) selectAgent(id);
+  };
+
+  // Card-level connect: explicit user action, offline cards keep it disabled.
+  const handleCardConnect = (id: string) => {
+    if (remote) clearRemote(); // local card actions always target home
+    selectAgent(id);
   };
 
   const handleDisconnect = () => {
@@ -165,6 +176,7 @@ export default function AgentsPage() {
   };
 
   const contextAgent = agents.find((a) => a.id === contextAgentRef.current) ?? null;
+  const selectedRemoteKey = remote ? `${remote.nodeId}:${remote.agent.id}` : null;
   const isContextAgentConnected =
     !!contextAgentRef.current && contextAgentRef.current === agentId && !!agentId;
   const canConnect = contextAgent?.status === 'Online' && !isContextAgentConnected;
@@ -182,6 +194,8 @@ export default function AgentsPage() {
               layout={layout}
               onLayoutToggle={toggleLayout}
               onOpen={handleOpen}
+              onConnect={handleCardConnect}
+              onDisconnect={handleDisconnect}
               onCardContextMenu={handleCardContextMenu}
             />
           </div>
@@ -220,8 +234,15 @@ export default function AgentsPage() {
         </ContextMenu.Popover>
       </ContextMenu>
 
-      {/* Devices on connected remote nodes — selectable segments (admin). */}
-      <RemoteNodeAgents segments={segments} layout={layout} onOpenAgent={handleOpenRemote} />
+      {/* Devices on connected remote nodes — explicit connect cards. */}
+      <RemoteNodeAgents
+        segments={segments}
+        layout={layout}
+        connectedKey={selectedRemoteKey}
+        onConnectAgent={handleConnectRemote}
+        onOpenAgent={openRemoteDetail}
+        onDisconnectAgent={() => clearRemote()}
+      />
 
       <AgentDetailModal
         isOpen={modalOpen}

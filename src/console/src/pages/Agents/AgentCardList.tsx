@@ -12,6 +12,8 @@ export function AgentCardList({
   connectedId,
   layout = 'list',
   onOpen,
+  onConnect,
+  onDisconnect,
   emptyLabel,
   onContextMenu,
 }: {
@@ -19,6 +21,10 @@ export function AgentCardList({
   connectedId: string;
   layout?: AgentListLayout;
   onOpen: (id: string) => void;
+  /** Explicit per-card connect; offline cards render it disabled. */
+  onConnect?: (id: string) => void;
+  /** Disconnect the currently connected device from its card. */
+  onDisconnect?: () => void;
   /** Overrides the default "no agents" copy (e.g. "nothing matches the filter"). */
   emptyLabel?: string;
   /** Optional right-click hook per card (desktop context menu). */
@@ -49,6 +55,8 @@ export function AgentCardList({
           agent={agent}
           connected={agent.id === connectedId}
           onOpen={() => onOpen(agent.id)}
+          onConnect={onConnect ? () => onConnect(agent.id) : undefined}
+          onDisconnect={onDisconnect}
           onContextMenu={onContextMenu}
         />
       ))}

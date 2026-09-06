@@ -200,7 +200,7 @@ export default function SettingsPage() {
         <div className="flex items-start gap-6">
           <nav
             aria-label={t('settings.tabsLabel')}
-            className="w-56 shrink-0 self-stretch border-r border-default-200/70 pr-5 dark:border-default-800"
+            className="sticky top-0 max-h-[calc(100vh-9rem)] w-56 shrink-0 self-start overflow-y-auto overscroll-contain border-r border-default-200/70 pr-5 dark:border-default-800"
           >
             {SETTING_GROUPS.map((group) => {
               const routes = group.routeIds

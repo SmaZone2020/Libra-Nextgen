@@ -85,20 +85,29 @@ export function useRemoteAgentSegments(): RemoteAgentSegment[] {
 }
 
 /**
- * Read-only aggregate view of agents running on connected remote nodes,
- * rendered as node-segmented sections below the local device list. Clicking a
- * remote device selects it (hub relay) so detail/terminal/files etc. operate
- * on that node.
+ * Aggregate view of agents running on connected remote nodes, rendered as
+ * node-segmented sections below the local device list. Browsing the section
+ * never connects anything: each card exposes an explicit connect button so
+ * detail/terminal/files etc. only operate on that node after the user asks.
  */
 export function RemoteNodeAgents({
   segments,
   layout,
+  connectedKey,
+  onConnectAgent,
   onOpenAgent,
+  onDisconnectAgent,
 }: {
   segments: RemoteAgentSegment[];
   /** Follows the local device list's layout switch. */
   layout: 'list' | 'grid';
+  /** Key (`nodeId:agentId`) of the currently connected remote device. */
+  connectedKey?: string | null;
+  onConnectAgent?: (segment: RemoteAgentSegment, agent: AgentListItem) => void;
+  /** Opens details of an already connected remote device. */
   onOpenAgent?: (segment: RemoteAgentSegment, agent: AgentListItem) => void;
+  /** Leaves the remote device workspace from its card. */
+  onDisconnectAgent?: () => void;
 }) {
   const { t } = useTranslation();
 
@@ -145,14 +154,22 @@ export function RemoteNodeAgents({
                 : 'space-y-2.5'
             }
           >
-            {seg.agents.map((agent) => (
-              <AgentCard
-                key={`${seg.nodeId}:${agent.id}`}
-                agent={agent}
-                connected={false}
-                onOpen={() => onOpenAgent?.(seg, agent)}
-              />
-            ))}
+            {seg.agents.map((agent) => {
+              const key = `${seg.nodeId}:${agent.id}`;
+              const connected = connectedKey === key && agent.status === 'Online';
+              return (
+                <AgentCard
+                  key={key}
+                  agent={agent}
+                  connected={connected}
+                  onOpen={connected ? () => onOpenAgent?.(seg, agent) : undefined}
+                  onConnect={
+                    !connected ? () => onConnectAgent?.(seg, agent) : undefined
+                  }
+                  onDisconnect={connected ? onDisconnectAgent : undefined}
+                />
+              );
+            })}
           </div>
         </section>
       ))}

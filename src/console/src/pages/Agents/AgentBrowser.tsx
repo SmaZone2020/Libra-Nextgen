@@ -102,6 +102,8 @@ export function AgentBrowser({
   layout,
   onLayoutToggle,
   onOpen,
+  onConnect,
+  onDisconnect,
   onCardContextMenu,
 }: {
   agents: AgentListItem[];
@@ -110,6 +112,10 @@ export function AgentBrowser({
   layout: AgentListLayout;
   onLayoutToggle: () => void;
   onOpen: (id: string) => void;
+  /** Explicit per-card connect (offline cards render it disabled). */
+  onConnect?: (id: string) => void;
+  /** Disconnect the currently connected device from its card. */
+  onDisconnect?: () => void;
   /** Optional per-card right-click hook (desktop context menu). */
   onCardContextMenu?: (id: string) => void;
 }) {
@@ -325,6 +331,8 @@ export function AgentBrowser({
         connectedId={connectedId}
         layout={layout}
         onOpen={onOpen}
+        onConnect={onConnect}
+        onDisconnect={onDisconnect}
         onContextMenu={onCardContextMenu}
         emptyLabel={agents.length > 0 ? t('agents.noMatch') : undefined}
       />
