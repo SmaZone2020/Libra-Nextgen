@@ -39,7 +39,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         ca-certificates curl \
     && rm -rf /var/lib/apt/lists/*
 
-COPY --from=publish /app /app
+COPY --from=publish /out /app
 COPY --from=console /web/dist /srv/console
 
 COPY deploy/docker/entrypoint.sh /entrypoint.sh
