@@ -895,12 +895,9 @@ export default {
         none: 'None',
         custom: 'Custom',
         upload: 'Upload image',
-        uploadHint: '16:9 images recommended; they are auto-compressed on save',
-        removeImage: 'Remove uploaded image',
         blur: 'Wallpaper blur',
         dim: 'Dimming',
         frost: 'UI translucency',
-        hint: 'UI translucency turns the Workspace into frosted glass so the wallpaper shows through; dimming keeps text readable.',
         reset: 'Reset to default',
         uploadFailed: 'Failed to read the image, please try another one',
         preset: {

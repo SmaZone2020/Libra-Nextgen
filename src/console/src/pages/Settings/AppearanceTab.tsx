@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { CSSProperties, ChangeEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button, Card, Tabs } from '@heroui/react';
-import { Check, Picture, Xmark } from '@gravity-ui/icons';
+import { Check, Picture } from '@gravity-ui/icons';
 import {
   WALLPAPER_BLUR_MAX,
   WALLPAPER_FROST_MAX,
@@ -261,19 +261,7 @@ export default function AppearanceTab() {
             )}
           </button>
         </div>
-        <p className="mt-2 text-xs text-default-400">{t('settings.wallpaper.uploadHint')}</p>
         {uploadError && <p className="mt-1 text-xs text-danger">{uploadError}</p>}
-        {prefs.presetId === 'custom' && prefs.customUrl && (
-          <Button
-            size="sm"
-            variant="ghost"
-            className="mt-3 gap-1.5 text-xs text-danger"
-            onPress={() => commit({ ...prefs, presetId: 'none', customUrl: null })}
-          >
-            <Xmark className="size-4" />
-            {t('settings.wallpaper.removeImage')}
-          </Button>
-        )}
 
         <input
           ref={fileRef}
@@ -315,7 +303,6 @@ export default function AppearanceTab() {
             disabled={!enabled}
             onChange={(v) => commit({ ...prefs, frost: v / 100 })}
           />
-          <p className="text-xs text-default-400">{t('settings.wallpaper.hint')}</p>
         </div>
       </Card>
     </div>

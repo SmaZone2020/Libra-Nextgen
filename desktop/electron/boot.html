@@ -2,129 +2,687 @@
 <html lang="zh-CN">
 <head>
   <meta charset="utf-8" />
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0"
+  />
   <title>Libra Console</title>
+
   <style>
-    :root { color-scheme: dark; }
-    * { box-sizing: border-box; }
-    html, body { height: 100%; margin: 0; overflow: hidden; }
-    body {
-      font-family: "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;
-      background: #0b0f14;
-      color: #d8dee6;
+    :root {
+      color-scheme: dark;
+
+      --bg: #090d12;
+      --text: #eef2f6;
+      --text-secondary: #9aa5b1;
+      --text-muted: #68737f;
+
+      --panel: rgba(18, 23, 30, 0.72);
+      --panel-border: rgba(255, 255, 255, 0.085);
+
+      --accent: #3b9cff;
+      --accent-hover: #4aa5ff;
+
+      --danger: #ff6b6b;
     }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      overflow: hidden;
+    }
+
+    body {
+      position: relative;
+
+      font-family:
+        "Segoe UI",
+        "Microsoft YaHei",
+        system-ui,
+        -apple-system,
+        BlinkMacSystemFont,
+        sans-serif;
+
+      background:
+        radial-gradient(
+          circle at 50% 35%,
+          rgba(55, 78, 105, 0.18),
+          transparent 42%
+        ),
+        radial-gradient(
+          circle at 10% 90%,
+          rgba(35, 85, 130, 0.12),
+          transparent 35%
+        ),
+        var(--bg);
+
+      color: var(--text);
+
+      -webkit-font-smoothing: antialiased;
+      text-rendering: optimizeLegibility;
+    }
+
+    /* ------------------------------------------------------------
+       Ambient background
+    ------------------------------------------------------------ */
+
+    .ambient {
+      position: fixed;
+      inset: -15%;
+      z-index: -2;
+
+      background:
+        radial-gradient(
+          ellipse at 30% 35%,
+          rgba(75, 90, 110, 0.10),
+          transparent 45%
+        ),
+        radial-gradient(
+          ellipse at 75% 65%,
+          rgba(40, 110, 170, 0.08),
+          transparent 42%
+        );
+
+      filter: blur(70px);
+      pointer-events: none;
+    }
+
+    .noise {
+      position: fixed;
+      inset: 0;
+      z-index: -1;
+
+      opacity: 0.025;
+      pointer-events: none;
+
+      background-image:
+        url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.6'/%3E%3C/svg%3E");
+    }
+
+    /* ------------------------------------------------------------
+       Title bar
+    ------------------------------------------------------------ */
 
     #titlebar {
       position: fixed;
       inset: 0 0 auto 0;
-      height: 40px;
+
+      height: 42px;
+
       display: flex;
       align-items: center;
       justify-content: space-between;
-      background: transparent;
+
       user-select: none;
       -webkit-app-region: drag;
     }
+
     #titlebar .app {
-      padding: 0 14px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+
+      padding: 0 15px;
+
+      color: rgba(220, 227, 235, 0.52);
       font-size: 12px;
-      color: #64707d;
+      letter-spacing: 0.01em;
+
       pointer-events: none;
+    }
+
+    .app-mark {
+      width: 16px;
+      height: 16px;
+
+      display: grid;
+      place-items: center;
+
+      border-radius: 5px;
+
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.07);
+
+      color: rgba(255, 255, 255, 0.65);
+    }
+
+    .app-mark svg {
+      width: 10px;
+      height: 10px;
     }
 
     .win-controls {
       display: flex;
       height: 100%;
+
       -webkit-app-region: no-drag;
     }
+
     .win-btn {
       width: 46px;
       height: 100%;
+
       border: 0;
-      background: transparent;
-      color: #d8dee6;
+      outline: none;
+
       display: grid;
       place-items: center;
+
       padding: 0;
+
+      background: transparent;
+      color: rgba(230, 235, 240, 0.72);
+
+      opacity: 0.6;
+
       cursor: default;
-      opacity: 0.55;
+
+      transition:
+        background 140ms ease,
+        color 140ms ease,
+        opacity 140ms ease;
     }
-    .win-btn:hover { background: rgba(255, 255, 255, 0.1); opacity: 1; }
-    .win-btn--close:hover { background: #e81123; color: #fff; opacity: 1; }
-    .win-btn svg { display: block; }
+
+    .win-btn:hover {
+      background: rgba(255, 255, 255, 0.075);
+      color: #fff;
+      opacity: 1;
+    }
+
+    .win-btn--close:hover {
+      background: #e81123;
+      color: #fff;
+      opacity: 1;
+    }
+
+    .win-btn svg {
+      display: block;
+    }
+
+    /* ------------------------------------------------------------
+       Main
+    ------------------------------------------------------------ */
 
     #card {
+      width: 100%;
       height: 100%;
+
       display: grid;
       place-items: center;
-      padding-top: 40px;
+
+      padding: 42px 24px 24px;
     }
+
     .box {
-      max-width: 480px;
-      padding: 28px 32px;
-      border: 1px solid #26303c;
-      border-radius: 12px;
-      background: #11161d;
+      position: relative;
+
+      width: min(430px, calc(100vw - 48px));
+
+      padding: 34px 36px 32px;
+
       text-align: center;
+
+      background:
+        linear-gradient(
+          145deg,
+          rgba(30, 36, 45, 0.72),
+          rgba(15, 20, 27, 0.72)
+        );
+
+      border: 1px solid var(--panel-border);
+      border-radius: 16px;
+
+      box-shadow:
+        0 24px 70px rgba(0, 0, 0, 0.34),
+        inset 0 1px 0 rgba(255, 255, 255, 0.035);
+
+      backdrop-filter: blur(28px) saturate(120%);
+      -webkit-backdrop-filter: blur(28px) saturate(120%);
+
+      animation: appear 260ms ease-out;
     }
-    .box h1 { margin: 0 0 10px; font-size: 18px; }
-    .box p { margin: 0 0 10px; line-height: 1.6; color: #9aa7b4; }
-    .box code { padding: 2px 8px; border-radius: 4px; background: #1a222c; color: #7ec8ff; }
-    .box .detail { margin: 8px 0 18px; font-size: 12px; color: #64707d; word-break: break-all; }
+
+    @keyframes appear {
+      from {
+        opacity: 0;
+        transform: translateY(5px) scale(0.985);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+      }
+    }
+
+    /* ------------------------------------------------------------
+       Status
+    ------------------------------------------------------------ */
+
+    .status-icon {
+      width: 48px;
+      height: 48px;
+
+      margin: 0 auto 20px;
+
+      display: grid;
+      place-items: center;
+
+      border-radius: 14px;
+
+      background: rgba(255, 255, 255, 0.045);
+      border: 1px solid rgba(255, 255, 255, 0.075);
+
+      color: #aab4bf;
+    }
+
+    .status-icon svg {
+      width: 21px;
+      height: 21px;
+    }
+
+    .status {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+
+      margin-bottom: 13px;
+
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+
+    .status-dot {
+      width: 6px;
+      height: 6px;
+
+      border-radius: 50%;
+
+      background: var(--danger);
+      box-shadow: 0 0 0 3px rgba(255, 107, 107, 0.08);
+    }
+
+    /* ------------------------------------------------------------
+       Typography
+    ------------------------------------------------------------ */
+
+    .box h1 {
+      margin: 0 0 10px;
+
+      color: #f1f4f7;
+
+      font-size: 19px;
+      font-weight: 600;
+
+      letter-spacing: -0.02em;
+    }
+
+    .box p {
+      margin: 0 auto;
+
+      max-width: 340px;
+
+      color: var(--text-secondary);
+
+      font-size: 13px;
+      line-height: 1.7;
+    }
+
+    .box code {
+      display: inline-block;
+
+      padding: 1px 6px;
+
+      border-radius: 5px;
+
+      background: rgba(255, 255, 255, 0.055);
+
+      color: #b9c8d7;
+
+      font-family:
+        "Cascadia Code",
+        "SFMono-Regular",
+        Consolas,
+        monospace;
+
+      font-size: 11px;
+    }
+
+    /* ------------------------------------------------------------
+       Detail
+    ------------------------------------------------------------ */
+
+    .detail {
+      margin: 16px 0 22px;
+
+      padding: 10px 12px;
+
+      border-radius: 8px;
+
+      background: rgba(0, 0, 0, 0.16);
+      border: 1px solid rgba(255, 255, 255, 0.045);
+
+      color: #687582;
+
+      font-family:
+        "Cascadia Code",
+        "SFMono-Regular",
+        Consolas,
+        monospace;
+
+      font-size: 10px;
+      line-height: 1.5;
+
+      text-align: left;
+      word-break: break-all;
+    }
+
+    .detail:empty {
+      display: none;
+    }
+
+    /* ------------------------------------------------------------
+       Actions
+    ------------------------------------------------------------ */
+
+    .actions {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+
+      margin-top: 22px;
+    }
+
     .box button {
-      padding: 8px 24px;
-      border: 0;
-      border-radius: 6px;
-      background: #2563eb;
+      min-width: 108px;
+      height: 34px;
+
+      padding: 0 18px;
+
+      border: 1px solid rgba(255, 255, 255, 0.07);
+      border-radius: 8px;
+
+      background:
+        linear-gradient(
+          180deg,
+          rgba(66, 164, 255, 0.98),
+          rgba(40, 133, 225, 0.98)
+        );
+
       color: #fff;
-      font-size: 14px;
+
+      font-family: inherit;
+      font-size: 12px;
+      font-weight: 500;
+
       cursor: pointer;
+
+      box-shadow:
+        0 5px 16px rgba(40, 130, 220, 0.16),
+        inset 0 1px 0 rgba(255, 255, 255, 0.14);
+
+      transition:
+        transform 120ms ease,
+        filter 120ms ease,
+        box-shadow 120ms ease;
     }
-    .box button:hover { background: #1d4ed8; }
+
+    .box button:hover {
+      filter: brightness(1.06);
+
+      box-shadow:
+        0 7px 20px rgba(40, 130, 220, 0.22),
+        inset 0 1px 0 rgba(255, 255, 255, 0.16);
+    }
+
+    .box button:active {
+      transform: translateY(1px);
+    }
+
+    .retry-content {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 7px;
+    }
+
+    .retry-content svg {
+      width: 13px;
+      height: 13px;
+    }
+
+    /* ------------------------------------------------------------
+       Footer
+    ------------------------------------------------------------ */
+
+    .footer {
+      margin-top: 18px;
+
+      color: rgba(130, 141, 152, 0.55);
+
+      font-size: 10px;
+      letter-spacing: 0.01em;
+    }
+
+    /* ------------------------------------------------------------
+       Small screens
+    ------------------------------------------------------------ */
+
+    @media (max-width: 520px) {
+      .box {
+        padding: 30px 24px 28px;
+      }
+
+      #titlebar .app {
+        padding-left: 12px;
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .box {
+        animation: none;
+      }
+
+      .box button,
+      .win-btn {
+        transition: none;
+      }
+    }
   </style>
 </head>
+
 <body>
+  <div class="ambient"></div>
+  <div class="noise"></div>
+
+  <!-- Window titlebar -->
   <header id="titlebar">
-    <div class="app" id="targetLabel"></div>
+    <div class="app" id="targetLabel">
+      <span class="app-mark">
+        <svg viewBox="0 0 16 16" fill="none">
+          <path
+            d="M8 1.5L13 4.3V11.7L8 14.5L3 11.7V4.3L8 1.5Z"
+            stroke="currentColor"
+            stroke-width="1.2"
+          />
+          <path
+            d="M5.2 5.8L8 7.4L10.8 5.8M8 7.4V11"
+            stroke="currentColor"
+            stroke-width="1.1"
+          />
+        </svg>
+      </span>
+
+      <span>Libra Console</span>
+    </div>
+
     <div class="win-controls">
-      <button class="win-btn" id="btn-min" title="最小化" aria-label="最小化">
-        <svg width="10" height="10" viewBox="0 0 10 10"><path d="M0 5.5h10" stroke="currentColor" stroke-width="1"/></svg>
+      <button
+        class="win-btn"
+        id="btn-min"
+        title="最小化"
+        aria-label="最小化"
+      >
+        <svg width="10" height="10" viewBox="0 0 10 10">
+          <path
+            d="M0 5.5h10"
+            stroke="currentColor"
+            stroke-width="1"
+          />
+        </svg>
       </button>
-      <button class="win-btn" id="btn-max" title="最大化" aria-label="最大化">
-        <svg width="10" height="10" viewBox="0 0 10 10"><rect x="0.5" y="0.5" width="9" height="9" fill="none" stroke="currentColor" stroke-width="1"/></svg>
+
+      <button
+        class="win-btn"
+        id="btn-max"
+        title="最大化"
+        aria-label="最大化"
+      >
+        <svg width="10" height="10" viewBox="0 0 10 10">
+          <rect
+            x="0.5"
+            y="0.5"
+            width="9"
+            height="9"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1"
+          />
+        </svg>
       </button>
-      <button class="win-btn win-btn--close" id="btn-close" title="关闭" aria-label="关闭">
-        <svg width="10" height="10" viewBox="0 0 10 10"><path d="M0.5 0.5l9 9M9.5 0.5l-9 9" stroke="currentColor" stroke-width="1"/></svg>
+
+      <button
+        class="win-btn win-btn--close"
+        id="btn-close"
+        title="关闭"
+        aria-label="关闭"
+      >
+        <svg width="10" height="10" viewBox="0 0 10 10">
+          <path
+            d="M0.5 0.5l9 9M9.5 0.5l-9 9"
+            stroke="currentColor"
+            stroke-width="1"
+          />
+        </svg>
       </button>
     </div>
   </header>
 
-  <div id="card">
-    <div class="box">
+  <!-- Content -->
+  <main id="card">
+    <section class="box">
+
+      <div class="status-icon">
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.5"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <rect x="3" y="5" width="18" height="14" rx="2" />
+          <path d="M7 9h10M7 13h6" />
+          <circle cx="17" cy="15" r="1" fill="currentColor" stroke="none" />
+        </svg>
+      </div>
+
+      <div class="status">
+        <span class="status-dot"></span>
+        <span>Service unavailable</span>
+      </div>
+
       <h1>无法连接控制台服务</h1>
-      <p>请确认 <code id="targetText"></code> 上的服务已启动,然后点击重试。</p>
+
+      <p>
+        请确认
+        <code id="targetText"></code>
+        上的服务已启动，然后重试。
+      </p>
+
       <div class="detail" id="detailText"></div>
-      <button id="btn-retry">重试</button>
-    </div>
-  </div>
+
+      <div class="actions">
+        <button id="btn-retry">
+          <span class="retry-content">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="M20 11a8.1 8.1 0 0 0-15.5-2" />
+              <path d="M4 4v5h5" />
+              <path d="M4 13a8.1 8.1 0 0 0 15.5 2" />
+              <path d="M20 20v-5h-5" />
+            </svg>
+
+            重试连接
+          </span>
+        </button>
+      </div>
+
+      <div class="footer">
+        Libra Console
+      </div>
+
+    </section>
+  </main>
 
   <script>
     const params = new URLSearchParams(location.search);
-    const target = params.get('target') || '';
-    document.getElementById('targetLabel').textContent = 'Libra Console · ' + target;
-    document.getElementById('targetText').textContent = target;
-    document.getElementById('detailText').textContent = params.get('detail')
-      ? '失败原因: ' + params.get('detail')
-      : '';
+
+    const target = params.get("target") || "";
+    const detail = params.get("detail") || "";
+
+    document.getElementById("targetLabel").lastElementChild.textContent =
+      target
+        ? `Libra Console · ${target}`
+        : "Libra Console";
+
+    document.getElementById("targetText").textContent = target;
+
+    const detailText = document.getElementById("detailText");
+
+    if (detail) {
+      detailText.textContent = "失败原因 · " + detail;
+    } else {
+      detailText.remove();
+    }
 
     const bridge = window.libraDesktop;
-    document.getElementById('btn-min').addEventListener('click', () => bridge.minimize());
-    document.getElementById('btn-max').addEventListener('click', () => bridge.toggleMaximize());
-    document.getElementById('btn-close').addEventListener('click', () => bridge.close());
-    document.getElementById('btn-retry').addEventListener('click', () => bridge.retry());
-    document.getElementById('titlebar').addEventListener('dblclick', (e) => {
-      if (e.target.closest('.win-controls')) return;
-      bridge.toggleMaximize();
-    });
+
+    document
+      .getElementById("btn-min")
+      .addEventListener("click", () => bridge.minimize());
+
+    document
+      .getElementById("btn-max")
+      .addEventListener("click", () => bridge.toggleMaximize());
+
+    document
+      .getElementById("btn-close")
+      .addEventListener("click", () => bridge.close());
+
+    document
+      .getElementById("btn-retry")
+      .addEventListener("click", () => bridge.retry());
+
+    document
+      .getElementById("titlebar")
+      .addEventListener("dblclick", (e) => {
+        if (e.target.closest(".win-controls")) return;
+
+        bridge.toggleMaximize();
+      });
   </script>
 </body>
 </html>

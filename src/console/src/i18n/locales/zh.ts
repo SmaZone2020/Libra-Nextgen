@@ -894,12 +894,9 @@ export default {
         none: '无壁纸',
         custom: '自定义',
         upload: '上传图片',
-        uploadHint: '建议 16:9 大图；保存前会自动压缩',
-        removeImage: '移除已上传图片',
         blur: '壁纸模糊',
         dim: '遮罩浓度',
         frost: '界面透明度',
-        hint: '界面透明度会把 Workspace 变为毛玻璃以透出壁纸；遮罩用于压暗壁纸，保证文字可读。',
         reset: '恢复默认',
         uploadFailed: '读取图片失败，请换一张重试',
         preset: {
