@@ -161,7 +161,13 @@ public sealed class TemplateManagerService
     private static bool IsCurrent(string cacheDir, string asset, string tag)
     {
         var cached = ReadCache(cacheDir);
-        return cached != null && cached.Asset == asset && cached.Tag == tag;
+        if (cached == null || cached.Asset != asset) return false;
+        // cache.json records the real release tag from the zip manifest, which
+        // never equals the literal "latest". "latest" is a moving pointer, so a
+        // verified cached template satisfies it until an explicit refresh
+        // (RefreshAsync / POST templates/refresh) pulls a newer release.
+        if (tag.Equals("latest", StringComparison.OrdinalIgnoreCase)) return true;
+        return cached.Tag == tag;
     }
 
     // ── URL resolution & download ────────────────────────────────────────
