@@ -174,6 +174,29 @@
 }
 .lw-workspace-body::-webkit-scrollbar-track { background: transparent; }
 
+/* Keep-alive page panels: every panel is its own scrollport while active.
+   Hidden panels stay mounted (display:none via inline style) so Shell/AI/
+   plugin state and background work survive route switches. */
+.lw-page-slot {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in oklab, var(--lw-text-soft) 35%, transparent) transparent;
+  animation: lw-page-in 0.22s ease-out both;
+}
+.lw-page-slot::-webkit-scrollbar { width: 5px; height: 5px; }
+.lw-page-slot::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--lw-text-soft) 35%, transparent);
+}
+.lw-page-slot::-webkit-scrollbar-track { background: transparent; }
+
+@keyframes lw-page-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .lw-page-slot { animation: none; }
+}
+
 /* ---- sidebar: navigation layer on the background --------------------------- */
 .lw-sidebar {
   position: fixed;

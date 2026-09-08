@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Routes, Route, useLocation } from 'react-router-dom';
-import { AnimatePresence, motion } from 'motion/react';
+import { useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@heroui/react';
 import { AntennaSignal } from '@gravity-ui/icons';
@@ -34,11 +33,7 @@ import { MobileTabBar } from './mobile/MobileTabBar';
 import { AppDrawer } from './mobile/AppDrawer';
 import MePage from '../pages/Me';
 import { isWallpaperEnabled, useWallpaperPrefs } from '../utils/wallpaper';
-
-const pageTransition = {
-  duration: 0.3,
-  ease: [0.25, 0.46, 0.45, 0.94] as const,
-};
+import { KeepAliveWorkspace, type PageRouteDef } from './KeepAliveWorkspace';
 
 export const SIDEBAR_W = { collapsed: 72, expanded: 256 };
 
@@ -78,8 +73,6 @@ export function AuthenticatedLayout({
     return permissions.allowedPages.includes(key);
   };
 
-  const NO_PADDING_ROUTES = new Set(['/shell']);
-  const FULL_HEIGHT_ROUTES = new Set(['/shell']);
   const isAiRoute = location.pathname === '/ai' || location.pathname.startsWith('/ai/');
 
   // Permission-filter every section; plugin-manager children are filled below.
@@ -122,8 +115,34 @@ export function AuthenticatedLayout({
   // Route → display name for plugin page headers.
   const pluginLabels = new Map(registeredPlugins.map((p) => [p.route, p.manifest.name || p.pluginId]));
 
-  const isFullHeight = FULL_HEIGHT_ROUTES.has(location.pathname) || isAiRoute;
-  const isPadded = !NO_PADDING_ROUTES.has(location.pathname) && !isAiRoute;
+  // Route registry for the keep-alive workspace. Pages that own live
+  // long-running UI (AI, workspace tools except Builder, plugin pages) stay
+  // mounted hidden after first visit; everything else unmounts like plain
+  // routing. Builder is excluded on purpose: builds already run server-side.
+  const pageRoutes: PageRouteDef[] = [
+    { key: 'dashboard', pattern: '/', element: <Dashboard />, keep: false, layout: 'scroll' },
+    { key: 'nodes', pattern: '/nodes', element: <NodesPage />, keep: false, layout: 'scroll' },
+    { key: 'agents', pattern: '/agents', element: <AgentsPage />, keep: false, layout: 'scroll' },
+    { key: 'agent-detail', pattern: '/agents/:agentId', element: <AgentDetailPage />, keep: false, layout: 'scroll' },
+    { key: 'shell', pattern: '/shell', element: <ShellPage />, keep: true, layout: 'fill' },
+    { key: 'files', pattern: '/files', element: <FileManager />, keep: true, layout: 'scroll' },
+    { key: 'audit', pattern: '/audit', element: <AuditLogsPage />, keep: false, layout: 'scroll' },
+    { key: 'system', pattern: '/system', element: <SystemPage />, keep: true, layout: 'scroll' },
+    { key: 'software', pattern: '/othersoft', element: <SoftwareDataPage />, keep: true, layout: 'scroll' },
+    { key: 'proxy', pattern: '/proxy', element: <ProxyBrowserPage />, keep: true, layout: 'scroll' },
+    { key: 'builder', pattern: '/builder', element: <BuilderPage />, keep: false, layout: 'scroll' },
+    { key: 'ai', pattern: '/ai', element: <AiPage />, keep: true, layout: 'fill' },
+    { key: 'ai', pattern: '/ai/:sessionId', element: <AiPage />, keep: true, layout: 'fill' },
+    { key: 'settings', pattern: '/settings', element: <SettingsPage />, keep: false, layout: 'scroll' },
+    { key: 'settings-detail', pattern: '/settings/:settingId', element: <SettingDetail />, keep: false, layout: 'scroll' },
+    { key: 'plugins', pattern: '/plugins', element: <PluginsPage />, keep: false, layout: 'scroll' },
+    { key: 'about', pattern: '/about', element: <AboutPage />, keep: false, layout: 'scroll' },
+    { key: 'me', pattern: '/me', element: <MePage user={user} permissions={permissions} onLogout={onLogout} />, keep: false, layout: 'scroll' },
+    ...registeredPlugins.map((p): PageRouteDef => {
+      const Page = p.Page;
+      return { key: `plugin:${p.pluginId}`, pattern: p.route, element: <Page />, keep: true, layout: 'scroll' };
+    }),
+  ];
 
   return (
     <div
@@ -169,53 +188,11 @@ export function AuthenticatedLayout({
               </div>
             </header>
 
-            <div
-              className={`lw-workspace-body flex min-h-0 flex-1 flex-col ${
-                isFullHeight ? 'overflow-hidden' : 'overflow-y-auto'
-              } ${
-                isPadded
-                  ? 'px-3 pt-2 pb-24 sm:px-5 sm:pt-3 sm:pb-6 lg:px-7'
-                  : 'pb-24 sm:pb-0'
-              }`}
-            >
-              <AnimatePresence mode="wait">
-                <motion.div
-                  key={isAiRoute ? 'ai' : location.pathname}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -12 }}
-                  initial={{ opacity: 0, y: 12 }}
-                  transition={pageTransition}
-                  className={isFullHeight ? 'flex min-h-0 flex-1 flex-col' : 'flex flex-col'}
-                >
-                  <Routes location={location}>
-                    <Route path="/" element={<Dashboard />} />
-                    <Route path="/nodes" element={<NodesPage />} />
-                    <Route path="/agents" element={<AgentsPage />} />
-                    <Route path="/agents/:agentId" element={<AgentDetailPage />} />
-                    <Route path="/shell" element={<ShellPage />} />
-                    <Route path="/files" element={<FileManager />} />
-                    <Route path="/audit" element={<AuditLogsPage />} />
-                    <Route path="/system" element={<SystemPage />} />
-                    <Route path="/othersoft" element={<SoftwareDataPage />} />
-                    <Route path="/proxy" element={<ProxyBrowserPage />} />
-                    <Route path="/builder" element={<BuilderPage />} />
-                    <Route path="/ai" element={<AiPage />} />
-                    <Route path="/ai/:sessionId" element={<AiPage />} />
-                    <Route path="/settings" element={<SettingsPage />} />
-                    <Route path="/settings/:settingId" element={<SettingDetail />} />
-                    <Route path="/plugins" element={<PluginsPage />} />
-                    <Route path="/about" element={<AboutPage />} />
-                    <Route
-                      path="/me"
-                      element={<MePage user={user} permissions={permissions} onLogout={onLogout} />}
-                    />
-                    {registeredPlugins.map((p) => {
-                      const Page = p.Page;
-                      return <Route key={p.pluginId} path={p.route} element={<Page />} />;
-                    })}
-                  </Routes>
-                </motion.div>
-              </AnimatePresence>
+            <div className="lw-workspace-body relative flex min-h-0 flex-1 flex-col">
+              {/* Keep-alive panels: hidden pages stay mounted and running
+                  (Shell task polling, AI streams, plugin pages), visible
+                  panels are absolutely stacked inside the workspace body. */}
+              <KeepAliveWorkspace routes={pageRoutes} />
             </div>
           </section>
         </div>
