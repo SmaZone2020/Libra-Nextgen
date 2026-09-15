@@ -95,8 +95,8 @@ export function FileList({
 
   return (
     <ContextMenu>
-      <ContextMenu.Trigger className="w-full">
-        <div onContextMenu={onContextMenu}>
+      <ContextMenu.Trigger className="flex h-full min-h-0 w-full flex-col">
+        <div className="flex h-full min-h-0 flex-col" onContextMenu={onContextMenu}>
           <DataGrid
             aria-label="File list"
             columns={columns}
@@ -110,7 +110,7 @@ export function FileList({
                 <Spinner size="sm" /> {t('common.loading')}
               </div>
             }
-            scrollContainerClassName="max-h-[calc(100vh-260px)]"
+            fill
             renderEmptyState={() => (
               <div className="flex justify-center py-8 text-default-500 text-sm">
                 {loading ? t('common.loading') : error ? <span className="text-danger-500">{error}</span> : t('fileManager.emptyDir')}

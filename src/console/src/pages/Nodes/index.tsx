@@ -14,6 +14,7 @@ import {
 import {
   CircleCheckFill,
   PlugConnection,
+  Plus,
   Server,
   TrashBin,
   Xmark,
@@ -112,9 +113,14 @@ export default function NodesPage() {
           {t('nodes.remoteSection')}
         </h2>
         {isAdmin && (
-          <Button size="sm" variant="primary" onPress={() => setAddOpen(true)}>
-            <PlugConnection className="size-4" />
-            {t('nodes.add')}
+          <Button
+            isIconOnly
+            variant="primary"
+            aria-label={t('nodes.add')}
+            className="rounded-[15px]"
+            onPress={() => setAddOpen(true)}
+          >
+            <Plus className="size-4" />
           </Button>
         )}
       </div>

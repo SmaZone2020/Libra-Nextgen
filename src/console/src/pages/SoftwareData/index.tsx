@@ -30,14 +30,14 @@ export default function SoftwareDataPage() {
   const activeTab = tabs.some((tb) => tb.id === tab) ? tab : tabs[0]!.id;
 
   return (
-    <div className="space-y-3">
+    <div className="flex h-full min-h-0 flex-col px-3 pt-2 sm:px-5 sm:pt-3 lg:px-7">
       <Tabs
         orientation="vertical"
         selectedKey={activeTab}
         onSelectionChange={(key) => setTab(String(key))}
-        className="items-start"
+        className="h-full min-h-0 items-start"
       >
-        <Tabs.ListContainer className="flex justify-center h-auto self-start">
+        <Tabs.ListContainer className="flex h-auto shrink-0 justify-center self-start">
           <Tabs.List aria-label={t('othersoft.tabsLabel')} className="my-0 px-2 w-35">
             {tabs.map((tb) => (
               <Tabs.Tab key={tb.id} id={tb.id}>{tb.label}<Tabs.Indicator /></Tabs.Tab>
@@ -45,7 +45,9 @@ export default function SoftwareDataPage() {
           </Tabs.List>
         </Tabs.ListContainer>
         {tabs.map((tb) => (
-          <Tabs.Panel key={tb.id} id={tb.id}>{tb.render}</Tabs.Panel>
+          <Tabs.Panel key={tb.id} id={tb.id} className="min-h-0 flex-1 overflow-y-auto pb-2">
+            {tb.render}
+          </Tabs.Panel>
         ))}
       </Tabs>
     </div>

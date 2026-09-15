@@ -356,43 +356,49 @@ export default function FileManagerPage() {
   }
 
   return (
-    <div className="space-y-2">
+    <div className="flex h-full min-h-0 flex-col gap-2 px-3 pt-2 sm:px-5 sm:pt-3 lg:px-7">
       {view === 'home' ? (
-        <StorageHome drives={drives} special={special} onEnter={enterBrowse} />
+        <div className="min-h-0 flex-1 overflow-y-auto pb-2">
+          <StorageHome drives={drives} special={special} onEnter={enterBrowse} />
+        </div>
       ) : (
         <>
-          <PathBar
-            path={path}
-            drives={drives.map(d => d.path)}
-            historyLength={history.length}
-            onGoBack={goBack}
-            onGoUp={goUp}
-            onDriveChange={handleDriveChange}
-            onNavigate={navigateTo}
-            onHome={goHome}
-          />
+          <div className="shrink-0">
+            <PathBar
+              path={path}
+              drives={drives.map(d => d.path)}
+              historyLength={history.length}
+              onGoBack={goBack}
+              onGoUp={goUp}
+              onDriveChange={handleDriveChange}
+              onNavigate={navigateTo}
+              onHome={goHome}
+            />
+          </div>
 
-          <FileList
-            entries={entries}
-            loading={loading}
-            error={error}
-            hasMore={hasMore}
-            isLoadingMore={loadingMore}
-            onLoadMore={loadMore}
-            onRowAction={handleRowAction}
-            onContextMenu={handleContextMenu}
-            contextEntry={contextEntry}
-            onOpen={handleOpen}
-            onViewArchive={handleViewArchive}
-            onRename={handleRename}
-            onMove={handleMove}
-            onCopy={handleCopy}
-            onDelete={handleDelete}
-            onCompress={handleCompress}
-            onDecompress={handleDecompress}
-            onShortcut={handleShortcut}
-            onDownload={handleDownload}
-          />
+          <div className="min-h-0 flex-1">
+            <FileList
+              entries={entries}
+              loading={loading}
+              error={error}
+              hasMore={hasMore}
+              isLoadingMore={loadingMore}
+              onLoadMore={loadMore}
+              onRowAction={handleRowAction}
+              onContextMenu={handleContextMenu}
+              contextEntry={contextEntry}
+              onOpen={handleOpen}
+              onViewArchive={handleViewArchive}
+              onRename={handleRename}
+              onMove={handleMove}
+              onCopy={handleCopy}
+              onDelete={handleDelete}
+              onCompress={handleCompress}
+              onDecompress={handleDecompress}
+              onShortcut={handleShortcut}
+              onDownload={handleDownload}
+            />
+          </div>
         </>
       )}
 

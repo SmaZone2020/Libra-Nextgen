@@ -99,7 +99,7 @@ export default function ProxyBrowserPage() {
   }
 
   return (
-    <div className="flex flex-col" style={{ height: 'calc(100vh - 10rem)' }}>
+    <div className="flex h-full min-h-0 flex-col px-3 pt-2 sm:px-5 sm:pt-3 lg:px-7">
       <div className="flex items-center gap-2 mb-2">
         <Button isIconOnly size="sm" variant="ghost" isDisabled={activeTab.historyIndex <= 0} onPress={handleBack} aria-label={t('proxyBrowser.back')}>
           <ArrowLeft className="w-4 h-4" />
@@ -153,7 +153,7 @@ export default function ProxyBrowserPage() {
         </Button>
       </div>
 
-      <Card className="flex-1 overflow-hidden">
+      <Card className="min-h-0 flex-1 overflow-hidden">
         {activeTab.src ? (
           <iframe
             src={activeTab.src}

@@ -3,6 +3,8 @@ import { useTranslation } from 'react-i18next';
 import { Button, Card, Input, Label, TextField } from '@heroui/react';
 import { setup } from '../../api/auth';
 import { getApiOrigin, pingBackend, setApiOriginOverride } from '../../api/client';
+import { isEmbeddedShell } from '../../shell/env';
+import { isWallpaperEnabled, useWallpaperPrefs } from '../../utils/wallpaper';
 import type { SetupRequest } from '../../types/models';
 
 interface SetupPageProps {
@@ -17,9 +19,14 @@ function withScheme(value: string): string {
 
 export default function SetupPage({ onSetup }: SetupPageProps) {
   const { t } = useTranslation();
+  const wallpaper = useWallpaperPrefs();
+
+  // Choosing the backend is a plain-web concern: the desktop shell and the
+  // mobile app own the service themselves, so they go straight to the account.
+  const embedded = isEmbeddedShell();
 
   // Step 1 — backend address (defaults to the effective origin)
-  const [phase, setPhase] = useState<Phase>('backend');
+  const [phase, setPhase] = useState<Phase>(embedded ? 'account' : 'backend');
   const [origin, setOrigin] = useState(() => getApiOrigin());
   const [originError, setOriginError] = useState('');
   const [probing, setProbing] = useState(false);
@@ -92,13 +99,17 @@ export default function SetupPage({ onSetup }: SetupPageProps) {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center">
-      <Card className="w-full max-w-sm p-6">
-        <Card.Header className="mb-4">
-          <Card.Title className="mx-auto text-[28px] libre">Libra-Nextgen</Card.Title>
-        </Card.Header>
+    <div
+      className="lw-frame lw-frame--auth"
+      data-wallpaper={isWallpaperEnabled(wallpaper) ? 'on' : 'off'}
+    >
+      <div className="relative z-10 flex min-h-full items-center justify-center px-4 py-10">
+        <Card className="w-full max-w-sm p-6">
+          <Card.Header className="mb-4">
+            <Card.Title className="mx-auto text-[28px] libre">Libra-Nextgen</Card.Title>
+          </Card.Header>
 
-        {phase === 'backend' ? (
+          {phase === 'backend' ? (
           <>
             <Card.Content className="flex flex-col gap-4">
               <h2 className="text-center text-lg font-semibold text-neutral-900 dark:text-neutral-100">
@@ -169,9 +180,11 @@ export default function SetupPage({ onSetup }: SetupPageProps) {
               </TextField>
             </Card.Content>
             <Card.Footer className="flex items-center justify-between gap-2 pt-6">
-              <Button variant="ghost" className="shrink-0" onPress={() => setPhase('backend')}>
-                {t('setup.backStep')}
-              </Button>
+              {!embedded && (
+                <Button variant="ghost" className="shrink-0" onPress={() => setPhase('backend')}>
+                  {t('setup.backStep')}
+                </Button>
+              )}
               <Button
                 isDisabled={loading}
                 type="submit"
@@ -183,7 +196,8 @@ export default function SetupPage({ onSetup }: SetupPageProps) {
             </Card.Footer>
           </form>
         )}
-      </Card>
+        </Card>
+      </div>
     </div>
   );
 }
