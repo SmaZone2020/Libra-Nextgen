@@ -27,4 +27,10 @@ contextBridge.exposeInMainWorld('libraDesktop', {
   getListenerConfig: () => ipcRenderer.invoke('shell:get-listener-config'),
   setListenerConfig: (settings) => ipcRenderer.invoke('shell:set-listener-config', settings),
   onUpdateProgress: (cb) => subscribe('shell:update-progress', cb),
+
+  // First-run setup wizard (setup.html only; the console never sees these).
+  getSetupState: () => ipcRenderer.invoke('shell:get-setup-state'),
+  testStorageConfig: (settings) => ipcRenderer.invoke('shell:test-storage-config', settings),
+  testRemoteServer: (url) => ipcRenderer.invoke('shell:test-remote-server', url),
+  completeSetup: (choice) => ipcRenderer.invoke('shell:complete-setup', choice),
 });
