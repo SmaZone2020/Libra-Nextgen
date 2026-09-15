@@ -11,11 +11,13 @@ import { DockerTab } from './DockerTab';
 import { useAgent } from '../../contexts/AgentContext';
 import { AgentRequired } from '../../components/AgentRequired';
 import { useAgentPlatform } from '../../hooks/useAgentPlatform';
+import { useIsDesktop } from '../../hooks/useMobileLayout';
 
 export default function SystemPage() {
   const { t } = useTranslation();
   const { agentId } = useAgent();
   const platform = useAgentPlatform();
+  const isDesktop = useIsDesktop();
   const [tab, setTab] = useState<string>('localAccounts');
 
   // Windows-only tab: window enumeration. Linux-only tabs: packages + docker.
@@ -44,14 +46,21 @@ export default function SystemPage() {
 
   return (
     <div className="space-y-3">
+      {/* Vertical sidebar on desktop; on a phone a vertical strip would eat the
+          whole width, so it becomes a horizontal, scrollable tab row. */}
       <Tabs
-        orientation="vertical"
+        orientation={isDesktop ? 'vertical' : 'horizontal'}
         selectedKey={activeTab}
         onSelectionChange={(key) => setTab(String(key))}
-        className="items-start"
+        className={isDesktop ? 'items-start' : ''}
       >
-        <Tabs.ListContainer className="flex justify-center h-auto self-start">
-          <Tabs.List aria-label={t('system.infoTabs')} className="my-0 px-2 w-35">
+        <Tabs.ListContainer
+          className={isDesktop ? 'flex h-auto justify-center self-start' : ''}
+        >
+          <Tabs.List
+            aria-label={t('system.infoTabs')}
+            className={isDesktop ? 'my-0 px-2 w-35' : 'my-0 px-2'}
+          >
             {tabs.map((tb) => (
               <Tabs.Tab key={tb.id} id={tb.id}>{tb.label}<Tabs.Indicator /></Tabs.Tab>
             ))}
