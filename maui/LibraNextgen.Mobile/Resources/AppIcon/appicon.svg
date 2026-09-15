@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- Adaptive-icon background layer. The foreground is the brand mark
+     (assets/branding/icon2-app.png), whose own disc is this same white, so the
+     two layers meet seamlessly under every launcher mask shape. -->
+<svg width="456" height="456" viewBox="0 0 456 456" version="1.1" xmlns="http://www.w3.org/2000/svg">
+    <rect x="0" y="0" width="456" height="456" fill="#FFFFFF" />
+</svg>

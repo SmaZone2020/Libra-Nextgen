@@ -1,0 +1,13 @@
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="LibraNextgen.Mobile.MainPage"
+             BackgroundColor="#0B0F14">
+
+    <!-- The app is a single full-bleed WebView: the console is the whole UI, and
+         the native layer only supplies the embedded service, the system-bar
+         insets and the JS bridge. No navigation bar, no toolbar, no chrome. -->
+    <WebView x:Name="Browser"
+             Navigating="OnBrowserNavigating"
+             Navigated="OnBrowserNavigated" />
+
+</ContentPage>
