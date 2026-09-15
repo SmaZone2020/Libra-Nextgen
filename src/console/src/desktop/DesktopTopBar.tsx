@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
+import { isLibraDesktopShell } from '../shell/env';
 
-// UA token appended by the Libra desktop shell (Electron). Must stay in sync
-// with `demo/main.js` DESKTOP_TOKEN. Plain browsers never carry it, so every
-// desktop-only behavior below stays inert for regular web usage.
-export const LIBRA_DESKTOP_UA = 'LibraDesktop';
+// Shell detection and the UA tokens live in `shell/env` now that there is more
+// than one embedded host (Electron desktop, MAUI mobile). Re-exported here so the
+// many existing desktop-only call sites keep importing from one place.
+export { LIBRA_DESKTOP_UA, isLibraDesktopShell } from '../shell/env';
 
 export const DESKTOP_TOPBAR_H = 32;
 
@@ -58,14 +59,6 @@ declare global {
   interface Window {
     libraDesktop?: LibraDesktopBridge;
   }
-}
-
-export function isLibraDesktopShell(): boolean {
-  return (
-    typeof navigator !== 'undefined' &&
-    navigator.userAgent.includes(LIBRA_DESKTOP_UA) &&
-    !!window.libraDesktop
-  );
 }
 
 interface DesktopTopBarProps {

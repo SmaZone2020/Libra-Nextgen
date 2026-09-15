@@ -45,10 +45,13 @@ interface StoredSlot {
   elements: Map<string, ReactNode>;
 }
 
+// Mobile keeps room for the floating bottom navigation plus the host's system
+// navigation bar (inset variable, 0 outside the mobile app); desktop is flush.
+const MOBILE_BOTTOM_PAD = 'pb-[calc(6rem+var(--libra-inset-bottom,0px))]';
 const FILL_PANEL_CLASS =
-  'lw-page-slot absolute inset-0 flex min-h-0 flex-col overflow-hidden pb-24 sm:pb-0';
+  `lw-page-slot absolute inset-0 flex min-h-0 flex-col overflow-hidden ${MOBILE_BOTTOM_PAD} sm:pb-0`;
 const SCROLL_PANEL_CLASS =
-  'lw-page-slot absolute inset-0 flex min-h-0 flex-col overflow-y-auto px-3 pt-2 pb-24 sm:px-5 sm:pt-3 sm:pb-6 lg:px-7';
+  `lw-page-slot absolute inset-0 flex min-h-0 flex-col overflow-y-auto px-3 pt-2 ${MOBILE_BOTTOM_PAD} sm:px-5 sm:pt-3 sm:pb-6 lg:px-7`;
 
 export function KeepAliveWorkspace({ routes }: { routes: PageRouteDef[] }) {
   const location = useLocation();

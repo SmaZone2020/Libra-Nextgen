@@ -12,7 +12,7 @@ import {
   apiBase,
 } from '../api/client';
 import { consoleWs } from '../ws/consoleWs';
-import { isLibraDesktopShell } from '../desktop/DesktopTopBar';
+import { isLibraDesktopShell, isLibraMobileShell, isEmbeddedShell } from '../shell/env';
 
 const RETRY_INTERVAL = 10_000;
 const MAX_RETRIES = 15;
@@ -34,12 +34,16 @@ export function NetworkOverlay({
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // In the desktop shell the backend address is derived from the shell config
-  // (127.0.0.1:<configured port>), so the manual address form is pointless
-  // there — restarting the local service is the right recovery action.
-  const desktopShell = isLibraDesktopShell();
+  // In an embedded host the backend address is owned by the shell/app (desktop:
+  // 127.0.0.1:<configured port>; mobile: the embedded service), so the manual
+  // address form is pointless there — restarting the local service is the right
+  // recovery action, and only a plain web deployment can be re-pointed by hand.
+  const embeddedShell = isEmbeddedShell();
   const bridge = window.libraDesktop;
-  const shellCanRestart = desktopShell && !!bridge?.restartService;
+  const restartLocalService =
+    (isLibraDesktopShell() && bridge?.restartService) ||
+    (isLibraMobileShell() && window.libraMobile?.restartService) ||
+    null;
 
   // Backend address override form (plain web deployments only)
   const [originDraft, setOriginDraft] = useState('');
@@ -160,13 +164,13 @@ export function NetworkOverlay({
         <h2 className="text-xl font-semibold text-neutral-900 dark:text-neutral-100 mb-2">{t('network.title')}</h2>
         <p className="text-sm text-neutral-500 mb-6">{t('network.desc')}</p>
 
-        {desktopShell ? (
+        {embeddedShell ? (
           <div className="mb-6 space-y-2 text-left">
             <div className="text-xs font-medium text-neutral-400">{t('network.backend')}</div>
             <p className="text-sm text-neutral-500">
               <code className="font-mono">{getApiOrigin()}</code>
             </p>
-            {shellCanRestart && (
+            {restartLocalService && (
               <Button
                 variant="secondary"
                 size="lg"
@@ -175,7 +179,7 @@ export function NetworkOverlay({
                 onPress={async () => {
                   setSavingOrigin(true);
                   try {
-                    await bridge!.restartService?.();
+                    await restartLocalService!();
                     setSavingOrigin(false);
                   } catch {
                     setSavingOrigin(false);

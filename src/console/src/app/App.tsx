@@ -12,6 +12,7 @@ import { AgreementModal } from '../components/AgreementModal';
 import { AgentProvider } from '../contexts/AgentContext';
 import { AuthenticatedLayout, SIDEBAR_W } from './AuthenticatedLayout';
 import { DesktopTopBar } from '../desktop/DesktopTopBar';
+import { syncStatusBarStyle } from '../shell/env';
 import '../i18n';
 
 const AUTO_COLLAPSE_CONTENT_MIN = 640;
@@ -26,6 +27,16 @@ export function App() {
   const [checking, setChecking] = useState(true);
   const [agreedAt, setAgreedAt] = useState<string | null | undefined>(undefined);
   const [backendReachable, setBackendReachable] = useState<boolean | null>(null);
+
+  // The mobile app's status-bar icons must follow the console theme, which is
+  // applied as a class on <html> — observe it instead of threading the theme
+  // state through here.
+  useEffect(() => {
+    syncStatusBarStyle();
+    const observer = new MutationObserver(syncStatusBarStyle);
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+    return () => observer.disconnect();
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -142,7 +153,7 @@ export function App() {
     // backend-address editor) instead of a blank/Loading screen. On recovery
     // we reboot the boot flow so setup/login state is evaluated fresh.
     view = (
-      <div className="min-h-screen bg-neutral-50 dark:bg-neutral-950">
+      <div className="libra-viewport-pad min-h-screen bg-neutral-50 dark:bg-neutral-950">
         <NetworkOverlay
           initiallyOffline
           onRecovered={() => window.location.reload()}
@@ -152,7 +163,7 @@ export function App() {
   } else if (!user) {
     if (checking) {
       view = (
-        <div className="min-h-screen flex items-center justify-center">
+        <div className="libra-viewport-pad min-h-screen flex items-center justify-center">
           <div className="text-neutral-500">Loading...</div>
         </div>
       );
@@ -167,7 +178,7 @@ export function App() {
     view = <AgreementModal onAccept={handleAcceptAgreement} onDecline={handleLogout} />;
   } else if (agreedAt === undefined) {
     view = (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="libra-viewport-pad min-h-screen flex items-center justify-center">
         <div className="text-neutral-500">Loading...</div>
       </div>
     );

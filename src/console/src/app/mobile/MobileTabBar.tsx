@@ -105,7 +105,9 @@ export function MobileTabBar({
   }, [activeIndex, hasMounted, controls]);
 
   return (
-    <div className="fixed bottom-[26px] left-4 right-4 z-40 sm:hidden">
+    // The pill floats above the host's system navigation bar / gesture area;
+    // the inset variable is 0 outside the mobile app.
+    <div className="fixed bottom-[calc(26px+var(--libra-inset-bottom,0px))] left-4 right-4 z-40 sm:hidden">
       <div className="relative rounded-[26px] h-[55px] border border-neutral-200/70 bg-white/70 shadow-lg shadow-black/10 backdrop-blur-md dark:border-neutral-800/80 dark:bg-neutral-900/75">
         {activeIndex >= 0 && (
           <motion.div

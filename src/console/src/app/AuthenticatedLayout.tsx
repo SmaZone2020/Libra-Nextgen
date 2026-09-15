@@ -33,6 +33,7 @@ import { MobileTabBar } from './mobile/MobileTabBar';
 import { AppDrawer } from './mobile/AppDrawer';
 import MePage from '../pages/Me';
 import { isWallpaperEnabled, useWallpaperPrefs } from '../utils/wallpaper';
+import { isLibraMobileShell } from '../shell/env';
 import { KeepAliveWorkspace, type PageRouteDef } from './KeepAliveWorkspace';
 
 export const SIDEBAR_W = { collapsed: 72, expanded: 256 };
@@ -125,11 +126,11 @@ export function AuthenticatedLayout({
     { key: 'agents', pattern: '/agents', element: <AgentsPage />, keep: false, layout: 'scroll' },
     { key: 'agent-detail', pattern: '/agents/:agentId', element: <AgentDetailPage />, keep: false, layout: 'scroll' },
     { key: 'shell', pattern: '/shell', element: <ShellPage />, keep: true, layout: 'fill' },
-    { key: 'files', pattern: '/files', element: <FileManager />, keep: true, layout: 'scroll' },
+    { key: 'files', pattern: '/files', element: <FileManager />, keep: true, layout: 'fill' },
     { key: 'audit', pattern: '/audit', element: <AuditLogsPage />, keep: false, layout: 'scroll' },
     { key: 'system', pattern: '/system', element: <SystemPage />, keep: true, layout: 'scroll' },
-    { key: 'software', pattern: '/othersoft', element: <SoftwareDataPage />, keep: true, layout: 'scroll' },
-    { key: 'proxy', pattern: '/proxy', element: <ProxyBrowserPage />, keep: true, layout: 'scroll' },
+    { key: 'software', pattern: '/othersoft', element: <SoftwareDataPage />, keep: true, layout: 'fill' },
+    { key: 'proxy', pattern: '/proxy', element: <ProxyBrowserPage />, keep: true, layout: 'fill' },
     { key: 'builder', pattern: '/builder', element: <BuilderPage />, keep: false, layout: 'scroll' },
     { key: 'ai', pattern: '/ai', element: <AiPage />, keep: true, layout: 'fill' },
     { key: 'ai', pattern: '/ai/:sessionId', element: <AiPage />, keep: true, layout: 'fill' },
@@ -146,7 +147,9 @@ export function AuthenticatedLayout({
 
   return (
     <div
-      className="lw-frame"
+      /* Mobile app draws edge to edge under the system status bar, so the frame
+         reserves that strip; the frame background still paints behind it. */
+      className={`lw-frame`}
       data-wallpaper={isWallpaperEnabled(wallpaper) ? 'on' : 'off'}
       style={{ '--sidebar-w': `${sidebarWidth}px` } as React.CSSProperties}
     >
@@ -165,7 +168,7 @@ export function AuthenticatedLayout({
       <main className="relative z-10 flex h-full min-w-0 flex-col sm:pl-[var(--sidebar-w)]">
         {/* Workspace main surface: right/bottom flush, top inset with the
             rounded top-left corner; mobile stays fully flush. */}
-        <div className="flex min-h-0 w-full flex-1 flex-col pt-0 sm:pt-8 lg:pt-12">
+        <div className={`flex min-h-0 w-full flex-1 flex-col pt-0 sm:pt-8 lg:pt-12`}>
           <section className="lw-workspace flex min-h-0 w-full flex-1 flex-col overflow-hidden">
             {/* Desktop-only header — lives INSIDE the workspace, no own panel. */}
             <header className="hidden shrink-0 items-center justify-between gap-4 px-4 pt-3.5 pb-1 sm:flex sm:px-6 lg:px-8 lg:pt-4">
@@ -188,7 +191,7 @@ export function AuthenticatedLayout({
               </div>
             </header>
 
-            <div className="lw-workspace-body relative flex min-h-0 flex-1 flex-col">
+            <div className={`lw-workspace-body relative flex min-h-0 flex-1 flex-col ${isLibraMobileShell() ? ' mt-[34px]' : ''}`}>
               {/* Keep-alive panels: hidden pages stay mounted and running
                   (Shell task polling, AI streams, plugin pages), visible
                   panels are absolutely stacked inside the workspace body. */}
