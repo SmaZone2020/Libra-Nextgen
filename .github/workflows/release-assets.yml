@@ -6,9 +6,13 @@
 #   libra-webapp-{tag}.zip               console SPA static build (also the
 #                                        shell's silent web update source)
 #   libra-service-{rid}-{tag}.zip        self-contained server, no SPA (cloud)
-#   (future) electron installers         electron-builder job (TODO, see below)
+#   libra-mobile-android-{abi}-{tag}.apk MAUI app (Android), one APK per ABI
+#   (optional) Apple mobile assets       iOS .ipa / macOS .app zip; only when
+#                                        workflow_dispatch sets build_apple=true
+#                                        (they need Apple signing secrets)
 # rid = win-x64 | win-arm64 | linux-x64 | linux-arm64
-# Every zip ships with a sibling .sha256. Agent templates are published by
+# abi = arm64 | x64
+# Every artifact ships with a sibling .sha256. Agent templates are published by
 # templates.yml on the same tag.
 # Trigger: pushing a tag (1.2.3) or workflow_dispatch with an optional tag_name.
 
@@ -22,6 +26,10 @@ on:
       tag_name:
         description: 'Release tag to publish under (default: current git ref)'
         required: false
+      build_apple:
+        description: 'Also build the iOS / macOS mobile app (requires Apple signing secrets)'
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -213,14 +221,200 @@ jobs:
           path: release-installers
           retention-days: 1
 
+  mobile-android:
+    name: mobile app (android-${{ matrix.abi }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - abi: arm64
+            rid: android-arm64
+          - abi: x64
+            rid: android-x64
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: src/console/package-lock.json
+
+      # The mobile app embeds the console, so the SPA has to exist first; the
+      # maui project's own build step then packs it into Resources/Raw.
+      - name: Build console SPA
+        working-directory: src/console
+        run: |
+          npm ci
+          npm run build
+
+      - name: Install MAUI Android workload
+        run: dotnet workload install maui-android --skip-sign-check
+
+      # Directory.Build.targets supplies the ASP.NET Core *shared framework* to
+      # the Android target (there is no runtime pack for mobile RIDs). The SDK
+      # ships it, but fail loudly here instead of with a confusing LIBRA001 later.
+      - name: Verify ASP.NET Core shared framework is present
+        shell: bash
+        run: |
+          set -euo pipefail
+          root="$(dirname "$(dirname "$(command -v dotnet)")")"
+          ls -d "$root"/shared/Microsoft.AspNetCore.App/* || {
+            echo "ASP.NET Core shared framework missing under $root/shared"; exit 1; }
+
+      # versionCode must be a monotonically increasing integer; derive it from the
+      # tag so a release and its APK never disagree.
+      - name: Derive Android version
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+          IFS=. read -r major minor patch <<< "${TAG%%-*}"
+          echo "name=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "code=$(( major * 10000 + minor * 100 + patch ))" >> "$GITHUB_OUTPUT"
+
+      - name: Publish APK (${{ matrix.abi }})
+        working-directory: maui/LibraNextgen.Mobile
+        run: |
+          dotnet publish -f net10.0-android -c Release \
+            -p:AndroidPackageFormat=apk \
+            -p:RuntimeIdentifier=${{ matrix.rid }} \
+            -p:ApplicationDisplayVersion=${{ steps.version.outputs.name }} \
+            -p:ApplicationVersion=${{ steps.version.outputs.code }}
+
+      - name: Collect APK + sha256
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p assets
+          src=$(ls maui/LibraNextgen.Mobile/bin/Release/net10.0-android/${{ matrix.rid }}/publish/*-Signed.apk)
+          out=assets/libra-mobile-android-${{ matrix.abi }}-$TAG.apk
+          cp "$src" "$out"
+          (cd assets && sha256sum "$(basename "$out")" | awk '{print $1}' > "$(basename "$out").sha256")
+          ls -la assets
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-assets-mobile-android-${{ matrix.abi }}
+          path: assets
+          retention-days: 1
+
+  # Apple platforms are opt-in (workflow_dispatch → build_apple): they only
+  # produce an installable artifact with a signing identity and provisioning
+  # profile, which the repository cannot assume. See docs/ for the secret names.
+  mobile-apple:
+    name: mobile app (apple)
+    if: ${{ github.event.inputs.build_apple == 'true' }}
+    runs-on: macos-15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: ios
+            tfm: net10.0-ios
+          - platform: maccatalyst
+            tfm: net10.0-maccatalyst
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: src/console/package-lock.json
+
+      - name: Build console SPA
+        working-directory: src/console
+        run: |
+          npm ci
+          npm run build
+
+      - name: Install MAUI Apple workloads
+        run: dotnet workload install maui-ios maui-maccatalyst --skip-sign-check
+
+      # Runs unconditionally and no-ops without secrets: `if:` cannot reliably
+      # read secrets, and an unsigned build is still useful for smoke testing.
+      - name: Import signing identity
+        env:
+          APPLE_CERT_P12: ${{ secrets.APPLE_CERT_P12 }}
+          APPLE_CERT_PASSWORD: ${{ secrets.APPLE_CERT_PASSWORD }}
+          APPLE_PROVISIONING_PROFILE: ${{ secrets.APPLE_PROVISIONING_PROFILE }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "${APPLE_CERT_P12:-}" ]; then
+            echo "No Apple signing secrets configured; continuing unsigned."
+            exit 0
+          fi
+          keychain=build.keychain
+          echo "$APPLE_CERT_P12" | base64 --decode > cert.p12
+          security create-keychain -p actions "$keychain"
+          security default-keychain -s "$keychain"
+          security unlock-keychain -p actions "$keychain"
+          security import cert.p12 -k "$keychain" -P "$APPLE_CERT_PASSWORD" \
+            -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple: -s -k actions "$keychain"
+          mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
+          echo "$APPLE_PROVISIONING_PROFILE" | base64 --decode \
+            > ~/Library/MobileDevice/Provisioning\ Profiles/libra.mobileprovision
+
+      # TargetFrameworks is overridden here because the project ships Android-only
+      # by default; the same sources build for Apple unchanged.
+      - name: Publish ${{ matrix.platform }}
+        working-directory: maui/LibraNextgen.Mobile
+        run: |
+          dotnet publish -f ${{ matrix.tfm }} -c Release \
+            -p:TargetFrameworks=${{ matrix.tfm }} \
+            -p:ApplicationDisplayVersion=$TAG \
+            -p:ApplicationVersion=1
+
+      - name: Collect artifact + sha256
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p assets
+          base=maui/LibraNextgen.Mobile/bin/Release/${{ matrix.tfm }}
+          if [ "${{ matrix.platform }}" = "ios" ]; then
+            # An unsigned build still yields the .app bundle; an .ipa needs signing.
+            if ls "$base"/*/publish/*.ipa >/dev/null 2>&1; then
+              cp "$base"/*/publish/*.ipa "assets/libra-mobile-ios-$TAG.ipa"
+            else
+              echo "No .ipa produced - Apple signing secrets are required"; exit 1
+            fi
+          else
+            (cd "$base" && zip -qry "$GITHUB_WORKSPACE/assets/libra-mobile-macos-$TAG.zip" *.app)
+          fi
+          (cd assets && for f in *; do sha256sum "$f" | awk '{print $1}' > "$f.sha256"; done)
+          ls -la assets
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-assets-mobile-${{ matrix.platform }}
+          path: assets
+          retention-days: 1
+
   attach:
     name: Attach to release
-    needs: [assets, webapp, electron]
+    needs: [assets, webapp, electron, mobile-android, mobile-apple]
     if: always()
     runs-on: ubuntu-latest
     steps:
       - name: Abort when any job failed
-        if: needs.assets.result != 'success' || needs.webapp.result != 'success' || needs.electron.result != 'success'
+        if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')
         run: |
           echo "asset build failed - nothing published"
           exit 1
@@ -245,4 +439,15 @@ jobs:
             release-assets/libra-webapp-*.zip
             release-assets/libra-webapp-*.zip.sha256
             release-assets/libra-desktop-installer-*
+            release-assets/libra-mobile-android-*
+          fail_on_unmatched_files: true
+
+      # Separate step: the Apple artifacts only exist on an opt-in dispatch run.
+      - uses: softprops/action-gh-release@v2
+        if: ${{ github.event.inputs.build_apple == 'true' }}
+        with:
+          tag_name: ${{ env.TAG }}
+          files: |
+            release-assets/libra-mobile-ios-*
+            release-assets/libra-mobile-macos-*
           fail_on_unmatched_files: true
