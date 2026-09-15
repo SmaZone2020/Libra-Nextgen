@@ -228,6 +228,26 @@ async function request<T>(
   return response.json();
 }
 
+/**
+ * Node-scoped one-off API: every call relays through a specific connected mesh
+ * node regardless of the current `apiNodeTarget`. Used by surfaces that must
+ * read a remote device before the user has connected it (the mobile detail
+ * page reopened from the merged device list).
+ */
+export function apiForNode(nodeId: string) {
+  const relay = (path: string) =>
+    `/mesh/nodes/${nodeId}/relay/${path.replace(/^\//, '')}`;
+  return {
+    get: <T>(path: string) => request<T>(relay(path)),
+    post: <T>(path: string, body?: unknown) =>
+      request<T>(relay(path), { method: 'POST', body: body ? JSON.stringify(body) : undefined }),
+    put: <T>(path: string, body?: unknown) =>
+      request<T>(relay(path), { method: 'PUT', body: body ? JSON.stringify(body) : undefined }),
+    delete: <T>(path: string, body?: unknown) =>
+      request<T>(relay(path), { method: 'DELETE', body: body ? JSON.stringify(body) : undefined }),
+  };
+}
+
 export const api = {
   get: <T>(path: string) => request<T>(path),
   post: <T>(path: string, body?: unknown) =>
