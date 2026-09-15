@@ -1,0 +1,579 @@
+using System.Text.Json;
+using System.Text.Json.Serialization;
+using System.Threading.RateLimiting;
+using System.Diagnostics;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Hosting.Server;
+using Microsoft.AspNetCore.Hosting.Server.Features;
+using Microsoft.IdentityModel.Tokens;
+using Microsoft.Extensions.FileProviders;
+using Scalar.AspNetCore;
+using LibraNextgen.Common.Models;
+using LibraNextgen.Service.Configuration;
+using LibraNextgen.Service.Data;
+using LibraNextgen.Service.Profiles;
+using LibraNextgen.Service.Services.Mesh;
+using LibraNextgen.Common.Protocol;
+using LibraNextgen.Service.Hubs;
+using LibraNextgen.Service.Middleware;
+using LibraNextgen.Service.Models;
+using LibraNextgen.Service.Controllers;
+
+namespace LibraNextgen.Service;
+
+/// <summary>
+/// The Libra-Nextgen service host, as a callable entry point.
+///
+/// The same code runs in three shapes: the cloud/bare-metal process, the
+/// Electron desktop sidecar (spawned child) and — since the mobile app cannot
+/// spawn a sidecar — hosted in-process inside the MAUI application. Only the
+/// bootstrapping lives here; behaviour is identical in all three, driven by the
+/// same <c>libra.conf.json</c> / CLI / environment contract.
+/// </summary>
+public static class LibraServiceHost
+{
+    /// <summary>
+    /// Optional extra logging sink, invoked after the default providers are
+    /// registered. Embedded hosts use it to surface service logs in their own
+    /// UI (the mobile app has no console to read); standalone deployments leave
+    /// it null and log to stdout exactly as before.
+    /// </summary>
+    public static Action<Microsoft.Extensions.Logging.ILoggingBuilder>? AdditionalLoggingSink { get; set; }
+
+    /// <summary>
+    /// Build and run the service until <paramref name="cancellationToken"/> is
+    /// cancelled or the host stops. Embedded hosts (mobile) cancel the token on
+    /// app shutdown; standalone hosts pass <see cref="CancellationToken.None"/>.
+    /// </summary>
+    public static async Task RunAsync(string[] args, CancellationToken cancellationToken = default)
+    {
+        var builder = WebApplication.CreateBuilder(args);
+
+        // Self-restart support: a relaunched process waits this long before binding
+        // so the previous instance (still holding the listen port) has time to stop
+        // gracefully. Set only by the restart path below.
+        if (int.TryParse(Environment.GetEnvironmentVariable("LIBRA_START_DELAY_MS"), out var startDelayMs)
+            && startDelayMs > 0)
+            Thread.Sleep(Math.Min(startDelayMs, 30_000));
+
+        // Drop the Windows EventLog provider: it is disposed during host shutdown, and a
+        // background task (Telegram/IM receiver) logging at that moment crashes the whole
+        // process via Logger.ThrowLoggingError. Console output is all the server needs.
+        builder.Logging.ClearProviders();
+        builder.Logging.AddConsole();
+        builder.Logging.AddDebug();
+        // Per-request HTTP tracing at Information is pure noise for high-frequency
+        // poll loops (wechat iLink / Telegram): keep warnings+ for HttpClient loggers.
+        builder.Logging.AddFilter("System.Net.Http.HttpClient", LogLevel.Warning);
+        AdditionalLoggingSink?.Invoke(builder.Logging);
+
+        // MongoDB
+        builder.Services.Configure<MongoSettings>(builder.Configuration.GetSection(MongoSettings.SectionName));
+        builder.Services.AddSingleton<MongoDbContext>();
+        builder.Services.AddSingleton<ServerKeyService>();
+        builder.Services.AddSingleton<MongoIndexBuilder>();
+
+        // Desktop user config (libra.conf.json under --user-data-dir or the OS
+        // application-data default), optionally overridden by CLI flags
+        // (--store/--connect/--dbpath) for portable launches. Absent in cloud
+        // deployments -> Mongo exactly as before: no probe, no exit.
+        var userConfig = UserConfigLoader.TryLoad(builder.Configuration, out var userConfigPath);
+        var resolvedConfig = UserConfigLoader.MergeOverrides(userConfig, builder.Configuration);
+        if (resolvedConfig is not null)
+            builder.Services.AddSingleton(new UserConfigSource(userConfigPath ?? "(cli overrides)", resolvedConfig));
+
+        var mongoConnectString = builder.Configuration["connect"]
+            ?? resolvedConfig?.Storage.ConnectString
+            ?? builder.Configuration.GetSection(MongoSettings.SectionName)["ConnectionString"]
+            ?? "mongodb://localhost:27017";
+
+        // Startup store decision (docs/desktop-electron-architecture.md §3): sqlite
+        // config -> sqlite; mongo config -> reachability probe, and an unreachable
+        // MongoDB exits with an error (fallback to sqlite removed); no config
+        // (cloud) -> mongo, never probing or exiting.
+        var resolution = new StoreModeResolver(new MongoReachabilityProbe(mongoConnectString))
+            .ResolveAsync(resolvedConfig)
+            .GetAwaiter()
+            .GetResult();
+
+        // Pre-flight mode for the desktop shell: report the verdict on stdout and
+        // exit before any port is bound or any service is registered, so a
+        // candidate connection string can be validated without side effects.
+        // Stdout carries the JSON line only — diagnostics belong on stderr.
+        if (StorageProbeReport.IsProbeRequested())
+        {
+            Console.Out.WriteLine(StorageProbeReport.Render(resolution));
+            Console.Out.Flush();
+            Environment.Exit(StorageProbeReport.ExitCode(resolution));
+        }
+
+        if (resolution.ExitRequested)
+        {
+            Console.Error.WriteLine(resolution.Error);
+            // An embedded host shares its process with its owner (the mobile app),
+            // which must be able to report the failure instead of disappearing.
+            if (Environment.GetEnvironmentVariable("LIBRA_EMBEDDED_HOST") == "1")
+                throw new InvalidOperationException(resolution.Error);
+            Environment.Exit(3);
+        }
+
+        var useSqlite = resolution.Effective == StoreKind.Sqlite;
+
+        if (useSqlite)
+        {
+            var configDir = userConfigPath is not null ? Path.GetDirectoryName(userConfigPath) : null;
+            // A configured-but-empty dbPath (e.g. the shell's default config carries
+            // "dbPath":"") must resolve to the default location, not Path.GetFullPath("").
+            var configuredDbPath = resolvedConfig!.Storage.DbPath;
+            var sqliteDbPath = string.IsNullOrWhiteSpace(configuredDbPath)
+                ? (configDir is not null
+                    ? Path.Combine(configDir, "data", "libra.db")
+                    : Path.Combine(AppContext.BaseDirectory, "data", "libra.db"))
+                : configuredDbPath;
+            builder.Services.AddSingleton(_ => new SqliteDbContext(sqliteDbPath));
+        }
+
+        // Exposed to /api/system/storage so the console can render the effective
+        // store (docs/desktop-electron-architecture.md §3).
+        builder.Services.AddSingleton<StoreResolution>(_ => resolution);
+
+        // Beacon authentication (shared secret injected at build time)
+        builder.Services.Configure<BeaconSettings>(builder.Configuration.GetSection(BeaconSettings.SectionName));
+
+        builder.Services.Configure<AiSettings>(builder.Configuration.GetSection(AiSettings.SectionName));
+        builder.Services.AddSingleton<AiPromptFileLoader>();
+
+        var listenerSettings = ListenerSettingsLoader.Load();
+
+        // Desktop libra.conf.json listener section is authoritative for the local
+        // shell (loopback binding + manifest port) unless LIBRA_LISTEN_PORT is set
+        // explicitly for debugging/ops.
+        if (resolvedConfig?.Listener is { } desktopListener)
+        {
+            if (desktopListener.Port is >= 1 and <= 65535
+                && Environment.GetEnvironmentVariable("LIBRA_LISTEN_PORT") is null)
+                listenerSettings.Port = desktopListener.Port;
+            listenerSettings.BindLoopbackOnly = desktopListener.BindLoopback;
+        }
+
+        builder.WebHost.ConfigureKestrel(options =>
+        {
+            if (listenerSettings.BindLoopbackOnly)
+                options.ListenLocalhost(listenerSettings.Port);
+            else
+                options.ListenAnyIP(listenerSettings.Port);
+
+            options.Limits.RequestHeadersTimeout = TimeSpan.FromMinutes(5);
+            options.Limits.KeepAliveTimeout = TimeSpan.FromMinutes(10);
+        });
+
+        builder.Services.AddHttpClient();
+
+        // Per-collection stores. Repository<T> (Mongo) stays registered for consumers
+        // that are not yet migrated; IStore<T> resolves per effective store kind
+        // (SQLite on the desktop, Mongo elsewhere) and is what migrated services use.
+        void RegisterStore<T>(IServiceCollection services, string collectionName) where T : class
+        {
+            services.AddSingleton(sp => new Repository<T>(sp.GetRequiredService<MongoDbContext>(), collectionName));
+            services.AddSingleton<IStore<T>>(sp => useSqlite
+                ? new SqliteStore<T>(sp.GetRequiredService<SqliteDbContext>(), collectionName)
+                : sp.GetRequiredService<Repository<T>>());
+        }
+
+        RegisterStore<Agent>(builder.Services, "agents");
+        RegisterStore<AgentTask>(builder.Services, "tasks");
+        RegisterStore<User>(builder.Services, "users");
+        RegisterStore<MalleableProfileConfig>(builder.Services, "profiles");
+        RegisterStore<AccessKey>(builder.Services, "access_keys");
+        RegisterStore<BuildTrafficLists>(builder.Services, "build_lists");
+        RegisterStore<TrafficRecord>(builder.Services, "traffic");
+        RegisterStore<AuditLog>(builder.Services, "audit_logs");
+        RegisterStore<RiskPolicy>(builder.Services, "risk_policy");
+        RegisterStore<SessionKey>(builder.Services, "session_keys");
+        RegisterStore<SessionTokenDoc>(builder.Services, "session_tokens");
+
+        RegisterStore<PluginRecord>(builder.Services, "plugins");
+        RegisterStore<McpConfig>(builder.Services, "mcp_config");
+        RegisterStore<AiEventSubscription>(builder.Services, "ai_event_subscriptions");
+        RegisterStore<AiProvider>(builder.Services, "ai_providers");
+        RegisterStore<AiSession>(builder.Services, "ai_sessions");
+        RegisterStore<AiMcpConfig>(builder.Services, "ai_mcp_config");
+        RegisterStore<AiChannel>(builder.Services, "ai_channels");
+        RegisterStore<AiChannelUser>(builder.Services, "ai_channel_users");
+        RegisterStore<AiChannelBindCode>(builder.Services, "ai_channel_bind_codes");
+        RegisterStore<AiChannelCursor>(builder.Services, "ai_channel_cursors");
+        RegisterStore<MeshNode>(builder.Services, "mesh_nodes");
+        builder.Services.AddScoped<BuildListService>();
+        builder.Services.AddSingleton<AiService>();
+
+        builder.Services.AddSingleton<TelegramChannelAdapter>();
+        builder.Services.AddSingleton<LarkChannelAdapter>();
+        builder.Services.AddSingleton<WeChatClawAdapter>();
+        builder.Services.AddSingleton<AiChannelService>();
+        builder.Services.AddSingleton<AiEventNotifier>();
+        builder.Services.AddHostedService<TelegramBotHostedService>();
+        builder.Services.AddHostedService<ChannelPollingHostedService>();
+        builder.Services.AddHostedService<LarkWsChannelService>();
+
+        // JWT Settings (singleton, holds RSA key pair)
+        var jwtSettings = new JwtSettings();
+        builder.Services.AddSingleton(jwtSettings);
+        builder.Services.AddScoped<AuthService>();
+        builder.Services.AddScoped<AccountService>();
+        builder.Services.AddScoped<ProfileService>();
+        builder.Services.AddScoped<AgentService>();
+        builder.Services.AddScoped<TaskService>();
+        builder.Services.AddScoped<AgentCommsService>();
+        builder.Services.AddScoped<RelayService>();
+        builder.Services.AddSingleton<ServerScriptService>();
+
+        // WebSocket
+        builder.Services.AddSingleton<ISessionLock, ShellSessionLock>();
+        builder.Services.AddSingleton<AgentTrafficService>();
+        builder.Services.AddSingleton<ConnectionManager>();
+        builder.Services.AddSingleton<SessionKeyStore>();
+        builder.Services.AddSingleton<AgentEventHub>();
+        builder.Services.AddSingleton<DownloadTicketStore>();
+        builder.Services.AddSingleton<RiskPolicyService>();
+        builder.Services.AddSingleton<PermissionService>();
+        builder.Services.AddSingleton<McpService>();
+        builder.Services.AddSingleton<AuditService>();
+        builder.Services.AddScoped<AccessKeyService>();
+        builder.Services.AddScoped<MeshNodeService>();
+        builder.Services.AddSingleton<MeshSessionManager>();
+        builder.Services.AddHostedService<MeshSyncService>();
+        builder.Services.AddSingleton<TemplateManagerService>();
+        builder.Services.AddSingleton<UpdateService>();
+        builder.Services.AddSingleton<BuilderBuildService>();
+        builder.Services.AddScoped<PluginService>();
+        builder.Services.AddHostedService<HeartbeatMonitor>();
+
+        // SQLite has no TTL indexes; a periodic purge stands in for Mongo's
+        // ExpireAfter (traffic retention). Mongo mode keeps its TTL indexes.
+        if (useSqlite)
+            builder.Services.AddHostedService<StoreTtlCleanupService>();
+
+        builder.Services.AddHttpContextAccessor();
+        builder.Services.AddMcpServer()
+            .WithHttpTransport(options => options.Stateless = true)
+            // Explicit assembly: an embedded host's entry assembly is the *app*,
+            // not this one, so "the calling assembly" heuristics must not be relied on.
+            .WithToolsFromAssembly(typeof(LibraServiceHost).Assembly);
+
+        // Auth
+        builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+            .AddJwtBearer(options =>
+            {
+                options.TokenValidationParameters = new TokenValidationParameters
+                {
+                    ValidateIssuer = true,
+                    ValidateAudience = true,
+                    ValidateLifetime = true,
+                    ValidateIssuerSigningKey = true,
+                    ValidIssuer = jwtSettings.Issuer,
+                    ValidAudience = jwtSettings.Audience,
+                    IssuerSigningKey = new RsaSecurityKey(jwtSettings.Rsa),
+                    ClockSkew = TimeSpan.Zero
+                };
+                options.Events = new JwtBearerEvents
+                {
+                    OnMessageReceived = context =>
+                    {
+                        var token = context.Request.Query["token"].FirstOrDefault();
+                        if (string.IsNullOrEmpty(token) &&
+                            context.HttpContext.Request.RouteValues.TryGetValue("token", out var routeToken))
+                        {
+                            token = routeToken?.ToString();
+                        }
+                        if (!string.IsNullOrEmpty(token))
+                        {
+                            context.Token = token;
+                        }
+                        return Task.CompletedTask;
+                    }
+                };
+            });
+        builder.Services.AddAuthentication()
+            .AddScheme<AuthenticationSchemeOptions, AccessKeyAuthHandler>("AccessKey", null);
+        builder.Services.AddAuthorization(options =>
+        {
+            options.AddPolicy("McpPolicy", policy =>
+                policy.AddAuthenticationSchemes("AccessKey").RequireAuthenticatedUser());
+        });
+
+        // Controllers + OpenAPI with Scalar UI.
+        // AddApplicationPart is explicit on purpose: MVC discovers controllers from
+        // the *entry* assembly, which is this one in the cloud/desktop shapes but is
+        // the host app when the service is embedded (mobile). Without it the API
+        // silently loses every controller endpoint.
+        builder.Services.AddControllers()
+            .AddApplicationPart(typeof(LibraServiceHost).Assembly)
+            .AddJsonOptions(options =>
+        {
+            options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());
+            // Match camelCase JSON (e.g. plugin meta.json "argsSchema") against
+            // PascalCase C# models, case-insensitively. The plugin meta uses
+            // camelCase keys; without this the nested classes deserialize empty.
+            options.JsonSerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
+            options.JsonSerializerOptions.PropertyNameCaseInsensitive = true;
+        });
+        builder.Services.AddOpenApi("v1", options =>
+        {
+            options.AddDocumentTransformer((document, _, _) =>
+            {
+                document.Info.Title = "Libra-Nextgen API";
+                document.Info.Version = "v1";
+                document.Info.Description = "Libra-Nextgen C2 Framework REST API";
+                return Task.CompletedTask;
+            });
+        });
+
+        // WebSocket middleware is enabled via app.UseWebSockets()
+
+        var listenerSettings2 = ListenerSettingsLoader.Load();
+        var securitySettings = SecuritySettingsLoader.Load();
+        var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? [];
+        builder.Services.AddCors(options =>
+        {
+            options.AddPolicy("CorsSignalR", policy =>
+            {
+                if (listenerSettings2.BindLoopbackOnly)
+                {
+                    if (allowedOrigins.Length > 0)
+                        policy.WithOrigins(allowedOrigins).AllowAnyHeader().AllowAnyMethod();
+                    else
+                        policy.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod();
+                }
+                else if (securitySettings.OpenLan)
+                {
+                    policy.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod();
+                }
+                else
+                {
+                    if (allowedOrigins.Length > 0)
+                        policy.WithOrigins(allowedOrigins).AllowAnyHeader().AllowAnyMethod();
+                    else
+                        policy.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod();
+                }
+            });
+        });
+
+        // Rate Limiting
+        builder.Services.AddRateLimiter(options =>
+        {
+            options.AddPolicy("auth", context =>
+            {
+                var ip = context.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+                return RateLimitPartition.GetFixedWindowLimiter(ip, _ => new FixedWindowRateLimiterOptions
+                {
+                    PermitLimit = 5,
+                    Window = TimeSpan.FromMinutes(1),
+                    QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                    QueueLimit = 0,
+                });
+            });
+            options.AddPolicy("mcp", context =>
+            {
+                var key = context.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
+                          ?? context.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+                return RateLimitPartition.GetFixedWindowLimiter(key, _ => new FixedWindowRateLimiterOptions
+                {
+                    PermitLimit = 120,
+                    Window = TimeSpan.FromMinutes(1),
+                    QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                    QueueLimit = 0,
+                });
+            });
+            options.RejectionStatusCode = 429;
+        });
+
+        var app = builder.Build();
+
+        SettingsController.RebindListeners = (listenUrl, ct) =>
+        {
+            _ = Task.Run(async () =>
+            {
+                await Task.Delay(1500, ct);
+                var logger = app.Services.GetRequiredService<ILoggerFactory>()
+                    .CreateLogger("ListenerRebind");
+                logger.LogInformation("Listener changed to {Url} — restarting service", listenUrl);
+                try
+                {
+                    if (resolvedConfig?.Listener is not null)
+                    {
+                        // Desktop shell owns libra.conf.json and supervises the
+                        // process; its settings UI applies listener changes through
+                        // the shell bridge (write config + restart). Never exit from
+                        // underneath the shell in response to a web-app request.
+                        logger.LogWarning(
+                            "Listener change deferred: desktop shell owns libra.conf.json — apply it from the app shell");
+                        return;
+                    }
+
+                    // No supervisor (bare web-app deployments): relaunch ourselves
+                    // with the identical command line so the new listener binds, then
+                    // stop gracefully. systemd/supervisord users can disable this by
+                    // relying on their own Restart= policy if double-spawn is unwanted.
+                    var psi = new ProcessStartInfo
+                    {
+                        FileName = Environment.ProcessPath ?? "dotnet",
+                        WorkingDirectory = Directory.GetCurrentDirectory(),
+                        UseShellExecute = false,
+                    };
+                    foreach (var arg in Environment.GetCommandLineArgs().Skip(1))
+                        psi.ArgumentList.Add(arg);
+                    // Give the old instance time to release the listen port before the
+                    // relaunched process binds it (avoids an address-in-use crash).
+                    psi.Environment["LIBRA_START_DELAY_MS"] = "1500";
+                    Process.Start(psi);
+                }
+                catch (Exception ex)
+                {
+                    logger.LogError(ex, "Failed to relaunch self after listener change");
+                }
+                app.Lifetime.StopApplication();
+            }, ct);
+            return Task.CompletedTask;
+        };
+
+        if (app.Environment.IsDevelopment())
+        {
+            app.UseDeveloperExceptionPage();
+        }
+        app.UseExceptionHandler(errorApp =>
+        {
+            errorApp.Run(async context =>
+            {
+                var exception = context.Features.Get<Microsoft.AspNetCore.Diagnostics.IExceptionHandlerFeature>()?.Error;
+                var logger = context.RequestServices.GetRequiredService<ILoggerFactory>()
+                    .CreateLogger("GlobalExceptionHandler");
+                if (exception != null)
+                    logger.LogError(exception, "Unhandled exception: {Path} {Method}",
+                        context.Request.Path, context.Request.Method);
+
+                context.Response.StatusCode = StatusCodes.Status500InternalServerError;
+                context.Response.ContentType = "application/json; charset=utf-8";
+                await context.Response.WriteAsJsonAsync(new { error = "Internal server error" });
+            });
+        });
+
+        // Optional console static hosting. Serves the SPA from a local web/ directory
+        // next to the server (desktop/local bundle) or from LIBRA_WEB_ROOT when set.
+        // nginx-style deployments keep hosting the SPA externally and skip this block.
+        var consoleWebRoot = ResolveConsoleWebRoot();
+        if (consoleWebRoot is not null)
+        {
+            app.Logger.LogInformation("Serving console SPA from {WebRoot}", consoleWebRoot);
+            app.UseStaticFiles(new StaticFileOptions
+            {
+                FileProvider = new PhysicalFileProvider(consoleWebRoot),
+            });
+        }
+        app.MapOpenApi();
+        if (app.Environment.IsDevelopment())
+        {
+            app.MapScalarApiReference(options =>
+            {
+                options.Title = "Libra-Nextgen API";
+                options.Theme = Scalar.AspNetCore.ScalarTheme.DeepSpace;
+            });
+        }
+
+        app.UseWebSockets(new WebSocketOptions { KeepAliveInterval = TimeSpan.FromSeconds(30) });
+        app.UseMiddleware<BeaconEntryMiddleware>();
+        app.UseMiddleware<ProfileFingerprintMiddleware>();
+        app.UseRouting();
+        app.UseCors("CorsSignalR");
+        app.UseAuthentication();
+        app.UseAuthorization();
+        app.UseRateLimiter();
+        app.UseMiddleware<PermissionMiddleware>();
+        app.UseMiddleware<AuditMiddleware>();
+        app.MapControllers();
+        app.UseMiddleware<McpToggleMiddleware>();
+        app.MapMcp("/mcp").RequireAuthorization("McpPolicy").RequireRateLimiting("mcp");
+        WebSocketHandler.Map(app);
+
+        // SPA fallback (only when serving the console in-process). API/beacon/ws/mcp
+        // prefixes must keep 404 instead of being swallowed by index.html.
+        if (consoleWebRoot is not null)
+        {
+            app.MapFallback(async context =>
+            {
+                var p = context.Request.Path;
+                if (p.StartsWithSegments("/api") || p.StartsWithSegments("/ws") ||
+                    p.StartsWithSegments("/mcp") || p.StartsWithSegments("/scalar") ||
+                    p.StartsWithSegments("/v1"))
+                {
+                    context.Response.StatusCode = StatusCodes.Status404NotFound;
+                    return;
+                }
+                context.Response.ContentType = "text/html; charset=utf-8";
+                await context.Response.SendFileAsync(Path.Combine(consoleWebRoot!, "index.html"));
+            });
+        }
+
+        // Startup bootstrap: Mongo indexes are Mongo-only (SQLite has no TTL/unique
+        // index equivalents to build), while the in-memory cache loads (risk policy,
+        // MCP flag, plugin scripts, session keys) run against the active store — all
+        // of them are dual-store now.
+        try
+        {
+            using (var scope = app.Services.CreateScope())
+            {
+                if (!useSqlite)
+                {
+                    var indexBuilder = scope.ServiceProvider.GetRequiredService<MongoIndexBuilder>();
+                    indexBuilder.EnsureIndexesAsync().GetAwaiter().GetResult();
+                }
+                var riskPolicy = scope.ServiceProvider.GetRequiredService<RiskPolicyService>();
+                riskPolicy.LoadAsync().GetAwaiter().GetResult();
+                var mcp = scope.ServiceProvider.GetRequiredService<McpService>();
+                mcp.LoadAsync().GetAwaiter().GetResult();
+                var plugins = scope.ServiceProvider.GetRequiredService<PluginService>();
+                plugins.PreloadScriptsAsync().GetAwaiter().GetResult();
+                var sessionKeys = scope.ServiceProvider.GetRequiredService<SessionKeyStore>();
+                sessionKeys.LoadAsync().GetAwaiter().GetResult();
+            }
+        }
+        catch (Exception ex)
+        {
+            var logger = app.Services.GetRequiredService<ILoggerFactory>().CreateLogger("Startup");
+            logger.LogWarning(ex, "Startup bootstrap failed — continuing without indexes/caches.");
+        }
+
+        if (resolvedConfig is not null)
+        {
+            var userCfgLog = app.Services.GetRequiredService<ILoggerFactory>().CreateLogger("UserConfig");
+            userCfgLog.LogInformation(
+                "User config from {ConfigPath}: requested={Requested} effective={Effective} fallbackReason={FallbackReason}",
+                userConfigPath ?? "(cli overrides)", resolution.Requested, resolution.Effective, resolution.FallbackReason ?? "-");
+        }
+
+        await app.RunAsync(cancellationToken);
+    }
+
+    /// <summary>
+    /// Locate a console SPA directory for in-process hosting. Resolution order:
+    /// LIBRA_WEB_ROOT env, ./web next to the current directory, web next to the
+    /// app base. Returns null when absent so nginx deployments are untouched.
+    /// </summary>
+    private static string? ResolveConsoleWebRoot()
+    {
+        var fromEnv = Environment.GetEnvironmentVariable("LIBRA_WEB_ROOT");
+        if (!string.IsNullOrWhiteSpace(fromEnv))
+            return Directory.Exists(fromEnv) ? Path.GetFullPath(fromEnv) : null;
+
+        foreach (var candidate in new[]
+                 {
+                     Path.Combine(Directory.GetCurrentDirectory(), "web"),
+                     Path.Combine(AppContext.BaseDirectory, "web"),
+                 })
+        {
+            if (Directory.Exists(candidate))
+                return Path.GetFullPath(candidate);
+        }
+        return null;
+    }
+}
