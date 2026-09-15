@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<title>Libra</title>
+<style>
+  /* Packaged boot screen. It lives in the same WebView as the console, so the
+     app has no native pages at all; the native side drives it through
+     window.libraBoot. */
+  :root { color-scheme: light dark; }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; height: 100%;
+    background: #fffdf9; color: #17202a;
+    font: 14px/1.6 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    -webkit-user-select: none; user-select: none;
+  }
+  /* Follow the device appearance: the console does, so the boot screen must too. */
+  @media (prefers-color-scheme: dark) {
+    html, body { background: #0b0f14; color: #e6edf3; }
+    .status { color: #8b949e; }
+    .spinner { border-color: #1f6feb33; border-top-color: #3b82f6; }
+  }
+  body {
+    display: flex; align-items: center; justify-content: center;
+    padding: calc(24px + var(--libra-inset-top, 0px)) 24px calc(24px + var(--libra-inset-bottom, 0px));
+  }
+  main { width: 100%; max-width: 340px; text-align: center; }
+  .brand {
+    font-size: 22px; font-weight: 700; letter-spacing: 3px; margin: 0 0 10px;
+  }
+  .status { color: #57606a; margin: 0 0 18px; min-height: 1.6em; }
+  .spinner {
+    width: 34px; height: 34px; margin: 0 auto;
+    border: 3px solid #1f6feb26; border-top-color: #1f6feb; border-radius: 50%;
+    animation: spin .9s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .detail {
+    display: none; margin: 16px 0 0; padding: 12px; text-align: left;
+    font-size: 12px; line-height: 1.5; color: #f87171;
+    background: #f8717112; border: 1px solid #f8717133; border-radius: 10px;
+    white-space: pre-wrap; word-break: break-word;
+    -webkit-user-select: text; user-select: text;
+  }
+  .actions { display: none; margin-top: 18px; }
+  button {
+    width: 100%; padding: 12px; font: inherit; font-weight: 600;
+    color: #fff; background: #1f6feb; border: 0; border-radius: 10px;
+  }
+  button:active { opacity: .85; }
+  [data-state="failed"] .spinner { display: none; }
+  [data-state="failed"] .detail { display: block; }
+  [data-state="failed"] .actions { display: block; }
+</style>
+</head>
+<body>
+  <main id="root" data-state="starting">
+    <p class="brand">LIBRA-NEXTGEN</p>
+    <p class="status" id="status">正在启动本地服务…</p>
+    <div class="spinner" aria-hidden="true"></div>
+    <pre class="detail" id="detail"></pre>
+    <div class="actions">
+      <!-- Custom scheme: the host cancels the navigation and restarts the
+           embedded service instead of loading anything. -->
+      <button type="button" onclick="location.href='libra-retry://restart'">重试</button>
+    </div>
+  </main>
+
+<script>
+  window.libraBoot = {
+    status: function (text) {
+      document.getElementById('status').textContent = text;
+    },
+    ready: function (url) {
+      document.getElementById('status').textContent = '正在打开控制台…';
+      // replace(): the boot screen must not stay in the back history.
+      location.replace(url);
+    },
+    fail: function (message) {
+      var root = document.getElementById('root');
+      root.dataset.state = 'failed';
+      document.getElementById('status').textContent = '本地服务启动失败';
+      document.getElementById('detail').textContent = message || '未知错误';
+    }
+  };
+</script>
+</body>
+</html>
