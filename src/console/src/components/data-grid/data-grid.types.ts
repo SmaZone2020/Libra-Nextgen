@@ -77,6 +77,13 @@ export interface DataGridProps<T extends object> {
   contentClassName?: string;
   /** Additional className for the scroll container. */
   scrollContainerClassName?: string;
+  /**
+   * Grow to the height of the flex parent and scroll rows inside, instead of
+   * sizing to the content. Use on list pages that own the whole screen; the
+   * parent chain must be a flex column with a definite height.
+   * @default false
+   */
+  fill?: boolean;
   /** Vertical alignment of cell content within each row. @default "middle" */
   verticalAlign?: 'top' | 'middle' | 'bottom';
   /** Row selection mode. @default "none" */

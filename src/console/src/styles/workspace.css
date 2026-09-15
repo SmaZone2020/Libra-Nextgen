@@ -100,22 +100,24 @@
 }
 
 /* ---- workspace: main surface ----------------------------------------------- */
-/* Mobile: flush to the screen edges — no radius, no shadow, no glass cost. */
+/* Flush to the screen edges on mobile (no radius, no shadow, no glass cost).
+   The surface is translucent by the frost amount on every width: the workspace
+   covers the whole screen on mobile, so an opaque surface would hide the
+   wallpaper completely. */
 .lw-workspace {
   position: relative;
   border-radius: 0;
-  background-color: var(--lw-workspace-solid);
+  background-color: color-mix(
+    in oklab,
+    var(--lw-workspace-solid) calc((1 - var(--lw-frost, 0)) * 100%),
+    transparent
+  );
   color: var(--lw-text-strong);
 }
 @media (min-width: 640px) {
   .lw-workspace {
     /* Only the top-left corner is rounded; right and bottom edges sit flush. */
     border-radius: 28px 0 0 0;
-    background-color: color-mix(
-      in oklab,
-      var(--lw-workspace-solid) calc((1 - var(--lw-frost, 0)) * 100%),
-      transparent
-    );
     /* Left-edge depth: a crisp 1px seam plus a soft shadow spilling onto the
        app background, so the workspace reads as a raised surface next to the
        sidebar instead of a flat rectangle. */
@@ -123,6 +125,8 @@
       -18px 0 42px -26px oklch(0.25 0.03 260 / 0.22),
       -2px 0 6px -3px oklch(0.2 0.03 260 / 0.08),
       -1px 0 0 oklch(0.15 0.02 260 / 0.05);
+    /* Desktop-only glass: the wallpaper layer already carries its own blur, so
+       mobile skips the extra backdrop-filter cost. */
     backdrop-filter: blur(calc(var(--lw-frost, 0) * 36px)) saturate(1.12);
     -webkit-backdrop-filter: blur(calc(var(--lw-frost, 0) * 36px)) saturate(1.12);
   }
@@ -131,15 +135,6 @@
       -24px 0 56px -28px oklch(0 0 0 / 0.75),
       -2px 0 8px -4px oklch(0 0 0 / 0.55),
       -1px 0 0 oklch(1 0 0 / 0.06);
-  }
-}
-
-/* Mobile never shows the wallpaper chrome inside the authenticated shell:
-   the workspace covers the screen. Pre-auth frames (login) keep it. */
-@media (max-width: 639.98px) {
-  .lw-frame[data-wallpaper="on"]:not(.lw-frame--auth)::before,
-  .lw-frame[data-wallpaper="on"]:not(.lw-frame--auth)::after {
-    display: none;
   }
 }
 

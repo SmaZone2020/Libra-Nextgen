@@ -14,6 +14,7 @@ import {
 import type { SortDescriptor } from 'react-aria-components/Table';
 import { TableLayout, Virtualizer } from 'react-aria-components/Virtualizer';
 import { composeSlotClassName } from '../../utils/compose';
+import { cx } from 'tailwind-variants';
 import { dataGridVariants } from './data-grid.styles';
 import { DataGridContext } from './data-grid-header';
 import { DataGridHeaderColumn } from './data-grid-header';
@@ -40,6 +41,7 @@ export const DataGrid = function DataGrid<T extends object>(
     disabledKeys,
     dragAndDropHooks: dragAndDropHooksProp,
     expandedKeys,
+    fill = false,
     getChildren,
     getRowId,
     headingHeight = 36,
@@ -310,12 +312,14 @@ export const DataGrid = function DataGrid<T extends object>(
   const tableElement = (
     <Table
       ref={tableRef}
-      className={composeSlotClassName(slots?.base, className)}
+      className={composeSlotClassName(slots?.base, cx(fill && 'data-grid--fill', className))}
       data-slot="data-grid"
       data-vertical-align={verticalAlign}
       variant={variant}
     >
-      <Table.ScrollContainer className={scrollContainerClassName}>
+      <Table.ScrollContainer
+        className={cx(fill && 'data-grid__scroll--fill', scrollContainerClassName)}
+      >
         {withResizing}
       </Table.ScrollContainer>
     </Table>

@@ -7,6 +7,21 @@
   position: relative
 }
 
+/* Fill variant: the grid takes its flex parent's height and scrolls rows
+   internally, so a list page can own the whole viewport instead of guessing a
+   magic max-height per page. */
+.data-grid--fill {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: 100%;
+}
+
+.data-grid__scroll--fill {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
 .data-grid__selection-column {
   width: var(--data-grid-selection-column-width);
   padding-right: calc(var(--spacing,.25rem) * 0)

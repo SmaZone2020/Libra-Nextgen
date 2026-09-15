@@ -32,6 +32,15 @@
   font-family:
     Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
     sans-serif;
+
+  /* System-bar insets. The mobile app overwrites these on <html> as the status
+     bar / cutout / navigation bar / keyboard change; every other host (browser,
+     Electron) keeps the zeros, so reserving space costs nothing there. */
+  --libra-inset-top: 0px;
+  --libra-inset-bottom: 0px;
+  --libra-inset-left: 0px;
+  --libra-inset-right: 0px;
+  --libra-inset-ime: 0px;
 }
 
 .dark {
@@ -42,6 +51,22 @@
 body {
   min-width: 320px;
   margin: 0;
+}
+
+/* Reserve the mobile host's system-bar area (status bar / cutout / navigation
+   bar) on the surfaces that own their viewport height, so their full-bleed
+   backgrounds still paint behind the transparent system bars while the content
+   stays clear of them. Zeros on every other host.
+
+   The authenticated frame (.lw-frame) is deliberately not in this list: its
+   gradient and wallpaper have to reach the screen edges, so the reserved space
+   sits on the inner content instead (see AuthenticatedLayout). */
+.libra-viewport-pad {
+  box-sizing: border-box;
+  padding-top: var(--libra-inset-top);
+  padding-right: var(--libra-inset-right);
+  padding-bottom: var(--libra-inset-bottom);
+  padding-left: var(--libra-inset-left);
 }
 
 button,
