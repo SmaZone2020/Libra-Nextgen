@@ -64,6 +64,23 @@ public class StoreModeResolverTests
         Assert.Equal(1, probe.Calls);
     }
 
+    [Theory]
+    [InlineData("sqlite", StoreKind.Sqlite)]
+    [InlineData("SQLITE", StoreKind.Sqlite)]
+    [InlineData("Sqlite", StoreKind.Sqlite)]
+    [InlineData("mongo", StoreKind.Mongo)]
+    [InlineData("MONGO", StoreKind.Mongo)]
+    public async Task ConfigMode_IsCaseInsensitive(string mode, StoreKind expected)
+    {
+        var probe = new FakeProbe(true);
+        var resolution = await Resolve(Config(mode), probe);
+
+        Assert.Equal(expected, resolution.Effective);
+        Assert.False(resolution.ExitRequested);
+        // Only a mongo request probes; sqlite has nothing remote to reach.
+        Assert.Equal(expected == StoreKind.Mongo ? 1 : 0, probe.Calls);
+    }
+
     [Fact]
     public async Task ConfigMongo_Unreachable_RequestsExit_NeverSilentlySwitchesToSqlite()
     {

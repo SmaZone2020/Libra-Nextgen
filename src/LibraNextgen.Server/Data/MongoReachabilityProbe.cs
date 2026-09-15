@@ -4,8 +4,8 @@ using MongoDB.Driver;
 namespace LibraNextgen.Service.Data;
 
 /// <summary>Real MongoDB reachability probe: issues a <c>ping</c> command with
-/// short connect/server-selection timeouts so startup can fail fast and (when
-/// configured) fall back to the SQLite store.</summary>
+/// short connect/server-selection timeouts so a configured-but-unreachable store
+/// fails fast at startup (or, in probe mode, before anything is bound).</summary>
 public sealed class MongoReachabilityProbe : IMongoReachabilityProbe
 {
     private readonly string _connectionString;
@@ -30,7 +30,7 @@ public sealed class MongoReachabilityProbe : IMongoReachabilityProbe
             timeoutCts.CancelAfter(_timeout);
 
             var client = new MongoClient(settings);
-            await client.GetDatabase("admin")
+            await client.GetDatabase(ResolveProbeDatabase(_connectionString))
                 .RunCommandAsync<BsonDocument>(new BsonDocument("ping", 1), cancellationToken: timeoutCts.Token);
             return true;
         }
@@ -38,5 +38,17 @@ public sealed class MongoReachabilityProbe : IMongoReachabilityProbe
         {
             return false;
         }
+    }
+
+    /// <summary>
+    /// Ping the database the connection string names: a user-supplied credential
+    /// is often scoped to its own database, and pinging an unauthorized
+    /// <c>admin</c> would report a healthy server as unreachable. Only a string
+    /// naming no database at all falls back to <c>admin</c>.
+    /// </summary>
+    public static string ResolveProbeDatabase(string connectionString)
+    {
+        var databaseName = MongoUrl.Create(connectionString).DatabaseName;
+        return string.IsNullOrWhiteSpace(databaseName) ? "admin" : databaseName;
     }
 }
