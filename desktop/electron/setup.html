@@ -1,0 +1,751 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Libra 初始设置</title>
+
+  <style>
+    :root {
+      color-scheme: dark;
+
+      --bg: #090d12;
+      --text: #eef2f6;
+      --text-secondary: #9aa5b1;
+      --text-muted: #68737f;
+
+      --panel: rgba(18, 23, 30, 0.72);
+      --panel-border: rgba(255, 255, 255, 0.085);
+
+      --accent: #3b9cff;
+      --accent-hover: #4aa5ff;
+
+      --danger: #ff6b6b;
+      --ok: #4ecb8f;
+    }
+
+    * { box-sizing: border-box; }
+
+    html,
+    body {
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      overflow: hidden;
+    }
+
+    body {
+      font-family: "Segoe UI", "Microsoft YaHei", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+      background:
+        radial-gradient(circle at 50% 30%, rgba(55, 78, 105, 0.18), transparent 44%),
+        radial-gradient(circle at 12% 88%, rgba(35, 85, 130, 0.12), transparent 36%),
+        var(--bg);
+      color: var(--text);
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .noise {
+      position: fixed;
+      inset: 0;
+      z-index: -1;
+      opacity: 0.025;
+      pointer-events: none;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.6'/%3E%3C/svg%3E");
+    }
+
+    /* ------------------------------------------------------------
+       Title bar (window controls provided by preload.js)
+    ------------------------------------------------------------ */
+
+    #titlebar {
+      position: fixed;
+      inset: 0 0 auto 0;
+      height: 42px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      user-select: none;
+      -webkit-app-region: drag;
+    }
+
+    #titlebar .app {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 0 15px;
+      color: rgba(220, 227, 235, 0.52);
+      font-size: 12px;
+      letter-spacing: 0.01em;
+      pointer-events: none;
+    }
+
+    .app-mark {
+      width: 16px;
+      height: 16px;
+      display: grid;
+      place-items: center;
+      border-radius: 5px;
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.07);
+      color: rgba(255, 255, 255, 0.65);
+    }
+
+    .app-mark svg { width: 10px; height: 10px; }
+
+    .win-controls {
+      display: flex;
+      height: 100%;
+      -webkit-app-region: no-drag;
+    }
+
+    .win-btn {
+      width: 46px;
+      height: 100%;
+      border: 0;
+      outline: none;
+      display: grid;
+      place-items: center;
+      padding: 0;
+      background: transparent;
+      color: rgba(230, 235, 240, 0.72);
+      opacity: 0.6;
+      cursor: default;
+      transition: background 140ms ease, color 140ms ease, opacity 140ms ease;
+    }
+
+    .win-btn:hover { background: rgba(255, 255, 255, 0.075); color: #fff; opacity: 1; }
+    .win-btn--close:hover { background: #e81123; color: #fff; opacity: 1; }
+    .win-btn svg { display: block; }
+
+    /* ------------------------------------------------------------
+       Layout
+    ------------------------------------------------------------ */
+
+    #stage {
+      width: 100%;
+      height: 100%;
+      overflow: auto;
+      padding: 62px 24px 28px;
+      display: flex;
+      align-items: flex-start;
+      justify-content: center;
+    }
+
+    /* Hidden until getSetupState() confirms the wizard is the right content. */
+    .sheet { visibility: hidden; }
+    body[data-state="ready"] .sheet { visibility: visible; }
+
+    .sheet {
+      width: min(880px, 100%);
+      animation: appear 260ms ease-out;
+    }
+
+    @keyframes appear {
+      from { opacity: 0; transform: translateY(5px) scale(0.99); }
+      to { opacity: 1; transform: translateY(0) scale(1); }
+    }
+
+    .head { text-align: center; margin-bottom: 26px; }
+
+    .head h1 {
+      margin: 0 0 9px;
+      color: #f1f4f7;
+      font-size: 21px;
+      font-weight: 600;
+      letter-spacing: -0.02em;
+    }
+
+    .head p {
+      margin: 0 auto;
+      max-width: 560px;
+      color: var(--text-secondary);
+      font-size: 13px;
+      line-height: 1.75;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      margin-bottom: 14px;
+      padding: 4px 10px;
+      border-radius: 999px;
+      background: rgba(59, 156, 255, 0.10);
+      border: 1px solid rgba(59, 156, 255, 0.20);
+      color: #8fc4ff;
+      font-size: 11px;
+    }
+
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 14px;
+    }
+
+    .card {
+      position: relative;
+      padding: 20px 20px 18px;
+      text-align: left;
+      background: linear-gradient(145deg, rgba(30, 36, 45, 0.72), rgba(15, 20, 27, 0.72));
+      border: 1px solid var(--panel-border);
+      border-radius: 14px;
+      box-shadow: 0 20px 55px rgba(0, 0, 0, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.035);
+      backdrop-filter: blur(24px) saturate(120%);
+      -webkit-backdrop-filter: blur(24px) saturate(120%);
+      transition: border-color 160ms ease, transform 160ms ease;
+    }
+
+    .card[data-active="true"] {
+      border-color: rgba(59, 156, 255, 0.42);
+      box-shadow: 0 22px 60px rgba(0, 0, 0, 0.32), 0 0 0 1px rgba(59, 156, 255, 0.12) inset;
+    }
+
+    .card:not([data-active="true"]):hover { transform: translateY(-1px); }
+
+    .card-top {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+
+    .card-icon {
+      width: 34px;
+      height: 34px;
+      flex: none;
+      display: grid;
+      place-items: center;
+      border-radius: 10px;
+      background: rgba(255, 255, 255, 0.045);
+      border: 1px solid rgba(255, 255, 255, 0.075);
+      color: #aab4bf;
+    }
+
+    .card-icon svg { width: 17px; height: 17px; }
+
+    .card-title {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: #f1f4f7;
+      font-size: 14px;
+      font-weight: 600;
+    }
+
+    .tag {
+      padding: 2px 7px;
+      border-radius: 999px;
+      background: rgba(78, 203, 143, 0.12);
+      border: 1px solid rgba(78, 203, 143, 0.24);
+      color: #7fd8ac;
+      font-size: 10px;
+      font-weight: 500;
+    }
+
+    .card p {
+      margin: 0;
+      color: var(--text-secondary);
+      font-size: 12px;
+      line-height: 1.65;
+    }
+
+    .card-note {
+      margin-top: 10px;
+      color: var(--text-muted);
+      font-size: 11px;
+      line-height: 1.6;
+    }
+
+    /* ------------------------------------------------------------
+       Forms
+    ------------------------------------------------------------ */
+
+    .field { margin-top: 14px; display: none; }
+    .card[data-active="true"] .field { display: block; }
+
+    .field label {
+      display: block;
+      margin-bottom: 6px;
+      color: var(--text-muted);
+      font-size: 11px;
+    }
+
+    .row { display: flex; gap: 8px; }
+
+    input[type="text"],
+    input[type="password"] {
+      flex: 1 1 auto;
+      min-width: 0;
+      height: 34px;
+      padding: 0 11px;
+      border: 1px solid rgba(255, 255, 255, 0.09);
+      border-radius: 8px;
+      background: rgba(0, 0, 0, 0.22);
+      color: var(--text);
+      font-family: "Cascadia Code", "SFMono-Regular", Consolas, monospace;
+      font-size: 12px;
+      outline: none;
+      transition: border-color 140ms ease, box-shadow 140ms ease;
+    }
+
+    input:focus {
+      border-color: rgba(59, 156, 255, 0.5);
+      box-shadow: 0 0 0 3px rgba(59, 156, 255, 0.10);
+    }
+
+    input::placeholder { color: rgba(122, 134, 146, 0.75); }
+
+    button {
+      font-family: inherit;
+      font-size: 12px;
+      font-weight: 500;
+      border-radius: 8px;
+      cursor: pointer;
+      /* Never leave a click with no visible feedback while a test runs. */
+      transition: transform 120ms ease, filter 120ms ease, box-shadow 120ms ease;
+    }
+
+    .btn-primary {
+      width: 100%;
+      height: 34px;
+      margin-top: 14px;
+      padding: 0 18px;
+      border: 1px solid rgba(255, 255, 255, 0.07);
+      background: linear-gradient(180deg, rgba(66, 164, 255, 0.98), rgba(40, 133, 225, 0.98));
+      color: #fff;
+      box-shadow: 0 5px 16px rgba(40, 130, 220, 0.16), inset 0 1px 0 rgba(255, 255, 255, 0.14);
+    }
+
+    .btn-primary:hover:not(:disabled) { filter: brightness(1.06); }
+    .btn-primary:active:not(:disabled) { transform: translateY(1px); }
+
+    .btn-ghost {
+      flex: none;
+      height: 34px;
+      padding: 0 14px;
+      border: 1px solid rgba(255, 255, 255, 0.10);
+      background: rgba(255, 255, 255, 0.045);
+      color: #cbd5e1;
+    }
+
+    .btn-ghost:hover:not(:disabled) { background: rgba(255, 255, 255, 0.08); }
+    .btn-ghost:active:not(:disabled) { transform: translateY(1px); }
+
+    button:disabled { opacity: 0.45; cursor: not-allowed; }
+
+    .result {
+      display: none;
+      margin-top: 10px;
+      padding: 8px 10px;
+      border-radius: 8px;
+      font-size: 11px;
+      line-height: 1.6;
+      word-break: break-all;
+    }
+
+    .result[data-state="ok"] {
+      display: block;
+      background: rgba(78, 203, 143, 0.09);
+      border: 1px solid rgba(78, 203, 143, 0.22);
+      color: #8fdcb4;
+    }
+
+    .result[data-state="bad"] {
+      display: block;
+      background: rgba(255, 107, 107, 0.09);
+      border: 1px solid rgba(255, 107, 107, 0.22);
+      color: #ff9c9c;
+    }
+
+    .result[data-state="busy"] {
+      display: block;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      color: var(--text-secondary);
+    }
+
+    .footer {
+      margin-top: 20px;
+      text-align: center;
+      color: rgba(130, 141, 152, 0.55);
+      font-size: 10px;
+      line-height: 1.7;
+    }
+
+    .footer code {
+      padding: 1px 5px;
+      border-radius: 5px;
+      background: rgba(255, 255, 255, 0.055);
+      color: #b9c8d7;
+      font-size: 10px;
+    }
+
+    @media (max-width: 560px) {
+      #stage { padding: 54px 14px 20px; }
+      .row { flex-direction: column; }
+      .btn-ghost { width: 100%; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .sheet { animation: none; }
+      .card,
+      button { transition: none; }
+    }
+  </style>
+</head>
+
+<body>
+  <div class="noise"></div>
+
+  <header id="titlebar">
+    <div class="app">
+      <span class="app-mark">
+        <svg viewBox="0 0 16 16" fill="none">
+          <path d="M8 1.5L13 4.3V11.7L8 14.5L3 11.7V4.3L8 1.5Z" stroke="currentColor" stroke-width="1.2" />
+          <path d="M5.2 5.8L8 7.4L10.8 5.8M8 7.4V11" stroke="currentColor" stroke-width="1.1" />
+        </svg>
+      </span>
+      <span>Libra Desktop · 初始设置</span>
+    </div>
+
+    <div class="win-controls">
+      <button class="win-btn" id="btn-min" title="最小化" aria-label="最小化">
+        <svg width="10" height="10" viewBox="0 0 10 10">
+          <path d="M0 5.5h10" stroke="currentColor" stroke-width="1" />
+        </svg>
+      </button>
+      <button class="win-btn" id="btn-max" title="最大化" aria-label="最大化">
+        <svg width="10" height="10" viewBox="0 0 10 10">
+          <rect x="0.5" y="0.5" width="9" height="9" fill="none" stroke="currentColor" stroke-width="1" />
+        </svg>
+      </button>
+      <button class="win-btn win-btn--close" id="btn-close" title="关闭" aria-label="关闭">
+        <svg width="10" height="10" viewBox="0 0 10 10">
+          <path d="M0.5 0.5l9 9M9.5 0.5l-9 9" stroke="currentColor" stroke-width="1" />
+        </svg>
+      </button>
+    </div>
+  </header>
+
+  <main id="stage">
+    <section class="sheet">
+      <div class="head">
+        <div class="badge">首次启动 · 本地服务尚未配置</div>
+        <h1>选择数据存储方式</h1>
+        <p>
+          本地服务需要一个存储后端才能启动，因此在你做出选择之前它不会被拉起。
+          选择会写入 <code>libra.conf.json</code>，之后可在控制台「存储设置」中切换。
+        </p>
+      </div>
+
+      <div class="cards">
+        <!-- 1. SQLite -->
+        <article class="card" data-choice="sqlite" data-active="true" id="card-sqlite">
+          <div class="card-top">
+            <div class="card-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                <ellipse cx="12" cy="6" rx="7" ry="3" />
+                <path d="M5 6v12c0 1.7 3.1 3 7 3s7-1.3 7-3V6" />
+                <path d="M5 12c0 1.7 3.1 3 7 3s7-1.3 7-3" />
+              </svg>
+            </div>
+            <div class="card-title">SQLite <span class="tag">推荐</span></div>
+          </div>
+          <p>单机本地存储，数据落在用户数据目录，无需任何外部服务。</p>
+          <div class="card-note">一键开始，适合个人使用与离线环境。</div>
+          <button class="btn-primary" id="btn-sqlite">使用 SQLite 继续</button>
+        </article>
+
+        <!-- 2. MongoDB -->
+        <article class="card" data-choice="mongo" id="card-mongo">
+          <div class="card-top">
+            <div class="card-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 3c3 4 4.5 7 4.5 10a4.5 4.5 0 0 1-9 0C7.5 10 9 7 12 3Z" />
+                <path d="M12 17v5" />
+              </svg>
+            </div>
+            <div class="card-title">MongoDB</div>
+          </div>
+          <p>连接已有的 MongoDB 部署，用于团队协作或多机共享数据。</p>
+          <div class="field">
+            <label for="mongo-input">连接串（必填，mongodb:// 或 mongodb+srv://）</label>
+            <div class="row">
+              <input id="mongo-input" type="text" spellcheck="false" autocomplete="off"
+                     placeholder="mongodb://user:pass@127.0.0.1:27017/libra" />
+              <button class="btn-ghost" id="btn-mongo-test">测试连接</button>
+            </div>
+            <div class="result" id="mongo-result"></div>
+          </div>
+          <button class="btn-primary" id="btn-mongo-next" disabled>下一步</button>
+        </article>
+
+        <!-- 3. Remote server -->
+        <article class="card" data-choice="remote" id="card-remote">
+          <div class="card-top">
+            <div class="card-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="2.5" y="4" width="19" height="12" rx="2" />
+                <path d="M8 20h8M12 16v4" />
+              </svg>
+            </div>
+            <div class="card-title">连接远程服务器</div>
+          </div>
+          <p>直接连接已部署的 Libra 服务端，本机不启动任何本地服务。</p>
+          <div class="field">
+            <label for="remote-input">服务器地址（例如 https://c2.example.com）</label>
+            <div class="row">
+              <input id="remote-input" type="text" spellcheck="false" autocomplete="off"
+                     placeholder="http://192.168.1.10:5270" />
+              <button class="btn-ghost" id="btn-remote-test">测试连接</button>
+            </div>
+            <div class="result" id="remote-result"></div>
+          </div>
+          <button class="btn-primary" id="btn-remote-next" disabled>连接并进入控制台</button>
+        </article>
+      </div>
+
+      <div class="footer">
+        关闭此窗口不会做任何改动：下次启动仍会显示本向导。配置目录 <code id="data-dir">…</code>
+        <div id="footer-status"></div>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    // Setup wizard state machine (per card):
+    //   idle ──(input/prefix ok)──> ready ──[测试]──> testing ──> ok | failed
+    //   [下一步] is enabled only in `ok`; any input change drops back to `ready`
+    //   (a successful test must never authorise a *different* value).
+    const bridge = window.libraDesktop;
+
+    const cards = {
+      sqlite: document.getElementById("card-sqlite"),
+      mongo: document.getElementById("card-mongo"),
+      remote: document.getElementById("card-remote"),
+    };
+
+    const state = {
+      mongo: { tested: null, busy: false },
+      remote: { tested: null, busy: false },
+    };
+
+    function activate(name) {
+      Object.entries(cards).forEach(([key, el]) => {
+        el.dataset.active = key === name ? "true" : "false";
+      });
+      const input = name === "mongo" ? mongoInput : name === "remote" ? remoteInput : null;
+      if (input) input.focus();
+    }
+
+    Object.entries(cards).forEach(([key, el]) => {
+      el.addEventListener("click", (event) => {
+        if (event.target.closest("button, input")) return;
+        activate(key);
+      });
+    });
+
+    const mongoInput = document.getElementById("mongo-input");
+    const remoteInput = document.getElementById("remote-input");
+    const mongoBtn = document.getElementById("btn-mongo-next");
+    const remoteBtn = document.getElementById("btn-remote-next");
+    const mongoResult = document.getElementById("mongo-result");
+    const remoteResult = document.getElementById("remote-result");
+
+    const MONGO_PREFIXES = ["mongodb://", "mongodb+srv://"];
+
+    function mongoPrefixOk(value) {
+      const text = value.trim();
+      return MONGO_PREFIXES.some((prefix) => text.startsWith(prefix));
+    }
+
+    function setResult(el, kind, text) {
+      if (!text) {
+        el.removeAttribute("data-state");
+        el.textContent = "";
+        return;
+      }
+      el.dataset.state = kind;
+      el.textContent = text;
+    }
+
+    // `stale` invalidates a previous successful test once the value changes.
+    function markMongoStale() {
+      state.mongo.tested = null;
+      mongoBtn.disabled = true;
+      setResult(mongoResult, null, "");
+    }
+
+    function markRemoteStale() {
+      state.remote.tested = null;
+      remoteBtn.disabled = true;
+      setResult(remoteResult, null, "");
+    }
+
+    mongoInput.addEventListener("input", markMongoStale);
+    remoteInput.addEventListener("input", markRemoteStale);
+
+    async function runTest(kind) {
+      if (!bridge) return;
+      const busyKey = kind;
+      if (state[busyKey].busy) return;
+      state[busyKey].busy = true;
+
+      const button = kind === "mongo" ? document.getElementById("btn-mongo-test") : document.getElementById("btn-remote-test");
+      const resultEl = kind === "mongo" ? mongoResult : remoteResult;
+      const nextBtn = kind === "mongo" ? mongoBtn : remoteBtn;
+      const original = button.textContent;
+
+      button.disabled = true;
+      button.textContent = "测试中…";
+      nextBtn.disabled = true;
+      setResult(resultEl, "busy", kind === "mongo" ? "正在探测存储连通性…" : "正在探测服务器…");
+
+      try {
+        let res;
+        if (kind === "mongo") {
+          const connectString = mongoInput.value.trim();
+          if (!mongoPrefixOk(connectString)) {
+            state.mongo.busy = false;
+            button.disabled = false;
+            button.textContent = original;
+            setResult(resultEl, "bad", "连接串必须以 mongodb:// 或 mongodb+srv:// 开头");
+            return;
+          }
+          state.mongo.tested = null;
+          res = await bridge.testStorageConfig({ mode: "mongo", connectString });
+        } else {
+          const url = remoteInput.value.trim();
+          if (!url) {
+            state.remote.busy = false;
+            button.disabled = false;
+            button.textContent = original;
+            setResult(resultEl, "bad", "请填写服务器地址");
+            return;
+          }
+          state.remote.tested = null;
+          res = await bridge.testRemoteServer(url);
+        }
+
+        if (res && res.ok) {
+          state[kind].tested = kind === "mongo" ? mongoInput.value.trim() : remoteInput.value.trim();
+          setResult(resultEl, "ok", res.detail || "连接成功");
+          nextBtn.disabled = false;
+        } else {
+          setResult(resultEl, "bad", (res && res.detail) || "连接失败");
+          nextBtn.disabled = true;
+        }
+      } catch (err) {
+        setResult(resultEl, "bad", "测试失败：" + (err && err.message ? err.message : String(err)));
+        nextBtn.disabled = true;
+      } finally {
+        state[kind].busy = false;
+        button.disabled = false;
+        button.textContent = original;
+      }
+    }
+
+    document.getElementById("btn-mongo-test").addEventListener("click", () => runTest("mongo"));
+    document.getElementById("btn-remote-test").addEventListener("click", () => runTest("remote"));
+
+    // Any typed value that is not the tested one must not be submittable.
+    mongoInput.addEventListener("input", () => {
+      if (state.mongo.tested !== null && mongoInput.value.trim() !== state.mongo.tested) {
+        mongoBtn.disabled = true;
+      }
+    });
+    remoteInput.addEventListener("input", () => {
+      if (state.remote.tested !== null && remoteInput.value.trim() !== state.remote.tested) {
+        remoteBtn.disabled = true;
+      }
+    });
+
+    mongoInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") runTest("mongo");
+    });
+    remoteInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") runTest("remote");
+    });
+
+    const allButtons = [
+      document.getElementById("btn-sqlite"),
+      mongoBtn,
+      remoteBtn,
+      document.getElementById("btn-mongo-test"),
+      document.getElementById("btn-remote-test"),
+    ];
+
+    function setBusy(on) {
+      allButtons.forEach((b) => { b.disabled = on; });
+      if (!on) {
+        // Re-apply the gating the wizard logic requires after a global lock.
+        mongoBtn.disabled = state.mongo.tested === null;
+        remoteBtn.disabled = state.remote.tested === null;
+      }
+      document.getElementById("footer-status").textContent = on ? "正在应用设置…" : "";
+    }
+
+    async function complete(choice, button) {
+      if (!bridge) return;
+      const original = button.textContent;
+      button.textContent = "正在应用…";
+      setBusy(true);
+      try {
+        const res = await bridge.completeSetup(choice);
+        if (res && res.ok) return; // main process navigates away
+        setBusy(false);
+        button.textContent = original;
+        const target = choice.mode === "mongo" ? mongoResult : remoteResult;
+        setResult(target, "bad", (res && res.error) || "设置未能写入，请重试或查看日志");
+      } catch (err) {
+        setBusy(false);
+        button.textContent = original;
+        setResult(remoteResult, "bad", "设置失败：" + (err && err.message ? err.message : String(err)));
+      }
+    }
+
+    document.getElementById("btn-sqlite").addEventListener("click", (e) => complete({ mode: "sqlite" }, e.currentTarget));
+    mongoBtn.addEventListener("click", (e) => complete({ mode: "mongo", connectString: mongoInput.value.trim() }, e.currentTarget));
+    remoteBtn.addEventListener("click", (e) => complete({ mode: "remote", url: remoteInput.value.trim() }, e.currentTarget));
+
+    document.getElementById("btn-min").addEventListener("click", () => bridge.minimize());
+    document.getElementById("btn-max").addEventListener("click", () => bridge.toggleMaximize());
+    document.getElementById("btn-close").addEventListener("click", () => bridge.close());
+    document.getElementById("titlebar").addEventListener("dblclick", (e) => {
+      if (e.target.closest(".win-controls")) return;
+      bridge.toggleMaximize();
+    });
+
+    // Scriptable probe for headless smoke runs (page state without a screenshot).
+    window.__libraSetup = () => ({
+      state: document.body.dataset.state || "",
+      cards: Object.values(cards).filter((c) => c.dataset.active === "true").length,
+      canSubmitMongo: !document.getElementById("btn-mongo-next").disabled,
+      canSubmitRemote: !document.getElementById("btn-remote-next").disabled,
+      userDataDir: document.getElementById("data-dir").textContent,
+    });
+
+    // Show the config directory so a failed reset can be diagnosed in place.
+    (async () => {
+      if (!bridge) {
+        // No bridge means this page was opened outside the shell: stay hidden.
+        document.body.dataset.state = "blocked";
+        return;
+      }
+      try {
+        const st = await bridge.getSetupState();
+        document.body.dataset.state = st && st.needsSetup ? "ready" : "blocked";
+      } catch {
+        // Fail open: a broken probe must not leave the user with a blank window.
+        document.body.dataset.state = "ready";
+      }
+      try {
+        const info = await bridge.getAppInfo();
+        if (info && info.userDataDir) {
+          document.getElementById("data-dir").textContent = info.userDataDir;
+        }
+      } catch { /* informational only */ }
+    })();
+  </script>
+</body>
+</html>
