@@ -1,0 +1,88 @@
+<Project>
+
+  <!--
+    ============================================================================
+    ASP.NET Core on Android (and iOS/Mac Catalyst) — supplying the shared framework
+    ============================================================================
+
+    The Libra local service is the very same ASP.NET Core application that the
+    desktop (Electron sidecar) and cloud deployments run, hosted *in process* by
+    the mobile app: the app boots the server on 127.0.0.1, points a WebView at it
+    and the React console runs unchanged. That is what "inherit the Electron
+    capabilities" means on a platform that cannot spawn a sidecar binary.
+
+    ASP.NET Core ships as a *shared framework*, not as NuGet packages, and the
+    runtime pack explicitly excludes mobile RIDs:
+
+        RuntimePackExcludedRuntimeIdentifiers="android;linux-bionic"
+        (Microsoft.NETCoreSdk.BundledVersions.props, KnownFrameworkReference
+         Microsoft.AspNetCore.App)
+
+    Referencing it the normal way therefore fails with
+
+        NETSDK1082: There was no runtime pack for Microsoft.AspNetCore.App
+                    available for the specified RuntimeIdentifier 'android-arm64'.
+
+    The reference assemblies (compile time) *are* available and are still taken
+    from the targeting pack — this file only fixes the runtime half: the extra
+    KnownFrameworkReference override below stops the SDK from looking for a pack
+    that will never exist, and the assemblies themselves are taken from the
+    ASP.NET Core shared framework installed next to the SDK (a build machine able
+    to build src/LibraNextgen.Server always has it).
+
+    Override AspNetCoreSharedFrameworkVersion (or AspNetCoreSharedFrameworkRoot)
+    when the shared framework lives somewhere unusual; the build fails loudly
+    when the assemblies cannot be found instead of producing a broken APK.
+  -->
+
+  <PropertyGroup>
+    <!-- e.g. net10.0-android -> 10. Guarded: this file is also evaluated for the
+         outer (multi-targeting) build where TargetFramework is empty. -->
+    <_AspNetCoreSharedFrameworkMajor Condition="'$(TargetFramework)' != '' and $([System.Text.RegularExpressions.Regex]::IsMatch('$(TargetFramework)', '^net\d+\.\d+'))">$([System.Version]::Parse($([System.Text.RegularExpressions.Regex]::Match('$(TargetFramework)', 'net(\d+\.\d+)').Groups[1].Value)).Major)</_AspNetCoreSharedFrameworkMajor>
+    <AspNetCoreSharedFrameworkMajorVersion Condition="'$(AspNetCoreSharedFrameworkMajorVersion)' == ''">$(_AspNetCoreSharedFrameworkMajor)</AspNetCoreSharedFrameworkMajorVersion>
+
+    <!-- $(NetCoreTargetingPackRoot) is <dotnet root>/packs; the shared framework
+         sits in the sibling <dotnet root>/shared directory. -->
+    <AspNetCoreSharedFrameworkRoot Condition="'$(AspNetCoreSharedFrameworkRoot)' == ''">$([MSBuild]::NormalizeDirectory('$(NetCoreTargetingPackRoot)', '..', 'shared', 'Microsoft.AspNetCore.App'))</AspNetCoreSharedFrameworkRoot>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'@(FrameworkReference->WithMetadataValue('Identity','Microsoft.AspNetCore.App')->Count())' != '0'">
+    <!-- Stop the SDK from resolving a runtime pack that does not exist for
+         mobile RIDs; the assemblies are supplied as plain references below. -->
+    <KnownFrameworkReference Update="Microsoft.AspNetCore.App"
+                              RuntimePackNamePatterns=""
+                              RuntimePackRuntimeIdentifiers=""
+                              RuntimePackExcludedRuntimeIdentifiers="" />
+
+    <_AspNetCoreSharedAssembly Include="$(AspNetCoreSharedFrameworkRoot)$(AspNetCoreSharedFrameworkMajorVersion).*\*.dll" />
+  </ItemGroup>
+
+  <Target Name="_LibraVerifyAspNetCoreSharedFramework"
+          BeforeTargets="ResolveAssemblyReferences"
+          Condition="'@(FrameworkReference->WithMetadataValue('Identity','Microsoft.AspNetCore.App')->Count())' != '0'">
+    <Error Condition="'@(_AspNetCoreSharedAssembly)' == ''"
+           Code="LIBRA001"
+           Text="ASP.NET Core shared framework not found under '$(AspNetCoreSharedFrameworkRoot)$(AspNetCoreSharedFrameworkMajorVersion).*'. The mobile app hosts the Libra server in process, so the build needs the ASP.NET Core implementation assemblies installed with the .NET SDK. Install the ASP.NET Core runtime, or point AspNetCoreSharedFrameworkRoot / AspNetCoreSharedFrameworkVersion at the right location." />
+  </Target>
+
+  <!--
+    Reference assemblies come from the targeting pack and are metadata only, so
+    they would never be packaged (and could not run). Swap every targeting-pack
+    reference for the shared framework's implementation assembly of the same
+    name: the compile-time surface is identical, and the implementation now ends
+    up in the app bundle via ReferenceCopyLocalPaths.
+  -->
+  <Target Name="_LibraUseAspNetCoreSharedRuntime"
+          AfterTargets="ResolveTargetingPackAssets"
+          BeforeTargets="ResolveAssemblyReferences"
+          Condition="'@(_AspNetCoreSharedAssembly)' != ''">
+    <ItemGroup>
+      <_AspNetCoreTargetingPackReference Include="@(Reference)"
+                                         Condition="$([System.String]::Copy('%(Reference.HintPath)').Contains('Microsoft.AspNetCore.App.Ref'))" />
+      <Reference Remove="@(_AspNetCoreTargetingPackReference)" />
+      <ReferenceCopyLocalPaths Remove="@(_AspNetCoreTargetingPackReference->'%(Filename)')" MatchOnMetadata="Filename" />
+      <Reference Include="@(_AspNetCoreSharedAssembly)" Private="true" />
+    </ItemGroup>
+  </Target>
+
+</Project>

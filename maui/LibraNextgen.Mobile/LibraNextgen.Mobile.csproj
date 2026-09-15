@@ -1,0 +1,105 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+		<!-- Phase 1 ships Android only; iOS and macOS (Mac Catalyst) are already
+		     modelled by the shared code, so enabling them is the single line below
+		     on a Mac host that has the workloads installed. -->
+		<TargetFrameworks>net10.0-android</TargetFrameworks>
+		<!-- <TargetFrameworks Condition="!$([MSBuild]::IsOSPlatform('linux'))">$(TargetFrameworks);net10.0-ios;net10.0-maccatalyst</TargetFrameworks> -->
+
+		<OutputType>Exe</OutputType>
+		<RootNamespace>LibraNextgen.Mobile</RootNamespace>
+		<UseMaui>true</UseMaui>
+		<SingleProject>true</SingleProject>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<Nullable>enable</Nullable>
+		<MauiXamlInflator>SourceGen</MauiXamlInflator>
+
+		<!-- Display name / identity -->
+		<ApplicationTitle>Libra</ApplicationTitle>
+		<ApplicationId>com.libra.nextgen.mobile</ApplicationId>
+
+		<!-- Versions (keep in sync with the release tag when shipping) -->
+		<ApplicationDisplayVersion>1.0.0</ApplicationDisplayVersion>
+		<ApplicationVersion>1</ApplicationVersion>
+
+		<SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios'">15.0</SupportedOSPlatformVersion>
+		<SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'maccatalyst'">15.0</SupportedOSPlatformVersion>
+		<SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">24.0</SupportedOSPlatformVersion>
+
+		<!-- The embedded service is the full ASP.NET Core application: Roslyn plugin
+		     scripts and MongoDB.Driver both rely on runtime code generation, so the
+		     linker cannot be allowed to trim it away (the desktop build reached the
+		     same conclusion: self-contained JIT, no trimming, no AOT). Release on
+		     Android defaults to AOT, which requires trimming — turn it off. -->
+		<AndroidLinkMode>None</AndroidLinkMode>
+		<PublishTrimmed>false</PublishTrimmed>
+		<RunAOTCompilation>false</RunAOTCompilation>
+		<AndroidEnableProfiledAot>false</AndroidEnableProfiledAot>
+
+		<!-- Keep the console inside the APK instead of fast-deploying it, so a
+		     release/debug install is self-contained and testable from the package. -->
+		<EmbedAssembliesIntoApk>true</EmbedAssembliesIntoApk>
+
+		<!-- The server project is an executable (it is also the cloud/desktop entry
+		     point), and this app is a self-contained executable too. We reference it
+		     as an assembly to host it in-process, never to launch it, so the
+		     "executable references executable" guard is intentionally off. -->
+		<ValidateExecutableReferencesMatchSelfContained>false</ValidateExecutableReferencesMatchSelfContained>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<!-- Brand mark comes straight from the shared branding asset so the APK,
+		     the desktop shell and the web console can never drift apart. Link
+		     renames the item to a Resizetizer-legal name (no hyphens allowed).
+		     ForegroundScale keeps the mark inside the 66% safe zone of an Android
+		     adaptive icon, where launcher masks are guaranteed not to crop it. -->
+		<MauiIcon Include="Resources\AppIcon\appicon.svg"
+		          ForegroundFile="..\..\assets\branding\icon2-app.png"
+		          ForegroundScale="0.667"
+		          Color="#FFFFFF" />
+		<MauiSplashScreen Include="..\..\assets\branding\icon2-app.png"
+		                  Link="splash.png"
+		                  Color="#0B0F14"
+		                  BaseSize="128,128"
+		                  ForegroundScale="0.667" />
+		<MauiImage Include="Resources\Images\*" />
+		<MauiFont Include="Resources\Fonts\*" />
+
+		<!-- Raw assets: the packed React console (web-bundle.zip) plus the files
+		     that ship inside the app package. -->
+		<MauiAsset Include="Resources\Raw\**" LogicalName="%(RecursiveDir)%(Filename)%(Extension)" />
+		<MauiAsset Remove="Resources\Raw\*.stamp" />
+		<MauiAsset Remove="Resources\Raw\AboutAssets.txt" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<PackageReference Include="Microsoft.Maui.Controls" Version="$(MauiVersion)" />
+		<PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="10.0.0" />
+	</ItemGroup>
+
+	<!-- The embedded local service is the very same ASP.NET Core application the
+	     desktop sidecar and cloud deployments run. The Android RID must not flow
+	     into it: the server builds once as plain net10.0 and its assembly is what
+	     we host in-process. -->
+	<ItemGroup>
+		<ProjectReference Include="..\..\src\LibraNextgen.Server\LibraNextgen.Server.csproj"
+		                  GlobalPropertiesToRemove="RuntimeIdentifier;RuntimeIdentifiers;SelfContained" />
+	</ItemGroup>
+
+	<!-- Mobile has no ASP.NET Core *runtime pack* (the framework excludes android),
+	     so the shared framework is supplied explicitly — see Directory.Build.targets. -->
+	<ItemGroup>
+		<FrameworkReference Include="Microsoft.AspNetCore.App" />
+	</ItemGroup>
+
+	<!-- Pack the console SPA into Resources/Raw/web-bundle.zip before building.
+	     The app unpacks it on first run and serves it from the embedded service. -->
+	<Target Name="LibraBuildWebBundle"
+	        BeforeTargets="PrepareForBuild"
+	        Condition="'$(SkipWebBundle)' != 'true'">
+		<Exec Command="node &quot;$(MSBuildThisFileDirectory)..\scripts\build-web-bundle.mjs&quot;"
+		      ContinueOnError="false" />
+	</Target>
+
+</Project>
