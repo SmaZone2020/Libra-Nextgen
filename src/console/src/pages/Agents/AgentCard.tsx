@@ -10,6 +10,7 @@ import { relativeTime, statusLabel, statusTone } from './agentStatus';
 export function AgentCard({
   agent,
   connected,
+  nodeName,
   onOpen,
   onConnect,
   onDisconnect,
@@ -17,6 +18,9 @@ export function AgentCard({
 }: {
   agent: AgentListItem;
   connected: boolean;
+  /** Owning mesh node of a remote device; renders a chip next to the hostname
+   *  so a merged local+remote list still tells the two apart. */
+  nodeName?: string;
   /** Opens the device detail page/modal without changing the active device. */
   onOpen?: () => void;
   /** Connects the device on click; disabled while the device is offline. */
@@ -96,6 +100,14 @@ export function AgentCard({
               {connected && (
                 <span className="shrink-0 rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">
                   {t('agents.connected')}
+                </span>
+              )}
+              {nodeName && (
+                <span
+                  className="shrink-0 max-w-[45%] truncate rounded-md bg-accent-soft px-1.5 py-0.5 text-[10px] font-medium text-accent-soft-foreground"
+                  title={nodeName}
+                >
+                  {nodeName}
                 </span>
               )}
             </div>

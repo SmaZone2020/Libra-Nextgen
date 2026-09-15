@@ -11,6 +11,7 @@ export function AgentCardList({
   agents,
   connectedId,
   layout = 'list',
+  nodeNameOf,
   onOpen,
   onConnect,
   onDisconnect,
@@ -20,6 +21,9 @@ export function AgentCardList({
   agents: AgentListItem[];
   connectedId: string;
   layout?: AgentListLayout;
+  /** Owning mesh node per agent id; renders the node chip on remote cards in
+   *  the merged mobile list. Local agents are absent from the map. */
+  nodeNameOf?: (id: string) => string | undefined;
   onOpen: (id: string) => void;
   /** Explicit per-card connect; offline cards render it disabled. */
   onConnect?: (id: string) => void;
@@ -54,6 +58,7 @@ export function AgentCardList({
           key={agent.id}
           agent={agent}
           connected={agent.id === connectedId}
+          nodeName={nodeNameOf?.(agent.id)}
           onOpen={() => onOpen(agent.id)}
           onConnect={onConnect ? () => onConnect(agent.id) : undefined}
           onDisconnect={onDisconnect}

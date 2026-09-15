@@ -19,6 +19,7 @@ import { useAgent } from '../../contexts/AgentContext';
 import { useDialog } from '../../hooks/useDialog';
 import type { AgentDetail } from '../../types/models';
 import { HardwareAccordion } from './HardwareAccordion';
+import { useRemoteAgentLookup } from './RemoteNodeAgents';
 import { relativeTime, statusLabel, statusTone } from './agentStatus';
 
 const ACTION_ROUTES = [
@@ -29,17 +30,27 @@ const ACTION_ROUTES = [
   { key: 'proxyBrowser', icon: Globe, to: '/proxy' },
 ] as const;
 
-/** Mobile-style device detail page (also reachable on desktop by URL). */
+/** Mobile-style device detail page (also reachable on desktop by URL). Opens
+ *  for local devices and for devices on connected mesh nodes — the latter even
+ *  before they are connected, since the connect button lives here. */
 export default function AgentDetailPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { agentId: routeId = '' } = useParams<{ agentId: string }>();
-  const { agents, agentId: connectedId, selectAgent, disconnect } = useAgent();
+  const { agents, agentId: connectedId, selectAgent, selectNodeAgent, disconnect } = useAgent();
   const { confirm, alert, DialogComponent } = useDialog();
+  const { lookup, ready: indexReady } = useRemoteAgentLookup();
 
   const [detail, setDetail] = useState<AgentDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
+  const [idle, setIdle] = useState(false);
+
+  // Route resolution order is local list first: a local device with the same
+  // id always wins over the same id seen on a node.
+  const localAgent = agents.find((a) => a.id === routeId);
+  const remoteHit = localAgent ? null : lookup(routeId);
+  const remoteNodeId = remoteHit?.segment.nodeId;
 
   const load = useCallback(async () => {
     if (!routeId) {
@@ -47,23 +58,42 @@ export default function AgentDetailPage() {
       setLoading(false);
       return;
     }
+    // A remote device is unknown until the node index has answered; without
+    // this gate its detail would be requested from the wrong service first.
+    if (!localAgent && !indexReady) {
+      setIdle(true);
+      setLoading(true);
+      return;
+    }
+    setIdle(false);
     setLoading(true);
     setFailed(false);
     try {
-      setDetail(await getAgent(routeId));
+      setDetail(await getAgent(routeId, remoteNodeId));
     } catch {
       setFailed(true);
       setDetail(null);
     } finally {
       setLoading(false);
     }
-  }, [routeId]);
+  }, [routeId, remoteNodeId, localAgent, indexReady]);
 
   useEffect(() => {
     void load();
   }, [load]);
 
-  // Live status from the shared real-time list wins over the fetched detail.
+  // Nothing local and nothing on any connected node: once the index has
+  // answered, such an id was never ours — settle on the failure state instead
+  // of leaving a spinner up for a device that cannot appear out of nowhere.
+  useEffect(() => {
+    if (!localAgent && indexReady && !lookup(routeId) && !idle) {
+      setFailed(true);
+      setLoading(false);
+    }
+  }, [localAgent, indexReady, lookup, routeId, idle]);
+
+  // Live status from the shared real-time list wins over the fetched detail
+  // (the list is home-pinned, so it only ever describes the local device).
   const liveAgent = agents.find((a) => a.id === routeId);
   const status = liveAgent?.status ?? detail?.status;
   const connected = connectedId === routeId && status === 'Online';
@@ -72,7 +102,7 @@ export default function AgentDetailPage() {
     const { confirmed } = await confirm(t(confirmKey));
     if (!confirmed) return;
     try {
-      await createTask({ agentId: routeId, commandType, command, timeoutSeconds: 5 });
+      await createTask({ agentId: routeId, commandType, command, timeoutSeconds: 5 }, remoteNodeId);
     } catch (e) {
       await alert(`${t(failKey)}\n${e instanceof Error ? e.message : String(e)}`);
     }
@@ -81,8 +111,23 @@ export default function AgentDetailPage() {
   const handleRemove = async () => {
     const { confirmed } = await confirm(t('agents.removeConfirm'));
     if (!confirmed) return;
-    await deleteAgent(routeId);
+    await deleteAgent(routeId, remoteNodeId);
     navigate('/agents');
+  };
+
+  // Remote devices connect through the relay of their node; the helpers above
+  // reach that node directly so this works before anything is connected.
+  const handleConnect = () => {
+    if (!remoteHit || !detail) {
+      selectAgent(routeId);
+      return;
+    }
+    selectNodeAgent({
+      nodeId: remoteHit.segment.nodeId,
+      nodeName: remoteHit.segment.nodeName,
+      origin: remoteHit.segment.origin,
+      agent: detail,
+    });
   };
 
   const openAction = (to: string) => {
@@ -145,8 +190,18 @@ export default function AgentDetailPage() {
               {detail.hostname.slice(0, 2).toUpperCase()}
             </span>
             <div className="min-w-0 flex-1">
-              <div className="truncate text-lg font-semibold text-neutral-900 dark:text-neutral-100">
-                {detail.hostname}
+              <div className="flex items-center gap-2">
+                <span className="truncate text-lg font-semibold text-neutral-900 dark:text-neutral-100">
+                  {detail.hostname}
+                </span>
+                {remoteHit && (
+                  <span
+                    className="shrink-0 max-w-[45%] truncate rounded-md bg-accent-soft px-1.5 py-0.5 text-[10px] font-medium text-accent-soft-foreground"
+                    title={remoteHit.segment.nodeName}
+                  >
+                    {remoteHit.segment.nodeName}
+                  </span>
+                )}
               </div>
               <div className="mt-0.5 flex items-center gap-1.5 text-sm">
                 <span className={`size-2 rounded-full ${statusTone(status ?? 'Offline').dot}`} />
@@ -164,7 +219,7 @@ export default function AgentDetailPage() {
                   {t('common.disconnect')}
                 </Button>
               ) : (
-                <Button size="sm" variant="secondary" onPress={() => selectAgent(routeId)}>
+                <Button size="sm" variant="secondary" onPress={handleConnect}>
                   {t('common.connect')}
                 </Button>
               ))}

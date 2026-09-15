@@ -20,19 +20,24 @@ const REFRESH_MS = 15000;
 const STORE_LABEL: Record<string, string> = { sqlite: 'SQLite', mongo: 'MongoDB' };
 
 /**
- * Poll connected mesh nodes and pull each one's agent list through the hub
- * proxy. Visible to every authenticated user (web and desktop); managing the
- * nodes themselves stays Admin-only on the server.
+ * Shared poller behind every remote-device surface: the connected mesh nodes
+ * plus each node's agent list. Visible to every authenticated user (web and
+ * desktop); managing the nodes themselves stays Admin-only on the server.
+ * `ready` flips once the first node-list request settles, so a caller can tell
+ * "no remote device with this id" apart from "the index has not answered yet".
  */
-export function useRemoteAgentSegments(): RemoteAgentSegment[] {
+function useRemoteAgentSegmentsCore(): { segments: RemoteAgentSegment[]; ready: boolean } {
   const [segments, setSegments] = useState<RemoteAgentSegment[]>([]);
   const [nodes, setNodes] = useState<MeshNode[]>([]);
+  const [ready, setReady] = useState(false);
 
   const loadNodes = useCallback(async () => {
     try {
       setNodes(await listMeshNodes());
     } catch {
       /* transient mesh outage — keep the last known node set */
+    } finally {
+      setReady(true);
     }
   }, []);
 
@@ -81,7 +86,53 @@ export function useRemoteAgentSegments(): RemoteAgentSegment[] {
     };
   }, [connectedNodes]);
 
-  return segments;
+  return { segments, ready };
+}
+
+/** Connected remote nodes and the agents visible on each of them. */
+export function useRemoteAgentSegments(): RemoteAgentSegment[] {
+  return useRemoteAgentSegmentsCore().segments;
+}
+
+/** A remote device located in the polled node index. */
+export interface RemoteAgentLookup {
+  segment: RemoteAgentSegment;
+  agent: AgentListItem;
+}
+
+export interface RemoteAgentIndex {
+  /** Resolves an agent id against the connected nodes; null when unknown. */
+  lookup: (agentId: string) => RemoteAgentLookup | null;
+  /** Owning node name per agent id, for the node chip on merged remote cards. */
+  nodeNameOf: (agentId: string) => string | undefined;
+  /** False until the first node poll settles: before that a miss means
+   *  "not looked up yet", not "not a remote device". */
+  ready: boolean;
+}
+
+/** Index the polled segments by agent id so a device can be resolved while it
+ *  is still disconnected (nodes are the only source of truth for remote ids).
+ *  First match wins: one device id can theoretically exist on two nodes. */
+export function useRemoteAgentLookup(): RemoteAgentIndex {
+  const { segments, ready } = useRemoteAgentSegmentsCore();
+
+  const lookup = useCallback(
+    (agentId: string): RemoteAgentLookup | null => {
+      for (const segment of segments) {
+        const agent = segment.agents.find((a) => a.id === agentId);
+        if (agent) return { segment, agent };
+      }
+      return null;
+    },
+    [segments],
+  );
+
+  const nodeNameOf = useCallback(
+    (agentId: string) => lookup(agentId)?.segment.nodeName,
+    [lookup],
+  );
+
+  return { lookup, nodeNameOf, ready };
 }
 
 /**

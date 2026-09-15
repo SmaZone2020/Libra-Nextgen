@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button, Drawer } from '@heroui/react';
-import { LayoutCells, LayoutList, Magnifier, SlidersVertical, Xmark } from '@gravity-ui/icons';
+import { LayoutCells, LayoutList, Magnifier, Plus, SlidersVertical, Xmark } from '@gravity-ui/icons';
 import type { AgentListItem } from '../../types/models';
 import { AgentCardList, type AgentListLayout } from './AgentCardList';
 
@@ -100,16 +100,20 @@ export function AgentBrowser({
   agents,
   connectedId,
   layout,
+  nodeNameOf,
   onLayoutToggle,
   onOpen,
   onConnect,
   onDisconnect,
   onCardContextMenu,
+  onBuildPayload,
 }: {
   agents: AgentListItem[];
   connectedId: string;
   /** Shared list/grid layout — also applied to remote-node segments above. */
   layout: AgentListLayout;
+  /** Owning mesh node per agent id; renders the node chip on merged remote cards. */
+  nodeNameOf?: (id: string) => string | undefined;
   onLayoutToggle: () => void;
   onOpen: (id: string) => void;
   /** Explicit per-card connect (offline cards render it disabled). */
@@ -118,6 +122,11 @@ export function AgentBrowser({
   onDisconnect?: () => void;
   /** Optional per-card right-click hook (desktop context menu). */
   onCardContextMenu?: (id: string) => void;
+  /**
+   * Narrow screens: the list/grid switch is meaningless (cards always stack),
+   * so that slot carries the payload-builder entry instead.
+   */
+  onBuildPayload?: () => void;
 }) {
   const { t } = useTranslation();
   const [query, setQuery] = useState('');
@@ -311,14 +320,26 @@ export function AgentBrowser({
             </span>
           )}
         </Button>
-        {/* Layout toggle: vertical list ↔ card grid (mirrors the nodes page). */}
+        {/* Layout toggle (wide screens) / payload builder entry (narrow screens).
+            Mobile cards always stack, so the toggle has nothing to switch there. */}
+        {onBuildPayload ? (
+          <Button
+            isIconOnly
+            aria-label={t('nav.builder')}
+            onPress={onBuildPayload}
+            variant="secondary"
+            className="size-10 shrink-0 rounded-[12px] sm:hidden"
+          >
+            <Plus className="size-4" />
+          </Button>
+        ) : null}
         <Button
           isIconOnly
           aria-label={layout === 'grid' ? t('agents.layoutList') : t('agents.layoutGrid')}
           aria-pressed={layout === 'grid'}
           onPress={onLayoutToggle}
           variant="secondary"
-          className={`size-10 shrink-0 rounded-[12px] ${
+          className={`hidden size-10 shrink-0 rounded-[12px] sm:flex ${
             layout === 'grid' ? 'bg-accent text-accent-foreground shadow-sm' : 'text-neutral-600 dark:text-neutral-300'
           }`}
         >
@@ -330,6 +351,7 @@ export function AgentBrowser({
         agents={visibleAgents}
         connectedId={connectedId}
         layout={layout}
+        nodeNameOf={nodeNameOf}
         onOpen={onOpen}
         onConnect={onConnect}
         onDisconnect={onDisconnect}
