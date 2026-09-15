@@ -19,8 +19,9 @@
 		<ApplicationTitle>Libra</ApplicationTitle>
 		<ApplicationId>com.libra.nextgen.mobile</ApplicationId>
 
-		<!-- Versions (keep in sync with the release tag when shipping) -->
-		<ApplicationDisplayVersion>1.0.0</ApplicationDisplayVersion>
+		<!-- Versions (keep in sync with the release tag when shipping; the release
+		     workflow overrides both from the tag, so a local build matches it). -->
+		<ApplicationDisplayVersion>1.7.4</ApplicationDisplayVersion>
 		<ApplicationVersion>1</ApplicationVersion>
 
 		<SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios'">15.0</SupportedOSPlatformVersion>
