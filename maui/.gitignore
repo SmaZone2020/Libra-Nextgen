@@ -1,0 +1,7 @@
+# Build outputs of the MAUI app. `web-bundle.zip` is packed from src/console/dist
+# by scripts/build-web-bundle.mjs before every build, and the stamp is how that
+# script decides whether the archive is still current — neither is source.
+bin/
+obj/
+LibraNextgen.Mobile/Resources/Raw/web-bundle.zip
+.web-bundle.stamp
