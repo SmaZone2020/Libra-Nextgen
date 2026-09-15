@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+      Aligned with the console's dark base. MAUI derives the splash background and
+      the overscroll edge effect from colorPrimary, so leaving the template purple
+      (#512BD4) painted a violet splash and a violet stretch glow around a console
+      that is nearly black.
+    -->
+    <color name="colorPrimary">#0B0F14</color>
+    <color name="colorPrimaryDark">#0B0F14</color>
+    <color name="colorAccent">#3B82F6</color>
+    <color name="maui_splash_color">#0B0F14</color>
+</resources>

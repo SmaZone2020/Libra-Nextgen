@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The console talks to the service embedded in this app over plain HTTP on
+  loopback (http://127.0.0.1:<port>), which Android blocks by default since API 28.
+  Loopback cleartext is therefore explicitly permitted, and cleartext in general is
+  kept permitted because a self-hosted Libra-Nextgen server is usually reached over
+  plain HTTP on a LAN — the same reach the desktop shell has.
+
+  Web storage and JavaScript for the console are enabled in MauiProgram
+  (WebView handler mapping).
+-->
+<network-security-config>
+	<base-config cleartextTrafficPermitted="true">
+		<trust-anchors>
+			<certificates src="system" />
+			<certificates src="user" />
+		</trust-anchors>
+	</base-config>
+	<domain-config cleartextTrafficPermitted="true">
+		<domain includeSubdomains="false">127.0.0.1</domain>
+		<domain includeSubdomains="false">localhost</domain>
+	</domain-config>
+</network-security-config>

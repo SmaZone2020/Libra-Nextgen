@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <!--
+    Edge-to-edge opt-in.
+
+    MAUI's base theme sets maui_edgetoedge_optout=true ("for .NET 9 we opt out of
+    edge to edge enforcement by default"), which would leave the system bars
+    opaque and outside the app window. The console is designed to fill the screen
+    and reserve the bars itself (the host publishes the insets as CSS variables),
+    so the opt-out is turned off here. The splash theme is extended rather than
+    replaced to keep the launch screen.
+  -->
+  <style name="Libra.SplashTheme" parent="Maui.SplashTheme">
+    <item name="maui_edgetoedge_optout">false</item>
+    <!-- The keyboard must resize the WebView so the console can lift its
+         composer above it using the IME inset. -->
+    <item name="android:windowSoftInputMode">adjustResize</item>
+    <!-- Overscroll stretch/glow colour. Defaults to colorPrimary, which used to
+         flash the template purple against the console's dark surface. -->
+    <item name="android:colorEdgeEffect">@color/colorPrimary</item>
+  </style>
+</resources>
