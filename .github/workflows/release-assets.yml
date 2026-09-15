@@ -264,13 +264,21 @@ jobs:
       # Directory.Build.targets supplies the ASP.NET Core *shared framework* to
       # the Android target (there is no runtime pack for mobile RIDs). The SDK
       # ships it, but fail loudly here instead of with a confusing LIBRA001 later.
+      #
+      # Ask dotnet where the framework is rather than deriving the path from the
+      # executable: `command -v dotnet` says nothing about the layout, and taking
+      # dirname twice from /usr/share/dotnet/dotnet lands on /usr/share.
       - name: Verify ASP.NET Core shared framework is present
         shell: bash
         run: |
           set -euo pipefail
-          root="$(dirname "$(dirname "$(command -v dotnet)")")"
-          ls -d "$root"/shared/Microsoft.AspNetCore.App/* || {
-            echo "ASP.NET Core shared framework missing under $root/shared"; exit 1; }
+          if ! dotnet --list-runtimes | grep -q '^Microsoft.AspNetCore.App '; then
+            echo "The ASP.NET Core shared framework is not installed for this SDK."
+            echo "Installed runtimes:"
+            dotnet --list-runtimes
+            exit 1
+          fi
+          dotnet --list-runtimes | grep '^Microsoft.AspNetCore.App '
 
       # versionCode must be a monotonically increasing integer; derive it from the
       # tag so a release and its APK never disagree.
