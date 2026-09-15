@@ -250,7 +250,7 @@ function RemoteNodeCard({
         <StoreChip storeType={node.storageType ?? null} connected={node.connected} />
       </div>
 
-      <div className="mt-4 flex items-center justify-end gap-2 border-t border-default-200/70 pt-3 dark:border-default-800">
+      <div className="flex items-center justify-end gap-2">
         {node.connected ? (
           <Button size="sm" variant="ghost" isDisabled={busy} onPress={onDisconnect}>
             <Xmark className="size-4" />
